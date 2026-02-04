@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Akıllı Sinyal Paneli (Backtest Özellikli)</title>
+    <title>Akıllı Sinyal Paneli (JSON Entegrasyonlu)</title>
     <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         body { margin: 0; background: #131722; color: #d1d4dc; font-family: 'Segoe UI', sans-serif; }
@@ -29,12 +29,12 @@
         }
         .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); border-color: #444; }
 
-        /* DURUM ETİKETLERİ (Badge) */
+        /* DURUM ETİKETLERİ */
         .badge { position: absolute; top: 15px; right: 15px; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-        .badge-waiting { background: #FF9800; color: #fff; } /* Bekliyor */
-        .badge-active { background: #2962FF; color: #fff; animation: pulse 1.5s infinite; } /* Aktif */
-        .badge-tp { background: #00E676; color: #000; } /* Kar Alındı */
-        .badge-sl { background: #FF5252; color: #fff; } /* Stop Oldu */
+        .badge-waiting { background: #FF9800; color: #fff; } 
+        .badge-active { background: #2962FF; color: #fff; animation: pulse 1.5s infinite; } 
+        .badge-tp { background: #00E676; color: #000; } 
+        .badge-sl { background: #FF5252; color: #fff; } 
 
         /* İÇERİK */
         .symbol { font-size: 20px; font-weight: bold; }
@@ -60,11 +60,10 @@
 
     <div class="app-header">
         <h2>🤖 Sinyal Bot Paneli</h2>
-        <div class="stats" id="total-stats">Veriler Analiz Ediliyor...</div>
+        <div class="stats" id="status-msg">Veriler Bekleniyor...</div>
     </div>
 
-    <div id="dashboard">
-        </div>
+    <div id="dashboard"></div>
 
     <div id="modal">
         <button id="close-btn" onclick="closeModal()">KAPAT X</button>
@@ -73,49 +72,65 @@
 
     <script>
         // ---------------------------------------------------------
-        // 1. SİNYAL LİSTESİ (Tarih formatı: YYYY-MM-DD HH:MM)
+        // 1. GLOBAL DEĞİŞKENLER
         // ---------------------------------------------------------
-        const signals = [
-            // Eski Biten İşlemler (Test Amaçlı)
-            { id: 1, symbol: 'BTCUSDT', dir: 'LONG', entry: 42000, sl: 41500, tp: 43000, date: '2023-12-01 10:00' },
-            { id: 2, symbol: 'ETHUSDT', dir: 'SHORT', entry: 2200, sl: 2250, tp: 2100, date: '2023-12-05 14:30' },
-            
-            // Yakın Tarihli (Muhtemelen sonuçlanmış veya aktif)
-            { id: 3, symbol: 'SOLUSDT', dir: 'LONG', entry: 95.50, sl: 92.00, tp: 105.00, date: '2024-01-28 09:00' },
-            { id: 4, symbol: 'ADAUSDT', dir: 'SHORT', entry: 0.5500, sl: 0.5600, tp: 0.5300, date: '2024-01-29 11:30' },
-
-            // Çok Yeni Sinyal (Henüz giriş gelmemiş olabilir)
-            { id: 5, symbol: 'XRPUSDT', dir: 'LONG', entry: 0.5300, sl: 0.5100, tp: 0.5800, date: new Date().toISOString() } 
-        ];
+        let signals = []; // Artık boş başlıyoruz, JSON'dan dolacak
+        let activeSocket = null; // WebSocket bağlantısını yönetmek için
 
         // ---------------------------------------------------------
-        // 2. BACKTEST MOTORU (GEÇMİŞİ KONTROL ET)
+        // 2. VERİ ÇEKME VE ANALİZ MOTORU
         // ---------------------------------------------------------
-        async function analyzeSignals() {
+        async function fetchAndAnalyze() {
+            const statusMsg = document.getElementById('status-msg');
             const dashboard = document.getElementById('dashboard');
-            dashboard.innerHTML = '<div style="padding:20px">Sinyaller ve geçmiş veriler taranıyor...</div>';
 
-            // Her sinyal için tek tek analiz yap
-            for (let sig of signals) {
-                await processSignalHistory(sig);
+            try {
+                // Önbellek sorununu aşmak için tarih damgası ekliyoruz (?v=...)
+                // Eğer GitHub Raw URL kullanacaksanız buraya tam URL'yi yazın.
+                const response = await fetch('signals.json?v=' + new Date().getTime());
+                
+                if (!response.ok) throw new Error("Dosya bulunamadı");
+                
+                const newSignals = await response.json();
+
+                // Eğer veri değişmediyse işlem yapma (Performans için)
+                if (JSON.stringify(newSignals) === JSON.stringify(signals) && signals.length > 0) {
+                    console.log("Veri güncel, değişiklik yok.");
+                    return; 
+                }
+
+                signals = newSignals;
+                
+                // Tarihe göre sırala (En yeni en üstte)
+                signals.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                statusMsg.innerText = `Son Güncelleme: ${new Date().toLocaleTimeString()}`;
+
+                // Backtest Analizi (Geçmiş Mumları Tara)
+                for (let sig of signals) {
+                    await processSignalHistory(sig);
+                }
+
+                renderDashboard();
+                restartLiveUpdates(); // Yeni semboller için socketi yeniden başlat
+
+            } catch (error) {
+                console.error("Hata:", error);
+                if(signals.length === 0) {
+                    dashboard.innerHTML = `<div style="padding:20px; color:#FF5252">Veri çekilemedi: ${error.message}</div>`;
+                }
             }
-
-            renderDashboard();
-            startLiveUpdates(); // Analiz bitince canlı takibe geç
         }
 
         async function processSignalHistory(sig) {
             // Varsayılan durum
-            sig.status = 'WAITING'; // WAITING, ACTIVE, TP, SL
+            sig.status = 'WAITING';
             sig.pnl = 0;
             sig.currentPrice = 0;
 
-            // CryptoCompare'den o tarihten sonraki verileri çek
+            // CryptoCompare API (Backtest)
             const signalTs = Math.floor(new Date(sig.date).getTime() / 1000);
             const nowTs = Math.floor(Date.now() / 1000);
-            
-            // API limiti yememek için sadece gerekli kadar veri çekelim (max 2000 mum)
-            // Not: Gerçek bir projede bu veriler backend'den gelmeli, frontend için limitli yapıyoruz.
             const url = `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${sig.symbol.replace('USDT','')}&tsym=USDT&limit=500&toTs=${nowTs}`;
             
             try {
@@ -123,60 +138,40 @@
                 const json = await res.json();
                 
                 if (json.Response === 'Success') {
-                    const candles = json.Data.Data; // Zaman sıralı mumlar
-                    
-                    // Sinyal zamanından sonraki mumları bul
+                    const candles = json.Data.Data;
                     const relevantCandles = candles.filter(c => c.time >= signalTs);
+                    
+                    if(relevantCandles.length > 0) {
+                         sig.currentPrice = relevantCandles[relevantCandles.length - 1].close;
+                    }
 
-                    // --- SİMÜLASYON DÖNGÜSÜ ---
                     let isActive = false;
 
                     for (let c of relevantCandles) {
-                        sig.currentPrice = c.close; // Son fiyatı güncelle
-
                         if (!isActive) {
-                            // Henüz işleme girilmedi, Giriş Fiyatına değdi mi?
                             if (checkEntry(c, sig)) {
                                 isActive = true;
                                 sig.status = 'ACTIVE';
                             }
                         }
-
                         if (isActive) {
-                            // İşlem aktif, TP veya SL oldu mu?
-                            if (checkTP(c, sig)) {
-                                sig.status = 'TP';
-                                break; // İşlem bitti, döngüden çık
-                            }
-                            if (checkSL(c, sig)) {
-                                sig.status = 'SL';
-                                break; // İşlem bitti, döngüden çık
-                            }
+                            if (checkTP(c, sig)) { sig.status = 'TP'; break; }
+                            if (checkSL(c, sig)) { sig.status = 'SL'; break; }
                         }
                     }
-                    // Döngü bittiğinde son durum sig nesnesine işlendi.
                 }
             } catch (e) {
-                console.error("Veri hatası:", sig.symbol, e);
+                console.error("Backtest hatası:", sig.symbol, e);
             }
         }
 
-        // --- YARDIMCI MANTIK FONKSİYONLARI ---
-        function checkEntry(candle, sig) {
-            // Candle Low <= Entry <= Candle High
-            return (sig.entry >= candle.low && sig.entry <= candle.high);
+        // --- YARDIMCI MANTIK ---
+        function checkEntry(candle, sig) { return (sig.entry >= candle.low && sig.entry <= candle.high); }
+        function checkTP(candle, sig) { 
+            return (sig.dir === 'LONG' && candle.high >= sig.tp) || (sig.dir === 'SHORT' && candle.low <= sig.tp);
         }
-
-        function checkTP(candle, sig) {
-            if (sig.dir === 'LONG') return candle.high >= sig.tp;
-            if (sig.dir === 'SHORT') return candle.low <= sig.tp;
-            return false;
-        }
-
         function checkSL(candle, sig) {
-            if (sig.dir === 'LONG') return candle.low <= sig.sl;
-            if (sig.dir === 'SHORT') return candle.high >= sig.sl;
-            return false;
+            return (sig.dir === 'LONG' && candle.low <= sig.sl) || (sig.dir === 'SHORT' && candle.high >= sig.sl);
         }
 
         // ---------------------------------------------------------
@@ -186,27 +181,24 @@
             const container = document.getElementById('dashboard');
             container.innerHTML = '';
 
-            // Önce Aktifleri, Sonra Bekleyenleri, Sonra Bitenleri sırala
-            signals.sort((a, b) => {
+            // Sıralama: Aktif > Bekleyen > Biten
+            const sortedSignals = [...signals].sort((a, b) => {
                 const order = { 'ACTIVE': 1, 'WAITING': 2, 'TP': 3, 'SL': 4 };
-                return order[a.status] - order[b.status];
+                return (order[a.status] || 5) - (order[b.status] || 5);
             });
 
-            signals.forEach(sig => {
+            sortedSignals.forEach(sig => {
                 const div = document.createElement('div');
                 div.className = 'card';
                 div.onclick = () => openChart(sig);
-                div.id = `card-${sig.id}`; // Canlı güncelleme için ID
+                div.id = `card-${sig.id}`;
 
-                // Badge Rengi ve Metni
-                let badgeClass = 'badge-waiting';
-                let badgeText = '⏳ GİRİŞ BEKLİYOR';
+                let badgeClass = 'badge-waiting', badgeText = '⏳ GİRİŞ BEKLİYOR';
                 if(sig.status === 'ACTIVE') { badgeClass = 'badge-active'; badgeText = '⚡ İŞLEM AKTİF'; }
                 if(sig.status === 'TP') { badgeClass = 'badge-tp'; badgeText = '🏆 KAR ALINDI'; }
                 if(sig.status === 'SL') { badgeClass = 'badge-sl'; badgeText = '🛑 STOP OLDU'; }
 
-                // PNL Hesapla (Sadece gösterim için, statik)
-                let pnlDisplay = calculatePnL(sig, sig.currentPrice);
+                let pnlDisplay = calculatePnL(sig, sig.currentPrice || sig.entry);
 
                 div.innerHTML = `
                     <div class="badge ${badgeClass}" id="badge-${sig.id}">${badgeText}</div>
@@ -215,7 +207,7 @@
                     
                     <div class="info-grid">
                         <div>Entry: <span class="info-val">${sig.entry}</span></div>
-                        <div>Current: <span class="info-val" id="price-${sig.id}">${sig.currentPrice}</span></div>
+                        <div>Current: <span class="info-val" id="price-${sig.id}">${sig.currentPrice || '---'}</span></div>
                         <div>TP: <span class="info-val" style="color:#00E676">${sig.tp}</span></div>
                         <div>SL: <span class="info-val" style="color:#FF5252">${sig.sl}</span></div>
                     </div>
@@ -232,7 +224,6 @@
         function calculatePnL(sig, currentPrice) {
             if (sig.status === 'WAITING') return { text: '0.00%', color: '#888' };
             
-            // Eğer işlem bitmişse (TP/SL), Entry ile TP/SL arasındaki farkı göster
             let exitPrice = currentPrice;
             if (sig.status === 'TP') exitPrice = sig.tp;
             if (sig.status === 'SL') exitPrice = sig.sl;
@@ -248,32 +239,38 @@
         }
 
         // ---------------------------------------------------------
-        // 4. CANLI FİYAT GÜNCELLEME (WEBSOCKET)
+        // 4. CANLI FİYAT (WEBSOCKET YÖNETİMİ)
         // ---------------------------------------------------------
-        function startLiveUpdates() {
-            // Sadece WAITING ve ACTIVE olanları dinlesek yeterli ama hepsi için açalım
-            const streams = signals.map(s => `${s.symbol.toLowerCase()}@miniTicker`).join('/');
-            const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streams}`);
+        function restartLiveUpdates() {
+            // Eğer eski bağlantı varsa kapat (Yeni semboller gelmiş olabilir)
+            if (activeSocket) {
+                activeSocket.close();
+            }
 
-            ws.onmessage = (e) => {
+            if (signals.length === 0) return;
+
+            // Benzersiz sembolleri al
+            const uniqueSymbols = [...new Set(signals.map(s => s.symbol.toLowerCase()))];
+            const streams = uniqueSymbols.map(s => `${s}@miniTicker`).join('/');
+            
+            activeSocket = new WebSocket(`wss://stream.binance.com:9443/ws/${streams}`);
+
+            activeSocket.onmessage = (e) => {
                 const data = JSON.parse(e.data);
                 const price = parseFloat(data.c);
-                const symbol = data.s;
+                const symbol = data.s; // Gelen sembol (örn: BTCUSDT)
 
-                // Bu sembole ait tüm sinyalleri bul (aynı coinde birden fazla işlem olabilir)
+                // İlgili sembole sahip tüm kartları güncelle
                 signals.filter(s => s.symbol === symbol).forEach(sig => {
                     
-                    // Sadece işlem bitmediyse durumu kontrol etmeye devam et
+                    // Durum Kontrolü (Sadece bitmemiş işlemlerde)
                     if (sig.status === 'WAITING' || sig.status === 'ACTIVE') {
-                        // 1. Bekliyorsa -> Giriş kontrolü
                         if (sig.status === 'WAITING') {
-                            // Basitlik için anlık fiyata bakıyoruz (candle high/low daha doğru ama canlı veri için close yeterli)
                             if ((sig.dir === 'LONG' && price <= sig.entry) || (sig.dir === 'SHORT' && price >= sig.entry)) {
                                 sig.status = 'ACTIVE';
                                 updateCardVisuals(sig, 'ACTIVE');
                             }
                         }
-                        // 2. Aktifse -> TP/SL kontrolü
                         else if (sig.status === 'ACTIVE') {
                             if ((sig.dir === 'LONG' && price >= sig.tp) || (sig.dir === 'SHORT' && price <= sig.tp)) {
                                 sig.status = 'TP';
@@ -286,9 +283,10 @@
                         }
                     }
 
-                    // Fiyat ve PnL Yazısını Güncelle (Her durumda)
+                    // DOM Güncelleme
                     const priceEl = document.getElementById(`price-${sig.id}`);
                     const pnlEl = document.getElementById(`pnl-${sig.id}`);
+                    
                     if(priceEl) priceEl.innerText = price;
                     
                     const pnlInfo = calculatePnL(sig, price);
@@ -317,7 +315,7 @@
         }
 
         // ---------------------------------------------------------
-        // 5. DETAY GRAFİĞİ (MODAL)
+        // 5. DETAY GRAFİĞİ
         // ---------------------------------------------------------
         let chartInstance = null;
         function openChart(sig) {
@@ -333,27 +331,35 @@
             
             const series = chartInstance.addCandlestickSeries();
             
-            // Çizgiler
             series.createPriceLine({ price: sig.entry, color: '#2962FF', title: 'ENTRY' });
             series.createPriceLine({ price: sig.sl, color: '#FF5252', title: 'SL' });
             series.createPriceLine({ price: sig.tp, color: '#00E676', title: 'TP' });
 
-            // Veriyi Çek (Geniş tarih aralığı)
             fetch(`https://min-api.cryptocompare.com/data/v2/histominute?fsym=${sig.symbol.replace('USDT','')}&tsym=USDT&limit=500`)
                 .then(r => r.json())
                 .then(d => {
                     const data = d.Data.Data.map(i => ({ time: i.time, open: i.open, high: i.high, low: i.low, close: i.close }));
                     series.setData(data);
                 });
+            
+            window.addEventListener('resize', () => {
+                if(chartInstance) chartInstance.resize(container.clientWidth, container.clientHeight);
+            });
         }
 
         function closeModal() {
             document.getElementById('modal').style.display = 'none';
-            if(chartInstance) chartInstance.remove();
+            if(chartInstance) {
+                chartInstance.remove();
+                chartInstance = null;
+            }
         }
 
-        // BAŞLAT
-        analyzeSignals();
+        // --- UYGULAMAYI BAŞLAT ---
+        fetchAndAnalyze();
+
+        // Her 60 saniyede bir yeni sinyal var mı diye kontrol et
+        setInterval(fetchAndAnalyze, 60000);
 
     </script>
 </body>
