@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Supabase Bağlantı Testi</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { background: #111; color: #fff; font-family: monospace; padding: 50px; }
+        .box { border: 1px solid #333; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+        .success { color: #00ff00; border-color: #00ff00; }
+        .error { color: #ff5555; border-color: #ff5555; }
+        .loading { color: #ffff00; }
+    </style>
+</head>
+<body>
+    <h1>📡 Supabase Bağlantı Testi</h1>
+    <div id="log" class="box loading">Test Başlıyor...</div>
+
+    <script>
+        // --- BURAYA BİLGİLERİNİ GİR ---
+        const SUPABASE_URL = 'https://your-project.supabase.co'; 
+        const SUPABASE_KEY = "your_supabase_anon_key";
+          // ------------------------------
+
+        const logDiv = document.getElementById('log');
+
+        async function testConnection() {
+            try {
+                logDiv.innerHTML += "<br>1. İstemci oluşturuluyor...";
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                
+                logDiv.innerHTML += "<br>2. 'signals' tablosuna sorgu atılıyor...";
+                
+                const { data, error } = await supabase
+                    .from('signals')
+                    .select('*')
+                    .limit(5);
+
+                if (error) {
+                    logDiv.className = "box error";
+                    logDiv.innerHTML += `<br><br>❌ HATA OLUŞTU:<br>Kod: ${error.code}<br>Mesaj: ${error.message}<br>Detay: ${error.details || 'Yok'}`;
+                    
+                    if(error.code === 'PGRST301' || error.message.includes('permission')) {
+                        logDiv.innerHTML += "<br><br>👉 ÇÖZÜM: Supabase Panel > Table Editor > signals tablosuna git > 'RLS is enabled' yazan yere tıkla > 'Disable RLS' yap.";
+                    }
+                } else {
+                    logDiv.className = "box success";
+                    logDiv.innerHTML += "<br><br>✅ BAĞLANTI BAŞARILI!";
+                    logDiv.innerHTML += `<br>Gelen Veri Sayısı: ${data.length}`;
+                    
+                    if (data.length === 0) {
+                        logDiv.innerHTML += "<br>⚠️ Uyarı: Bağlantı var ama tablo BOŞ veya RLS yüzünden veri gelmiyor.";
+                    } else {
+                        logDiv.innerHTML += `<br>Örnek Veri: ${JSON.stringify(data[0])}`;
+                    }
+                }
+
+            } catch (err) {
+                logDiv.className = "box error";
+                logDiv.innerHTML += `<br><br>❌ KRİTİK HATA: ${err.message}`;
+            }
+        }
+
+        testConnection();
+    </script>
+</body>
+</html>
