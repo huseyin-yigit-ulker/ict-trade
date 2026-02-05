@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICT Journal - Binance Futures & TV Style</title>
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+    <div id="mode-selection">
+        <h1>ICT JOURNAL</h1>
+        <p>Backtest veya Canlı Veri Seçimi</p>
+        <div class="mode-container">
+            <div class="mode-card disabled">
+                <h3>🔴 LIVE</h3>
+                <p>Supabase (Devre Dışı)</p>
+            </div>
+            <div class="mode-card" id="btn-backtest">
+                <h3>📂 BACKTEST</h3>
+                <p>Binance Futures Data</p>
+                <small id="path-text">Path: ./data/btcusdt.json</small>
+                <div class="spinner" id="spinner"></div>
+            </div>
+        </div>
+        <input type="file" id="jsonInput" accept=".json" style="display:none;">
+    </div>
+
+    <div id="main-app" style="display:none;">
+        <div class="app-header">
+            <div class="header-title">⚡ ICT TRADING JOURNAL <span class="source-badge">BINANCE F</span></div>
+            <div class="status-badge" id="conn-status">Mod: Backtest</div>
+        </div>
+        <div id="dashboard"></div>
+    </div>
+
+    <div id="modal">
+        <div id="chart-header"><h2 id="modal-title">BTCUSDT</h2></div>
+        <button id="close-modal">KAPAT [ESC]</button>
+        <div id="chart-container"></div>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/chart.js"></script>
+</body>
+</html>
