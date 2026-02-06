@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const Dashboard = () => {
@@ -9,45 +10,65 @@ const Dashboard = () => {
     return (diff / sig.entry) * 100;
   };
 
-  const grouped = filteredSignals.reduce((acc, sig) => {
-    const dateKey = sig.dateObj.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-    if (!acc[dateKey]) acc[dateKey] = [];
-    acc[dateKey].push(sig);
-    return acc;
-  }, {});
+  const grouped = useMemo(() => {
+    return filteredSignals.reduce((acc, sig) => {
+      const dateKey = sig.dateObj.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey].push(sig);
+      return acc;
+    }, {});
+  }, [filteredSignals]);
 
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {Object.keys(grouped).map(dateKey => {
         const trades = grouped[dateKey];
         const dailyPnL = trades.reduce((sum, t) => sum + calculatePnL(t), 0);
-        
+
         return (
-          <div key={dateKey}>
-            <div className="date-header">
-              <span>{dateKey}</span>
-              <div className="daily-summary">
-                <span style={{ color: '#aaa' }}>{trades.length} İşlem</span>
-                <span className={dailyPnL >= 0 ? 'win' : 'loss'}>Net: {dailyPnL.toFixed(2)}%</span>
+          <div key={dateKey} className="day-notebook">
+            <div className="day-header">
+              <div className="day-title">{dateKey}</div>
+              <div className="day-summary">
+                <span>{trades.length} işlem</span>
+                <span className={dailyPnL >= 0 ? 'win' : 'loss'}>{dailyPnL.toFixed(2)}%</span>
               </div>
             </div>
-            
-            <div className="date-group">
+
+            <div className="trade-grid">
               {trades.map(sig => {
                 const pnl = calculatePnL(sig);
                 const pnlClass = pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting');
-                
+                const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
                 return (
-                  <div key={sig.id} className="trade-item" onClick={() => setActiveSignal(sig)}>
-                    <div className="trade-info">
+                  <div key={sig.id} className="trade-card" onClick={() => setActiveSignal(sig)}>
+                    <div className="trade-head">
                       <span className="symbol-box">{sig.symbol}</span>
-                      {/* DÜZELTİLDİ: className eklendi */}
                       <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
-                      <span className="time-detail">{sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="time-detail">{timeLabel}</span>
                     </div>
-                    <div className="trade-result">
-                      <span className={`status-text ${pnlClass}`}>{sig.status}</span>
-                      <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? pnl.toFixed(2) + '%' : '--'}</span>
+                    <div className="trade-body">
+                      <div className="trade-metric">
+                        <span className="metric-label">Durum</span>
+                        <span className={`status-text ${pnlClass}`}>{sig.status}</span>
+                      </div>
+                      <div className="trade-metric">
+                        <span className="metric-label">P/L</span>
+                        <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? pnl.toFixed(2) + '%' : '--'}</span>
+                      </div>
+                      <div className="trade-metric">
+                        <span className="metric-label">Entry</span>
+                        <span className="metric-value">{sig.entry?.toFixed(4)}</span>
+                      </div>
+                      <div className="trade-metric">
+                        <span className="metric-label">TP/SL</span>
+                        <span className="metric-value">{sig.tp?.toFixed(4)} / {sig.sl?.toFixed(4)}</span>
+                      </div>
+                    </div>
+                    <div className="trade-foot">
+                      <div className={`chip ${pnlClass}`}>{pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL')}</div>
+                      <div className="chip outline">Detaylı Grafik</div>
                     </div>
                   </div>
                 );
