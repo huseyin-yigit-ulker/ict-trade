@@ -42,7 +42,14 @@ const Dashboard = () => {
                 const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
                 return (
-                  <div key={sig.id} className="trade-card" onClick={() => setActiveSignal(sig)}>
+                  <div
+                    key={sig.id}
+                    className="trade-card"
+                    onClick={() => {
+                      setChartView('journal');
+                      setActiveSignal(sig);
+                    }}
+                  >
                     <div className="trade-head">
                       <span className="symbol-box">{sig.symbol}</span>
                       <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
@@ -77,16 +84,6 @@ const Dashboard = () => {
                         }}
                       >
                         Live Graph
-                      </button>
-                      <button
-                        className="chip outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setChartView('journal');
-                          setActiveSignal(sig);
-                        }}
-                      >
-                        Trade Graph
                       </button>
                     </div>
                   </div>
