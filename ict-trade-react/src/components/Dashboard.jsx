@@ -3,14 +3,12 @@ import { useTradeContext } from '../context/TradeContext';
 const Dashboard = () => {
   const { filteredSignals, setActiveSignal } = useTradeContext();
 
-  // PnL Hesaplama Helper
   const calculatePnL = (sig) => {
     if (sig.status !== 'TP' && sig.status !== 'SL') return 0;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
   };
 
-  // Gruplama Mantığı
   const grouped = filteredSignals.reduce((acc, sig) => {
     const dateKey = sig.dateObj.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
     if (!acc[dateKey]) acc[dateKey] = [];
@@ -43,6 +41,7 @@ const Dashboard = () => {
                   <div key={sig.id} className="trade-item" onClick={() => setActiveSignal(sig)}>
                     <div className="trade-info">
                       <span className="symbol-box">{sig.symbol}</span>
+                      {/* DÜZELTİLEN SATIR BURASI: className eklendi */}
                       <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
                       <span className="time-detail">{sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
