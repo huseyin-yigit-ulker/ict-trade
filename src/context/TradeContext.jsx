@@ -13,9 +13,21 @@ export const TradeProvider = ({ children }) => {
   const [showStats, setShowStats] = useState(false);
 
   const processData = (data) => {
-    if (!data || !Array.isArray(data)) return;
+    const raw = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.ict_signal)
+        ? data.ict_signal
+        : [];
 
-    const processed = data.map((item, index) => {
+    if (raw.length === 0) {
+      setAllSignals([]);
+      setFilteredSignals([]);
+      setSelectedSymbols(new Set());
+      setIsLoaded(true);
+      return;
+    }
+
+    const processed = raw.map((item, index) => {
       // Status Mapping
       let status = 'WAITING';
       if (item.status === 'TAKE PROFIT') status = 'TP';
@@ -56,10 +68,8 @@ export const TradeProvider = ({ children }) => {
 
   // Başlangıçta veriyi yükle
   useEffect(() => {
-    // Check if the data exists before processing
-    if (defaultData && defaultData.length > 0) {
-      processData(defaultData); // Your processing function
-      setIsLoaded(true);
+    if (defaultData) {
+      processData(defaultData);
     }
   }, []);
 

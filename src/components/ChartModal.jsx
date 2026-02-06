@@ -10,11 +10,13 @@ const ChartModal = () => {
     if (!activeSignal || !chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
-      layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
-      grid: { vertLines: { color: '#242938' }, horzLines: { color: '#242938' } },
+      layout: { backgroundColor: '#0b0f18', textColor: '#d6e1ff' },
+      grid: { vertLines: { color: '#1a2333' }, horzLines: { color: '#1a2333' } },
       timeScale: { timeVisible: true, secondsVisible: false },
       width: chartContainerRef.current.clientWidth,
-      height: 500,
+      height: 520,
+      rightPriceScale: { borderColor: '#1a2333' },
+      crosshair: { mode: 1 }
     });
 
     const series = chart.addCandlestickSeries({
@@ -24,8 +26,9 @@ const ChartModal = () => {
     // Binance Verisi
     const fetchAndRender = async () => {
       const entryTime = activeSignal.dateObj.getTime();
-      const fetchStartTime = entryTime - (60 * 60 * 1000 * 4);
-      const fetchEndTime = activeSignal.exitTs + (60 * 60 * 1000 * 4);
+      const exitTime = activeSignal.exitTs || entryTime + (20 * 60 * 1000);
+      const fetchStartTime = entryTime - (60 * 1000 * 20);
+      const fetchEndTime = exitTime + (60 * 1000 * 20);
       const baseSymbol = activeSignal.symbol.replace('1000', '');
 
       try {
@@ -41,10 +44,29 @@ const ChartModal = () => {
         }));
 
         series.setData(candles);
-        
-        series.createPriceLine({ price: activeSignal.entry, color: '#787b86', lineWidth: 1, lineStyle: 2, title: 'ENTRY' });
-        series.createPriceLine({ price: activeSignal.tp, color: '#089981', lineWidth: 2, title: 'TP' });
-        series.createPriceLine({ price: activeSignal.sl, color: '#F23645', lineWidth: 2, title: 'SL' });
+
+        series.createPriceLine({ price: activeSignal.entry, color: '#7b8cff', lineWidth: 2, lineStyle: 2, title: 'ENTRY' });
+        series.createPriceLine({ price: activeSignal.tp, color: '#30d158', lineWidth: 2, title: 'TP' });
+        series.createPriceLine({ price: activeSignal.sl, color: '#ff4d6d', lineWidth: 2, title: 'SL' });
+
+        const markerSeries = chart.addLineSeries({ color: 'transparent' });
+        markerSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+        markerSeries.setMarkers([
+          {
+            time: Math.floor(entryTime / 1000),
+            position: 'belowBar',
+            color: '#7b8cff',
+            shape: 'arrowUp',
+            text: 'ENTRY'
+          },
+          {
+            time: Math.floor(exitTime / 1000),
+            position: 'aboveBar',
+            color: activeSignal.status === 'TP' ? '#30d158' : '#ff4d6d',
+            shape: 'arrowDown',
+            text: activeSignal.status === 'TP' ? 'TP' : 'SL'
+          }
+        ]);
 
         chart.timeScale().fitContent();
       } catch (err) {
