@@ -4,7 +4,6 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import ChartModal from './components/ChartModal';
 import StatsModal from './components/StatsModal';
-import './assets/css/style.css'; // Mevcut CSS'ini import et
 
 const MainContent = () => {
   const { isLoaded, activeSignal, showStats } = useTradeContext();

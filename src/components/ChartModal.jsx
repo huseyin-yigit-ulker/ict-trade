@@ -5,12 +5,10 @@ import { useTradeContext } from '../context/TradeContext';
 const ChartModal = () => {
   const { activeSignal, setActiveSignal } = useTradeContext();
   const chartContainerRef = useRef(null);
-  const chartRef = useRef(null);
 
   useEffect(() => {
     if (!activeSignal || !chartContainerRef.current) return;
 
-    // Grafik Oluşturma
     const chart = createChart(chartContainerRef.current, {
       layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#242938' }, horzLines: { color: '#242938' } },
@@ -23,7 +21,7 @@ const ChartModal = () => {
       upColor: '#089981', downColor: '#F23645', borderVisible: false, wickUpColor: '#089981', wickDownColor: '#F23645'
     });
 
-    // Binance Verisi Çekme
+    // Binance Verisi
     const fetchAndRender = async () => {
       const entryTime = activeSignal.dateObj.getTime();
       const fetchStartTime = entryTime - (60 * 60 * 1000 * 4);
@@ -44,25 +42,21 @@ const ChartModal = () => {
 
         series.setData(candles);
         
-        // Çizgiler
         series.createPriceLine({ price: activeSignal.entry, color: '#787b86', lineWidth: 1, lineStyle: 2, title: 'ENTRY' });
         series.createPriceLine({ price: activeSignal.tp, color: '#089981', lineWidth: 2, title: 'TP' });
         series.createPriceLine({ price: activeSignal.sl, color: '#F23645', lineWidth: 2, title: 'SL' });
 
         chart.timeScale().fitContent();
       } catch (err) {
-        console.error("Binance data error", err);
+        console.error("Chart Data Error:", err);
       }
     };
 
     fetchAndRender();
-    chartRef.current = chart;
 
-    // Cleanup: Modal kapanınca grafiği yok et
     return () => chart.remove();
   }, [activeSignal]);
 
-  // ESC ile kapatma
   useEffect(() => {
     const handleEsc = (e) => e.key === 'Escape' && setActiveSignal(null);
     window.addEventListener('keydown', handleEsc);
@@ -73,7 +67,7 @@ const ChartModal = () => {
     <div id="modal" style={{ display: 'block' }}>
       <div id="chart-header">
         <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
-          {activeSignal.symbol} | {activeSignal.dir} | Entry: {activeSignal.entry}
+          {activeSignal.symbol} | {activeSignal.dir}
         </h2>
       </div>
       <button id="close-modal" onClick={() => setActiveSignal(null)}>KAPAT [ESC]</button>

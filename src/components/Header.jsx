@@ -24,7 +24,7 @@ const Header = () => {
             Coin Seçimi ({selectedSymbols.size})
           </button>
           
-          <div id="multi-select-list" className={`multi-select-content ${dropdownOpen ? 'show' : ''}`}>
+          <div className={`multi-select-content ${dropdownOpen ? 'show' : ''}`} id="multi-select-list">
             {uniqueSymbols.map(sym => (
               <label key={sym} onClick={(e) => e.stopPropagation()}>
                 <input 
@@ -36,13 +36,20 @@ const Header = () => {
               </label>
             ))}
           </div>
-          {/* Dışarı tıklayınca kapanması için basit bir overlay eklenebilir veya useEffect kullanılabilir */}
         </div>
 
         <button id="btn-stats" className="header-btn" onClick={() => setShowStats(true)}>📊 ÖZET TABLO</button>
       </div>
       
       <div className="status-badge" style={{ fontSize: '12px', color: '#aaa' }}>Mod: Backtest</div>
+      
+      {/* Overlay to close dropdown */}
+      {dropdownOpen && (
+        <div 
+          style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', zIndex:99}} 
+          onClick={() => setDropdownOpen(false)}
+        ></div>
+      )}
     </div>
   );
 };
