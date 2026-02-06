@@ -1,11 +1,9 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-// JSON dosyasını direkt import ediyoruz
+// MUST IMPORT DIRECTLY:
 import defaultData from '../assets/data/trades.json';
 
 const TradeContext = createContext();
-
 export const useTradeContext = () => useContext(TradeContext);
-
 export const TradeProvider = ({ children }) => {
   const [allSignals, setAllSignals] = useState([]);
   const [filteredSignals, setFilteredSignals] = useState([]);
@@ -58,8 +56,10 @@ export const TradeProvider = ({ children }) => {
 
   // Başlangıçta veriyi yükle
   useEffect(() => {
+    // Check if the data exists before processing
     if (defaultData && defaultData.length > 0) {
-        processData(defaultData);
+      processData(defaultData); // Your processing function
+      setIsLoaded(true);
     }
   }, []);
 
