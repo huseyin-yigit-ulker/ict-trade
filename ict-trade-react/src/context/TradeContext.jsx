@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-// 1. JSON dosyasını direkt import ediyoruz
+// 1. JSON dosyasını direkt import ediyoruz (En garanti yöntem)
 import defaultData from '../assets/data/trades.json';
 
 const TradeContext = createContext();
@@ -17,16 +17,27 @@ export const TradeProvider = ({ children }) => {
   // Veriyi işleyen fonksiyon
   const processData = (data) => {
     if (!data || !Array.isArray(data)) {
-        console.error("Veri formatı hatalı veya boş!");
+        console.error("Veri hatalı veya boş!");
         return;
     }
 
     const processed = data.map((item, index) => {
-      const status = item.status === 'TAKE PROFIT' ? 'TP' : item.status === 'STOP LOSS' ? 'SL' : item.status || 'WAITING';
+      // Status mapping
+      let status = item.status || 'WAITING';
+      if (item.status === 'TAKE PROFIT') status = 'TP';
+      if (item.status === 'STOP LOSS') status = 'SL';
+
       const entry = parseFloat(item.entry_price);
       let exitPrice = item.current_price || entry;
+      
       if (status === 'TP') exitPrice = parseFloat(item.tp_price);
       if (status === 'SL') exitPrice = parseFloat(item.sl_price);
+
+      // Tarih hesaplama (Eğer exit_time yoksa 2 saat ekle)
+      const signalTime = new Date(item.signal_time).getTime();
+      const exitTime = item.exit_time 
+        ? new Date(item.exit_time).getTime() 
+        : signalTime + (2 * 60 * 60 * 1000);
 
       return {
         id: index,
@@ -36,7 +47,7 @@ export const TradeProvider = ({ children }) => {
         tp: parseFloat(item.tp_price),
         sl: parseFloat(item.sl_price),
         dateObj: new Date(item.signal_time),
-        exitTs: item.exit_time ? new Date(item.exit_time).getTime() : new Date(item.signal_time).getTime() + (2 * 60 * 60 * 1000),
+        exitTs: exitTime,
         status,
         exitPrice
       };
@@ -44,19 +55,18 @@ export const TradeProvider = ({ children }) => {
 
     setAllSignals(processed);
     
-    // İlk yüklemede tüm sembolleri seç
+    // Tüm sembolleri seçili hale getir
     const symbols = new Set(processed.map(s => s.symbol));
     setSelectedSymbols(symbols);
+    
+    // Yükleme tamamlandı
     setIsLoaded(true);
   };
 
   // 2. useEffect içinde import edilen veriyi yüklüyoruz
   useEffect(() => {
     if (defaultData) {
-        console.log("Veri başarıyla yüklendi:", defaultData.length, "adet işlem.");
         processData(defaultData);
-    } else {
-        console.error("JSON dosyası okunamadı!");
     }
   }, []);
 
