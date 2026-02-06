@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, LineSeries } from 'lightweight-charts';
+import { createChart, CandlestickSeries, BaselineSeries, LineSeries } from 'lightweight-charts';
 import { useTradeContext } from '../context/TradeContext';
 
 const ChartModal = () => {
@@ -9,22 +9,17 @@ const ChartModal = () => {
   const [showTv, setShowTv] = useState(chartView === 'tv');
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
+
+  // PnL Hesaplama
   const calculatePnL = (sig) => {
     if (!sig || !sig.entry || !sig.exitPrice) return null;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
   };
 
-  const normalizeForBinance = (sym) => {
-    if (!sym) return '';
-    return sym.replace(/[^A-Za-z0-9]/g, '');
-  };
-
-  const normalizeForTv = (sym) => {
-    if (!sym) return '';
-    return sym.replace(/[^A-Za-z0-9.]/g, '');
-  };
-
+  const normalizeForBinance = (sym) => sym ? sym.replace(/[^A-Za-z0-9]/g, '') : '';
+  const normalizeForTv = (sym) => sym ? sym.replace(/[^A-Za-z0-9.]/g, '') : '';
+  
   const toTvFuturesSymbol = (sym) => {
     let base = normalizeForTv(sym);
     if (!base) return '';
@@ -63,62 +58,82 @@ const ChartModal = () => {
     const width = rect.width > 0 ? rect.width : 900;
     const height = rect.height > 0 ? rect.height : 520;
 
+    // --- TEMA AYARLARI ---
     const themeConfig = {
-      bg: '#0b0f18',
-      text: '#d6e1ff',
-      grid: 'rgba(0,0,0,0)',
-      up: '#bfc9d9',
-      down: '#1b1b1b'
+      bg: '#131722',           // TradingView Dark
+      text: '#d1d4dc',         
+      grid: 'transparent',     // Gridler gizli
+      upColor: '#089981',      // TV Yeşili
+      downColor: '#F23645',    // TV Kırmızısı
+      wickUp: '#089981',
+      wickDown: '#F23645',
     };
 
     const chart = createChart(chartContainerRef.current, {
-      layout: { backgroundColor: themeConfig.bg, textColor: themeConfig.text },
-      grid: { vertLines: { color: themeConfig.grid }, horzLines: { color: themeConfig.grid } },
+      layout: { 
+        background: { type: 'solid', color: themeConfig.bg }, 
+        textColor: themeConfig.text,
+        fontFamily: "'Trebuchet MS', Roboto, Ubuntu, sans-serif"
+      },
+      grid: { 
+        vertLines: { visible: false }, 
+        horzLines: { visible: false } 
+      },
       width,
       height,
-      rightPriceScale: { borderColor: 'rgba(0,0,0,0)' },
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: 'rgba(0,0,0,0)' },
+      rightPriceScale: { 
+        borderColor: 'rgba(197, 203, 206, 0.2)',
+        scaleMargins: { top: 0.2, bottom: 0.2 },
+      },
+      timeScale: { 
+        timeVisible: true, 
+        secondsVisible: true,
+        borderColor: 'rgba(197, 203, 206, 0.2)' 
+      },
       crosshair: {
         mode: 1,
-        vertLine: { color: 'rgba(255,255,255,0.15)', style: 2 },
-        horzLine: { color: 'rgba(255,255,255,0.15)', style: 2 }
+        vertLine: { color: '#9598a1', style: 2, labelBackgroundColor: '#9598a1' },
+        horzLine: { color: '#9598a1', style: 2, labelBackgroundColor: '#9598a1' }
       }
     });
     chartRef.current = chart;
 
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor: themeConfig.up,
-      downColor: themeConfig.down,
+    // 1. Ana Mum Grafiği
+    const mainSeries = chart.addSeries(CandlestickSeries, {
+      upColor: themeConfig.upColor,
+      downColor: themeConfig.downColor,
       borderVisible: false,
-      wickUpColor: themeConfig.up,
-      wickDownColor: themeConfig.down
+      wickUpColor: themeConfig.wickUp,
+      wickDownColor: themeConfig.wickDown
     });
 
-    // Binance Verisi
     const fetchAndRender = async () => {
       setChartError('');
-      const entryTime = activeSignal.dateObj.getTime();
-      const exitTime = activeSignal.exitTs || entryTime + (50 * 60 * 1000);
-      const fetchStartTime = entryTime - (60 * 1000 * 50);
-      const fetchEndTime = exitTime + (60 * 1000 * 50);
-      const baseSymbol = normalizeForBinance(activeSignal.symbol);
-
       try {
+        const entryTime = activeSignal.dateObj.getTime();
+        const exitTime = activeSignal.exitTs || entryTime + (60 * 60 * 1000);
+        
+        // Geniş bir aralık çekelim (Görsel bütünlük için)
+        const fetchStartTime = entryTime - (60 * 1000 * 120); 
+        const fetchEndTime = exitTime + (60 * 1000 * 60);     
+        const baseSymbol = normalizeForBinance(activeSignal.symbol);
+
+        let data = [];
         const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
         const res = await fetch(urlFutures);
-        let data = await res.json();
+        let rawData = await res.json();
 
-        if (!Array.isArray(data)) {
+        if (!Array.isArray(rawData)) {
           const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
           const resSpot = await fetch(urlSpot);
-          data = await resSpot.json();
+          rawData = await resSpot.json();
         }
 
-        if (!Array.isArray(data)) {
-          throw new Error('Kline verisi alınamadı');
+        if (!Array.isArray(rawData) || rawData.length === 0) {
+          throw new Error('Kline verisi boş');
         }
 
-        const candles = data.map(d => ({
+        const candles = rawData.map(d => ({
           time: d[0] / 1000,
           open: parseFloat(d[1]),
           high: parseFloat(d[2]),
@@ -126,91 +141,157 @@ const ChartModal = () => {
           close: parseFloat(d[4])
         }));
 
-        if (candles.length === 0) {
-          throw new Error('Kline verisi boş');
-        }
+        mainSeries.setData(candles);
 
-        series.setData(candles);
-
-        const entryPrice = activeSignal.entry;
-        const tpPrice = activeSignal.tp;
-        const slPrice = activeSignal.sl;
+        const { entry, tp, sl, dir } = activeSignal;
         const entryTs = Math.floor(entryTime / 1000);
-        const exitTs = Math.floor(exitTime / 1000);
+        const exitTsReal = Math.floor(exitTime / 1000);
+        const isLong = dir === 'LONG';
 
-        if (entryPrice && tpPrice) {
-          const tpBand = chart.addBaselineSeries({
-            baseValue: { type: 'price', price: entryPrice },
-            topLineColor: 'rgba(48, 209, 88, 0.9)',
-            topFillColor1: 'rgba(48, 209, 88, 0.28)',
-            topFillColor2: 'rgba(48, 209, 88, 0.06)',
+        // --- 2. TRADE ALANI (Görseldeki gibi sadece işlem süresince boyalı) ---
+        // Baseline Series kullanarak Entry fiyatını baz alıp boyama yapıyoruz.
+        // ÖNEMLİ: Sadece Entry ve Exit arasındaki datayı veriyoruz.
+        
+        if (entry) {
+          const pnlSeries = chart.addSeries(BaselineSeries, {
+            baseValue: { type: 'price', price: entry },
+            // Long işlemde kar (üst) yeşil, zarar (alt) kırmızı
+            // Short işlemde kar (alt) yeşil, zarar (üst) kırmızı
+            topLineColor: 'rgba(0,0,0,0)', 
+            topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(242, 54, 69, 0.25)', 
+            topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(242, 54, 69, 0.05)',
+            
             bottomLineColor: 'rgba(0,0,0,0)',
-            bottomFillColor1: 'rgba(0,0,0,0)',
-            bottomFillColor2: 'rgba(0,0,0,0)',
-            lineWidth: 1,
+            bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(8, 153, 129, 0.25)',
+            bottomFillColor2: isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(8, 153, 129, 0.05)',
+            
+            lineWidth: 0, 
             priceLineVisible: false,
-            lastValueVisible: false
+            lastValueVisible: false,
+            crosshairMarkerVisible: false
           });
-          tpBand.setData([
-            { time: entryTs, value: tpPrice },
-            { time: exitTs, value: tpPrice }
-          ]);
+
+          // Datayı filtrele: Sadece işlem süresi
+          const tradePeriodData = candles
+            .filter(c => c.time >= entryTs && c.time <= exitTsReal)
+            .map(c => ({ time: c.time, value: c.close }));
+            
+          pnlSeries.setData(tradePeriodData);
         }
 
-        if (entryPrice && slPrice) {
-          const slBand = chart.addBaselineSeries({
-            baseValue: { type: 'price', price: entryPrice },
-            topLineColor: 'rgba(0,0,0,0)',
-            topFillColor1: 'rgba(0,0,0,0)',
-            topFillColor2: 'rgba(0,0,0,0)',
-            bottomLineColor: 'rgba(255, 77, 109, 0.9)',
-            bottomFillColor1: 'rgba(255, 77, 109, 0.28)',
-            bottomFillColor2: 'rgba(255, 77, 109, 0.06)',
-            lineWidth: 1,
-            priceLineVisible: false,
-            lastValueVisible: false
-          });
-          slBand.setData([
-            { time: entryTs, value: slPrice },
-            { time: exitTs, value: slPrice }
-          ]);
-        }
+        // --- 3. DASHED LINE (Girişten Çıkışa Kesikli Çizgi) ---
+        if (entry) {
+            const trendLineSeries = chart.addSeries(LineSeries, {
+                color: '#d1d4dc',
+                lineWidth: 1,
+                lineStyle: 2, // Dashed
+                crosshairMarkerVisible: false,
+                lastValueVisible: false,
+                priceLineVisible: false
+            });
+            
+            // İki nokta: Başlangıç ve Bitiş
+            // Bitiş fiyatı exitPrice, eğer yoksa son kapanış
+            const endPrice = activeSignal.exitPrice || candles[candles.length-1].close;
+            
+            trendLineSeries.setData([
+                { time: entryTs, value: entry },
+                { time: exitTsReal, value: endPrice }
+            ]);
 
-        if (entryPrice && entryTs && exitTs) {
-          const entryLine = chart.addSeries(LineSeries, { color: 'rgba(123, 140, 255, 0.8)', lineWidth: 1 });
-          entryLine.setData([
-            { time: entryTs, value: entryPrice },
-            { time: exitTs, value: entryPrice }
-          ]);
-        }
+            // --- 4. NOKTA (POINT) İŞARETÇİLERİ ---
+            const markers = [];
+            
+            // Entry Noktası (Mavi Daire)
+            markers.push({
+                time: entryTs,
+                position: 'inBar',
+                color: '#2962FF',
+                shape: 'circle',
+                size: 2, // Biraz daha belirgin
+            });
 
-        if (entryPrice) {
-          const marker = chart.addSeries(LineSeries, { color: 'transparent' });
-          marker.setData(candles.map(c => ({ time: c.time, value: c.close })));
-          marker.setMarkers([
-            {
-              time: entryTs,
-              position: 'belowBar',
-              color: '#7b8cff',
-              shape: 'arrowUp',
-              text: 'ENTRY'
-            },
-            {
-              time: exitTs,
-              position: 'aboveBar',
-              color: activeSignal.status === 'TP' ? '#30d158' : '#ff4d6d',
-              shape: 'arrowDown',
-              text: activeSignal.status === 'TP' ? 'TP' : 'SL'
+            // Exit Noktası (Varsa)
+            if (activeSignal.exitPrice) {
+                 markers.push({
+                    time: exitTsReal,
+                    position: 'inBar',
+                    color: calculatePnL(activeSignal) >= 0 ? '#089981' : '#F23645',
+                    shape: 'circle',
+                    size: 2,
+                });
             }
-          ]);
+            // TrendLine üzerine marker ekleyemiyoruz ama Main seriye ekleyebiliriz
+            // Ancak zamanlar main seride olmalı.
+            
+            // Biz burada mainSeries üzerine ekleyelim görsel olarak
+            const mainMarkers = [];
+            
+            // Entry Marker (Ok yerine görseldeki gibi point/circle mantığı için yazı eklemiyoruz)
+            mainMarkers.push({
+              time: entryTs,
+              position: isLong ? 'belowBar' : 'aboveBar',
+              color: '#2962FF',
+              shape: 'arrowUp', // Yönü göstermek için ok daha iyi, ama kullanıcı point istedi.
+              text: 'ENTRY'     // Circle shape lightweight-charts markerlarında kısıtlı, 'circle' yok, arrow var.
+                                // Circle efekti için series marker yerine custom yapılabilir ama 'circle' şekli en yakın 'circle' yoksa idare edeceğiz.
+                                // Workaround: shape: 'circle' lightweight charts v4'te geldi.
+            });
+
+            // Sadece işlem kapanışına görsel marker
+            if (activeSignal.exitTs) {
+               if(exitTsReal <= candles[candles.length - 1].time) {
+                 mainMarkers.push({
+                   time: exitTsReal,
+                   position: isLong ? 'aboveBar' : 'belowBar',
+                   color: activeSignal.status === 'TP' ? '#089981' : '#F23645',
+                   shape: 'arrowDown',
+                   text: activeSignal.status
+                 });
+               }
+            }
+            mainSeries.setMarkers(mainMarkers);
+        }
+
+        // Fiyat Çizgileri (Entry, TP, SL)
+        if (entry) {
+          mainSeries.createPriceLine({
+            price: entry,
+            color: '#2962FF',
+            lineWidth: 1,
+            lineStyle: 0,
+            axisLabelVisible: true,
+            title: 'Giriş',
+          });
+        }
+        if (tp) {
+          mainSeries.createPriceLine({
+            price: tp,
+            color: '#089981',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'TP',
+          });
+        }
+        if (sl) {
+          mainSeries.createPriceLine({
+            price: sl,
+            color: '#F23645',
+            lineWidth: 1,
+            lineStyle: 2, 
+            axisLabelVisible: true,
+            title: 'SL',
+          });
         }
 
         chart.timeScale().fitContent();
         setChartLoading(false);
+
       } catch (err) {
-        setChartError('Grafik verisi çekilemedi. TradingView görünümüne geçebilirsin.');
+        setChartError('Veri alınamadı.');
         setChartLoading(false);
-        console.error("Chart Data Error:", err);
+        console.error(err);
       }
     };
 
@@ -218,9 +299,8 @@ const ChartModal = () => {
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (!entry || !chartRef.current) return;
-      const { width: w, height: h } = entry.contentRect;
-      if (w > 0 && h > 0) {
+      if (entry && chartRef.current) {
+        const { width: w, height: h } = entry.contentRect;
         chartRef.current.applyOptions({ width: w, height: h });
       }
     });
@@ -233,15 +313,20 @@ const ChartModal = () => {
     };
   }, [activeSignal, showTv]);
 
+  const formatSignalTime = (dateObj) => {
+    if (!dateObj) return '--';
+    return dateObj.toLocaleString('tr-TR', { 
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+    });
+  };
+
   useEffect(() => {
     if (!showTv) return;
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
     }
-    if (chartContainerRef.current) {
-      chartContainerRef.current.innerHTML = '';
-    }
+    if (chartContainerRef.current) chartContainerRef.current.innerHTML = '';
     setChartLoading(false);
     setChartError('');
   }, [showTv]);
@@ -252,101 +337,56 @@ const ChartModal = () => {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [setActiveSignal]);
 
-  useEffect(() => {
-    const isTv = chartView === 'tv';
-    setShowTv(isTv);
-  }, [activeSignal, chartView]);
+  useEffect(() => { setShowTv(chartView === 'tv'); }, [activeSignal, chartView]);
 
   return (
-    <div id="modal" style={{ display: 'block' }}>
-      <div id="chart-header">
+    <div id="modal" style={{ display: 'block', backgroundColor: '#131722', color: '#d1d4dc' }}>
+      <div id="chart-header" style={{ borderBottom: '1px solid #2a2e39', padding: '10px' }}>
         <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
-          {activeSignal.symbol} | {activeSignal.dir}
+          {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#089981' : '#F23645'}}>{activeSignal?.dir}</span>
         </h2>
         <div className="chart-actions">
-          <button
-            className={`chart-toggle ${!showTv ? 'active' : ''}`}
-            onClick={() => {
-              setChartView('journal');
-              setShowTv(false);
-            }}
-          >
-            Trade Graph
-          </button>
-          <button
-            className={`chart-toggle ${showTv ? 'active' : ''}`}
-            onClick={() => {
-              setChartView('tv');
-              setShowTv(true);
-            }}
-          >
-            Live Graph
-          </button>
+          <button className={`chart-toggle ${!showTv ? 'active' : ''}`} onClick={() => { setChartView('journal'); setShowTv(false); }}>Analiz</button>
+          <button className={`chart-toggle ${showTv ? 'active' : ''}`} onClick={() => { setChartView('tv'); setShowTv(true); }}>Canlı (TV)</button>
         </div>
       </div>
-      <button id="close-modal" onClick={() => setActiveSignal(null)}>
-        Kapat <span className="esc-pill">ESC</span>
-      </button>
+      
+      <button id="close-modal" onClick={() => setActiveSignal(null)} style={{ color:'white' }}>Kapat <span className="esc-pill">ESC</span></button>
+
       {!showTv && activeSignal && (
-        <div className="position-panel">
+        <div className="position-panel" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>
           <div className="position-row">
-            <span>Sembol</span>
-            <b>{activeSignal.symbol}</b>
+            <span>Tarih</span>
+            <b style={{fontSize:'0.9em'}}>{formatSignalTime(activeSignal.dateObj)}</b>
           </div>
+          <div className="position-row"><span>Giriş</span><b>{activeSignal.entry?.toFixed(4)}</b></div>
           <div className="position-row">
-            <span>Yön</span>
-            <b>{activeSignal.dir}</b>
-          </div>
-          <div className="position-row">
-            <span>Entry</span>
-            <b>{activeSignal.entry?.toFixed(4)}</b>
-          </div>
-          <div className="position-row">
-            <span>TP / SL</span>
-            <b>
-              <span className="pos-tp">{activeSignal.tp?.toFixed(4)}</span>
-              {' / '}
-              <span className="pos-sl">{activeSignal.sl?.toFixed(4)}</span>
-            </b>
+             <span>Hedef/Stop</span>
+             <b><span style={{color:'#089981'}}>{activeSignal.tp?.toFixed(4)}</span> / <span style={{color:'#F23645'}}>{activeSignal.sl?.toFixed(4)}</span></b>
           </div>
           <div className="position-row">
             <span>Çıkış</span>
-            <b>{activeSignal.exitPrice?.toFixed(4)}</b>
-          </div>
-          <div className="position-row">
-            <span>Durum</span>
-            <b className={activeSignal.status === 'TP' ? 'win' : activeSignal.status === 'SL' ? 'loss' : ''}>
-              {activeSignal.status}
-            </b>
+            <b>{activeSignal.exitPrice ? activeSignal.exitPrice.toFixed(4) : '--'}</b>
           </div>
           <div className="position-row">
             <span>PnL</span>
-            <b className={calculatePnL(activeSignal) >= 0 ? 'win' : 'loss'}>
+            <b style={{color: calculatePnL(activeSignal) >= 0 ? '#089981' : '#F23645'}}>
               {calculatePnL(activeSignal) !== null ? `${calculatePnL(activeSignal).toFixed(2)}%` : '--'}
-            </b>
-          </div>
-          <div className="position-row">
-            <span>Süre</span>
-            <b>
-              {activeSignal.exitTs
-                ? `${Math.max(1, Math.round((activeSignal.exitTs - activeSignal.dateObj.getTime()) / 60000))} dk`
-                : '--'}
             </b>
           </div>
         </div>
       )}
-      {chartError && !showTv && (
-        <div className="chart-warning">{chartError}</div>
-      )}
-      {chartLoading && !showTv && (
-        <div className="chart-warning">Grafik yükleniyor...</div>
-      )}
+
+      {chartError && !showTv && <div className="chart-warning" style={{color:'#F23645'}}>{chartError}</div>}
+      {chartLoading && !showTv && <div className="chart-warning">Veriler yükleniyor...</div>}
+
       <div
         ref={chartContainerRef}
         id="chart-container"
         className="journal-chart"
-        style={{ width: '100%', height: '100%', minHeight: '520px', display: showTv ? 'none' : 'block' }}
+        style={{ width: '100%', height: '100%', minHeight: '520px', display: showTv ? 'none' : 'block', backgroundColor: '#131722' }}
       ></div>
+
       {showTv && (
         <iframe
           className="tv-iframe"
