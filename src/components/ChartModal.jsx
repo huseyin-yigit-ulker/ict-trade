@@ -284,7 +284,9 @@ const ChartModal = () => {
           </button>
         </div>
       </div>
-      <button id="close-modal" onClick={() => setActiveSignal(null)}>KAPAT [ESC]</button>
+      <button id="close-modal" onClick={() => setActiveSignal(null)}>
+        Kapat <span className="esc-pill">ESC</span>
+      </button>
       {!showTv && activeSignal && (
         <div className="position-panel">
           <div className="position-row">
@@ -301,7 +303,11 @@ const ChartModal = () => {
           </div>
           <div className="position-row">
             <span>TP / SL</span>
-            <b>{activeSignal.tp?.toFixed(4)} / {activeSignal.sl?.toFixed(4)}</b>
+            <b>
+              <span className="pos-tp">{activeSignal.tp?.toFixed(4)}</span>
+              {' / '}
+              <span className="pos-sl">{activeSignal.sl?.toFixed(4)}</span>
+            </b>
           </div>
           <div className="position-row">
             <span>Çıkış</span>
@@ -309,7 +315,9 @@ const ChartModal = () => {
           </div>
           <div className="position-row">
             <span>Durum</span>
-            <b>{activeSignal.status}</b>
+            <b className={activeSignal.status === 'TP' ? 'win' : activeSignal.status === 'SL' ? 'loss' : ''}>
+              {activeSignal.status}
+            </b>
           </div>
           <div className="position-row">
             <span>PnL</span>

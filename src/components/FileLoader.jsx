@@ -40,6 +40,10 @@ const FileLoader = () => {
           <div className="bot-ring"></div>
           <div className="bot-scan"></div>
         </div>
+        <div className="trade-hero">
+          <h1 className="trade-hero-title">ICT TRADE</h1>
+          <p className="trade-hero-sub">Algoritmik backtest ve canlı izleme paneli.</p>
+        </div>
         <h1 className="logo-title">ICT TRADE BOT</h1>
         <p className="subtitle">1 dakikalık işlem günlüğü. JSON yükle veya webhook çıktısını yapıştır.</p>
       </div>
