@@ -58,13 +58,12 @@ const ChartModal = () => {
     const width = rect.width > 0 ? rect.width : 900;
     const height = rect.height > 0 ? rect.height : 520;
 
-    // --- TEMA AYARLARI ---
     const themeConfig = {
-      bg: '#131722',           // TradingView Dark
-      text: '#d1d4dc',         
-      grid: 'transparent',     // Gridler gizli
-      upColor: '#089981',      // TV Yeşili
-      downColor: '#F23645',    // TV Kırmızısı
+      bg: '#131722',
+      text: '#d1d4dc',
+      grid: 'transparent',
+      upColor: '#089981',
+      downColor: '#F23645',
       wickUp: '#089981',
       wickDown: '#F23645',
     };
@@ -74,6 +73,21 @@ const ChartModal = () => {
         background: { type: 'solid', color: themeConfig.bg }, 
         textColor: themeConfig.text,
         fontFamily: "'Trebuchet MS', Roboto, Ubuntu, sans-serif"
+      },
+      // --- YENİ EKLENEN: LOCALIZATION & TIME FORMATTING ---
+      localization: {
+        locale: 'tr-TR', // Türkçe Yerelleştirme
+        dateFormat: 'dd MMM yyyy', // Tarih Formatı (örn: 12 Şub 2024)
+        timeFormatter: (timestamp) => {
+            // Crosshair üzerindeki tam zaman etiketi
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString('tr-TR', { 
+                day: 'numeric', 
+                month: 'short', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
       },
       grid: { 
         vertLines: { visible: false }, 
@@ -85,10 +99,22 @@ const ChartModal = () => {
         borderColor: 'rgba(197, 203, 206, 0.2)',
         scaleMargins: { top: 0.2, bottom: 0.2 },
       },
+      // --- GÜNCELLENEN: TIME SCALE AYARLARI ---
       timeScale: { 
-        timeVisible: true, 
-        secondsVisible: true,
-        borderColor: 'rgba(197, 203, 206, 0.2)' 
+        timeVisible: true,     // Saat bilgisini göster
+        secondsVisible: false, // Saniye kalabalık yapmasın
+        borderColor: 'rgba(197, 203, 206, 0.2)',
+        visible: true,         // Ekseni görünür yap
+        tickMarkFormatter: (time, tickMarkType, locale) => {
+            // Eksen üzerindeki etiket formatı
+            const date = new Date(time * 1000);
+            // Eğer yeni bir günse Tarihi, değilse Saati göster
+            // tickMarkType: 0=Year, 1=Month, 2=DayOfMonth, 3=Time
+            if (tickMarkType < 3) {
+                return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+            }
+            return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        }
       },
       crosshair: {
         mode: 1,
@@ -98,7 +124,24 @@ const ChartModal = () => {
     });
     chartRef.current = chart;
 
-    // 1. Ana Mum Grafiği
+    // --- KATMAN 1: Renkli Kutular (Arka Planda) ---
+    const tpAreaSeries = chart.addSeries(BaselineSeries, {
+        baseValue: { type: 'price', price: activeSignal.entry },
+        lineWidth: 0, 
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false
+    });
+
+    const slAreaSeries = chart.addSeries(BaselineSeries, {
+        baseValue: { type: 'price', price: activeSignal.entry },
+        lineWidth: 0,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false
+    });
+
+    // --- KATMAN 2: Mum Grafiği (Ön Planda) ---
     const mainSeries = chart.addSeries(CandlestickSeries, {
       upColor: themeConfig.upColor,
       downColor: themeConfig.downColor,
@@ -113,7 +156,6 @@ const ChartModal = () => {
         const entryTime = activeSignal.dateObj.getTime();
         const exitTime = activeSignal.exitTs || entryTime + (60 * 60 * 1000);
         
-        // Geniş bir aralık çekelim (Görsel bütünlük için)
         const fetchStartTime = entryTime - (60 * 1000 * 120); 
         const fetchEndTime = exitTime + (60 * 1000 * 60);     
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
@@ -148,142 +190,66 @@ const ChartModal = () => {
         const exitTsReal = Math.floor(exitTime / 1000);
         const isLong = dir === 'LONG';
 
-        // --- 2. TRADE ALANI (Görseldeki gibi sadece işlem süresince boyalı) ---
-        // Baseline Series kullanarak Entry fiyatını baz alıp boyama yapıyoruz.
-        // ÖNEMLİ: Sadece Entry ve Exit arasındaki datayı veriyoruz.
-        
-        if (entry) {
-          const pnlSeries = chart.addSeries(BaselineSeries, {
-            baseValue: { type: 'price', price: entry },
-            // Long işlemde kar (üst) yeşil, zarar (alt) kırmızı
-            // Short işlemde kar (alt) yeşil, zarar (üst) kırmızı
-            topLineColor: 'rgba(0,0,0,0)', 
-            topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(242, 54, 69, 0.25)', 
-            topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(242, 54, 69, 0.05)',
-            
-            bottomLineColor: 'rgba(0,0,0,0)',
-            bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(8, 153, 129, 0.25)',
-            bottomFillColor2: isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(8, 153, 129, 0.05)',
-            
-            lineWidth: 0, 
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false
-          });
+        // --- RENKLİ KUTULARI OLUŞTURMA ---
+        if (entry && tp && sl) {
+            tpAreaSeries.applyOptions({
+                topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
+                topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
+                bottomFillColor1: !isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
+                bottomFillColor2: !isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
+            });
 
-          // Datayı filtrele: Sadece işlem süresi
-          const tradePeriodData = candles
-            .filter(c => c.time >= entryTs && c.time <= exitTsReal)
-            .map(c => ({ time: c.time, value: c.close }));
+            slAreaSeries.applyOptions({
+                topFillColor1: !isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
+                topFillColor2: !isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
+                bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
+                bottomFillColor2: isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
+            });
+
+            const tradeCandles = candles.filter(c => c.time >= entryTs && c.time <= exitTsReal);
             
-          pnlSeries.setData(tradePeriodData);
+            if (tradeCandles.length > 0) {
+                const tpData = tradeCandles.map(c => ({ time: c.time, value: tp }));
+                tpAreaSeries.setData(tpData);
+
+                const slData = tradeCandles.map(c => ({ time: c.time, value: sl }));
+                slAreaSeries.setData(slData);
+            }
         }
 
-        // --- 3. DASHED LINE (Girişten Çıkışa Kesikli Çizgi) ---
+        // --- DASHED LINE ---
         if (entry) {
             const trendLineSeries = chart.addSeries(LineSeries, {
                 color: '#d1d4dc',
                 lineWidth: 1,
-                lineStyle: 2, // Dashed
+                lineStyle: 2, 
                 crosshairMarkerVisible: false,
                 lastValueVisible: false,
                 priceLineVisible: false
             });
             
-            // İki nokta: Başlangıç ve Bitiş
-            // Bitiş fiyatı exitPrice, eğer yoksa son kapanış
             const endPrice = activeSignal.exitPrice || candles[candles.length-1].close;
-            
             trendLineSeries.setData([
                 { time: entryTs, value: entry },
                 { time: exitTsReal, value: endPrice }
             ]);
 
-            // --- 4. NOKTA (POINT) İŞARETÇİLERİ ---
-            const markers = [];
-            
-            // Entry Noktası (Mavi Daire)
-            markers.push({
-                time: entryTs,
-                position: 'inBar',
-                color: '#2962FF',
-                shape: 'circle',
-                size: 2, // Biraz daha belirgin
-            });
-
-            // Exit Noktası (Varsa)
-            if (activeSignal.exitPrice) {
-                 markers.push({
-                    time: exitTsReal,
-                    position: 'inBar',
-                    color: calculatePnL(activeSignal) >= 0 ? '#089981' : '#F23645',
-                    shape: 'circle',
-                    size: 2,
-                });
-            }
-            // TrendLine üzerine marker ekleyemiyoruz ama Main seriye ekleyebiliriz
-            // Ancak zamanlar main seride olmalı.
-            
-            // Biz burada mainSeries üzerine ekleyelim görsel olarak
-            const mainMarkers = [];
-            
-            // Entry Marker (Ok yerine görseldeki gibi point/circle mantığı için yazı eklemiyoruz)
-            mainMarkers.push({
-              time: entryTs,
-              position: isLong ? 'belowBar' : 'aboveBar',
-              color: '#2962FF',
-              shape: 'arrowUp', // Yönü göstermek için ok daha iyi, ama kullanıcı point istedi.
-              text: 'ENTRY'     // Circle shape lightweight-charts markerlarında kısıtlı, 'circle' yok, arrow var.
-                                // Circle efekti için series marker yerine custom yapılabilir ama 'circle' şekli en yakın 'circle' yoksa idare edeceğiz.
-                                // Workaround: shape: 'circle' lightweight charts v4'te geldi.
-            });
-
-            // Sadece işlem kapanışına görsel marker
-            if (activeSignal.exitTs) {
-               if(exitTsReal <= candles[candles.length - 1].time) {
-                 mainMarkers.push({
-                   time: exitTsReal,
-                   position: isLong ? 'aboveBar' : 'belowBar',
-                   color: activeSignal.status === 'TP' ? '#089981' : '#F23645',
-                   shape: 'arrowDown',
-                   text: activeSignal.status
-                 });
-               }
-            }
-            mainSeries.setMarkers(mainMarkers);
+            // --- MARKERLAR ---
+            mainSeries.setMarkers([
+                 {
+                    time: entryTs,
+                    position: isLong ? 'belowBar' : 'aboveBar',
+                    color: '#2962FF',
+                    shape: 'arrowUp',
+                    text: 'ENTRY'
+                 }
+            ]);
         }
 
-        // Fiyat Çizgileri (Entry, TP, SL)
-        if (entry) {
-          mainSeries.createPriceLine({
-            price: entry,
-            color: '#2962FF',
-            lineWidth: 1,
-            lineStyle: 0,
-            axisLabelVisible: true,
-            title: 'Giriş',
-          });
-        }
-        if (tp) {
-          mainSeries.createPriceLine({
-            price: tp,
-            color: '#089981',
-            lineWidth: 1,
-            lineStyle: 2,
-            axisLabelVisible: true,
-            title: 'TP',
-          });
-        }
-        if (sl) {
-          mainSeries.createPriceLine({
-            price: sl,
-            color: '#F23645',
-            lineWidth: 1,
-            lineStyle: 2, 
-            axisLabelVisible: true,
-            title: 'SL',
-          });
-        }
+        // --- FİYAT ÇİZGİLERİ ---
+        if (entry) mainSeries.createPriceLine({ price: entry, color: '#2962FF', lineWidth: 1, lineStyle: 0, title: 'Entry' });
+        if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP' });
+        if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL' });
 
         chart.timeScale().fitContent();
         setChartLoading(false);
