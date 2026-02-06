@@ -17,8 +17,8 @@ const FileLoader = () => {
       <div className="mode-container">
         <div className="mode-card" onClick={() => document.getElementById('jsonInput').click()}>
           <h3>📂 BACKTEST</h3>
-          <p>Dosya Yüklemek İçin Tıkla</p>
-          <div className="spinner" id="spinner"></div>
+          <p>Yükleniyor... veya Dosya Seç</p>
+          <div className="spinner" id="spinner" style={{display:'block'}}></div>
         </div>
       </div>
       <input type="file" id="jsonInput" accept=".json" style={{ display: 'none' }} onChange={handleFileUpload} />

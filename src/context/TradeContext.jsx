@@ -1,6 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-
-// BU SATIR ÇOK ÖNEMLİ: Veriyi direkt import ediyoruz.
+// JSON dosyasını direkt import ediyoruz
 import defaultData from '../assets/data/trades.json';
 
 const TradeContext = createContext();
@@ -16,10 +15,10 @@ export const TradeProvider = ({ children }) => {
   const [showStats, setShowStats] = useState(false);
 
   const processData = (data) => {
-    if (!data) return;
+    if (!data || !Array.isArray(data)) return;
 
     const processed = data.map((item, index) => {
-      // Status mapping
+      // Status Mapping
       let status = 'WAITING';
       if (item.status === 'TAKE PROFIT') status = 'TP';
       else if (item.status === 'STOP LOSS') status = 'SL';
@@ -51,22 +50,20 @@ export const TradeProvider = ({ children }) => {
 
     setAllSignals(processed);
     
-    // Tüm sembolleri seç
+    // Varsayılan olarak tüm sembolleri seç
     const symbols = new Set(processed.map(s => s.symbol));
     setSelectedSymbols(symbols);
     setIsLoaded(true);
   };
 
-  // BU KISIM DEĞİŞTİ: Fetch yerine direkt import edilen veriyi kullanıyoruz
+  // Başlangıçta veriyi yükle
   useEffect(() => {
     if (defaultData && defaultData.length > 0) {
-        console.log("Veri yüklendi:", defaultData.length);
         processData(defaultData);
-    } else {
-        console.error("JSON verisi boş veya okunamadı.");
     }
   }, []);
 
+  // Filtreleme mantığı
   useEffect(() => {
     if (allSignals.length > 0) {
       setFilteredSignals(allSignals.filter(s => selectedSymbols.has(s.symbol)));
