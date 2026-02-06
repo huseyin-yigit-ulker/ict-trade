@@ -1,4 +1,6 @@
 import { createContext, useState, useEffect, useContext } from 'react';
+// 1. JSON dosyasını direkt import ediyoruz
+import defaultData from '../assets/data/trades.json';
 
 const TradeContext = createContext();
 
@@ -9,11 +11,16 @@ export const TradeProvider = ({ children }) => {
   const [filteredSignals, setFilteredSignals] = useState([]);
   const [selectedSymbols, setSelectedSymbols] = useState(new Set());
   const [isLoaded, setIsLoaded] = useState(false);
-  const [activeSignal, setActiveSignal] = useState(null); // Grafik için seçili işlem
+  const [activeSignal, setActiveSignal] = useState(null);
   const [showStats, setShowStats] = useState(false);
 
-  // Status mapping ve veri işleme
+  // Veriyi işleyen fonksiyon
   const processData = (data) => {
+    if (!data || !Array.isArray(data)) {
+        console.error("Veri formatı hatalı veya boş!");
+        return;
+    }
+
     const processed = data.map((item, index) => {
       const status = item.status === 'TAKE PROFIT' ? 'TP' : item.status === 'STOP LOSS' ? 'SL' : item.status || 'WAITING';
       const entry = parseFloat(item.entry_price);
@@ -43,12 +50,14 @@ export const TradeProvider = ({ children }) => {
     setIsLoaded(true);
   };
 
-  // Otomatik yükleme (Local JSON)
+  // 2. useEffect içinde import edilen veriyi yüklüyoruz
   useEffect(() => {
-    fetch('/src/assets/data/trades.json') // Vite'de public veya direct import da olabilir
-      .then(res => res.json())
-      .then(data => processData(data))
-      .catch(err => console.log("Otomatik yükleme başarısız, manuel bekleniyor."));
+    if (defaultData) {
+        console.log("Veri başarıyla yüklendi:", defaultData.length, "adet işlem.");
+        processData(defaultData);
+    } else {
+        console.error("JSON dosyası okunamadı!");
+    }
   }, []);
 
   // Filtreleme Mantığı
