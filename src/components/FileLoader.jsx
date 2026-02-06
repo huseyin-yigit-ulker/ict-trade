@@ -35,7 +35,12 @@ const FileLoader = () => {
     <div id="mode-selection">
       <div className="loader-hero">
         <div className="loader-badge">TRADINGVIEW WEBHOOK READY</div>
-        <h1 className="logo-title">ICT NOTEBOOK</h1>
+        <div className="bot-logo">
+          <div className="bot-core"></div>
+          <div className="bot-ring"></div>
+          <div className="bot-scan"></div>
+        </div>
+        <h1 className="logo-title">ICT TRADE BOT</h1>
         <p className="subtitle">1 dakikalık işlem günlüğü. JSON yükle veya webhook çıktısını yapıştır.</p>
       </div>
 

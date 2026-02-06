@@ -11,6 +11,7 @@ export const TradeProvider = ({ children }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeSignal, setActiveSignal] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  const [chartView, setChartView] = useState('tv');
 
   const processData = (data) => {
     const raw = Array.isArray(data)
@@ -90,7 +91,8 @@ export const TradeProvider = ({ children }) => {
   return (
     <TradeContext.Provider value={{
       allSignals, filteredSignals, selectedSymbols, isLoaded, processData,
-      activeSignal, setActiveSignal, showStats, setShowStats, toggleSymbol
+      activeSignal, setActiveSignal, showStats, setShowStats, toggleSymbol,
+      chartView, setChartView
     }}>
       {children}
     </TradeContext.Provider>

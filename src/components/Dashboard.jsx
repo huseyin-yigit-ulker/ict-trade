@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const Dashboard = () => {
-  const { filteredSignals, setActiveSignal } = useTradeContext();
+  const { filteredSignals, setActiveSignal, setChartView } = useTradeContext();
 
   const calculatePnL = (sig) => {
     if (sig.status !== 'TP' && sig.status !== 'SL') return 0;
@@ -68,7 +68,26 @@ const Dashboard = () => {
                     </div>
                     <div className="trade-foot">
                       <div className={`chip ${pnlClass}`}>{pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL')}</div>
-                      <div className="chip outline">Detaylı Grafik</div>
+                      <button
+                        className="chip outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setChartView('tv');
+                          setActiveSignal(sig);
+                        }}
+                      >
+                        Live Graph
+                      </button>
+                      <button
+                        className="chip outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setChartView('journal');
+                          setActiveSignal(sig);
+                        }}
+                      >
+                        Trade Graph
+                      </button>
                     </div>
                   </div>
                 );
