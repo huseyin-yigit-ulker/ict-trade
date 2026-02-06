@@ -4,9 +4,10 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import ChartModal from './components/ChartModal';
 import StatsModal from './components/StatsModal';
+import SummaryModal from './components/SummaryModal';
 
 const MainContent = () => {
-  const { isLoaded, activeSignal, showStats } = useTradeContext();
+  const { isLoaded, activeSignal, showStats, showSummary } = useTradeContext();
 
   if (!isLoaded) return <FileLoader />;
 
@@ -16,6 +17,7 @@ const MainContent = () => {
       <Dashboard />
       {activeSignal && <ChartModal />}
       {showStats && <StatsModal />}
+      {showSummary && <SummaryModal />}
     </>
   );
 };

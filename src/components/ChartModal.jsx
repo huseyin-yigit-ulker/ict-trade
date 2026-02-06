@@ -311,13 +311,13 @@ const ChartModal = () => {
         <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
           {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#089981' : '#F23645'}}>{activeSignal?.dir}</span>
         </h2>
-        <div className="chart-actions">
-          <button className={`chart-toggle ${!showTv ? 'active' : ''}`} onClick={() => { setChartView('journal'); setShowTv(false); }}>Analiz</button>
-          <button className={`chart-toggle ${showTv ? 'active' : ''}`} onClick={() => { setChartView('tv'); setShowTv(true); }}>Canlı (TV)</button>
-        </div>
+        <div className="chart-actions"></div>
       </div>
       
-      <button id="close-modal" onClick={() => setActiveSignal(null)} style={{ color:'white' }}>Kapat <span className="esc-pill">ESC</span></button>
+      <button id="close-modal" className="close-modern" onClick={() => setActiveSignal(null)}>
+        <span className="close-label">Kapat</span>
+        <span className="esc-pill">ESC</span>
+      </button>
 
       {!showTv && activeSignal && (
         <div className="position-panel" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>

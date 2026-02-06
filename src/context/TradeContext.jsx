@@ -8,10 +8,14 @@ export const TradeProvider = ({ children }) => {
   const [allSignals, setAllSignals] = useState([]);
   const [filteredSignals, setFilteredSignals] = useState([]);
   const [selectedSymbols, setSelectedSymbols] = useState(new Set());
+  const [pendingSymbols, setPendingSymbols] = useState(new Set());
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeSignal, setActiveSignal] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [chartView, setChartView] = useState('tv');
+  const [showSummary, setShowSummary] = useState(false);
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
 
   const processData = (data) => {
     const raw = Array.isArray(data)
@@ -64,6 +68,7 @@ export const TradeProvider = ({ children }) => {
     // Varsayılan olarak tüm sembolleri seç
     const symbols = new Set(processed.map(s => s.symbol));
     setSelectedSymbols(symbols);
+    setPendingSymbols(symbols);
     setIsLoaded(true);
   };
 
@@ -75,24 +80,38 @@ export const TradeProvider = ({ children }) => {
   }, []);
 
   // Filtreleme mantığı
+  const isInRange = (sig) => {
+    if (!dateStart && !dateEnd) return true;
+    const ts = sig.dateObj.getTime();
+    const startTs = dateStart ? new Date(`${dateStart}T00:00:00`).getTime() : -Infinity;
+    const endTs = dateEnd ? new Date(`${dateEnd}T23:59:59`).getTime() : Infinity;
+    return ts >= startTs && ts <= endTs;
+  };
+
   useEffect(() => {
     if (allSignals.length > 0) {
-      setFilteredSignals(allSignals.filter(s => selectedSymbols.has(s.symbol)));
+      setFilteredSignals(
+        allSignals.filter(s => selectedSymbols.has(s.symbol) && isInRange(s))
+      );
     }
-  }, [selectedSymbols, allSignals]);
+  }, [selectedSymbols, allSignals, dateStart, dateEnd]);
 
   const toggleSymbol = (symbol) => {
-    const newSet = new Set(selectedSymbols);
+    const newSet = new Set(pendingSymbols);
     if (newSet.has(symbol)) newSet.delete(symbol);
     else newSet.add(symbol);
-    setSelectedSymbols(newSet);
+    setPendingSymbols(newSet);
+  };
+
+  const applySymbols = () => {
+    setSelectedSymbols(new Set(pendingSymbols));
   };
 
   return (
     <TradeContext.Provider value={{
-      allSignals, filteredSignals, selectedSymbols, isLoaded, processData,
-      activeSignal, setActiveSignal, showStats, setShowStats, toggleSymbol,
-      chartView, setChartView
+      allSignals, filteredSignals, selectedSymbols, pendingSymbols, isLoaded, processData,
+      activeSignal, setActiveSignal, showStats, setShowStats, toggleSymbol, applySymbols,
+      chartView, setChartView, showSummary, setShowSummary, dateStart, setDateStart, dateEnd, setDateEnd
     }}>
       {children}
     </TradeContext.Provider>
