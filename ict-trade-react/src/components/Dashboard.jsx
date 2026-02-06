@@ -41,7 +41,7 @@ const Dashboard = () => {
                   <div key={sig.id} className="trade-item" onClick={() => setActiveSignal(sig)}>
                     <div className="trade-info">
                       <span className="symbol-box">{sig.symbol}</span>
-                      {/* DÜZELTİLEN SATIR BURASI: className eklendi */}
+                      {/* AŞAĞIDAKİ SATIR DÜZELTİLDİ: className EKLENDİ */}
                       <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
                       <span className="time-detail">{sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>

@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-// 1. JSON dosyasını direkt import ediyoruz (En garanti yöntem)
+
+// BU SATIR ÇOK ÖNEMLİ: Veriyi direkt import ediyoruz.
 import defaultData from '../assets/data/trades.json';
 
 const TradeContext = createContext();
@@ -14,26 +15,21 @@ export const TradeProvider = ({ children }) => {
   const [activeSignal, setActiveSignal] = useState(null);
   const [showStats, setShowStats] = useState(false);
 
-  // Veriyi işleyen fonksiyon
   const processData = (data) => {
-    if (!data || !Array.isArray(data)) {
-        console.error("Veri hatalı veya boş!");
-        return;
-    }
+    if (!data) return;
 
     const processed = data.map((item, index) => {
       // Status mapping
-      let status = item.status || 'WAITING';
+      let status = 'WAITING';
       if (item.status === 'TAKE PROFIT') status = 'TP';
-      if (item.status === 'STOP LOSS') status = 'SL';
+      else if (item.status === 'STOP LOSS') status = 'SL';
+      else if (item.status) status = item.status;
 
       const entry = parseFloat(item.entry_price);
       let exitPrice = item.current_price || entry;
-      
       if (status === 'TP') exitPrice = parseFloat(item.tp_price);
       if (status === 'SL') exitPrice = parseFloat(item.sl_price);
 
-      // Tarih hesaplama (Eğer exit_time yoksa 2 saat ekle)
       const signalTime = new Date(item.signal_time).getTime();
       const exitTime = item.exit_time 
         ? new Date(item.exit_time).getTime() 
@@ -55,22 +51,22 @@ export const TradeProvider = ({ children }) => {
 
     setAllSignals(processed);
     
-    // Tüm sembolleri seçili hale getir
+    // Tüm sembolleri seç
     const symbols = new Set(processed.map(s => s.symbol));
     setSelectedSymbols(symbols);
-    
-    // Yükleme tamamlandı
     setIsLoaded(true);
   };
 
-  // 2. useEffect içinde import edilen veriyi yüklüyoruz
+  // BU KISIM DEĞİŞTİ: Fetch yerine direkt import edilen veriyi kullanıyoruz
   useEffect(() => {
-    if (defaultData) {
+    if (defaultData && defaultData.length > 0) {
+        console.log("Veri yüklendi:", defaultData.length);
         processData(defaultData);
+    } else {
+        console.error("JSON verisi boş veya okunamadı.");
     }
   }, []);
 
-  // Filtreleme Mantığı
   useEffect(() => {
     if (allSignals.length > 0) {
       setFilteredSignals(allSignals.filter(s => selectedSymbols.has(s.symbol)));
