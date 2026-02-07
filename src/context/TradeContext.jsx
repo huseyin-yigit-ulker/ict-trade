@@ -16,6 +16,10 @@ export const TradeProvider = ({ children }) => {
   const [showSummary, setShowSummary] = useState(false);
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
+  const [pendingDateStart, setPendingDateStart] = useState('');
+  const [pendingDateEnd, setPendingDateEnd] = useState('');
+  const [mode, setMode] = useState('backtest'); // backtest | live
+  const [liveError, setLiveError] = useState('');
 
   const processData = (data) => {
     const raw = Array.isArray(data)
@@ -72,12 +76,67 @@ export const TradeProvider = ({ children }) => {
     setIsLoaded(true);
   };
 
-  // Başlangıçta veriyi yükle
-  useEffect(() => {
-    if (defaultData) {
-      processData(defaultData);
+  const loadLive = async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      setLiveError('Supabase ayarları eksik.');
+      setIsLoaded(true);
+      return;
     }
-  }, []);
+
+    try {
+      setLiveError('');
+      const now = new Date();
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+      const params = new URLSearchParams({
+        select: '*',
+        order: 'signal_time.desc'
+      });
+      params.append('signal_time', `gte.${start.toISOString()}`);
+      params.append('signal_time', `lt.${end.toISOString()}`);
+
+      const res = await fetch(`${supabaseUrl}/rest/v1/signals?${params.toString()}`, {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`
+        }
+      });
+      if (!res.ok) throw new Error('Live veri alınamadı');
+      const rows = await res.json();
+
+      const mapped = rows.map((r) => ({
+        symbol: r.symbol,
+        trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
+        entry_price: r.entry,
+        tp_price: r.tp,
+        sl_price: r.sl,
+        signal_time: r.signal_time,
+        status: 'WAITING'
+      }));
+
+      processData(mapped);
+    } catch (err) {
+      setLiveError('Live veri alınamadı.');
+      setIsLoaded(true);
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    let intervalId;
+    if (mode === 'backtest') {
+      if (defaultData) processData(defaultData);
+    } else {
+      loadLive();
+      intervalId = setInterval(loadLive, 15 * 60 * 1000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [mode]);
 
   // Filtreleme mantığı
   const isInRange = (sig) => {
@@ -107,11 +166,20 @@ export const TradeProvider = ({ children }) => {
     setSelectedSymbols(new Set(pendingSymbols));
   };
 
+  const applyDates = () => {
+    setDateStart(pendingDateStart);
+    setDateEnd(pendingDateEnd);
+  };
+
   return (
     <TradeContext.Provider value={{
       allSignals, filteredSignals, selectedSymbols, pendingSymbols, isLoaded, processData,
       activeSignal, setActiveSignal, showStats, setShowStats, toggleSymbol, applySymbols,
-      chartView, setChartView, showSummary, setShowSummary, dateStart, setDateStart, dateEnd, setDateEnd
+      chartView, setChartView, showSummary, setShowSummary,
+      dateStart, setDateStart, dateEnd, setDateEnd,
+      pendingDateStart, setPendingDateStart, pendingDateEnd, setPendingDateEnd,
+      applyDates,
+      mode, setMode, liveError
     }}>
       {children}
     </TradeContext.Provider>

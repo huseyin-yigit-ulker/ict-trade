@@ -44,6 +44,24 @@ const SummaryModal = () => {
     { title: 'Yıllık', data: yearly }
   ];
 
+  const overall = summarize(filtered);
+  const bySymbol = filtered.reduce((acc, s) => {
+    if (!acc[s.symbol]) acc[s.symbol] = { count: 0, wins: 0, pnl: 0 };
+    acc[s.symbol].count++;
+    acc[s.symbol].wins += s.status === 'TP' ? 1 : 0;
+    acc[s.symbol].pnl += calculatePnL(s);
+    return acc;
+  }, {});
+  const topSymbols = Object.entries(bySymbol)
+    .map(([sym, data]) => ({
+      sym,
+      count: data.count,
+      winRate: data.count ? (data.wins / data.count) * 100 : 0,
+      pnl: data.pnl
+    }))
+    .sort((a, b) => b.pnl - a.pnl)
+    .slice(0, 5);
+
   return (
     <div id="summary-modal" className="summary-screen" style={{ display: 'block' }}>
       <div className="summary-hero">
@@ -95,6 +113,38 @@ const SummaryModal = () => {
             <span className="close-label">Kapat</span>
             <span className="esc-pill">ESC</span>
           </button>
+        </div>
+      </div>
+
+      <div className="summary-overview">
+        <div className="overview-card">
+          <div className="summary-title">Genel Özet</div>
+          <div className="summary-metric">
+            <span>Toplam İşlem</span>
+            <b>{overall.count}</b>
+          </div>
+          <div className="summary-metric">
+            <span>Win Rate</span>
+            <b className={overall.winRate >= 50 ? 'win' : 'loss'}>{overall.winRate.toFixed(1)}%</b>
+          </div>
+          <div className="summary-metric">
+            <span>Toplam PnL</span>
+            <b className={overall.pnlSum >= 0 ? 'win' : 'loss'}>{overall.pnlSum.toFixed(2)}%</b>
+          </div>
+          <div className="summary-metric">
+            <span>Ortalama PnL</span>
+            <b className={overall.avgPnl >= 0 ? 'win' : 'loss'}>{overall.avgPnl.toFixed(2)}%</b>
+          </div>
+        </div>
+        <div className="overview-card">
+          <div className="summary-title">En İyi Semboller</div>
+          {topSymbols.length === 0 && <div className="summary-empty">Kayıt yok</div>}
+          {topSymbols.map(item => (
+            <div key={item.sym} className="summary-metric">
+              <span>{item.sym}</span>
+              <b className={item.pnl >= 0 ? 'win' : 'loss'}>{item.pnl.toFixed(2)}%</b>
+            </div>
+          ))}
         </div>
       </div>
 

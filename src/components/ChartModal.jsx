@@ -193,6 +193,8 @@ const ChartModal = () => {
         // --- RENKLİ KUTULARI OLUŞTURMA ---
         if (entry && tp && sl) {
             tpAreaSeries.applyOptions({
+                topLineColor: 'rgba(0,0,0,0)',
+                bottomLineColor: 'rgba(0,0,0,0)',
                 topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
                 topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
                 bottomFillColor1: !isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
@@ -200,6 +202,8 @@ const ChartModal = () => {
             });
 
             slAreaSeries.applyOptions({
+                topLineColor: 'rgba(0,0,0,0)',
+                bottomLineColor: 'rgba(0,0,0,0)',
                 topFillColor1: !isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
                 topFillColor2: !isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
                 bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
@@ -217,21 +221,20 @@ const ChartModal = () => {
             }
         }
 
-        // --- DASHED LINE ---
+        // --- ENTRY BEYAZ ÇİZGİ ---
         if (entry) {
-            const trendLineSeries = chart.addSeries(LineSeries, {
-                color: '#d1d4dc',
+            const entryLineSeries = chart.addSeries(LineSeries, {
+                color: '#ffffff',
                 lineWidth: 1,
-                lineStyle: 2, 
+                lineStyle: 0,
                 crosshairMarkerVisible: false,
                 lastValueVisible: false,
                 priceLineVisible: false
             });
-            
-            const endPrice = activeSignal.exitPrice || candles[candles.length-1].close;
-            trendLineSeries.setData([
+
+            entryLineSeries.setData([
                 { time: entryTs, value: entry },
-                { time: exitTsReal, value: endPrice }
+                { time: exitTsReal, value: entry }
             ]);
 
             // --- MARKERLAR ---

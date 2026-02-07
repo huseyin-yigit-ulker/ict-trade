@@ -100,6 +100,10 @@ a {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.status-error {
+  color: var(--loss);
+}
+
 .header-overlay {
   position: fixed;
   top: 0;
@@ -151,6 +155,8 @@ a {
   border-radius: 999px;
   font-size: 12px;
   cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }
 
 .date-popover {
@@ -163,6 +169,85 @@ a {
   display: grid;
   gap: 10px;
   z-index: 70;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.date-popover.centered {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  margin-top: 0;
+  z-index: 200;
+  width: min(420px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cal-title {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cal-nav {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  gap: 6px;
+}
+
+.cal-day {
+  width: 32px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+}
+
+.cal-day-label {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+}
+
+.cal-day.empty {
+  background: transparent;
+  border: none;
+}
+
+.cal-day.in-range {
+  background: rgba(123, 140, 255, 0.18);
+  border-color: rgba(123, 140, 255, 0.3);
+}
+
+.cal-day.start,
+.cal-day.end {
+  background: rgba(48, 209, 88, 0.25);
+  border-color: rgba(48, 209, 88, 0.5);
 }
 
 .date-field {
@@ -240,6 +325,15 @@ a {
   color: var(--muted);
 }
 
+.boot-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.primary-btn.outline {
+  background: transparent;
+}
+
 .loader-hero {
   display: grid;
   gap: 10px;
@@ -285,7 +379,7 @@ a {
   border-radius: 24px;
   border: 1px solid rgba(123, 140, 255, 0.5);
   box-shadow: inset 0 0 16px rgba(48, 209, 88, 0.25);
-  animation: spin-ring 6s linear infinite;
+  animation: spin-ring 6s linear infinite, grow-ring 3.8s ease-in-out infinite;
 }
 
 .bot-scan {
@@ -317,6 +411,11 @@ a {
 
 @keyframes spin-ring {
   to { transform: rotate(360deg); }
+}
+
+@keyframes grow-ring {
+  0%, 100% { transform: rotate(0deg) scale(0.9); opacity: 0.7; }
+  50% { transform: rotate(180deg) scale(1.15); opacity: 1; }
 }
 
 @keyframes scan-pulse {
@@ -787,6 +886,28 @@ button.chip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.summary-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.overview-card {
+  border: 1px solid var(--border);
+  background: rgba(11, 15, 24, 0.7);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.summary-empty {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .summary-card {

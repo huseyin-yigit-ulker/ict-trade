@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const Header = () => {
@@ -11,14 +11,54 @@ const Header = () => {
     setShowStats,
     setShowSummary,
     dateStart,
-    setDateStart,
     dateEnd,
-    setDateEnd
+    pendingDateStart,
+    setPendingDateStart,
+    pendingDateEnd,
+    setPendingDateEnd,
+    applyDates
+    mode,
+    liveError
   } = useTradeContext();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
   const uniqueSymbols = [...new Set(allSignals.map(s => s.symbol))].sort();
+  const monthLabel = calendarMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+
+  const daysGrid = useMemo(() => {
+    const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const end = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+    const startWeekDay = (start.getDay() + 6) % 7; // Mon=0
+    const totalDays = end.getDate();
+    const cells = [];
+
+    for (let i = 0; i < startWeekDay; i++) {
+      cells.push(null);
+    }
+    for (let d = 1; d <= totalDays; d++) {
+      cells.push(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), d));
+    }
+    return cells;
+  }, [calendarMonth]);
+
+  const isInRange = (day) => {
+    if (!day || (!pendingDateStart && !pendingDateEnd)) return false;
+    const ts = day.getTime();
+    const startTs = pendingDateStart ? new Date(`${pendingDateStart}T00:00:00`).getTime() : -Infinity;
+    const endTs = pendingDateEnd ? new Date(`${pendingDateEnd}T23:59:59`).getTime() : Infinity;
+    return ts >= startTs && ts <= endTs;
+  };
+
+  const isSameDay = (day, value) => {
+    if (!day || !value) return false;
+    const d = day.toISOString().slice(0, 10);
+    return d === value;
+  };
 
   return (
     <div className="app-header">
@@ -34,7 +74,7 @@ const Header = () => {
             className="coin-select"
             onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            Sembol Seçimi ({selectedSymbols.size})
+            🪙 Sembol Seçimi ({selectedSymbols.size})
           </button>
 
           <div className={`multi-select-content ${dropdownOpen ? 'show' : ''}`} id="multi-select-list">
@@ -55,7 +95,7 @@ const Header = () => {
                 setDropdownOpen(false);
               }}
             >
-              Uygula
+              ✅ Uygula
             </button>
           </div>
         </div>
@@ -63,55 +103,100 @@ const Header = () => {
         <div className="date-filters">
           <button
             className="date-picker-btn"
-            onClick={() => setDateOpen(!dateOpen)}
+            onClick={() => {
+              if (!dateOpen) {
+                setPendingDateStart(dateStart);
+                setPendingDateEnd(dateEnd);
+              }
+              setDateOpen(!dateOpen);
+            }}
           >
-            Tarih Seçimi
+            📅 {dateStart || dateEnd ? `${dateStart || '...'} → ${dateEnd || '...'}` : 'Tarih Seçimi'}
           </button>
           {dateOpen && (
-            <div className="date-popover" onClick={(e) => e.stopPropagation()}>
-              <div className="date-field">
-                <span>Başlangıç</span>
-                <input
-                  type="date"
-                  value={dateStart}
-                  onChange={(e) => setDateStart(e.target.value)}
-                />
+            <div className="date-popover centered" onClick={(e) => e.stopPropagation()}>
+              <div className="calendar-header">
+                <button
+                  className="cal-nav"
+                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
+                >
+                  ‹
+                </button>
+                <div className="cal-title">{monthLabel}</div>
+                <button
+                  className="cal-nav"
+                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                >
+                  ›
+                </button>
               </div>
-              <div className="date-field">
-                <span>Bitiş</span>
-                <input
-                  type="date"
-                  value={dateEnd}
-                  onChange={(e) => setDateEnd(e.target.value)}
-                />
+              <div className="calendar-grid">
+                {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((d) => (
+                  <div key={d} className="cal-day cal-day-label">{d}</div>
+                ))}
+                {daysGrid.map((day, idx) => {
+                  if (!day) return <div key={`empty-${idx}`} className="cal-day empty"></div>;
+                  const iso = day.toISOString().slice(0, 10);
+                  const inRange = isInRange(day);
+                  const isStart = isSameDay(day, pendingDateStart);
+                  const isEnd = isSameDay(day, pendingDateEnd);
+                  return (
+                    <button
+                      key={iso}
+                      className={`cal-day ${inRange ? 'in-range' : ''} ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''}`}
+                      onClick={() => {
+                        if (!pendingDateStart || (pendingDateStart && pendingDateEnd)) {
+                          setPendingDateStart(iso);
+                          setPendingDateEnd('');
+                        } else {
+                          if (new Date(iso) < new Date(pendingDateStart)) {
+                            setPendingDateEnd(pendingDateStart);
+                            setPendingDateStart(iso);
+                          } else {
+                            setPendingDateEnd(iso);
+                          }
+                        }
+                      }}
+                    >
+                      {day.getDate()}
+                    </button>
+                  );
+                })}
               </div>
               <div className="date-actions">
                 <button
                   className="apply-btn"
-                  onClick={() => setDateOpen(false)}
+                  onClick={() => {
+                    applyDates();
+                    setDateOpen(false);
+                  }}
                 >
-                  Uygula
+                  ✅ Uygula
                 </button>
                 <button
                   className="apply-btn ghost"
                   onClick={() => {
+                    setPendingDateStart('');
+                    setPendingDateEnd('');
                     setDateStart('');
                     setDateEnd('');
                     setDateOpen(false);
                   }}
                 >
-                  Temizle
+                  🧹 Temizle
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        <button id="btn-stats" className="header-btn" onClick={() => setShowStats(true)}>📊 Özet</button>
-        <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı</button>
+        <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı Geçmişi</button>
       </div>
 
-      <div className="status-badge">Mod: Backtest</div>
+      <div className="status-badge">
+        Mod: {mode === 'live' ? 'Live' : 'Backtest'}
+        {liveError && <span className="status-error"> • {liveError}</span>}
+      </div>
 
       {(dropdownOpen || dateOpen) && (
         <div
