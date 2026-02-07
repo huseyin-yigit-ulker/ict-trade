@@ -11,7 +11,7 @@ INTERVAL = "15m"
 DISPLACEMENT_FACTOR = 2.0 
 ATR_PERIOD = 14
 RR_RATIO = 2.0 
-FILENAME = "./src/assets/data/btc.json" # Kaydedilecek dosya adı
+FILENAME = "./src/assets/data/daily_signals.json" # Kaydedilecek dosya adı
 
 def get_binance_data(symbol, interval, start_str, end_str=None):
     url = "https://api.binance.com/api/v3/klines"
