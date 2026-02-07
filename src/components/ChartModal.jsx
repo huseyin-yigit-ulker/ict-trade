@@ -314,7 +314,26 @@ const ChartModal = () => {
         <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
           {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#089981' : '#F23645'}}>{activeSignal?.dir}</span>
         </h2>
-        <div className="chart-actions"></div>
+        <div className="chart-actions">
+          <button
+            className={`chart-toggle ${!showTv ? 'active' : ''}`}
+            onClick={() => {
+              setChartView('journal');
+              setShowTv(false);
+            }}
+          >
+            Trade Graph
+          </button>
+          <button
+            className={`chart-toggle ${showTv ? 'active' : ''}`}
+            onClick={() => {
+              setChartView('tv');
+              setShowTv(true);
+            }}
+          >
+            Live Graph
+          </button>
+        </div>
       </div>
       
       <button id="close-modal" className="close-modern" onClick={() => setActiveSignal(null)}>

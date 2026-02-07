@@ -16,9 +16,12 @@ const Header = () => {
     setPendingDateStart,
     pendingDateEnd,
     setPendingDateEnd,
-    applyDates
+    applyDates,
     mode,
-    liveError
+    liveError,
+    dbStatus,
+    dbMessage,
+    testDbConnection
   } = useTradeContext();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
@@ -191,11 +194,13 @@ const Header = () => {
         </div>
 
         <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı Geçmişi</button>
+        <button id="btn-dbtest" className="header-btn" onClick={testDbConnection}>🧪 DB Test</button>
       </div>
 
       <div className="status-badge">
-        Mod: {mode === 'live' ? 'Live' : 'Backtest'}
+        Mod: {mode === 'live' ? 'Live' : mode === 'backtest' ? 'Backtest' : 'Seçilmedi'}
         {liveError && <span className="status-error"> • {liveError}</span>}
+        {dbMessage && <span className={`db-pill ${dbStatus}`}> • {dbMessage}</span>}
       </div>
 
       {(dropdownOpen || dateOpen) && (
