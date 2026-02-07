@@ -28,7 +28,7 @@ jobs:
           pip install pandas numpy requests
 
       - name: Python Scriptini Çalıştır
-        run: python update.py
+        run: python update_data.py
 
       - name: Değişiklikleri Kaydet ve Pushla
         uses: stefanzweifel/git-auto-commit-action@v5
