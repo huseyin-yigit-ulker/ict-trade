@@ -27,12 +27,12 @@ jobs:
         run: |
           pip install pandas numpy requests
 
-      - name: Python Scriptini Çalıştır
-        run: python update.py
+      - name: Python Scriptini Çalıştır 
+        run: python update_data.py
 
       - name: Değişiklikleri Kaydet ve Pushla
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Otomatik Veri Güncellemesi: ${{ github.event.head_commit.timestamp }}"
           file_pattern: "./src/assets/data/daily_signals.json" # Sadece bu dosyadaki değişikliği al
-          branch: development # Eğer branch adın 'master' ise burayı değiştir
+          branch: main # Eğer branch adın 'master' ise burayı değiştir
