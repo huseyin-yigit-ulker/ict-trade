@@ -20,8 +20,7 @@ const Header = () => {
     mode,
     liveError,
     dbStatus,
-    dbMessage,
-    testDbConnection
+    dbMessage
   } = useTradeContext();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
@@ -194,7 +193,6 @@ const Header = () => {
         </div>
 
         <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı Geçmişi</button>
-        <button id="btn-dbtest" className="header-btn" onClick={testDbConnection}>🧪 DB Test</button>
       </div>
 
       <div className="status-badge">

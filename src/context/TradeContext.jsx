@@ -80,7 +80,7 @@ export const TradeProvider = ({ children }) => {
 
   const loadLive = async () => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     if (!supabaseUrl || !supabaseKey) {
       setLiveError('Supabase ayarları eksik.');
       setIsLoaded(true);
@@ -99,10 +99,12 @@ export const TradeProvider = ({ children }) => {
       /*params.append('signal_time', `gte.${start.toISOString()}`);
       params.append('signal_time', `lt.${end.toISOString()}`);*/
 
-      const res = await fetch(`${supabaseUrl}/rest/v1/ict_trade.signals?${params.toString()}`, {
+      const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
+      const res = await fetch(url, {
         headers: {
           apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`
+          Authorization: `Bearer ${supabaseKey}`,
+          'Accept-Profile': 'ict_trade'
         }
       });
       if (!res.ok) throw new Error('Live veri alınamadı');
@@ -128,7 +130,7 @@ export const TradeProvider = ({ children }) => {
 
   const testDbConnection = async () => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     if (!supabaseUrl || !supabaseKey) {
       setDbStatus('fail');
       setDbMessage('Supabase ayarları eksik.');
@@ -137,10 +139,12 @@ export const TradeProvider = ({ children }) => {
     try {
       setDbStatus('testing');
       setDbMessage('Bağlanıyor...');
-      const res = await fetch(`${supabaseUrl}/rest/v1/ict_trade.signals?select=id&limit=1`, {
+      const url = `${supabaseUrl}/rest/v1/signals?select=id&limit=1`;
+      const res = await fetch(url, {
         headers: {
           apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`
+          Authorization: `Bearer ${supabaseKey}`,
+          'Accept-Profile': 'ict_trade'
         }
       });
       if (!res.ok) throw new Error('Bağlantı başarısız');
@@ -160,7 +164,16 @@ export const TradeProvider = ({ children }) => {
       if (defaultData) processData(defaultData);
     } else {
       loadLive();
-      intervalId = setInterval(loadLive, 15 * 60 * 1000);
+      intervalId = setInterval(() => {
+        const now = new Date();
+        const minute = now.getMinutes();
+        const second = now.getSeconds();
+        const inWindow = (minute % 15 === 0) || (minute % 15 === 1);
+        const aligned = second % 10 === 0;
+        if (inWindow && aligned) {
+          loadLive();
+        }
+      }, 1000);
     }
 
     return () => {
