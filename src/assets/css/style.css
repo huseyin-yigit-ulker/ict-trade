@@ -104,6 +104,29 @@ a {
   color: var(--loss);
 }
 
+.db-pill {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  border: 1px solid var(--border);
+}
+
+.db-pill.testing {
+  color: var(--warn);
+  border-color: rgba(244, 191, 80, 0.4);
+}
+
+.db-pill.ok {
+  color: var(--win);
+  border-color: rgba(48, 209, 88, 0.4);
+}
+
+.db-pill.fail {
+  color: var(--loss);
+  border-color: rgba(255, 77, 109, 0.4);
+}
+
 .header-overlay {
   position: fixed;
   top: 0;

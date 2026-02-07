@@ -18,8 +18,10 @@ export const TradeProvider = ({ children }) => {
   const [dateEnd, setDateEnd] = useState('');
   const [pendingDateStart, setPendingDateStart] = useState('');
   const [pendingDateEnd, setPendingDateEnd] = useState('');
-  const [mode, setMode] = useState('backtest'); // backtest | live
+  const [mode, setMode] = useState(null); // backtest | live
   const [liveError, setLiveError] = useState('');
+  const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
+  const [dbMessage, setDbMessage] = useState('');
 
   const processData = (data) => {
     const raw = Array.isArray(data)
@@ -94,10 +96,10 @@ export const TradeProvider = ({ children }) => {
         select: '*',
         order: 'signal_time.desc'
       });
-      params.append('signal_time', `gte.${start.toISOString()}`);
-      params.append('signal_time', `lt.${end.toISOString()}`);
+      /*params.append('signal_time', `gte.${start.toISOString()}`);
+      params.append('signal_time', `lt.${end.toISOString()}`);*/
 
-      const res = await fetch(`${supabaseUrl}/rest/v1/signals?${params.toString()}`, {
+      const res = await fetch(`${supabaseUrl}/rest/v1/ict_trade.signals?${params.toString()}`, {
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`
@@ -124,8 +126,36 @@ export const TradeProvider = ({ children }) => {
     }
   };
 
+  const testDbConnection = async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      setDbStatus('fail');
+      setDbMessage('Supabase ayarları eksik.');
+      return;
+    }
+    try {
+      setDbStatus('testing');
+      setDbMessage('Bağlanıyor...');
+      const res = await fetch(`${supabaseUrl}/rest/v1/ict_trade.signals?select=id&limit=1`, {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`
+        }
+      });
+      if (!res.ok) throw new Error('Bağlantı başarısız');
+      setDbStatus('ok');
+      setDbMessage('Bağlı');
+    } catch (err) {
+      setDbStatus('fail');
+      setDbMessage('Bağlantı yok');
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     let intervalId;
+    if (!mode) return () => {};
     if (mode === 'backtest') {
       if (defaultData) processData(defaultData);
     } else {
@@ -179,7 +209,8 @@ export const TradeProvider = ({ children }) => {
       dateStart, setDateStart, dateEnd, setDateEnd,
       pendingDateStart, setPendingDateStart, pendingDateEnd, setPendingDateEnd,
       applyDates,
-      mode, setMode, liveError
+      mode, setMode, liveError,
+      dbStatus, dbMessage, testDbConnection
     }}>
       {children}
     </TradeContext.Provider>
