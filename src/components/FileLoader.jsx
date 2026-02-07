@@ -1,4 +1,7 @@
+import { useTradeContext } from '../context/TradeContext';
+
 const FileLoader = () => {
+  const { setMode } = useTradeContext();
   return (
     <div id="mode-selection" className="boot-screen">
       <div className="boot-center">
@@ -11,6 +14,10 @@ const FileLoader = () => {
         <div className="boot-text">
           <div className="boot-title">ICT TRADE BOT</div>
           <div className="boot-sub">starting</div>
+        </div>
+        <div className="boot-actions">
+          <button className="primary-btn" onClick={() => setMode('backtest')}>📂 Backtest</button>
+          <button className="primary-btn outline" onClick={() => setMode('live')}>🛰️ Live</button>
         </div>
       </div>
     </div>
