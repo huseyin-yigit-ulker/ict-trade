@@ -6,19 +6,27 @@ import os
 from datetime import datetime, timedelta, timezone
 
 # --- AYARLAR ---
-# Birden fazla sembolü buraya ekleyebilirsiniz
 SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", 
-    "DOGEUSDT", "ADAUSDT", "AVAXUSDT"
+    "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "SHIBUSDT", "TRXUSDT", 
+    "DOTUSDT", "LINKUSDT", "TONUSDT", "MATICUSDT", "LTCUSDT", 
+    "BCHUSDT", "UNIUSDT", "NEARUSDT", "APTUSDT", "XLMUSDT", 
+    "ICPUSDT", "ATOMUSDT", "IMXUSDT", "ARBUSDT", "OPUSDT", 
+    "INJUSDT", "STXUSDT", "FILUSDT", "KASUSDT", "VETUSDT", 
+    "ETCUSDT", "RNDRUSDT", "GRTUSDT", "ALGOUSDT", "THETAUSDT", 
+    "FIMUSDT", "SUIUSDT", "TIAUSDT", "SEIUSDT", "ORDIUSDT", 
+    "AAVEUSDT", "MKRUSDT", "QNTUSDT", "EGLDUSDT", "AXSUSDT", 
+    "SANDUSDT", "MANAUSDT", "EOSUSDT", "FETUSDT", "GALAUSDT"
 ]
 INTERVAL = "15m"
 DISPLACEMENT_FACTOR = 2.0 
 ATR_PERIOD = 14
 RR_RATIO = 2.0 
-FILENAME = "./src/assets/data/daily_signals.json" # Kaydedilecek dosya adı
+
+# Dosyanın kaydedileceği KLASÖR yolu (Sonuna / koymayı unutmayın)
+OUTPUT_FOLDER = "./src/assets/data/" 
 
 def get_binance_futures_data(symbol, interval, start_str, end_str=None):
-    # URL Binance Futures (fapi) olarak değiştirildi
     url = "https://fapi.binance.com/fapi/v1/klines"
     
     dt_obj = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
@@ -28,7 +36,7 @@ def get_binance_futures_data(symbol, interval, start_str, end_str=None):
         "symbol": symbol,
         "interval": interval,
         "startTime": start_ts,
-        "limit": 1500 # Futures max limit 1500'dür
+        "limit": 1500
     }
     
     if end_str:
@@ -39,7 +47,6 @@ def get_binance_futures_data(symbol, interval, start_str, end_str=None):
         response = requests.get(url, params=params)
         data = response.json()
         
-        # Hata kontrolü (Futures API bazen dictionary dönebilir)
         if isinstance(data, dict) and "code" in data:
             print(f"API Hatası ({symbol}): {data.get('msg')}")
             return pd.DataFrame()
@@ -110,14 +117,13 @@ def check_trade_outcome(df, signal_index, entry_price, tp_price, sl_price, trade
 
     return status, real_entry_time, exit_time
 
-def analyze_symbol(symbol, start_str):
+def analyze_symbol(symbol, start_str, end_str):
     """Tek bir sembol için analizi yapar ve sinyalleri döner"""
-    df = get_binance_futures_data(symbol, INTERVAL, start_str)
+    df = get_binance_futures_data(symbol, INTERVAL, start_str, end_str)
     
     if df.empty:
         return []
 
-    # İndikatör Hesaplamaları
     df['body_size'] = abs(df['close'] - df['open'])
     df['body_avg'] = df['body_size'].rolling(window=20).mean()
     
@@ -126,13 +132,11 @@ def analyze_symbol(symbol, start_str):
                                      abs(df['low'] - df['close'].shift(1))))
     df['atr'] = df['tr'].rolling(window=ATR_PERIOD).mean()
 
-    # Tarih Filtreleme (Sadece Dün)
-    now = datetime.now(timezone.utc)
-    yesterday = now - timedelta(days=1)
-    yesterday_start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday_end = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+    # Tarih Filtreleme (Sadece analiz edilen gün)
+    dt_start = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    dt_end = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
 
-    mask = (df['open_time'] >= yesterday_start) & (df['open_time'] <= yesterday_end)
+    mask = (df['open_time'] >= dt_start) & (df['open_time'] <= dt_end)
     target_indices = df.index[mask].tolist()
 
     symbol_signals = []
@@ -143,7 +147,6 @@ def analyze_symbol(symbol, start_str):
         row = df.iloc[i]
         pre_prev_row = df.iloc[i-2]
 
-        # 1. Displacement Kontrolü
         if row['body_size'] <= (row['body_avg'] * DISPLACEMENT_FACTOR):
             continue
 
@@ -152,7 +155,6 @@ def analyze_symbol(symbol, start_str):
         sl = 0.0
         tp = 0.0
 
-        # 2. Bullish FVG
         if row['close'] > row['open']: 
             if row['low'] > pre_prev_row['high']:
                 gap = row['low'] - pre_prev_row['high']
@@ -162,7 +164,6 @@ def analyze_symbol(symbol, start_str):
                     sl = row['low'] - row['atr'] 
                     tp = entry + (entry - sl) * RR_RATIO
 
-        # 3. Bearish FVG
         elif row['close'] < row['open']: 
             if row['high'] < pre_prev_row['low']:
                 gap = pre_prev_row['low'] - row['high']
@@ -176,7 +177,7 @@ def analyze_symbol(symbol, start_str):
             status, real_entry, exit_ts = check_trade_outcome(df, i, entry, tp, sl, trade_type)
 
             signal_obj = {
-                "symbol": symbol, # Dinamik sembol
+                "symbol": symbol,
                 "trade_type": trade_type,
                 "signal_time": row['open_time'].isoformat().replace("+00:00", "Z"),
                 "signal_time_confirmed": row['close_time'].isoformat().replace("+00:00", "Z"),
@@ -196,40 +197,55 @@ def analyze_symbol(symbol, start_str):
 def generate_ict_signals():
     now = datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
+    
+    # Analiz edilen günün başlangıcı ve bitişi
     yesterday_start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_end = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
     
-    print(f"Analiz edilen tarih aralığı: {yesterday_start} - {yesterday_end}")
+    # Dosya ismi için tarih stringi (Örn: 2026-02-07)
+    date_str = yesterday.strftime("%Y-%m-%d")
+    
+    print(f"Analiz Tarihi: {date_str}")
     
     all_signals = []
 
-    # Tüm semboller için döngü
+    start_str = yesterday_start.strftime("%Y-%m-%d %H:%M:%S")
+    # Bitiş zamanını vermiyoruz ki trade sonucunu kontrol etmek için bugünün verisini de çekebilsin
+    # Ancak analiz fonksiyonunda (analyze_symbol) sadece dün filtreleniyor.
+    
+    # check_trade_outcome için "bugün"ün verisine de ihtiyaç olduğundan API çağrısında end_time vermiyoruz.
+    # Ancak analiz fonksiyonuna tarih aralığını paslıyoruz.
+    
+    end_str_for_filter = yesterday_end.strftime("%Y-%m-%d %H:%M:%S")
+
     for symbol in SYMBOLS:
         print(f"Taranıyor: {symbol}...")
         try:
-            signals = analyze_symbol(symbol, yesterday_start.strftime("%Y-%m-%d %H:%M:%S"))
+            signals = analyze_symbol(symbol, start_str, end_str_for_filter)
             all_signals.extend(signals)
         except Exception as e:
             print(f"Hata oluştu ({symbol}): {e}")
 
-    return {"ict_signal": all_signals}
+    return {"ict_signal": all_signals}, date_str
 
-def save_to_json_file(data):
+def save_to_json_file(data, date_str):
     """
-    Veriyi .json dosyasına kaydeder.
+    Veriyi YYYY-MM-DD.json ismiyle kaydeder.
     """
     # Klasör yoksa oluştur
-    folder_path = os.path.dirname(FILENAME)
-    if folder_path and not os.path.exists(folder_path):
-        os.makedirs(folder_path)
+    if OUTPUT_FOLDER and not os.path.exists(OUTPUT_FOLDER):
+        os.makedirs(OUTPUT_FOLDER)
+    
+    # Dosya ismini tarih yap: ./src/assets/data/2026-02-07.json
+    filename = f"{OUTPUT_FOLDER}{date_str}.json"
 
     try:
-        with open(FILENAME, 'w', encoding='utf-8') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        print(f"✅ Dosya başarıyla kaydedildi: {FILENAME}")
+        print(f"✅ Dosya başarıyla kaydedildi: {filename}")
     except Exception as e:
         print(f"❌ Dosya kaydetme hatası: {e}")
 
 if __name__ == "__main__":
-    result_data = generate_ict_signals()
-    save_to_json_file(result_data)
+    result_data, date_filename = generate_ict_signals()
+    save_to_json_file(result_data, date_filename)
