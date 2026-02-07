@@ -8,3 +8,4 @@ node_modules/    <-- Bu satır çok önemli
 dist/
 dist-ssr
 *.local
+.env
