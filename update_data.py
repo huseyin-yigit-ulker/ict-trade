@@ -25,9 +25,15 @@ RR_RATIO = 2.0
 
 # Dosyanın kaydedileceği KLASÖR yolu (Sonuna / koymayı unutmayın)
 OUTPUT_FOLDER = "./src/assets/data/" 
-
+PROXY_URL = "http://185.123.45.67:8080" # <-- BURAYI GÜNCELLE
 def get_binance_futures_data(symbol, interval, start_str, end_str=None):
     url = "https://fapi.binance.com/fapi/v1/klines"
+    
+    # Proxy Ayarı
+    proxies = {
+        "http": PROXY_URL,
+        "https": PROXY_URL
+    } if PROXY_URL else None
     
     dt_obj = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
     start_ts = int(dt_obj.timestamp() * 1000)
@@ -44,7 +50,8 @@ def get_binance_futures_data(symbol, interval, start_str, end_str=None):
         params["endTime"] = int(dt_end.timestamp() * 1000)
 
     try:
-        response = requests.get(url, params=params)
+        # proxies parametresi eklendi
+        response = requests.get(url, params=params, proxies=proxies, timeout=10)
         data = response.json()
         
         if isinstance(data, dict) and "code" in data:
