@@ -2,10 +2,9 @@ name: Daily ICT Signal Bot
 
 on:
   schedule:
-    # Her gün UTC saatiyle 01:00'de çalışır.
-    # (Türkiye saatiyle kışın 04:00, yazın 04:00 civarı - Gün kapanışından 1 saat sonra)
+    # Her gün UTC 01:00'de çalışır.
     - cron: '0 1 * * *'
-  workflow_dispatch: # Manuel test etmek için "Run" butonu ekler
+  workflow_dispatch: # Manuel tetikleme butonu
 
 permissions:
   contents: write # Repoya dosya yükleyebilmesi için yazma izni
@@ -23,16 +22,20 @@ jobs:
         with:
           python-version: '3.10'
 
+      # GÜNCELLEME: Supabase yerine SQLAlchemy ve PostgreSQL sürücüleri yüklendi
       - name: Kütüphaneleri Yükle
         run: |
-          pip install pandas numpy requests
+          pip install sqlalchemy psycopg2-binary
 
+      # GÜNCELLEME: Veritabanı bağlantı adresi Secret olarak verildi
       - name: Python Scriptini Çalıştır 
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
         run: python update_data.py
 
       - name: Değişiklikleri Kaydet ve Pushla
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Otomatik Veri Güncellemesi: ${{ github.event.head_commit.timestamp }}"
-          file_pattern: "./src/assets/data/" # Sadece bu dosyadaki değişikliği al
-          branch: main # Eğer branch adın 'master' ise burayı değiştir
+          file_pattern: "./src/assets/data/*.json" # Sadece data klasöründeki JSON dosyalarını al
+          branch: main
