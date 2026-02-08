@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useRef } from 'react';
 // MUST IMPORT DIRECTLY:
 import defaultData from '../assets/data/trades.json';
 
@@ -22,6 +22,8 @@ export const TradeProvider = ({ children }) => {
   const [liveError, setLiveError] = useState('');
   const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
   const [dbMessage, setDbMessage] = useState('');
+  const [liveStatuses, setLiveStatuses] = useState({});
+  const liveStatusesRef = useRef({});
 
   const processData = (data) => {
     const raw = Array.isArray(data)
@@ -181,6 +183,104 @@ export const TradeProvider = ({ children }) => {
     };
   }, [mode]);
 
+  const normalizeForBinance = (sym) => sym ? sym.replace(/[^A-Za-z0-9]/g, '') : '';
+
+  const computeLiveStatusFromCandles = (sig, candles) => {
+    if (!sig || !sig.entry || !sig.tp || !sig.sl || !sig.dir || !candles?.length) {
+      return 'Sinyal Bekliyor';
+    }
+    const entryTs = Math.floor(sig.dateObj.getTime() / 1000);
+    let entryHitTime = null;
+    for (const c of candles) {
+      if (c.time < entryTs) continue;
+      const entryTouched = sig.dir === 'LONG' ? c.low <= sig.entry : c.high >= sig.entry;
+      const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
+      const slHit = sig.dir === 'LONG' ? c.low <= sig.sl : c.high >= sig.sl;
+      if (!entryTouched && (tpHit || slHit)) return 'İptal (Entry Gelmeden TP/SL)';
+      if (entryTouched) {
+        entryHitTime = c.time;
+        break;
+      }
+    }
+    if (entryHitTime === null) return 'Sinyal Bekliyor';
+    for (const c of candles) {
+      if (c.time < entryHitTime) continue;
+      const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
+      const slHit = sig.dir === 'LONG' ? c.low <= sig.sl : c.high >= sig.sl;
+      if (tpHit || slHit) {
+        return tpHit && slHit ? 'TP/SL Aynı Mum' : (tpHit ? 'TP Oldu' : 'SL Oldu');
+      }
+    }
+    return 'İşlem Aktif (Entry Geldi)';
+  };
+
+  const resolveLiveMeta = (status) => {
+    if (!status) return { terminal: false };
+    if (status === 'TP Oldu') return { terminal: true };
+    if (status === 'SL Oldu') return { terminal: true };
+    if (status === 'TP/SL Aynı Mum') return { terminal: true };
+    if (status.startsWith('İptal')) return { terminal: true };
+    return { terminal: false };
+  };
+
+  useEffect(() => {
+    if (mode !== 'live' || allSignals.length === 0) return () => {};
+    let stopped = false;
+
+    const fetchCandles = async (sig) => {
+      const baseSymbol = normalizeForBinance(sig.symbol);
+      const entryTime = sig.dateObj.getTime();
+      const now = Date.now();
+      const fetchStartTime = entryTime - (60 * 1000 * 120);
+      const fetchEndTime = now;
+      const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+      const res = await fetch(urlFutures);
+      let rawData = await res.json();
+
+      if (!Array.isArray(rawData)) {
+        const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+        const resSpot = await fetch(urlSpot);
+        rawData = await resSpot.json();
+      }
+
+      if (!Array.isArray(rawData) || rawData.length === 0) return [];
+      return rawData.map(d => ({
+        time: d[0] / 1000,
+        open: parseFloat(d[1]),
+        high: parseFloat(d[2]),
+        low: parseFloat(d[3]),
+        close: parseFloat(d[4])
+      }));
+    };
+
+    const updateStatuses = async () => {
+      for (const sig of allSignals) {
+        const existing = liveStatusesRef.current[sig.id];
+        if (resolveLiveMeta(existing?.status).terminal) continue;
+        try {
+          const candles = await fetchCandles(sig);
+          const status = computeLiveStatusFromCandles(sig, candles);
+          if (stopped) return;
+          setLiveStatuses(prev => {
+            const next = { ...prev, [sig.id]: { status } };
+            liveStatusesRef.current = next;
+            return next;
+          });
+        } catch {
+          // Sessizce geç
+        }
+      }
+    };
+
+    updateStatuses();
+    const intervalId = setInterval(updateStatuses, 30000);
+
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+    };
+  }, [mode, allSignals]);
+
   // Filtreleme mantığı
   const isInRange = (sig) => {
     if (!dateStart && !dateEnd) return true;
@@ -223,6 +323,7 @@ export const TradeProvider = ({ children }) => {
       pendingDateStart, setPendingDateStart, pendingDateEnd, setPendingDateEnd,
       applyDates,
       mode, setMode, liveError,
+      liveStatuses,
       dbStatus, dbMessage, testDbConnection
     }}>
       {children}

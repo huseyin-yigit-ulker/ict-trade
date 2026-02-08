@@ -3,12 +3,15 @@ import { createChart, CandlestickSeries, BaselineSeries, LineSeries } from 'ligh
 import { useTradeContext } from '../context/TradeContext';
 
 const ChartModal = () => {
-  const { activeSignal, setActiveSignal, chartView, setChartView } = useTradeContext();
+  const { activeSignal, setActiveSignal, chartView, setChartView, mode } = useTradeContext();
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const [showTv, setShowTv] = useState(chartView === 'tv');
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
+  const [hoverInfo, setHoverInfo] = useState(null);
+  const [liveTradeStatus, setLiveTradeStatus] = useState('');
+  const [showPositionGraph, setShowPositionGraph] = useState(true);
 
   // PnL Hesaplama
   const calculatePnL = (sig) => {
@@ -130,7 +133,8 @@ const ChartModal = () => {
         lineWidth: 0, 
         priceLineVisible: false,
         lastValueVisible: false,
-        crosshairMarkerVisible: false
+        crosshairMarkerVisible: false,
+        priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
     const slAreaSeries = chart.addSeries(BaselineSeries, {
@@ -138,7 +142,8 @@ const ChartModal = () => {
         lineWidth: 0,
         priceLineVisible: false,
         lastValueVisible: false,
-        crosshairMarkerVisible: false
+        crosshairMarkerVisible: false,
+        priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
     // --- KATMAN 2: Mum Grafiği (Ön Planda) ---
@@ -147,7 +152,8 @@ const ChartModal = () => {
       downColor: themeConfig.downColor,
       borderVisible: false,
       wickUpColor: themeConfig.wickUp,
-      wickDownColor: themeConfig.wickDown
+      wickDownColor: themeConfig.wickDown,
+      priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
     const fetchAndRender = async () => {
@@ -190,35 +196,95 @@ const ChartModal = () => {
         const exitTsReal = Math.floor(exitTime / 1000);
         const isLong = dir === 'LONG';
 
+        let liveStatus = '';
+        let entryHitTime = null;
+        let shouldShowPosition = true;
+
+        if (mode === 'live' && entry && tp && sl && dir && candles.length > 0) {
+          const entryTimeSec = entryTs;
+          let status = 'Sinyal Bekliyor';
+          let entryHit = false;
+          let cancelled = false;
+
+          for (const c of candles) {
+            if (c.time < entryTimeSec) continue;
+            const entryTouched = dir === 'LONG'
+              ? c.low <= entry
+              : c.high >= entry;
+            const tpHit = dir === 'LONG' ? c.high >= tp : c.low <= tp;
+            const slHit = dir === 'LONG' ? c.low <= sl : c.high >= sl;
+
+            if (!entryTouched && (tpHit || slHit)) {
+              cancelled = true;
+              status = 'İptal (Entry Gelmeden TP/SL)';
+              break;
+            }
+
+            if (entryTouched) {
+              entryHit = true;
+              entryHitTime = c.time;
+              status = 'İşlem Aktif (Entry Geldi)';
+              break;
+            }
+          }
+
+          if (entryHit && entryHitTime !== null) {
+            for (const c of candles) {
+              if (c.time < entryHitTime) continue;
+              const tpHit = dir === 'LONG' ? c.high >= tp : c.low <= tp;
+              const slHit = dir === 'LONG' ? c.low <= sl : c.high >= sl;
+              if (tpHit || slHit) {
+                status = tpHit && slHit
+                  ? 'TP/SL Aynı Mum'
+                  : tpHit
+                    ? 'TP Oldu'
+                    : 'SL Oldu';
+                break;
+              }
+            }
+          }
+
+          liveStatus = status;
+          shouldShowPosition = !cancelled;
+        }
+
+        setLiveTradeStatus(liveStatus);
+        setShowPositionGraph(mode === 'live' ? shouldShowPosition : true);
+
         // --- RENKLİ KUTULARI OLUŞTURMA ---
         if (entry && tp && sl) {
+          if (mode === 'live' && !shouldShowPosition) {
+            tpAreaSeries.setData([]);
+            slAreaSeries.setData([]);
+          } else {
             tpAreaSeries.applyOptions({
-                topLineColor: 'rgba(0,0,0,0)',
-                bottomLineColor: 'rgba(0,0,0,0)',
-                topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
-                topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
-                bottomFillColor1: !isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
-                bottomFillColor2: !isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
+              topLineColor: 'rgba(0,0,0,0)',
+              bottomLineColor: 'rgba(0,0,0,0)',
+              topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
+              topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
+              bottomFillColor1: !isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
+              bottomFillColor2: !isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
             });
 
             slAreaSeries.applyOptions({
-                topLineColor: 'rgba(0,0,0,0)',
-                bottomLineColor: 'rgba(0,0,0,0)',
-                topFillColor1: !isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
-                topFillColor2: !isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
-                bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
-                bottomFillColor2: isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
+              topLineColor: 'rgba(0,0,0,0)',
+              bottomLineColor: 'rgba(0,0,0,0)',
+              topFillColor1: !isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
+              topFillColor2: !isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
+              bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
+              bottomFillColor2: isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
             });
 
             const tradeCandles = candles.filter(c => c.time >= entryTs && c.time <= exitTsReal);
             
             if (tradeCandles.length > 0) {
-                const tpData = tradeCandles.map(c => ({ time: c.time, value: tp }));
-                tpAreaSeries.setData(tpData);
+              const tpData = tradeCandles.map(c => ({ time: c.time, value: tp }));
+              tpAreaSeries.setData(tpData);
 
-                const slData = tradeCandles.map(c => ({ time: c.time, value: sl }));
-                slAreaSeries.setData(slData);
+              const slData = tradeCandles.map(c => ({ time: c.time, value: sl }));
+              slAreaSeries.setData(slData);
             }
+          }
         }
 
         // --- ENTRY BEYAZ ÇİZGİ ---
@@ -229,7 +295,8 @@ const ChartModal = () => {
                 lineStyle: 0,
                 crosshairMarkerVisible: false,
                 lastValueVisible: false,
-                priceLineVisible: false
+                priceLineVisible: false,
+                priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
             });
 
             entryLineSeries.setData([
@@ -266,6 +333,26 @@ const ChartModal = () => {
 
     fetchAndRender();
 
+    const handleCrosshairMove = (param) => {
+      if (!param || !param.time || !param.seriesData) {
+        setHoverInfo(null);
+        return;
+      }
+      const candle = param.seriesData.get(mainSeries);
+      if (!candle) {
+        setHoverInfo(null);
+        return;
+      }
+      setHoverInfo({
+        time: param.time,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close
+      });
+    };
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry && chartRef.current) {
@@ -277,6 +364,7 @@ const ChartModal = () => {
 
     return () => {
       observer.disconnect();
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.remove();
       chartRef.current = null;
     };
@@ -288,6 +376,21 @@ const ChartModal = () => {
       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
     });
   };
+
+  const formatHoverTime = (t) => {
+    if (!t) return '--';
+    const dt = new Date(t * 1000);
+    return dt.toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  const formatPrice = (value) => (
+    typeof value === 'number' ? value.toFixed(5) : '--'
+  );
 
   useEffect(() => {
     if (!showTv) return;
@@ -315,6 +418,11 @@ const ChartModal = () => {
           {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#089981' : '#F23645'}}>{activeSignal?.dir}</span>
         </h2>
         <div className="chart-actions">
+          {!showTv && hoverInfo && (
+            <div className="chart-hover-info">
+              {formatHoverTime(hoverInfo.time)} • O {formatPrice(hoverInfo.open)} H {formatPrice(hoverInfo.high)} L {formatPrice(hoverInfo.low)} C {formatPrice(hoverInfo.close)}
+            </div>
+          )}
           <button
             className={`chart-toggle ${!showTv ? 'active' : ''}`}
             onClick={() => {
@@ -347,14 +455,14 @@ const ChartModal = () => {
             <span>Tarih</span>
             <b style={{fontSize:'0.9em'}}>{formatSignalTime(activeSignal.dateObj)}</b>
           </div>
-          <div className="position-row"><span>Giriş</span><b>{activeSignal.entry?.toFixed(4)}</b></div>
+          <div className="position-row"><span>Giriş</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
              <span>Hedef/Stop</span>
-             <b><span style={{color:'#089981'}}>{activeSignal.tp?.toFixed(4)}</span> / <span style={{color:'#F23645'}}>{activeSignal.sl?.toFixed(4)}</span></b>
+             <b><span style={{color:'#089981'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F23645'}}>{formatPrice(activeSignal.sl)}</span></b>
           </div>
           <div className="position-row">
             <span>Çıkış</span>
-            <b>{activeSignal.exitPrice ? activeSignal.exitPrice.toFixed(4) : '--'}</b>
+            <b>{formatPrice(activeSignal.exitPrice)}</b>
           </div>
           <div className="position-row">
             <span>PnL</span>
@@ -362,6 +470,12 @@ const ChartModal = () => {
               {calculatePnL(activeSignal) !== null ? `${calculatePnL(activeSignal).toFixed(2)}%` : '--'}
             </b>
           </div>
+          {mode === 'live' && (
+            <div className="position-row">
+              <span>Canlı Durum</span>
+              <b>{liveTradeStatus || 'Hesaplanıyor...'}</b>
+            </div>
+          )}
         </div>
       )}
 

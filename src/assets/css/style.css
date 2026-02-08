@@ -713,6 +713,17 @@ button.chip {
 .chart-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.chart-hover-info {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
 }
 
 .chart-toggle {

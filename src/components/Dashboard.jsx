@@ -2,12 +2,22 @@ import { useMemo } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const Dashboard = () => {
-  const { filteredSignals, setActiveSignal, setChartView } = useTradeContext();
+  const { filteredSignals, setActiveSignal, setChartView, mode, liveStatuses } = useTradeContext();
 
   const calculatePnL = (sig) => {
     if (sig.status !== 'TP' && sig.status !== 'SL') return 0;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
+  };
+
+  const resolveLiveMeta = (status) => {
+    if (!status) return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
+    if (status === 'TP Oldu') return { label: 'TP', cls: 'win', terminal: true };
+    if (status === 'SL Oldu') return { label: 'SL', cls: 'loss', terminal: true };
+    if (status === 'TP/SL Aynı Mum') return { label: 'TP/SL', cls: 'loss', terminal: true };
+    if (status.startsWith('İptal')) return { label: 'İPTAL', cls: 'loss', terminal: true };
+    if (status.startsWith('İşlem Aktif')) return { label: 'AKTIF', cls: 'waiting', terminal: false };
+    return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
   };
 
   const grouped = useMemo(() => {
@@ -38,7 +48,11 @@ const Dashboard = () => {
             <div className="trade-grid">
               {trades.map(sig => {
                 const pnl = calculatePnL(sig);
-                const pnlClass = pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting');
+                const liveStatus = mode === 'live' ? liveStatuses[sig.id]?.status : '';
+                const liveMeta = resolveLiveMeta(liveStatus);
+                const pnlClass = mode === 'live'
+                  ? liveMeta.cls
+                  : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
                 const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
                 return (
@@ -58,7 +72,7 @@ const Dashboard = () => {
                     <div className="trade-body">
                       <div className="trade-metric">
                         <span className="metric-label">Durum</span>
-                        <span className={`status-text ${pnlClass}`}>{sig.status}</span>
+                        <span className={`status-text ${pnlClass}`}>{mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}</span>
                       </div>
                       <div className="trade-metric">
                         <span className="metric-label">P/L</span>
@@ -74,7 +88,7 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <div className="trade-foot">
-                      <div className={`chip ${pnlClass}`}>{pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL')}</div>
+                      <div className={`chip ${pnlClass}`}>{mode === 'live' ? liveMeta.label : (pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL'))}</div>
                       <button
                         className="chip outline"
                         onClick={(e) => {
