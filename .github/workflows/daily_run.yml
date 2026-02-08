@@ -25,7 +25,7 @@ jobs:
       # GÜNCELLEME: Supabase yerine SQLAlchemy ve PostgreSQL sürücüleri yüklendi
       - name: Kütüphaneleri Yükle
         run: |
-          pip install sqlalchemy psycopg2-binary
+          pip install sqlalchemy psycopg2-binary dotenv
 
       # GÜNCELLEME: Veritabanı bağlantı adresi Secret olarak verildi
       - name: Python Scriptini Çalıştır 
