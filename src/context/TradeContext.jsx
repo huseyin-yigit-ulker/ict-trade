@@ -309,6 +309,15 @@ export const TradeProvider = ({ children }) => {
     setSelectedSymbols(new Set(pendingSymbols));
   };
 
+  const clearPendingSymbols = () => {
+    setPendingSymbols(new Set());
+  };
+
+  const selectAllPendingSymbols = () => {
+    const symbols = new Set(allSignals.map(s => s.symbol));
+    setPendingSymbols(symbols);
+  };
+
   const applyDates = () => {
     setDateStart(pendingDateStart);
     setDateEnd(pendingDateEnd);
@@ -318,6 +327,7 @@ export const TradeProvider = ({ children }) => {
     <TradeContext.Provider value={{
       allSignals, filteredSignals, selectedSymbols, pendingSymbols, isLoaded, processData,
       activeSignal, setActiveSignal, showStats, setShowStats, toggleSymbol, applySymbols,
+      clearPendingSymbols, selectAllPendingSymbols,
       chartView, setChartView, showSummary, setShowSummary,
       dateStart, setDateStart, dateEnd, setDateEnd,
       pendingDateStart, setPendingDateStart, pendingDateEnd, setPendingDateEnd,

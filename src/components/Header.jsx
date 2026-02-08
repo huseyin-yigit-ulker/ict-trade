@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const Header = () => {
@@ -8,6 +8,8 @@ const Header = () => {
     allSignals,
     toggleSymbol,
     applySymbols,
+    clearPendingSymbols,
+    selectAllPendingSymbols,
     setShowStats,
     setShowSummary,
     dateStart,
@@ -25,12 +27,18 @@ const Header = () => {
   } = useTradeContext();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  const [symbolQuery, setSymbolQuery] = useState('');
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
   const uniqueSymbols = [...new Set(allSignals.map(s => s.symbol))].sort();
+  const filteredSymbols = useMemo(() => {
+    if (!symbolQuery) return uniqueSymbols;
+    const q = symbolQuery.toLowerCase();
+    return uniqueSymbols.filter(sym => sym.toLowerCase().includes(q));
+  }, [uniqueSymbols, symbolQuery]);
   const monthLabel = calendarMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 
   const daysGrid = useMemo(() => {
@@ -63,6 +71,10 @@ const Header = () => {
     return d === value;
   };
 
+  useEffect(() => {
+    if (!dropdownOpen) setSymbolQuery('');
+  }, [dropdownOpen]);
+
   return (
     <div className="app-header">
       <div className="header-title">
@@ -89,16 +101,29 @@ const Header = () => {
           </button>
 
           <div className={`multi-select-content ${dropdownOpen ? 'show' : ''}`} id="multi-select-list">
-            {uniqueSymbols.map(sym => (
-              <label key={sym} onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={pendingSymbols.has(sym)}
-                  onChange={() => toggleSymbol(sym)}
-                />
-                {sym}
-              </label>
-            ))}
+            <input
+              className="symbol-search"
+              type="text"
+              placeholder="Sembol ara..."
+              value={symbolQuery}
+              onChange={(e) => setSymbolQuery(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="symbol-list" onClick={(e) => e.stopPropagation()}>
+              {filteredSymbols.length === 0 && (
+                <div className="symbol-empty">Sonuç yok</div>
+              )}
+              {filteredSymbols.map(sym => (
+                <label key={sym}>
+                  <input
+                    type="checkbox"
+                    checked={pendingSymbols.has(sym)}
+                    onChange={() => toggleSymbol(sym)}
+                  />
+                  {sym}
+                </label>
+              ))}
+            </div>
             <button
               className="apply-btn"
               onClick={() => {
@@ -107,6 +132,22 @@ const Header = () => {
               }}
             >
               ✅ Uygula
+            </button>
+            <button
+              className="apply-btn"
+              onClick={() => {
+                selectAllPendingSymbols();
+              }}
+            >
+              ✅ Tümünü Seç
+            </button>
+            <button
+              className="apply-btn ghost"
+              onClick={() => {
+                clearPendingSymbols();
+              }}
+            >
+              🧹 Temizle
             </button>
           </div>
         </div>

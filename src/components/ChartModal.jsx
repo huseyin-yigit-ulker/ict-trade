@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, BaselineSeries, LineSeries } from 'lightweight-charts';
+import { createChart, CandlestickSeries, BaselineSeries } from 'lightweight-charts';
 import { useTradeContext } from '../context/TradeContext';
 
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode } = useTradeContext();
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
+  const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
+
   const [showTv, setShowTv] = useState(chartView === 'tv');
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
   const [hoverInfo, setHoverInfo] = useState(null);
   const [liveTradeStatus, setLiveTradeStatus] = useState('');
-  const [showPositionGraph, setShowPositionGraph] = useState(true);
 
-  // PnL Hesaplama
+  // --- Yardımcı Fonksiyonlar ---
   const calculatePnL = (sig) => {
     if (!sig || !sig.entry || !sig.exitPrice) return null;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
@@ -34,19 +35,10 @@ const ChartModal = () => {
   const getTvEmbedUrl = () => {
     const tvSymbol = toTvFuturesSymbol(activeSignal?.symbol);
     const params = new URLSearchParams({
-      symbol: tvSymbol,
-      interval: '1',
-      theme: 'dark',
-      style: '1',
-      toolbarbg: '1a2333',
-      enable_publishing: 'false',
-      hide_side_toolbar: 'false',
-      allow_symbol_change: 'true',
-      studies: '["Volume@tv-basicstudies"]',
-      locale: 'tr',
-      withdateranges: 'true',
-      hideideas: 'true',
-      autosize: 'true'
+      symbol: tvSymbol, interval: '1', theme: 'dark', style: '1',
+      toolbarbg: '1a2333', enable_publishing: 'false', hide_side_toolbar: 'false',
+      allow_symbol_change: 'true', studies: '["Volume@tv-basicstudies"]',
+      locale: 'tr', withdateranges: 'true', hideideas: 'true', autosize: 'true'
     });
     return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
   };
@@ -62,60 +54,33 @@ const ChartModal = () => {
     const height = rect.height > 0 ? rect.height : 520;
 
     const themeConfig = {
-      bg: '#131722',
-      text: '#d1d4dc',
-      grid: 'transparent',
-      upColor: '#089981',
-      downColor: '#F23645',
-      wickUp: '#089981',
-      wickDown: '#F23645',
+      bg: '#131722', text: '#d1d4dc', grid: 'transparent',
+      upColor: '#089981', downColor: '#F23645',
+      wickUp: '#089981', wickDown: '#F23645',
     };
 
+    // 1. CHART OLUŞTURMA
     const chart = createChart(chartContainerRef.current, {
       layout: { 
         background: { type: 'solid', color: themeConfig.bg }, 
         textColor: themeConfig.text,
         fontFamily: "'Trebuchet MS', Roboto, Ubuntu, sans-serif"
       },
-      // --- YENİ EKLENEN: LOCALIZATION & TIME FORMATTING ---
       localization: {
-        locale: 'tr-TR', // Türkçe Yerelleştirme
-        dateFormat: 'dd MMM yyyy', // Tarih Formatı (örn: 12 Şub 2024)
+        locale: 'tr-TR', dateFormat: 'dd MMM yyyy',
         timeFormatter: (timestamp) => {
-            // Crosshair üzerindeki tam zaman etiketi
             const date = new Date(timestamp * 1000);
-            return date.toLocaleString('tr-TR', { 
-                day: 'numeric', 
-                month: 'short', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
+            return date.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
         }
       },
-      grid: { 
-        vertLines: { visible: false }, 
-        horzLines: { visible: false } 
-      },
-      width,
-      height,
-      rightPriceScale: { 
-        borderColor: 'rgba(197, 203, 206, 0.2)',
-        scaleMargins: { top: 0.2, bottom: 0.2 },
-      },
-      // --- GÜNCELLENEN: TIME SCALE AYARLARI ---
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+      width, height,
+      rightPriceScale: { borderColor: 'rgba(197, 203, 206, 0.2)', scaleMargins: { top: 0.2, bottom: 0.2 } },
       timeScale: { 
-        timeVisible: true,     // Saat bilgisini göster
-        secondsVisible: false, // Saniye kalabalık yapmasın
-        borderColor: 'rgba(197, 203, 206, 0.2)',
-        visible: true,         // Ekseni görünür yap
-        tickMarkFormatter: (time, tickMarkType, locale) => {
-            // Eksen üzerindeki etiket formatı
+        timeVisible: true, secondsVisible: false, borderColor: 'rgba(197, 203, 206, 0.2)',
+        tickMarkFormatter: (time, tickMarkType) => {
             const date = new Date(time * 1000);
-            // Eğer yeni bir günse Tarihi, değilse Saati göster
-            // tickMarkType: 0=Year, 1=Month, 2=DayOfMonth, 3=Time
-            if (tickMarkType < 3) {
-                return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-            }
+            if (tickMarkType < 3) return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
             return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
         }
       },
@@ -127,199 +92,179 @@ const ChartModal = () => {
     });
     chartRef.current = chart;
 
-    // --- KATMAN 1: Renkli Kutular (Arka Planda) ---
+    // --- KATMAN 1: MODERN POZİSYON GÖRÜNÜMÜ (Baseline Series) ---
+    // Bu seriler Entry seviyesini baz alarak üstünü ve altını boyar.
+    
+    // TP Bölgesi (Yeşil Alan için)
     const tpAreaSeries = chart.addSeries(BaselineSeries, {
         baseValue: { type: 'price', price: activeSignal.entry },
-        lineWidth: 0, 
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
+        lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
+    // SL Bölgesi (Kırmızı Alan için)
     const slAreaSeries = chart.addSeries(BaselineSeries, {
         baseValue: { type: 'price', price: activeSignal.entry },
-        lineWidth: 0,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
+        lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
-    // --- KATMAN 2: Mum Grafiği (Ön Planda) ---
+    // --- KATMAN 2: MUM GRAFİĞİ ---
     const mainSeries = chart.addSeries(CandlestickSeries, {
-      upColor: themeConfig.upColor,
-      downColor: themeConfig.downColor,
-      borderVisible: false,
-      wickUpColor: themeConfig.wickUp,
-      wickDownColor: themeConfig.wickDown,
+      upColor: themeConfig.upColor, downColor: themeConfig.downColor,
+      borderVisible: false, wickUpColor: themeConfig.wickUp, wickDownColor: themeConfig.wickDown,
       priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
+    // ---------------------------------------------------------
+    // VERİ ÇEKME VE MANTIK ALANI
+    // ---------------------------------------------------------
     const fetchAndRender = async () => {
       setChartError('');
       try {
         const entryTime = activeSignal.dateObj.getTime();
-        const exitTime = activeSignal.exitTs || entryTime + (60 * 60 * 1000);
-        
+        // Live modda ise şu an, değilse işlem tahmini bitişine kadar veri çek
+        const fetchEndTime = mode === 'live' ? Date.now() : (entryTime + (60 * 1000 * 240));     
         const fetchStartTime = entryTime - (60 * 1000 * 120); 
-        const fetchEndTime = exitTime + (60 * 1000 * 60);     
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
-        let data = [];
+        // 1. Veriyi Çek
+        let rawData = [];
         const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
         const res = await fetch(urlFutures);
-        let rawData = await res.json();
+        rawData = await res.json();
 
+        // Futures yoksa Spot dene
         if (!Array.isArray(rawData)) {
-          const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
-          const resSpot = await fetch(urlSpot);
-          rawData = await resSpot.json();
+            const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+            const resSpot = await fetch(urlSpot);
+            rawData = await resSpot.json();
         }
 
-        if (!Array.isArray(rawData) || rawData.length === 0) {
-          throw new Error('Kline verisi boş');
-        }
+        if (!Array.isArray(rawData) || rawData.length === 0) throw new Error('Kline verisi boş');
 
         const candles = rawData.map(d => ({
           time: d[0] / 1000,
-          open: parseFloat(d[1]),
-          high: parseFloat(d[2]),
-          low: parseFloat(d[3]),
-          close: parseFloat(d[4])
+          open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4])
         }));
 
         mainSeries.setData(candles);
 
+        // 2. İşlem Durumunu Analiz Et (Trading Logic)
         const { entry, tp, sl, dir } = activeSignal;
         const entryTs = Math.floor(entryTime / 1000);
-        const exitTsReal = Math.floor(exitTime / 1000);
         const isLong = dir === 'LONG';
+        
+        let statusText = '⏳ Sinyal Bekliyor';
+        let isTerminalState = false; // İşlem bitti mi?
+        let isCancelled = false;
+        let endTimeForGraph = candles[candles.length - 1].time; // Varsayılan: Son mum
 
-        let liveStatus = '';
-        let entryHitTime = null;
-        let shouldShowPosition = true;
+        if (mode === 'live' && entry && tp && sl && candles.length > 0) {
+             let entryHit = false;
 
-        if (mode === 'live' && entry && tp && sl && dir && candles.length > 0) {
-          const entryTimeSec = entryTs;
-          let status = 'Sinyal Bekliyor';
-          let entryHit = false;
-          let cancelled = false;
+             for (const c of candles) {
+                 if (c.time < entryTs) continue; 
 
-          for (const c of candles) {
-            if (c.time < entryTimeSec) continue;
-            const entryTouched = dir === 'LONG'
-              ? c.low <= entry
-              : c.high >= entry;
-            const tpHit = dir === 'LONG' ? c.high >= tp : c.low <= tp;
-            const slHit = dir === 'LONG' ? c.low <= sl : c.high >= sl;
+                 const cHigh = c.high;
+                 const cLow = c.low;
 
-            if (!entryTouched && (tpHit || slHit)) {
-              cancelled = true;
-              status = 'İptal (Entry Gelmeden TP/SL)';
-              break;
-            }
+                 // A) Henüz giriş yapılmadıysa
+                 if (!entryHit) {
+                     const hitEntryLevel = isLong ? cLow <= entry : cHigh >= entry;
+                     const hitTpLevel = isLong ? cHigh >= tp : cLow <= tp;
+                     const hitSlLevel = isLong ? cLow <= sl : cHigh >= sl;
 
-            if (entryTouched) {
-              entryHit = true;
-              entryHitTime = c.time;
-              status = 'İşlem Aktif (Entry Geldi)';
-              break;
-            }
-          }
+                     // İPTAL KONTROLÜ: Entry'ye gelmeden TP veya SL'ye değdi mi?
+                     if (!hitEntryLevel && (hitTpLevel || hitSlLevel)) {
+                         isCancelled = true;
+                         isTerminalState = true;
+                         statusText = '❌ İptal (Entry Öncesi Temas)';
+                         endTimeForGraph = c.time; // Grafiği burada kes
+                         break;
+                     }
 
-          if (entryHit && entryHitTime !== null) {
-            for (const c of candles) {
-              if (c.time < entryHitTime) continue;
-              const tpHit = dir === 'LONG' ? c.high >= tp : c.low <= tp;
-              const slHit = dir === 'LONG' ? c.low <= sl : c.high >= sl;
-              if (tpHit || slHit) {
-                status = tpHit && slHit
-                  ? 'TP/SL Aynı Mum'
-                  : tpHit
-                    ? 'TP Oldu'
-                    : 'SL Oldu';
-                break;
-              }
-            }
-          }
+                     if (hitEntryLevel) {
+                         entryHit = true;
+                         statusText = '⚡ İşlem Aktif';
+                     }
+                 }
 
-          liveStatus = status;
-          shouldShowPosition = !cancelled;
+                 // B) Giriş yapıldıysa -> TP/SL Kontrolü
+                 if (entryHit) {
+                     const hitTpLevel = isLong ? cHigh >= tp : cLow <= tp;
+                     const hitSlLevel = isLong ? cLow <= sl : cHigh >= sl;
+
+                     if (hitTpLevel && hitSlLevel) {
+                         statusText = '⚠️ TP/SL Aynı Mum';
+                         isTerminalState = true;
+                         endTimeForGraph = c.time;
+                         break;
+                     } else if (hitTpLevel) {
+                         statusText = '✅ Hedef (TP) Alındı';
+                         isTerminalState = true;
+                         endTimeForGraph = c.time;
+                         break;
+                     } else if (hitSlLevel) {
+                         statusText = '🛑 Stop (SL) Oldu';
+                         isTerminalState = true;
+                         endTimeForGraph = c.time;
+                         break;
+                     }
+                 }
+             }
         }
 
-        setLiveTradeStatus(liveStatus);
-        setShowPositionGraph(mode === 'live' ? shouldShowPosition : true);
+        setLiveTradeStatus(statusText);
 
-        // --- RENKLİ KUTULARI OLUŞTURMA ---
-        if (entry && tp && sl) {
-          if (mode === 'live' && !shouldShowPosition) {
+        // 3. Veri Akışını Durdurma (Live Mode & Terminal State)
+        if (mode === 'live' && isTerminalState) {
+            console.log("İşlem Sonlandı. Veri akışı durduruluyor...");
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        }
+
+        // 4. Modern Pozisyon Görünümü (TradingView Style)
+        // BaselineSeries kullanarak Entry'nin üstünü/altını boyuyoruz.
+        
+        if (isLong) {
+            // LONG: TP (Üst) Yeşil, SL (Alt) Kırmızı
+            tpAreaSeries.applyOptions({
+                topLineColor: '#089981', topFillColor1: 'rgba(8, 153, 129, 0.25)', topFillColor2: 'rgba(8, 153, 129, 0.05)',
+                bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
+            });
+            slAreaSeries.applyOptions({
+                topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
+                bottomLineColor: '#F23645', bottomFillColor1: 'rgba(242, 54, 69, 0.25)', bottomFillColor2: 'rgba(242, 54, 69, 0.05)'
+            });
+        } else {
+            // SHORT: TP (Alt) Yeşil, SL (Üst) Kırmızı
+            tpAreaSeries.applyOptions({
+                topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
+                bottomLineColor: '#089981', bottomFillColor1: 'rgba(8, 153, 129, 0.25)', bottomFillColor2: 'rgba(8, 153, 129, 0.05)'
+            });
+            slAreaSeries.applyOptions({
+                topLineColor: '#F23645', topFillColor1: 'rgba(242, 54, 69, 0.25)', topFillColor2: 'rgba(242, 54, 69, 0.05)',
+                bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
+            });
+        }
+
+        // Veriyi Serilere Ata
+        if (entry && tp && sl && !isCancelled) {
+             // Entry anından -> Bitiş anına kadar bir kutu çiz
+             tpAreaSeries.setData([ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]);
+             slAreaSeries.setData([ { time: entryTs, value: sl }, { time: endTimeForGraph, value: sl } ]);
+        } else {
             tpAreaSeries.setData([]);
             slAreaSeries.setData([]);
-          } else {
-            tpAreaSeries.applyOptions({
-              topLineColor: 'rgba(0,0,0,0)',
-              bottomLineColor: 'rgba(0,0,0,0)',
-              topFillColor1: isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
-              topFillColor2: isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
-              bottomFillColor1: !isLong ? 'rgba(8, 153, 129, 0.25)' : 'rgba(0,0,0,0)', 
-              bottomFillColor2: !isLong ? 'rgba(8, 153, 129, 0.05)' : 'rgba(0,0,0,0)',
-            });
-
-            slAreaSeries.applyOptions({
-              topLineColor: 'rgba(0,0,0,0)',
-              bottomLineColor: 'rgba(0,0,0,0)',
-              topFillColor1: !isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
-              topFillColor2: !isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
-              bottomFillColor1: isLong ? 'rgba(242, 54, 69, 0.25)' : 'rgba(0,0,0,0)', 
-              bottomFillColor2: isLong ? 'rgba(242, 54, 69, 0.05)' : 'rgba(0,0,0,0)',
-            });
-
-            const tradeCandles = candles.filter(c => c.time >= entryTs && c.time <= exitTsReal);
-            
-            if (tradeCandles.length > 0) {
-              const tpData = tradeCandles.map(c => ({ time: c.time, value: tp }));
-              tpAreaSeries.setData(tpData);
-
-              const slData = tradeCandles.map(c => ({ time: c.time, value: sl }));
-              slAreaSeries.setData(slData);
-            }
-          }
         }
 
-        // --- ENTRY BEYAZ ÇİZGİ ---
-        if (entry) {
-            const entryLineSeries = chart.addSeries(LineSeries, {
-                color: '#ffffff',
-                lineWidth: 1,
-                lineStyle: 0,
-                crosshairMarkerVisible: false,
-                lastValueVisible: false,
-                priceLineVisible: false,
-                priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
-            });
-
-            entryLineSeries.setData([
-                { time: entryTs, value: entry },
-                { time: exitTsReal, value: entry }
-            ]);
-
-            // --- MARKERLAR ---
-            mainSeries.setMarkers([
-                 {
-                    time: entryTs,
-                    position: isLong ? 'belowBar' : 'aboveBar',
-                    color: '#2962FF',
-                    shape: 'arrowUp',
-                    text: 'ENTRY'
-                 }
-            ]);
-        }
-
-        // --- FİYAT ÇİZGİLERİ ---
-        if (entry) mainSeries.createPriceLine({ price: entry, color: '#2962FF', lineWidth: 1, lineStyle: 0, title: 'Entry' });
-        if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP' });
-        if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL' });
+        // 5. Referans Çizgileri
+        if (entry) mainSeries.createPriceLine({ price: entry, color: '#787B86', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
+        if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
+        if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
 
         chart.timeScale().fitContent();
         setChartLoading(false);
@@ -332,24 +277,16 @@ const ChartModal = () => {
     };
 
     fetchAndRender();
+    if (mode === 'live') {
+      intervalRef.current = setInterval(fetchAndRender, 5000); // 5 saniyede bir güncelle
+    }
 
+    // --- Crosshair ve Resize ---
     const handleCrosshairMove = (param) => {
-      if (!param || !param.time || !param.seriesData) {
-        setHoverInfo(null);
-        return;
-      }
+      if (!param || !param.time || !param.seriesData) { setHoverInfo(null); return; }
       const candle = param.seriesData.get(mainSeries);
-      if (!candle) {
-        setHoverInfo(null);
-        return;
-      }
-      setHoverInfo({
-        time: param.time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close
-      });
+      if (!candle) { setHoverInfo(null); return; }
+      setHoverInfo({ time: param.time, open: candle.open, high: candle.high, low: candle.low, close: candle.close });
     };
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
@@ -364,43 +301,20 @@ const ChartModal = () => {
 
     return () => {
       observer.disconnect();
+      if (intervalRef.current) clearInterval(intervalRef.current);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeSignal, showTv]);
+  }, [activeSignal, showTv, mode]);
 
-  const formatSignalTime = (dateObj) => {
-    if (!dateObj) return '--';
-    return dateObj.toLocaleString('tr-TR', { 
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
-    });
-  };
-
-  const formatHoverTime = (t) => {
-    if (!t) return '--';
-    const dt = new Date(t * 1000);
-    return dt.toLocaleString('tr-TR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-  const formatPrice = (value) => (
-    typeof value === 'number' ? value.toFixed(5) : '--'
-  );
+  // UI Formatters
+  const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+  const formatHoverTime = (t) => t ? new Date(t * 1000).toLocaleString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+  const formatPrice = (value) => typeof value === 'number' ? value.toFixed(5) : '--';
 
   useEffect(() => {
-    if (!showTv) return;
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-    }
-    if (chartContainerRef.current) chartContainerRef.current.innerHTML = '';
-    setChartLoading(false);
-    setChartError('');
+    if (!showTv && chartContainerRef.current) {}
   }, [showTv]);
 
   useEffect(() => {
@@ -417,52 +331,24 @@ const ChartModal = () => {
         <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
           {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#089981' : '#F23645'}}>{activeSignal?.dir}</span>
         </h2>
-        <div className="chart-actions">
-          {!showTv && hoverInfo && (
-            <div className="chart-hover-info">
-              {formatHoverTime(hoverInfo.time)} • O {formatPrice(hoverInfo.open)} H {formatPrice(hoverInfo.high)} L {formatPrice(hoverInfo.low)} C {formatPrice(hoverInfo.close)}
-            </div>
-          )}
-          <button
-            className={`chart-toggle ${!showTv ? 'active' : ''}`}
-            onClick={() => {
-              setChartView('journal');
-              setShowTv(false);
-            }}
-          >
-            Trade Graph
-          </button>
-          <button
-            className={`chart-toggle ${showTv ? 'active' : ''}`}
-            onClick={() => {
-              setChartView('tv');
-              setShowTv(true);
-            }}
-          >
-            Live Graph
-          </button>
-        </div>
+        {!showTv && hoverInfo && (
+          <div className="chart-hover-info">
+            {formatHoverTime(hoverInfo.time)} • O {formatPrice(hoverInfo.open)} H {formatPrice(hoverInfo.high)} L {formatPrice(hoverInfo.low)} C {formatPrice(hoverInfo.close)}
+          </div>
+        )}
       </div>
       
       <button id="close-modal" className="close-modern" onClick={() => setActiveSignal(null)}>
-        <span className="close-label">Kapat</span>
-        <span className="esc-pill">ESC</span>
+        <span className="close-label">Kapat</span><span className="esc-pill neo">ESC</span>
       </button>
 
       {!showTv && activeSignal && (
         <div className="position-panel" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>
-          <div className="position-row">
-            <span>Tarih</span>
-            <b style={{fontSize:'0.9em'}}>{formatSignalTime(activeSignal.dateObj)}</b>
-          </div>
+          <div className="position-row"><span>Tarih</span><b>{formatSignalTime(activeSignal.dateObj)}</b></div>
           <div className="position-row"><span>Giriş</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
              <span>Hedef/Stop</span>
              <b><span style={{color:'#089981'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F23645'}}>{formatPrice(activeSignal.sl)}</span></b>
-          </div>
-          <div className="position-row">
-            <span>Çıkış</span>
-            <b>{formatPrice(activeSignal.exitPrice)}</b>
           </div>
           <div className="position-row">
             <span>PnL</span>
@@ -473,7 +359,9 @@ const ChartModal = () => {
           {mode === 'live' && (
             <div className="position-row">
               <span>Canlı Durum</span>
-              <b>{liveTradeStatus || 'Hesaplanıyor...'}</b>
+              <b style={{ color: liveTradeStatus.includes('İptal') || liveTradeStatus.includes('Stop') ? '#F23645' : liveTradeStatus.includes('Hedef') ? '#089981' : '#d1d4dc' }}>
+                {liveTradeStatus || 'Hesaplanıyor...'}
+              </b>
             </div>
           )}
         </div>
@@ -490,15 +378,7 @@ const ChartModal = () => {
       ></div>
 
       {showTv && (
-        <iframe
-          className="tv-iframe"
-          title="TradingView"
-          src={getTvEmbedUrl()}
-          frameBorder="0"
-          allowTransparency="true"
-          allow="fullscreen; clipboard-write"
-          loading="lazy"
-        />
+        <iframe className="tv-iframe" title="TradingView" src={getTvEmbedUrl()} frameBorder="0" allowTransparency="true" allow="fullscreen; clipboard-write" loading="lazy" />
       )}
     </div>
   );

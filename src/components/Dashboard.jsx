@@ -20,6 +20,19 @@ const Dashboard = () => {
     return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
   };
 
+  const summarizeLiveCounts = (list) => {
+    let tp = 0;
+    let sl = 0;
+    list.forEach((sig) => {
+      const status = liveStatuses[sig.id]?.status;
+      const meta = resolveLiveMeta(status);
+      if (meta.label === 'TP') tp += 1;
+      else if (meta.label === 'SL' || meta.label === 'TP/SL') sl += 1;
+    });
+    const rScore = (2 * tp) - sl;
+    return { tp, sl, rScore };
+  };
+
   const grouped = useMemo(() => {
     return filteredSignals.reduce((acc, sig) => {
       const dateKey = sig.dateObj.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
@@ -33,7 +46,7 @@ const Dashboard = () => {
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {Object.keys(grouped).map(dateKey => {
         const trades = grouped[dateKey];
-        const dailyPnL = trades.reduce((sum, t) => sum + calculatePnL(t), 0);
+        const liveCounts = mode === 'live' ? summarizeLiveCounts(trades) : null;
 
         return (
           <div key={dateKey} className="day-notebook">
@@ -41,7 +54,14 @@ const Dashboard = () => {
               <div className="day-title">{dateKey}</div>
               <div className="day-summary">
                 <span>{trades.length} işlem</span>
-                <span className={dailyPnL >= 0 ? 'win' : 'loss'}>{dailyPnL.toFixed(2)}%</span>
+                {mode === 'live' && (
+                  <span className="tp-sl-ratio">
+                    TP/SL: {liveCounts.tp}/{liveCounts.sl} • R:{' '}
+                    <span className={liveCounts.rScore >= 0 ? 'win' : 'loss'}>
+                      {liveCounts.rScore >= 0 ? '+' : ''}{liveCounts.rScore}
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
 

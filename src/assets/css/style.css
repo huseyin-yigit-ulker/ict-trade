@@ -302,6 +302,30 @@ a {
   gap: 8px;
 }
 
+.symbol-search {
+  width: 100%;
+  background: rgba(11, 15, 24, 0.6);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.symbol-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.symbol-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 4px;
+}
+
 .multi-select-content label {
   display: flex;
   gap: 8px;
@@ -522,6 +546,11 @@ a {
   font-size: 12px;
 }
 
+.tp-sl-ratio {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .trade-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -708,6 +737,13 @@ button.chip {
   border: 1px solid var(--border);
   font-size: 10px;
   letter-spacing: 0.08em;
+}
+
+.esc-pill.neo {
+  background: linear-gradient(135deg, rgba(123, 140, 255, 0.35), rgba(48, 209, 88, 0.15));
+  border-color: rgba(123, 140, 255, 0.6);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
 }
 
 .chart-actions {
