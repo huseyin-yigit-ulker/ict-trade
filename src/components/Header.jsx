@@ -18,6 +18,7 @@ const Header = () => {
     setPendingDateEnd,
     applyDates,
     mode,
+    setMode,
     liveError,
     dbStatus,
     dbMessage
@@ -70,6 +71,14 @@ const Header = () => {
       </div>
 
       <div className="header-controls">
+        {mode && (
+          <button
+            className="header-btn mode-toggle"
+            onClick={() => setMode(mode === 'live' ? 'backtest' : 'live')}
+          >
+            {mode === 'live' ? '📂 Backtest\'e Geç' : '🛰️ Live\'a Geç'}
+          </button>
+        )}
         <div className="multi-select-container">
           <button
             id="multi-select-btn"
