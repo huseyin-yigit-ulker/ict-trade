@@ -146,17 +146,17 @@ const Dashboard = () => {
                     </div>
                     <div className="trade-foot">
                       <div className={`chip ${pnlClass}`}>{mode === 'live' ? liveMeta.label : (pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL'))}</div>
-                      <button
-                        className="chip outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setChartView('tv');
-                          setActiveSignal(sig);
-                        }}
-                      >
-                        Live Graph
-                      </button>
                     </div>
+                    <button
+                      className="live-graph-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setChartView('tv');
+                        setActiveSignal(sig);
+                      }}
+                    >
+                      Live <span className="live-graph-dot">•</span>
+                    </button>
                   </div>
                 );
               })}
