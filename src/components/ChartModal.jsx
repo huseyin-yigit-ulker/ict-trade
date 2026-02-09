@@ -278,7 +278,7 @@ const ChartModal = () => {
 
     fetchAndRender();
     if (mode === 'live') {
-      intervalRef.current = setInterval(fetchAndRender, 5000); // 5 saniyede bir güncelle
+      intervalRef.current = setInterval(fetchAndRender, 3000); // 3 saniyede bir güncelle
     }
 
     // --- Crosshair ve Resize ---
@@ -364,6 +364,24 @@ const ChartModal = () => {
               </b>
             </div>
           )}
+        </div>
+      )}
+
+      {showTv && activeSignal && mode === 'live' && (
+        <div className="position-panel horizontal bottom-left" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>
+          <div className="position-row"><span>Sembol</span><b>{activeSignal.symbol}</b></div>
+          <div className="position-row">
+            <span>Yön</span>
+            <b style={{ color: activeSignal.dir === 'LONG' ? '#089981' : '#F23645' }}>
+              {activeSignal.dir}
+            </b>
+          </div>
+          <div className="position-row"><span>Sinyal</span><b>{formatSignalTime(activeSignal.dateObj)}</b></div>
+          <div className="position-row"><span>Entry</span><b>{formatPrice(activeSignal.entry)}</b></div>
+          <div className="position-row">
+            <span>TP / SL</span>
+            <b><span style={{color:'#089981'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F23645'}}>{formatPrice(activeSignal.sl)}</span></b>
+          </div>
         </div>
       )}
 

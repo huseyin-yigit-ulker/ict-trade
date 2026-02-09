@@ -187,31 +187,32 @@ export const TradeProvider = ({ children }) => {
 
   const computeLiveStatusFromCandles = (sig, candles) => {
     if (!sig || !sig.entry || !sig.tp || !sig.sl || !sig.dir || !candles?.length) {
-      return 'Sinyal Bekliyor';
+      return { status: 'Sinyal Bekliyor', lastPrice: null };
     }
     const entryTs = Math.floor(sig.dateObj.getTime() / 1000);
+    const lastPrice = candles[candles.length - 1]?.close ?? null;
     let entryHitTime = null;
     for (const c of candles) {
       if (c.time < entryTs) continue;
       const entryTouched = sig.dir === 'LONG' ? c.low <= sig.entry : c.high >= sig.entry;
       const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
       const slHit = sig.dir === 'LONG' ? c.low <= sig.sl : c.high >= sig.sl;
-      if (!entryTouched && (tpHit || slHit)) return 'İptal (Entry Gelmeden TP/SL)';
+      if (!entryTouched && (tpHit || slHit)) return { status: 'İptal (Entry Gelmeden TP/SL)', lastPrice };
       if (entryTouched) {
         entryHitTime = c.time;
         break;
       }
     }
-    if (entryHitTime === null) return 'Sinyal Bekliyor';
+    if (entryHitTime === null) return { status: 'Sinyal Bekliyor', lastPrice };
     for (const c of candles) {
       if (c.time < entryHitTime) continue;
       const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
       const slHit = sig.dir === 'LONG' ? c.low <= sig.sl : c.high >= sig.sl;
       if (tpHit || slHit) {
-        return tpHit && slHit ? 'TP/SL Aynı Mum' : (tpHit ? 'TP Oldu' : 'SL Oldu');
+        return { status: tpHit && slHit ? 'TP/SL Aynı Mum' : (tpHit ? 'TP Oldu' : 'SL Oldu'), lastPrice };
       }
     }
-    return 'İşlem Aktif (Entry Geldi)';
+    return { status: 'İşlem Aktif (Entry Geldi)', lastPrice };
   };
 
   const resolveLiveMeta = (status) => {
@@ -259,10 +260,10 @@ export const TradeProvider = ({ children }) => {
         if (resolveLiveMeta(existing?.status).terminal) continue;
         try {
           const candles = await fetchCandles(sig);
-          const status = computeLiveStatusFromCandles(sig, candles);
+          const result = computeLiveStatusFromCandles(sig, candles);
           if (stopped) return;
           setLiveStatuses(prev => {
-            const next = { ...prev, [sig.id]: { status } };
+            const next = { ...prev, [sig.id]: { status: result.status, lastPrice: result.lastPrice } };
             liveStatusesRef.current = next;
             return next;
           });

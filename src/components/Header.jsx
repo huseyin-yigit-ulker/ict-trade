@@ -152,97 +152,101 @@ const Header = () => {
           </div>
         </div>
 
-        <div className="date-filters">
-          <button
-            className="date-picker-btn"
-            onClick={() => {
-              if (!dateOpen) {
-                setPendingDateStart(dateStart);
-                setPendingDateEnd(dateEnd);
-              }
-              setDateOpen(!dateOpen);
-            }}
-          >
-            📅 {dateStart || dateEnd ? `${dateStart || '...'} → ${dateEnd || '...'}` : 'Tarih Seçimi'}
-          </button>
-          {dateOpen && (
-            <div className="date-popover centered" onClick={(e) => e.stopPropagation()}>
-              <div className="calendar-header">
-                <button
-                  className="cal-nav"
-                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
-                >
-                  ‹
-                </button>
-                <div className="cal-title">{monthLabel}</div>
-                <button
-                  className="cal-nav"
-                  onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
-                >
-                  ›
-                </button>
-              </div>
-              <div className="calendar-grid">
-                {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((d) => (
-                  <div key={d} className="cal-day cal-day-label">{d}</div>
-                ))}
-                {daysGrid.map((day, idx) => {
-                  if (!day) return <div key={`empty-${idx}`} className="cal-day empty"></div>;
-                  const iso = day.toISOString().slice(0, 10);
-                  const inRange = isInRange(day);
-                  const isStart = isSameDay(day, pendingDateStart);
-                  const isEnd = isSameDay(day, pendingDateEnd);
-                  return (
+        {mode !== 'live' && (
+          <>
+            <div className="date-filters">
+              <button
+                className="date-picker-btn"
+                onClick={() => {
+                  if (!dateOpen) {
+                    setPendingDateStart(dateStart);
+                    setPendingDateEnd(dateEnd);
+                  }
+                  setDateOpen(!dateOpen);
+                }}
+              >
+                📅 {dateStart || dateEnd ? `${dateStart || '...'} → ${dateEnd || '...'}` : 'Tarih Seçimi'}
+              </button>
+              {dateOpen && (
+                <div className="date-popover centered" onClick={(e) => e.stopPropagation()}>
+                  <div className="calendar-header">
                     <button
-                      key={iso}
-                      className={`cal-day ${inRange ? 'in-range' : ''} ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''}`}
+                      className="cal-nav"
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
+                    >
+                      ‹
+                    </button>
+                    <div className="cal-title">{monthLabel}</div>
+                    <button
+                      className="cal-nav"
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <div className="calendar-grid">
+                    {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((d) => (
+                      <div key={d} className="cal-day cal-day-label">{d}</div>
+                    ))}
+                    {daysGrid.map((day, idx) => {
+                      if (!day) return <div key={`empty-${idx}`} className="cal-day empty"></div>;
+                      const iso = day.toISOString().slice(0, 10);
+                      const inRange = isInRange(day);
+                      const isStart = isSameDay(day, pendingDateStart);
+                      const isEnd = isSameDay(day, pendingDateEnd);
+                      return (
+                        <button
+                          key={iso}
+                          className={`cal-day ${inRange ? 'in-range' : ''} ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''}`}
+                          onClick={() => {
+                            if (!pendingDateStart || (pendingDateStart && pendingDateEnd)) {
+                              setPendingDateStart(iso);
+                              setPendingDateEnd('');
+                            } else {
+                              if (new Date(iso) < new Date(pendingDateStart)) {
+                                setPendingDateEnd(pendingDateStart);
+                                setPendingDateStart(iso);
+                              } else {
+                                setPendingDateEnd(iso);
+                              }
+                            }
+                          }}
+                        >
+                          {day.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="date-actions">
+                    <button
+                      className="apply-btn"
                       onClick={() => {
-                        if (!pendingDateStart || (pendingDateStart && pendingDateEnd)) {
-                          setPendingDateStart(iso);
-                          setPendingDateEnd('');
-                        } else {
-                          if (new Date(iso) < new Date(pendingDateStart)) {
-                            setPendingDateEnd(pendingDateStart);
-                            setPendingDateStart(iso);
-                          } else {
-                            setPendingDateEnd(iso);
-                          }
-                        }
+                        applyDates();
+                        setDateOpen(false);
                       }}
                     >
-                      {day.getDate()}
+                      ✅ Uygula
                     </button>
-                  );
-                })}
-              </div>
-              <div className="date-actions">
-                <button
-                  className="apply-btn"
-                  onClick={() => {
-                    applyDates();
-                    setDateOpen(false);
-                  }}
-                >
-                  ✅ Uygula
-                </button>
-                <button
-                  className="apply-btn ghost"
-                  onClick={() => {
-                    setPendingDateStart('');
-                    setPendingDateEnd('');
-                    setDateStart('');
-                    setDateEnd('');
-                    setDateOpen(false);
-                  }}
-                >
-                  🧹 Temizle
-                </button>
-              </div>
+                    <button
+                      className="apply-btn ghost"
+                      onClick={() => {
+                        setPendingDateStart('');
+                        setPendingDateEnd('');
+                        setDateStart('');
+                        setDateEnd('');
+                        setDateOpen(false);
+                      }}
+                    >
+                      🧹 Temizle
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı Geçmişi</button>
+            <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı Geçmişi</button>
+          </>
+        )}
       </div>
 
       <div className="status-badge">

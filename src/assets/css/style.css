@@ -568,6 +568,7 @@ a {
   transition: transform 0.15s ease, border 0.15s ease;
 }
 
+
 .trade-card:hover {
   transform: translateY(-2px);
   border-color: rgba(123, 140, 255, 0.5);
@@ -627,6 +628,11 @@ a {
 
 .metric-value {
   font-size: 13px;
+}
+
+.live-delta {
+  font-size: 11px;
+  margin-left: 4px;
 }
 
 .trade-foot {
@@ -827,6 +833,25 @@ button.chip {
   gap: 6px;
   min-width: 220px;
   backdrop-filter: blur(6px);
+}
+
+.position-panel.bottom-left {
+  top: auto;
+  bottom: 16px;
+}
+
+.position-panel.horizontal {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: unset;
+  padding: 10px 14px;
+}
+
+.position-panel.horizontal .position-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .position-row {

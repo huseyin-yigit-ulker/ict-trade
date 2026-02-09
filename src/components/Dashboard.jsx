@@ -15,9 +15,24 @@ const Dashboard = () => {
     if (status === 'TP Oldu') return { label: 'TP', cls: 'win', terminal: true };
     if (status === 'SL Oldu') return { label: 'SL', cls: 'loss', terminal: true };
     if (status === 'TP/SL Aynı Mum') return { label: 'TP/SL', cls: 'loss', terminal: true };
-    if (status.startsWith('İptal')) return { label: 'İPTAL', cls: 'loss', terminal: true };
+    if (status.startsWith('İptal')) return { label: 'İPTAL', cls: 'waiting', terminal: true };
     if (status.startsWith('İşlem Aktif')) return { label: 'AKTIF', cls: 'waiting', terminal: false };
     return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
+  };
+
+  const formatLiveDelta = (sig, lastPrice) => {
+    if (!sig?.entry || typeof lastPrice !== 'number') return '--';
+    const diff = sig.dir === 'LONG' ? (lastPrice - sig.entry) : (sig.entry - lastPrice);
+    const pct = (diff / sig.entry) * 100;
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+  };
+
+  const getLiveRLabel = (status) => {
+    if (!status) return { label: '--', cls: 'waiting' };
+    if (status === 'TP Oldu') return { label: '2R', cls: 'win' };
+    if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return { label: '-R', cls: 'loss' };
+    if (status.startsWith('İptal')) return { label: '0', cls: 'waiting' };
+    return { label: '--', cls: 'waiting' };
   };
 
   const summarizeLiveCounts = (list) => {
@@ -69,6 +84,7 @@ const Dashboard = () => {
               {trades.map(sig => {
                 const pnl = calculatePnL(sig);
                 const liveStatus = mode === 'live' ? liveStatuses[sig.id]?.status : '';
+                const liveLastPrice = mode === 'live' ? liveStatuses[sig.id]?.lastPrice : null;
                 const liveMeta = resolveLiveMeta(liveStatus);
                 const pnlClass = mode === 'live'
                   ? liveMeta.cls
@@ -92,11 +108,30 @@ const Dashboard = () => {
                     <div className="trade-body">
                       <div className="trade-metric">
                         <span className="metric-label">Durum</span>
-                        <span className={`status-text ${pnlClass}`}>{mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}</span>
+                        <span className={`status-text ${pnlClass}`}>
+                          {mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}
+                          {mode === 'live' && liveMeta.label === 'AKTIF' && (
+                            <span className={`live-delta ${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}`}>
+                              {' '}• {formatLiveDelta(sig, liveLastPrice)}
+                            </span>
+                          )}
+                        </span>
                       </div>
                       <div className="trade-metric">
                         <span className="metric-label">P/L</span>
-                        <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? pnl.toFixed(2) + '%' : '--'}</span>
+                        {mode === 'live' ? (
+                          liveMeta.label === 'AKTIF' ? (
+                            <span className={`pnl-text ${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}`}>
+                              {formatLiveDelta(sig, liveLastPrice)}
+                            </span>
+                          ) : (
+                            <span className={`pnl-text ${getLiveRLabel(liveStatus).cls}`}>
+                              {getLiveRLabel(liveStatus).label}
+                            </span>
+                          )
+                        ) : (
+                          <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? pnl.toFixed(2) + '%' : '--'}</span>
+                        )}
                       </div>
                       <div className="trade-metric">
                         <span className="metric-label">Entry</span>
