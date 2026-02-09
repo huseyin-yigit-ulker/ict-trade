@@ -27,6 +27,10 @@ const Dashboard = () => {
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
   };
 
+  const formatLivePrice = (value) => (
+    typeof value === 'number' ? value.toFixed(5) : '--'
+  );
+
   const getLiveRLabel = (status) => {
     if (!status) return { label: '--', cls: 'waiting' };
     if (status === 'TP Oldu') return { label: '2R', cls: 'win' };
@@ -116,8 +120,11 @@ const Dashboard = () => {
                         <span className="metric-label">P/L</span>
                         {mode === 'live' ? (
                           liveMeta.label === 'AKTIF' ? (
-                            <span className={`pnl-text ${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}`}>
-                              {formatLiveDelta(sig, liveLastPrice)}
+                            <span className="pnl-text live-pnl-stack">
+                              <span className="live-price">{formatLivePrice(liveLastPrice)}</span>
+                              <span className={formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}>
+                                {formatLiveDelta(sig, liveLastPrice)}
+                              </span>
                             </span>
                           ) : (
                             <span className={`pnl-text ${getLiveRLabel(liveStatus).cls}`}>
