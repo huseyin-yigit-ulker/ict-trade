@@ -261,10 +261,13 @@ const ChartModal = () => {
             slAreaSeries.setData([]);
         }
 
-        // 5. Referans Çizgileri
-        if (entry) mainSeries.createPriceLine({ price: entry, color: '#787B86', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
-        if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
-        if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
+        // 5. Referans Çizgileri (tek sefer)
+        if (!chartRef.current._priceLinesAdded) {
+          if (entry) mainSeries.createPriceLine({ price: entry, color: '#787B86', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
+          if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
+          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
+          chartRef.current._priceLinesAdded = true;
+        }
 
         chart.timeScale().fitContent();
         setChartLoading(false);

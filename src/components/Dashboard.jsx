@@ -110,11 +110,6 @@ const Dashboard = () => {
                         <span className="metric-label">Durum</span>
                         <span className={`status-text ${pnlClass}`}>
                           {mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}
-                          {mode === 'live' && liveMeta.label === 'AKTIF' && (
-                            <span className={`live-delta ${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}`}>
-                              {' '}• {formatLiveDelta(sig, liveLastPrice)}
-                            </span>
-                          )}
                         </span>
                       </div>
                       <div className="trade-metric">
