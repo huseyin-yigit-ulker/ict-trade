@@ -217,13 +217,12 @@ const ChartModal = () => {
 
         setLiveTradeStatus(statusText);
 
-        // 3. Veri Akışını Durdurma (Live Mode & Terminal State)
-        if (mode === 'live' && isTerminalState) {
-            console.log("İşlem Sonlandı. Veri akışı durduruluyor...");
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
+        // 3. Veri Akışını Durdurma (Live Mode & Aktif Değilse)
+        if (mode === 'live' && (isTerminalState || statusText !== '⚡ İşlem Aktif')) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
         }
 
         // 4. Modern Pozisyon Görünümü (TradingView Style)
@@ -252,13 +251,13 @@ const ChartModal = () => {
         }
 
         // Veriyi Serilere Ata
-        if (entry && tp && sl && !isCancelled) {
-             // Entry anından -> Bitiş anına kadar bir kutu çiz
-             tpAreaSeries.setData([ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]);
-             slAreaSeries.setData([ { time: entryTs, value: sl }, { time: endTimeForGraph, value: sl } ]);
+        if (entry && tp && sl) {
+          // Entry anından -> Bitiş anına kadar bir kutu çiz (iptalde de)
+          tpAreaSeries.setData([ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]);
+          slAreaSeries.setData([ { time: entryTs, value: sl }, { time: endTimeForGraph, value: sl } ]);
         } else {
-            tpAreaSeries.setData([]);
-            slAreaSeries.setData([]);
+          tpAreaSeries.setData([]);
+          slAreaSeries.setData([]);
         }
 
         // 5. Referans Çizgileri (tek sefer)
