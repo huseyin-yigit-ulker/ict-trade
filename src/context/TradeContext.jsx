@@ -98,8 +98,8 @@ export const TradeProvider = ({ children }) => {
         select: '*',
         order: 'signal_time.desc'
       });
-      /*params.append('signal_time', `gte.${start.toISOString()}`);
-      params.append('signal_time', `lt.${end.toISOString()}`);*/
+      params.append('signal_time', `gte.${start.toISOString()}`);
+      params.append('signal_time', `lt.${end.toISOString()}`);
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
       const res = await fetch(url, {
