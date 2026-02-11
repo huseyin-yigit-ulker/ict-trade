@@ -52,6 +52,17 @@ const Dashboard = () => {
     return { tp, sl, rScore };
   };
 
+  const summarizeBacktestCounts = (list) => {
+    let tp = 0;
+    let sl = 0;
+    list.forEach((sig) => {
+      if (sig.status === 'TP') tp += 1;
+      else if (sig.status === 'SL') sl += 1;
+    });
+    const rScore = (2 * tp) - sl;
+    return { tp, sl, rScore };
+  };
+
   const grouped = useMemo(() => {
     return filteredSignals.reduce((acc, sig) => {
       const dateKey = sig.dateObj.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
@@ -65,7 +76,7 @@ const Dashboard = () => {
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {Object.keys(grouped).map(dateKey => {
         const trades = grouped[dateKey];
-        const liveCounts = mode === 'live' ? summarizeLiveCounts(trades) : null;
+        const counts = mode === 'live' ? summarizeLiveCounts(trades) : summarizeBacktestCounts(trades);
 
         return (
           <div key={dateKey} className="day-notebook">
@@ -73,14 +84,12 @@ const Dashboard = () => {
               <div className="day-title">{dateKey}</div>
               <div className="day-summary">
                 <span>{trades.length} işlem</span>
-                {mode === 'live' && (
-                  <span className="tp-sl-ratio">
-                    TP/SL: {liveCounts.tp}/{liveCounts.sl} • R:{' '}
-                    <span className={liveCounts.rScore >= 0 ? 'win' : 'loss'}>
-                      {liveCounts.rScore >= 0 ? '+' : ''}{liveCounts.rScore}
-                    </span>
+                <span className="tp-sl-ratio">
+                  TP/SL: {counts.tp}/{counts.sl} • R:{' '}
+                  <span className={counts.rScore >= 0 ? 'win' : 'loss'}>
+                    {counts.rScore >= 0 ? '+' : ''}{counts.rScore}
                   </span>
-                )}
+                </span>
               </div>
             </div>
 
