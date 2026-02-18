@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const SummaryModal = () => {
-  const { allSignals, selectedSymbols, setShowSummary, mode, liveStatuses } = useTradeContext();
+  const { allSignals, selectedSymbols, setShowSummary, mode, liveStatuses, backtestInsights } = useTradeContext();
   const [localSymbols, setLocalSymbols] = useState(new Set(selectedSymbols));
   const [filterOpen, setFilterOpen] = useState(false);
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [statusFilters, setStatusFilters] = useState(new Set(['TP', 'SL', 'AKTIF', 'BEKLEMEDE', 'IPTAL']));
 
   const calculatePnL = (sig) => {
+    if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
     if (sig.status !== 'TP' && sig.status !== 'SL') return 0;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
@@ -41,6 +42,7 @@ const SummaryModal = () => {
     const type = resolveLiveType(status);
     return statusFilters.has(type);
   });
+  const hasDbPnl = filtered.some(s => Number.isFinite(s?.pnlR));
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
@@ -104,6 +106,10 @@ const SummaryModal = () => {
     }))
     .sort((a, b) => b.pnl - a.pnl)
     .slice(0, 5);
+  const sqlSummary = backtestInsights?.summary;
+  const sqlSymbols = Array.isArray(backtestInsights?.symbols) ? backtestInsights.symbols.slice(0, 5) : [];
+  const sqlWeekdays = Array.isArray(backtestInsights?.weekdays) ? backtestInsights.weekdays.slice(0, 7) : [];
+  const sqlSessions = Array.isArray(backtestInsights?.sessions) ? backtestInsights.sessions.slice(0, 4) : [];
 
   return (
     <div id="summary-modal" className="summary-screen" style={{ display: 'block' }}>
@@ -229,11 +235,11 @@ const SummaryModal = () => {
               </div>
               <div className="summary-metric">
                 <span>Toplam PnL</span>
-                <b className={overall.pnlSum >= 0 ? 'win' : 'loss'}>{overall.pnlSum.toFixed(2)}%</b>
+                <b className={overall.pnlSum >= 0 ? 'win' : 'loss'}>{overall.pnlSum.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
               </div>
               <div className="summary-metric">
                 <span>Ortalama PnL</span>
-                <b className={overall.avgPnl >= 0 ? 'win' : 'loss'}>{overall.avgPnl.toFixed(2)}%</b>
+                <b className={overall.avgPnl >= 0 ? 'win' : 'loss'}>{overall.avgPnl.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
               </div>
             </>
           )}
@@ -244,7 +250,7 @@ const SummaryModal = () => {
           {topSymbols.map(item => (
             <div key={item.sym} className="summary-metric">
               <span>{item.sym}</span>
-              <b className={item.pnl >= 0 ? 'win' : 'loss'}>{item.pnl.toFixed(2)}%</b>
+              <b className={item.pnl >= 0 ? 'win' : 'loss'}>{item.pnl.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
             </div>
           ))}
         </div>
@@ -281,17 +287,72 @@ const SummaryModal = () => {
                 </div>
                 <div className="summary-metric">
                   <span>Toplam PnL</span>
-                  <b className={c.data.pnlSum >= 0 ? 'win' : 'loss'}>{c.data.pnlSum.toFixed(2)}%</b>
+                  <b className={c.data.pnlSum >= 0 ? 'win' : 'loss'}>{c.data.pnlSum.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
                 </div>
                 <div className="summary-metric">
                   <span>Ortalama PnL</span>
-                  <b className={c.data.avgPnl >= 0 ? 'win' : 'loss'}>{c.data.avgPnl.toFixed(2)}%</b>
+                  <b className={c.data.avgPnl >= 0 ? 'win' : 'loss'}>{c.data.avgPnl.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
                 </div>
               </>
             )}
           </div>
         ))}
       </div>
+
+      {mode === 'backtest' && sqlSummary && (
+        <div className="summary-overview">
+          <div className="overview-card">
+            <div className="summary-title">SQL Analiz Özeti</div>
+            <div className="summary-metric">
+              <span>Profit Factor</span>
+              <b>{Number(sqlSummary.profit_factor || 0).toFixed(2)}</b>
+            </div>
+            <div className="summary-metric">
+              <span>Expectancy</span>
+              <b className={Number(sqlSummary.expectancy_r || 0) >= 0 ? 'win' : 'loss'}>
+                {Number(sqlSummary.expectancy_r || 0).toFixed(2)}R
+              </b>
+            </div>
+            <div className="summary-metric">
+              <span>Ortalama Süre</span>
+              <b>{Number(sqlSummary.avg_minutes || 0).toFixed(1)} dk</b>
+            </div>
+            <div className="summary-metric">
+              <span>TP / SL / Cancel</span>
+              <b>
+                <span className="win">{sqlSummary.tp_count || 0}</span> / <span className="loss">{sqlSummary.sl_count || 0}</span> / {sqlSummary.cancelled_count || 0}
+              </b>
+            </div>
+          </div>
+
+          <div className="overview-card">
+            <div className="summary-title">SQL Sembol Analizi</div>
+            {sqlSymbols.length === 0 && <div className="summary-empty">Kayıt yok</div>}
+            {sqlSymbols.map((row) => (
+              <div key={row.symbol} className="summary-metric">
+                <span>{row.symbol} ({row.total_trades})</span>
+                <b className={Number(row.total_r || 0) >= 0 ? 'win' : 'loss'}>{Number(row.total_r || 0).toFixed(2)}R</b>
+              </div>
+            ))}
+          </div>
+
+          <div className="overview-card">
+            <div className="summary-title">SQL Zaman Analizi</div>
+            {sqlWeekdays.map((row) => (
+              <div key={row.weekday_name} className="summary-metric">
+                <span>{row.weekday_name}</span>
+                <b className={Number(row.total_r || 0) >= 0 ? 'win' : 'loss'}>{Number(row.total_r || 0).toFixed(2)}R</b>
+              </div>
+            ))}
+            {sqlSessions.map((row) => (
+              <div key={row.session_name} className="summary-metric">
+                <span>{row.session_name}</span>
+                <b className={Number(row.total_r || 0) >= 0 ? 'win' : 'loss'}>{Number(row.total_r || 0).toFixed(2)}R</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

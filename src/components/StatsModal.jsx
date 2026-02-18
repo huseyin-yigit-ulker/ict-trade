@@ -4,10 +4,12 @@ const StatsModal = () => {
   const { allSignals, setShowStats } = useTradeContext();
 
   const calculatePnL = (sig) => {
+    if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
     if (sig.status !== 'TP' && sig.status !== 'SL') return 0;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
   };
+  const hasDbPnl = allSignals.some(s => Number.isFinite(s?.pnlR));
 
   const stats = {};
   allSignals.forEach(s => {
@@ -43,7 +45,7 @@ const StatsModal = () => {
                     <td><b>{sym}</b></td>
                     <td>{data.count}</td>
                     <td className={wr >= 50 ? 'win' : 'loss'}>%{wr}</td>
-                    <td className={data.pnl >= 0 ? 'win' : 'loss'}>%{data.pnl.toFixed(2)}</td>
+                    <td className={data.pnl >= 0 ? 'win' : 'loss'}>{data.pnl.toFixed(2)}{hasDbPnl ? 'R' : '%'}</td>
                   </tr>
                 );
               })}

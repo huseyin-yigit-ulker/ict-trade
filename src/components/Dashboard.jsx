@@ -5,10 +5,15 @@ const Dashboard = () => {
   const { filteredSignals, setActiveSignal, setChartView, mode, liveStatuses } = useTradeContext();
 
   const calculatePnL = (sig) => {
+    if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
     if (sig.status !== 'TP' && sig.status !== 'SL') return 0;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
   };
+
+  const formatBacktestPnl = (sig, pnl) => (
+    Number.isFinite(sig?.pnlR) ? `${pnl.toFixed(2)}R` : `${pnl.toFixed(2)}%`
+  );
 
   const resolveLiveMeta = (status) => {
     if (!status) return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
@@ -141,7 +146,7 @@ const Dashboard = () => {
                             </span>
                           )
                         ) : (
-                          <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? pnl.toFixed(2) + '%' : '--'}</span>
+                          <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? formatBacktestPnl(sig, pnl) : '--'}</span>
                         )}
                       </div>
                       <div className="trade-metric">

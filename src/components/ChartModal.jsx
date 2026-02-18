@@ -16,10 +16,12 @@ const ChartModal = () => {
 
   // --- Yardımcı Fonksiyonlar ---
   const calculatePnL = (sig) => {
+    if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
     if (!sig || !sig.entry || !sig.exitPrice) return null;
     const diff = sig.dir === 'LONG' ? (sig.exitPrice - sig.entry) : (sig.entry - sig.exitPrice);
     return (diff / sig.entry) * 100;
   };
+  const formatPnL = (sig, pnl) => (Number.isFinite(sig?.pnlR) ? `${pnl.toFixed(2)}R` : `${pnl.toFixed(2)}%`);
 
   const normalizeForBinance = (sym) => sym ? sym.replace(/[^A-Za-z0-9]/g, '') : '';
   const normalizeForTv = (sym) => sym ? sym.replace(/[^A-Za-z0-9.]/g, '') : '';
@@ -314,6 +316,7 @@ const ChartModal = () => {
   const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
   const formatHoverTime = (t) => t ? new Date(t * 1000).toLocaleString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
   const formatPrice = (value) => typeof value === 'number' ? value.toFixed(5) : '--';
+  const activePnL = calculatePnL(activeSignal);
 
   useEffect(() => {
     if (!showTv && chartContainerRef.current) {}
@@ -354,8 +357,8 @@ const ChartModal = () => {
           </div>
           <div className="position-row">
             <span>PnL</span>
-            <b style={{color: calculatePnL(activeSignal) >= 0 ? '#089981' : '#F23645'}}>
-              {calculatePnL(activeSignal) !== null ? `${calculatePnL(activeSignal).toFixed(2)}%` : '--'}
+            <b style={{color: activePnL === null || activePnL >= 0 ? '#089981' : '#F23645'}}>
+              {activePnL !== null ? formatPnL(activeSignal, activePnL) : '--'}
             </b>
           </div>
           {mode === 'live' && (

@@ -1,6 +1,4 @@
 import { createContext, useState, useEffect, useContext, useRef } from 'react';
-// MUST IMPORT DIRECTLY:
-import defaultData from '../assets/data/trades.json';
 
 const TradeContext = createContext();
 export const useTradeContext = () => useContext(TradeContext);
@@ -23,7 +21,49 @@ export const TradeProvider = ({ children }) => {
   const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
   const [dbMessage, setDbMessage] = useState('');
   const [liveStatuses, setLiveStatuses] = useState({});
+  const [backtestInsights, setBacktestInsights] = useState({
+    summary: null,
+    symbols: [],
+    weekdays: [],
+    sessions: []
+  });
   const liveStatusesRef = useRef({});
+
+  const toNumber = (value) => {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeDirection = (item) => {
+    const raw = (item.trade_type || item.direction || '').toString().toUpperCase();
+    if (raw === 'BUY' || raw === 'LONG') return 'LONG';
+    if (raw === 'SELL' || raw === 'SHORT') return 'SHORT';
+    return null;
+  };
+
+  const normalizeStatus = (item) => {
+    const raw = (item.status || '').toString().toLowerCase();
+    if (raw.includes('tp') || raw.includes('take profit')) return 'TP';
+    if (raw.includes('sl') || raw.includes('stop loss')) return 'SL';
+    return 'WAITING';
+  };
+
+  const cleanEnvValue = (value) => {
+    if (typeof value !== 'string') return value;
+    return value.trim().replace(/^["']|["']$/g, '');
+  };
+
+  const resolveSchemaAndTable = (rawTable, defaultSchema = 'ict_trade', defaultTable = 'backtesting_trades') => {
+    const cleaned = cleanEnvValue(rawTable);
+    if (!cleaned) return { schema: defaultSchema, table: defaultTable };
+    const parts = cleaned.split('.');
+    if (parts.length >= 2) {
+      const schema = parts[0]?.trim() || defaultSchema;
+      const table = parts[parts.length - 1]?.trim() || defaultTable;
+      return { schema, table };
+    }
+    return { schema: defaultSchema, table: cleaned };
+  };
 
   const processData = (data) => {
     const raw = Array.isArray(data)
@@ -41,30 +81,34 @@ export const TradeProvider = ({ children }) => {
     }
 
     const processed = raw.map((item, index) => {
-      // Status Mapping
-      let status = 'WAITING';
-      if (item.status === 'TAKE PROFIT') status = 'TP';
-      else if (item.status === 'STOP LOSS') status = 'SL';
-      else if (item.status) status = item.status;
+      const status = normalizeStatus(item);
+      const entry = toNumber(item.entry_price ?? item.entry);
+      const tp = toNumber(item.tp_price ?? item.tp);
+      const sl = toNumber(item.sl_price ?? item.sl);
+      const pnlR = toNumber(item.pnl_r);
+      const signalDate = item.signal_time ? new Date(item.signal_time) : new Date(item.created_at);
+      const signalTime = signalDate.getTime();
 
-      const entry = parseFloat(item.entry_price);
-      let exitPrice = item.current_price || entry;
-      if (status === 'TP') exitPrice = parseFloat(item.tp_price);
-      if (status === 'SL') exitPrice = parseFloat(item.sl_price);
+      let exitPrice = toNumber(item.exit_price ?? item.current_price ?? item.real_exit_price);
+      if (exitPrice === null) {
+        if (status === 'TP') exitPrice = tp;
+        else if (status === 'SL') exitPrice = sl;
+        else exitPrice = entry;
+      }
 
-      const signalTime = new Date(item.signal_time).getTime();
       const exitTime = item.exit_time 
         ? new Date(item.exit_time).getTime() 
         : signalTime + (2 * 60 * 60 * 1000);
 
       return {
-        id: index,
+        id: item.id ?? index,
         symbol: item.symbol,
-        dir: item.trade_type === 'BUY' ? 'LONG' : 'SHORT',
+        dir: normalizeDirection(item) || 'SHORT',
         entry,
-        tp: parseFloat(item.tp_price),
-        sl: parseFloat(item.sl_price),
-        dateObj: new Date(item.signal_time),
+        tp,
+        sl,
+        pnlR,
+        dateObj: signalDate,
         exitTs: exitTime,
         status,
         exitPrice
@@ -130,6 +174,97 @@ export const TradeProvider = ({ children }) => {
     }
   };
 
+  const loadBacktest = async () => {
+    const supabaseUrl = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    const backtestTableRaw = import.meta.env.BACKTESTING_DB_TABLE;
+    const { schema: backtestSchema, table: backtestTable } = resolveSchemaAndTable(backtestTableRaw);
+    const dbConnectionString = import.meta.env.BACKTESTING_DB_CONNECTION_STRING;
+    if (!supabaseUrl || !supabaseKey) {
+      const hasConnStr = Boolean(dbConnectionString);
+      setLiveError(hasConnStr
+        ? 'Backtest için URL/KEY eksik. BACKTESTING_DB_CONNECTION_STRING frontend tarafında kullanılamaz.'
+        : 'Backtest Supabase ayarları eksik.'
+      );
+      setIsLoaded(true);
+      return;
+    }
+
+    try {
+      setLiveError('');
+      const callRpc = async (fnName) => {
+        const rpcUrl = `${supabaseUrl}/rest/v1/rpc/${fnName}`;
+        const rpcRes = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            'Accept-Profile': backtestSchema,
+            'Content-Type': 'application/json'
+          },
+          body: '{}'
+        });
+        if (!rpcRes.ok) {
+          const rpcErr = await rpcRes.text();
+          throw new Error(`RPC ${fnName} failed (${rpcRes.status}) ${rpcErr}`);
+        }
+        return rpcRes.json();
+      };
+
+      const params = new URLSearchParams({
+        select: 'id,symbol,trade_type,direction,signal_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,created_at',
+        order: 'signal_time.desc'
+      });
+      const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Accept-Profile': backtestSchema
+        }
+      });
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`Backtest veri alınamadı (${res.status}) ${errBody}`);
+      }
+      const rows = await res.json();
+      const filteredRows = rows.filter((row) => {
+        const rawStatus = (row?.status || '').toString().toLowerCase();
+        return rawStatus !== 'cancelled' && rawStatus !== 'canceled';
+      });
+      processData(filteredRows);
+
+      try {
+        const [summaryRows, symbolRows, weekdayRows, sessionRows] = await Promise.all([
+          callRpc('backtest_summary_metrics'),
+          callRpc('backtest_symbol_metrics'),
+          callRpc('backtest_weekday_metrics'),
+          callRpc('backtest_session_metrics')
+        ]);
+
+        setBacktestInsights({
+          summary: Array.isArray(summaryRows) ? (summaryRows[0] || null) : null,
+          symbols: Array.isArray(symbolRows) ? symbolRows : [],
+          weekdays: Array.isArray(weekdayRows) ? weekdayRows : [],
+          sessions: Array.isArray(sessionRows) ? sessionRows : []
+        });
+      } catch (rpcErr) {
+        setBacktestInsights({
+          summary: null,
+          symbols: [],
+          weekdays: [],
+          sessions: []
+        });
+        console.error('Backtest analytics RPC error:', rpcErr);
+      }
+    } catch (err) {
+      // Hatayı direkt ekrana basarak ne olduğunu anlayalım
+      setLiveError(`Backtest verisi alınamadı: ${err.message}`);
+      setIsLoaded(true);
+      console.error("Fetch Hatası Detayı:", err);
+    }
+  };
+
   const testDbConnection = async () => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -162,8 +297,16 @@ export const TradeProvider = ({ children }) => {
   useEffect(() => {
     let intervalId;
     if (!mode) return () => {};
+    setLiveStatuses({});
+    liveStatusesRef.current = {};
+    setBacktestInsights({
+      summary: null,
+      symbols: [],
+      weekdays: [],
+      sessions: []
+    });
     if (mode === 'backtest') {
-      if (defaultData) processData(defaultData);
+      loadBacktest();
     } else {
       loadLive();
       intervalId = setInterval(() => {
@@ -335,6 +478,7 @@ export const TradeProvider = ({ children }) => {
       applyDates,
       mode, setMode, liveError,
       liveStatuses,
+      backtestInsights,
       dbStatus, dbMessage, testDbConnection
     }}>
       {children}
