@@ -125,9 +125,15 @@ const ChartModal = () => {
       setChartError('');
       try {
         const entryTime = activeSignal.dateObj.getTime();
-        // Live modda ise şu an, değilse işlem tahmini bitişine kadar veri çek
-        const fetchEndTime = mode === 'live' ? Date.now() : (entryTime + (60 * 1000 * 240));     
-        const fetchStartTime = entryTime - (60 * 1000 * 120); 
+        const fallbackBacktestEnd = entryTime + (60 * 1000 * 240);
+        const backtestExitTsMs = Number.isFinite(activeSignal?.exitTs) ? activeSignal.exitTs : fallbackBacktestEnd;
+        // Live modda "şu ana kadar", backtest modunda "signal_time -> exit_time" aralığı
+        const fetchEndTime = mode === 'live'
+          ? Date.now()
+          : Math.max(backtestExitTsMs, entryTime + (60 * 1000));
+        const fetchStartTime = mode === 'live'
+          ? (entryTime - (60 * 1000 * 120))
+          : entryTime;
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
         // 1. Veriyi Çek
@@ -160,7 +166,9 @@ const ChartModal = () => {
         let statusText = '⏳ Sinyal Bekliyor';
         let isTerminalState = false; // İşlem bitti mi?
         let isCancelled = false;
-        let endTimeForGraph = candles[candles.length - 1].time; // Varsayılan: Son mum
+        let endTimeForGraph = mode === 'backtest'
+          ? Math.floor(backtestExitTsMs / 1000)
+          : candles[candles.length - 1].time; // Varsayılan: Son mum
 
         if (mode === 'live' && entry && tp && sl && candles.length > 0) {
              let entryHit = false;
@@ -216,6 +224,17 @@ const ChartModal = () => {
                  }
              }
         }
+        if (mode === 'backtest') {
+          if (activeSignal.status === 'TP') {
+            statusText = '✅ Kapanış: TP';
+            isTerminalState = true;
+          } else if (activeSignal.status === 'SL') {
+            statusText = '🛑 Kapanış: SL';
+            isTerminalState = true;
+          } else if (activeSignal.status === 'WAITING') {
+            statusText = '⏳ Beklemede';
+          }
+        }
 
         setLiveTradeStatus(statusText);
 
@@ -267,6 +286,16 @@ const ChartModal = () => {
           if (entry) mainSeries.createPriceLine({ price: entry, color: '#787B86', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
           if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
           if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
+          if (mode === 'backtest' && activeSignal?.exitPrice) {
+            mainSeries.createPriceLine({
+              price: activeSignal.exitPrice,
+              color: '#f4bf50',
+              lineWidth: 1,
+              lineStyle: 1,
+              title: 'Çıkış',
+              axisLabelVisible: true
+            });
+          }
           chartRef.current._priceLinesAdded = true;
         }
 

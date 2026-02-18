@@ -34,6 +34,10 @@ const Header = () => {
   });
 
   const uniqueSymbols = [...new Set(allSignals.map(s => s.symbol))].sort();
+  const availableDaySet = useMemo(() => {
+    const scoped = allSignals.filter((s) => pendingSymbols.has(s.symbol) || selectedSymbols.has(s.symbol));
+    return new Set(scoped.map((s) => s.dateObj.toISOString().slice(0, 10)));
+  }, [allSignals, pendingSymbols, selectedSymbols]);
   const filteredSymbols = useMemo(() => {
     if (!symbolQuery) return uniqueSymbols;
     const q = symbolQuery.toLowerCase();
@@ -69,6 +73,48 @@ const Header = () => {
     if (!day || !value) return false;
     const d = day.toISOString().slice(0, 10);
     return d === value;
+  };
+
+  const toIso = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const applyQuickRange = (kind) => {
+    const now = new Date();
+    const todayIso = toIso(now);
+    if (kind === 'today') {
+      setPendingDateStart(todayIso);
+      setPendingDateEnd(todayIso);
+      return;
+    }
+    if (kind === '7d') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 6);
+      setPendingDateStart(toIso(start));
+      setPendingDateEnd(todayIso);
+      return;
+    }
+    if (kind === '30d') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 29);
+      setPendingDateStart(toIso(start));
+      setPendingDateEnd(todayIso);
+      return;
+    }
+    if (kind === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      setPendingDateStart(toIso(start));
+      setPendingDateEnd(toIso(end));
+      return;
+    }
+    if (kind === 'clear') {
+      setPendingDateStart('');
+      setPendingDateEnd('');
+    }
   };
 
   useEffect(() => {
@@ -169,6 +215,14 @@ const Header = () => {
               </button>
               {dateOpen && (
                 <div className="date-popover centered" onClick={(e) => e.stopPropagation()}>
+                  <div className="quick-range-row">
+                    <button className="quick-range-btn" onClick={() => applyQuickRange('today')}>Bugün</button>
+                    <button className="quick-range-btn" onClick={() => applyQuickRange('7d')}>Son 7 Gün</button>
+                    <button className="quick-range-btn" onClick={() => applyQuickRange('30d')}>Son 30 Gün</button>
+                    <button className="quick-range-btn" onClick={() => applyQuickRange('month')}>Bu Ay</button>
+                    <button className="quick-range-btn ghost" onClick={() => applyQuickRange('clear')}>Sıfırla</button>
+                  </div>
+
                   <div className="calendar-header">
                     <button
                       className="cal-nav"
@@ -194,10 +248,11 @@ const Header = () => {
                       const inRange = isInRange(day);
                       const isStart = isSameDay(day, pendingDateStart);
                       const isEnd = isSameDay(day, pendingDateEnd);
+                      const hasTrades = availableDaySet.has(iso);
                       return (
                         <button
                           key={iso}
-                          className={`cal-day ${inRange ? 'in-range' : ''} ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''}`}
+                          className={`cal-day ${inRange ? 'in-range' : ''} ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''} ${hasTrades ? 'has-trades' : ''}`}
                           onClick={() => {
                             if (!pendingDateStart || (pendingDateStart && pendingDateEnd)) {
                               setPendingDateStart(iso);
@@ -216,6 +271,11 @@ const Header = () => {
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="range-preview">
+                    {pendingDateStart || pendingDateEnd
+                      ? `${pendingDateStart || '...'} → ${pendingDateEnd || '...'}`
+                      : 'Aralık seçilmedi'}
                   </div>
                   <div className="date-actions">
                     <button

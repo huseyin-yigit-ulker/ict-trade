@@ -161,3 +161,9 @@ from closed
 group by session_name
 order by total_r desc;
 $$;
+
+grant usage on schema ict_trade to anon, authenticated;
+grant execute on function ict_trade.backtest_summary_metrics() to anon, authenticated;
+grant execute on function ict_trade.backtest_symbol_metrics() to anon, authenticated;
+grant execute on function ict_trade.backtest_weekday_metrics() to anon, authenticated;
+grant execute on function ict_trade.backtest_session_metrics() to anon, authenticated;

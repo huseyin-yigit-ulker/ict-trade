@@ -1,8 +1,20 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
 const Dashboard = () => {
-  const { filteredSignals, setActiveSignal, setChartView, mode, liveStatuses } = useTradeContext();
+  const {
+    filteredSignals,
+    allSignals,
+    selectedSymbols,
+    setDateStart,
+    setDateEnd,
+    dateStart,
+    dateEnd,
+    setActiveSignal,
+    setChartView,
+    mode,
+    liveStatuses
+  } = useTradeContext();
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -77,8 +89,133 @@ const Dashboard = () => {
     }, {});
   }, [filteredSignals]);
 
+  const dayChips = useMemo(() => {
+    if (mode !== 'backtest') return [];
+    const scoped = allSignals.filter((s) => selectedSymbols.has(s.symbol));
+    const byDay = scoped.reduce((acc, sig) => {
+      const iso = sig.dateObj.toISOString().slice(0, 10);
+      if (!acc[iso]) acc[iso] = [];
+      acc[iso].push(sig);
+      return acc;
+    }, {});
+
+    return Object.entries(byDay)
+      .map(([iso, list]) => {
+        const tp = list.filter((s) => s.status === 'TP').length;
+        const sl = list.filter((s) => s.status === 'SL').length;
+        const rTotal = list.reduce((sum, s) => {
+          if (Number.isFinite(s?.pnlR)) return sum + s.pnlR;
+          return sum + calculatePnL(s);
+        }, 0);
+        return {
+          iso,
+          list,
+          tp,
+          sl,
+          rTotal,
+          label: new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', {
+            day: '2-digit',
+            month: 'short',
+            weekday: 'short'
+          })
+        };
+      })
+      .sort((a, b) => b.iso.localeCompare(a.iso));
+  }, [mode, allSignals, selectedSymbols]);
+
+  const isSingleDayFilter = Boolean(dateStart && dateEnd && dateStart === dateEnd);
+  const activeDayIso = isSingleDayFilter ? dateStart : '';
+  const monthOptions = useMemo(() => {
+    const monthSet = new Set(dayChips.map((d) => d.iso.slice(0, 7)));
+    return [...monthSet].sort((a, b) => b.localeCompare(a));
+  }, [dayChips]);
+  const [selectedMonth, setSelectedMonth] = useState('');
+
+  useEffect(() => {
+    if (mode !== 'backtest') return;
+    if (monthOptions.length === 0) {
+      setSelectedMonth('');
+      return;
+    }
+    if (!selectedMonth || !monthOptions.includes(selectedMonth)) {
+      setSelectedMonth(monthOptions[0]);
+    }
+  }, [mode, monthOptions, selectedMonth]);
+
+  const selectedMonthIndex = monthOptions.indexOf(selectedMonth);
+  const visibleDayChips = selectedMonth
+    ? dayChips.filter((d) => d.iso.startsWith(selectedMonth))
+    : dayChips;
+  const selectedMonthLabel = selectedMonth
+    ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })
+    : 'Tüm Aylar';
+
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+      {mode === 'backtest' && (
+        <>
+          <div className="day-strip-head">
+            <button
+              className="month-nav-btn"
+              disabled={selectedMonthIndex < 0 || selectedMonthIndex >= monthOptions.length - 1}
+              onClick={() => {
+                if (selectedMonthIndex < 0 || selectedMonthIndex >= monthOptions.length - 1) return;
+                setSelectedMonth(monthOptions[selectedMonthIndex + 1]);
+              }}
+            >
+              ‹
+            </button>
+            <div className="month-nav-title">{selectedMonthLabel}</div>
+            <button
+              className="month-nav-btn"
+              disabled={selectedMonthIndex <= 0}
+              onClick={() => {
+                if (selectedMonthIndex <= 0) return;
+                setSelectedMonth(monthOptions[selectedMonthIndex - 1]);
+              }}
+            >
+              ›
+            </button>
+          </div>
+
+          <div className="day-strip">
+          <button
+            className={`day-pill all ${!dateStart && !dateEnd ? 'active' : ''}`}
+            onClick={() => {
+              setDateStart('');
+              setDateEnd('');
+            }}
+          >
+            <div className="day-pill-title">Tümü</div>
+            <div className="day-pill-meta">{visibleDayChips.length} gün</div>
+          </button>
+
+          {visibleDayChips.map((d) => (
+            <button
+              key={d.iso}
+              className={`day-pill ${activeDayIso === d.iso ? 'active' : ''}`}
+              onClick={() => {
+                if (activeDayIso === d.iso) {
+                  setDateStart('');
+                  setDateEnd('');
+                } else {
+                  setDateStart(d.iso);
+                  setDateEnd(d.iso);
+                }
+              }}
+            >
+              <div className="day-pill-title">{d.label}</div>
+              <div className="day-pill-meta">{d.list.length} işlem</div>
+              <div className="day-pill-meta">
+                TP/SL: <span className="win">{d.tp}</span>/<span className="loss">{d.sl}</span> •{' '}
+                <span className={d.rTotal >= 0 ? 'win' : 'loss'}>{d.rTotal >= 0 ? '+' : ''}{d.rTotal.toFixed(2)}R</span>
+              </div>
+            </button>
+          ))}
+          </div>
+        </>
+      )}
+
       {Object.keys(grouped).map(dateKey => {
         const trades = grouped[dateKey];
         const counts = mode === 'live' ? summarizeLiveCounts(trades) : summarizeBacktestCounts(trades);

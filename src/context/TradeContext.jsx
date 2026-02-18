@@ -212,7 +212,7 @@ export const TradeProvider = ({ children }) => {
       };
 
       const params = new URLSearchParams({
-        select: 'id,symbol,trade_type,direction,signal_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,created_at',
+        select: 'id,symbol,trade_type,signal_time,real_entry_time,exit_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,created_at',
         order: 'signal_time.desc'
       });
       const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;
