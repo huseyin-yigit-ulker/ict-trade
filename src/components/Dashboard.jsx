@@ -7,8 +7,20 @@ const Dashboard = () => {
     setActiveSignal,
     setChartView,
     mode,
-    liveStatuses
+    liveStatuses,
+    backtestAccessGranted,
+    setBacktestAccessGranted
   } = useTradeContext();
+  const BACKTEST_PASSWORD = 'ict-trade26';
+  const [backtestPasswordInput, setBacktestPasswordInput] = useState('');
+  const [backtestPasswordError, setBacktestPasswordError] = useState('');
+
+  useEffect(() => {
+    if (mode !== 'backtest') {
+      setBacktestPasswordInput('');
+      setBacktestPasswordError('');
+    }
+  }, [mode]);
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -325,6 +337,43 @@ const Dashboard = () => {
   );
 
   if (mode === 'backtest') {
+    if (!backtestAccessGranted) {
+      return (
+        <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+          <div className="day-notebook" style={{ maxWidth: 480, margin: '40px auto' }}>
+            <div className="day-header">
+              <div className="day-title">Backtest Kilidi</div>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (backtestPasswordInput === BACKTEST_PASSWORD) {
+                  setBacktestAccessGranted(true);
+                  setBacktestPasswordError('');
+                  return;
+                }
+                setBacktestPasswordError('Şifre hatalı.');
+              }}
+              style={{ display: 'grid', gap: 10 }}
+            >
+              <input
+                type="password"
+                className="symbol-search"
+                placeholder="Şifre"
+                value={backtestPasswordInput}
+                onChange={(e) => {
+                  setBacktestPasswordInput(e.target.value);
+                  if (backtestPasswordError) setBacktestPasswordError('');
+                }}
+              />
+              {backtestPasswordError && <div className="status-error">{backtestPasswordError}</div>}
+              <button className="apply-btn" type="submit">Backtest Aç</button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
         <div className="backtest-flow">

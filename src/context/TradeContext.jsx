@@ -45,6 +45,7 @@ export const TradeProvider = ({ children }) => {
   const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
   const [dbMessage, setDbMessage] = useState('');
   const [liveStatuses, setLiveStatuses] = useState({});
+  const [backtestAccessGranted, setBacktestAccessGranted] = useState(false);
   const [backtestInsights, setBacktestInsights] = useState({
     summary: null,
     symbols: [],
@@ -373,6 +374,7 @@ export const TradeProvider = ({ children }) => {
       setDateEnd('');
       setPendingDateStart('');
       setPendingDateEnd('');
+      setBacktestAccessGranted(false);
     }
 
     setLiveStatuses({});
@@ -380,7 +382,15 @@ export const TradeProvider = ({ children }) => {
     setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
 
     if (mode === 'backtest') {
-      loadBacktest();
+      if (backtestAccessGranted) {
+        loadBacktest();
+      } else {
+        setAllSignals([]);
+        setFilteredSignals([]);
+        setSelectedSymbols(new Set());
+        setPendingSymbols(new Set());
+        setIsLoaded(true);
+      }
     } else {
       loadLive();
       intervalId = setInterval(() => {
@@ -396,7 +406,7 @@ export const TradeProvider = ({ children }) => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [mode, loadBacktest, loadLive]);
+  }, [mode, loadBacktest, loadLive, backtestAccessGranted]);
 
   const normalizeForBinance = useCallback((sym) => (sym ? sym.replace(/[^A-Za-z0-9]/g, '') : ''), []);
 
@@ -587,6 +597,8 @@ export const TradeProvider = ({ children }) => {
     setMode,
     liveError,
     liveStatuses,
+    backtestAccessGranted,
+    setBacktestAccessGranted,
     backtestInsights,
     dbStatus,
     dbMessage,
@@ -614,6 +626,7 @@ export const TradeProvider = ({ children }) => {
     mode,
     liveError,
     liveStatuses,
+    backtestAccessGranted,
     backtestInsights,
     dbStatus,
     dbMessage,
