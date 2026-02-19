@@ -4,12 +4,6 @@ import { useTradeContext } from '../context/TradeContext';
 const Dashboard = () => {
   const {
     filteredSignals,
-    allSignals,
-    selectedSymbols,
-    setDateStart,
-    setDateEnd,
-    dateStart,
-    dateEnd,
     setActiveSignal,
     setChartView,
     mode,
@@ -44,9 +38,7 @@ const Dashboard = () => {
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
   };
 
-  const formatLivePrice = (value) => (
-    typeof value === 'number' ? value.toFixed(5) : '--'
-  );
+  const formatLivePrice = (value) => (typeof value === 'number' ? value.toFixed(5) : '--');
 
   const getLiveRLabel = (status) => {
     if (!status) return { label: '--', cls: 'waiting' };
@@ -60,13 +52,11 @@ const Dashboard = () => {
     let tp = 0;
     let sl = 0;
     list.forEach((sig) => {
-      const status = liveStatuses[sig.id]?.status;
-      const meta = resolveLiveMeta(status);
+      const meta = resolveLiveMeta(liveStatuses[sig.id]?.status);
       if (meta.label === 'TP') tp += 1;
       else if (meta.label === 'SL' || meta.label === 'TP/SL') sl += 1;
     });
-    const rScore = (2 * tp) - sl;
-    return { tp, sl, rScore };
+    return { tp, sl, rScore: (2 * tp) - sl };
   };
 
   const summarizeBacktestCounts = (list) => {
@@ -76,149 +66,360 @@ const Dashboard = () => {
       if (sig.status === 'TP') tp += 1;
       else if (sig.status === 'SL') sl += 1;
     });
-    const rScore = (2 * tp) - sl;
-    return { tp, sl, rScore };
+    return { tp, sl, rScore: (2 * tp) - sl };
   };
 
-  const grouped = useMemo(() => {
+  const getTotalR = (list) => list.reduce((sum, s) => sum + (Number.isFinite(s?.pnlR) ? s.pnlR : calculatePnL(s)), 0);
+
+  const formatLocalIso = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const parseIsoDate = (isoString) => {
+    const [year, month, day] = isoString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  // Live görünümü için mevcut günlük grup
+  const groupedLive = useMemo(() => {
+    if (mode !== 'live') return {};
     return filteredSignals.reduce((acc, sig) => {
-      const dateKey = sig.dateObj.toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+      const dateKey = sig.dateObj.toLocaleDateString('tr-TR', {
+        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+      });
       if (!acc[dateKey]) acc[dateKey] = [];
       acc[dateKey].push(sig);
       return acc;
     }, {});
-  }, [filteredSignals]);
+  }, [filteredSignals, mode]);
 
-  const dayChips = useMemo(() => {
+  // Backtest hiyerarşik veri seti
+  const backtestSignals = useMemo(() => {
     if (mode !== 'backtest') return [];
-    const scoped = allSignals.filter((s) => selectedSymbols.has(s.symbol));
-    const byDay = scoped.reduce((acc, sig) => {
-      const iso = sig.dateObj.toISOString().slice(0, 10);
-      if (!acc[iso]) acc[iso] = [];
-      acc[iso].push(sig);
+    return [...filteredSignals].sort((a, b) => b.dateObj - a.dateObj);
+  }, [mode, filteredSignals]);
+
+  const yearBuckets = useMemo(() => {
+    const byYear = backtestSignals.reduce((acc, sig) => {
+      const year = sig.dateObj.getFullYear();
+      if (!acc[year]) acc[year] = [];
+      acc[year].push(sig);
+      return acc;
+    }, {});
+
+    return Object.entries(byYear)
+      .map(([year, list]) => {
+        const counts = summarizeBacktestCounts(list);
+        const totalR = getTotalR(list);
+        return {
+          year: Number(year),
+          list,
+          count: list.length,
+          tp: counts.tp,
+          sl: counts.sl,
+          totalR
+        };
+      })
+      .sort((a, b) => b.year - a.year);
+  }, [backtestSignals]);
+
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
+
+  useEffect(() => {
+    if (mode !== 'backtest') {
+      setSelectedYear(null);
+      setSelectedMonth('');
+      setSelectedDay('');
+      return;
+    }
+    if (selectedYear !== null && !yearBuckets.some((y) => y.year === selectedYear)) {
+      setSelectedYear(null);
+      setSelectedMonth('');
+      setSelectedDay('');
+    }
+  }, [mode, selectedYear, yearBuckets]);
+
+  const monthBuckets = useMemo(() => {
+    if (!selectedYear) return [];
+    const yearData = yearBuckets.find((y) => y.year === selectedYear);
+    const list = yearData?.list || [];
+
+    const byMonth = list.reduce((acc, sig) => {
+      const monthKey = `${sig.dateObj.getFullYear()}-${String(sig.dateObj.getMonth() + 1).padStart(2, '0')}`;
+      if (!acc[monthKey]) acc[monthKey] = [];
+      acc[monthKey].push(sig);
+      return acc;
+    }, {});
+
+    return Object.entries(byMonth)
+      .map(([monthKey, monthList]) => {
+        const counts = summarizeBacktestCounts(monthList);
+        const totalR = getTotalR(monthList);
+        const label = parseIsoDate(`${monthKey}-01`).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+        return {
+          monthKey,
+          label,
+          list: monthList,
+          count: monthList.length,
+          tp: counts.tp,
+          sl: counts.sl,
+          totalR
+        };
+      })
+      .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  }, [selectedYear, yearBuckets]);
+
+  useEffect(() => {
+    if (!selectedMonth) return;
+    if (!monthBuckets.some((m) => m.monthKey === selectedMonth)) {
+      setSelectedMonth('');
+      setSelectedDay('');
+    }
+  }, [selectedMonth, monthBuckets]);
+
+  const dayBuckets = useMemo(() => {
+    if (!selectedMonth) return [];
+    const monthData = monthBuckets.find((m) => m.monthKey === selectedMonth);
+    const list = monthData?.list || [];
+
+    const byDay = list.reduce((acc, sig) => {
+      const dayKey = formatLocalIso(sig.dateObj);
+      if (!acc[dayKey]) acc[dayKey] = [];
+      acc[dayKey].push(sig);
       return acc;
     }, {});
 
     return Object.entries(byDay)
-      .map(([iso, list]) => {
-        const tp = list.filter((s) => s.status === 'TP').length;
-        const sl = list.filter((s) => s.status === 'SL').length;
-        const rTotal = list.reduce((sum, s) => {
-          if (Number.isFinite(s?.pnlR)) return sum + s.pnlR;
-          return sum + calculatePnL(s);
-        }, 0);
+      .map(([dayKey, dayList]) => {
+        const counts = summarizeBacktestCounts(dayList);
+        const totalR = getTotalR(dayList);
+        const label = parseIsoDate(dayKey).toLocaleDateString('tr-TR', { weekday: 'short', day: '2-digit', month: 'short' });
         return {
-          iso,
-          list,
-          tp,
-          sl,
-          rTotal,
-          label: new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', {
-            day: '2-digit',
-            month: 'short',
-            weekday: 'short'
-          })
+          dayKey,
+          label,
+          list: dayList,
+          count: dayList.length,
+          tp: counts.tp,
+          sl: counts.sl,
+          totalR
         };
       })
-      .sort((a, b) => b.iso.localeCompare(a.iso));
-  }, [mode, allSignals, selectedSymbols]);
-
-  const isSingleDayFilter = Boolean(dateStart && dateEnd && dateStart === dateEnd);
-  const activeDayIso = isSingleDayFilter ? dateStart : '';
-  const monthOptions = useMemo(() => {
-    const monthSet = new Set(dayChips.map((d) => d.iso.slice(0, 7)));
-    return [...monthSet].sort((a, b) => b.localeCompare(a));
-  }, [dayChips]);
-  const [selectedMonth, setSelectedMonth] = useState('');
+      .sort((a, b) => b.dayKey.localeCompare(a.dayKey));
+  }, [selectedMonth, monthBuckets]);
 
   useEffect(() => {
-    if (mode !== 'backtest') return;
-    if (monthOptions.length === 0) {
-      setSelectedMonth('');
+    if (!selectedMonth) return;
+    if (dayBuckets.length === 0) {
+      setSelectedDay('');
       return;
     }
-    if (!selectedMonth || !monthOptions.includes(selectedMonth)) {
-      setSelectedMonth(monthOptions[0]);
+    if (!selectedDay || !dayBuckets.some((d) => d.dayKey === selectedDay)) {
+      setSelectedDay(dayBuckets[0].dayKey);
     }
-  }, [mode, monthOptions, selectedMonth]);
+  }, [selectedMonth, selectedDay, dayBuckets]);
 
-  const selectedMonthIndex = monthOptions.indexOf(selectedMonth);
-  const visibleDayChips = selectedMonth
-    ? dayChips.filter((d) => d.iso.startsWith(selectedMonth))
-    : dayChips;
-  const selectedMonthLabel = selectedMonth
-    ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })
-    : 'Tüm Aylar';
+  const selectedDayTrades = useMemo(() => {
+    if (!selectedDay) return [];
+    return dayBuckets.find((d) => d.dayKey === selectedDay)?.list || [];
+  }, [selectedDay, dayBuckets]);
+
+  const selectedDayLabel = useMemo(() => {
+    if (!selectedDay) return '';
+    return parseIsoDate(selectedDay).toLocaleDateString('tr-TR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  }, [selectedDay]);
+
+  const renderTradeCards = (trades) => (
+    <div className="trade-grid">
+      {trades.map((sig) => {
+        const pnl = calculatePnL(sig);
+        const liveStatus = mode === 'live' ? liveStatuses[sig.id]?.status : '';
+        const liveLastPrice = mode === 'live' ? liveStatuses[sig.id]?.lastPrice : null;
+        const liveMeta = resolveLiveMeta(liveStatus);
+
+        const pnlClass = mode === 'live'
+          ? liveMeta.cls
+          : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
+
+        const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+        return (
+          <div
+            key={sig.id}
+            className="trade-card"
+            onClick={() => {
+              setChartView('journal');
+              setActiveSignal(sig);
+            }}
+          >
+            <div className="trade-head">
+              <span className="symbol-box">{sig.symbol}</span>
+              <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
+              <span className="time-detail">{timeLabel}</span>
+            </div>
+
+            <div className="trade-body">
+              <div className="trade-metric">
+                <span className="metric-label">Durum</span>
+                <span className={`status-text ${pnlClass}`}>
+                  {mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}
+                </span>
+              </div>
+              <div className="trade-metric">
+                <span className="metric-label">P/L</span>
+                {mode === 'live' ? (
+                  liveMeta.label === 'AKTIF' ? (
+                    <span className="pnl-text live-pnl-stack">
+                      <span className="live-price">{formatLivePrice(liveLastPrice)}</span>
+                      <span className={formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}>
+                        {formatLiveDelta(sig, liveLastPrice)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className={`pnl-text ${getLiveRLabel(liveStatus).cls}`}>
+                      {getLiveRLabel(liveStatus).label}
+                    </span>
+                  )
+                ) : (
+                  <span className={`pnl-text ${pnlClass}`}>
+                    {pnl !== 0 ? formatBacktestPnl(sig, pnl) : '--'}
+                  </span>
+                )}
+              </div>
+              <div className="trade-metric">
+                <span className="metric-label">Entry</span>
+                <span className="metric-value">{sig.entry?.toFixed(4)}</span>
+              </div>
+              <div className="trade-metric">
+                <span className="metric-label">TP/SL</span>
+                <span className="metric-value">{sig.tp?.toFixed(4)} / {sig.sl?.toFixed(4)}</span>
+              </div>
+            </div>
+
+            <div className="trade-foot">
+              <div className={`chip ${pnlClass}`}>
+                {mode === 'live' ? liveMeta.label : (pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL'))}
+              </div>
+            </div>
+
+            <button
+              className="live-graph-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setChartView('tv');
+                setActiveSignal(sig);
+              }}
+            >
+              Live <span className="live-graph-dot">•</span>
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  if (mode === 'backtest') {
+    return (
+      <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+        <div className="backtest-flow">
+          <div className="drill-header">
+            <div className="drill-path">
+              {!selectedYear && 'Yıllar'}
+              {selectedYear && !selectedMonth && `${selectedYear} / Aylar`}
+              {selectedYear && selectedMonth && `${selectedYear} / ${parseIsoDate(`${selectedMonth}-01`).toLocaleDateString('tr-TR', { month: 'long' })} / Günler`}
+            </div>
+            <div className="drill-actions">
+              {selectedMonth && (
+                <button className="drill-back-btn" onClick={() => { setSelectedMonth(''); setSelectedDay(''); }}>
+                  Aylara Dön
+                </button>
+              )}
+              {selectedYear && !selectedMonth && (
+                <button className="drill-back-btn" onClick={() => { setSelectedYear(null); setSelectedMonth(''); setSelectedDay(''); }}>
+                  Yıllara Dön
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!selectedYear && (
+            <div className="drill-grid years">
+              {yearBuckets.map((y) => (
+                <button key={y.year} className="drill-card" onClick={() => setSelectedYear(y.year)}>
+                  <div className="drill-title">{y.year}</div>
+                  <div className="drill-meta">{y.count} işlem</div>
+                  <div className="drill-meta">TP/SL: <span className="win">{y.tp}</span>/<span className="loss">{y.sl}</span></div>
+                  <div className={`drill-r ${y.totalR >= 0 ? 'win' : 'loss'}`}>{y.totalR >= 0 ? '+' : ''}{y.totalR.toFixed(2)}R</div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {selectedYear && !selectedMonth && (
+            <div className="drill-grid months">
+              {monthBuckets.map((m) => (
+                <button key={m.monthKey} className="drill-card" onClick={() => setSelectedMonth(m.monthKey)}>
+                  <div className="drill-title">{m.label}</div>
+                  <div className="drill-meta">{m.count} işlem</div>
+                  <div className="drill-meta">TP/SL: <span className="win">{m.tp}</span>/<span className="loss">{m.sl}</span></div>
+                  <div className={`drill-r ${m.totalR >= 0 ? 'win' : 'loss'}`}>{m.totalR >= 0 ? '+' : ''}{m.totalR.toFixed(2)}R</div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {selectedYear && selectedMonth && (
+            <>
+              <div className="drill-grid days">
+                {dayBuckets.map((d) => (
+                  <button
+                    key={d.dayKey}
+                    className={`drill-card ${selectedDay === d.dayKey ? 'active' : ''}`}
+                    onClick={() => setSelectedDay(d.dayKey)}
+                  >
+                    <div className="drill-title">{d.label}</div>
+                    <div className="drill-meta">{d.count} işlem</div>
+                    <div className="drill-meta">TP/SL: <span className="win">{d.tp}</span>/<span className="loss">{d.sl}</span></div>
+                    <div className={`drill-r ${d.totalR >= 0 ? 'win' : 'loss'}`}>{d.totalR >= 0 ? '+' : ''}{d.totalR.toFixed(2)}R</div>
+                  </button>
+                ))}
+              </div>
+
+              {selectedDayTrades.length > 0 && (
+                <div className="day-notebook">
+                  <div className="day-header">
+                    <div className="day-title">{selectedDayLabel}</div>
+                    <div className="day-summary">
+                      <span>{selectedDayTrades.length} işlem</span>
+                      <span className="tp-sl-ratio">
+                        Toplam R:{' '}
+                        <span className={getTotalR(selectedDayTrades) >= 0 ? 'win' : 'loss'}>
+                          {getTotalR(selectedDayTrades) >= 0 ? '+' : ''}{getTotalR(selectedDayTrades).toFixed(2)}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  {renderTradeCards(selectedDayTrades)}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
-      {mode === 'backtest' && (
-        <>
-          <div className="day-strip-head">
-            <button
-              className="month-nav-btn"
-              disabled={selectedMonthIndex < 0 || selectedMonthIndex >= monthOptions.length - 1}
-              onClick={() => {
-                if (selectedMonthIndex < 0 || selectedMonthIndex >= monthOptions.length - 1) return;
-                setSelectedMonth(monthOptions[selectedMonthIndex + 1]);
-              }}
-            >
-              ‹
-            </button>
-            <div className="month-nav-title">{selectedMonthLabel}</div>
-            <button
-              className="month-nav-btn"
-              disabled={selectedMonthIndex <= 0}
-              onClick={() => {
-                if (selectedMonthIndex <= 0) return;
-                setSelectedMonth(monthOptions[selectedMonthIndex - 1]);
-              }}
-            >
-              ›
-            </button>
-          </div>
-
-          <div className="day-strip">
-          <button
-            className={`day-pill all ${!dateStart && !dateEnd ? 'active' : ''}`}
-            onClick={() => {
-              setDateStart('');
-              setDateEnd('');
-            }}
-          >
-            <div className="day-pill-title">Tümü</div>
-            <div className="day-pill-meta">{visibleDayChips.length} gün</div>
-          </button>
-
-          {visibleDayChips.map((d) => (
-            <button
-              key={d.iso}
-              className={`day-pill ${activeDayIso === d.iso ? 'active' : ''}`}
-              onClick={() => {
-                if (activeDayIso === d.iso) {
-                  setDateStart('');
-                  setDateEnd('');
-                } else {
-                  setDateStart(d.iso);
-                  setDateEnd(d.iso);
-                }
-              }}
-            >
-              <div className="day-pill-title">{d.label}</div>
-              <div className="day-pill-meta">{d.list.length} işlem</div>
-              <div className="day-pill-meta">
-                TP/SL: <span className="win">{d.tp}</span>/<span className="loss">{d.sl}</span> •{' '}
-                <span className={d.rTotal >= 0 ? 'win' : 'loss'}>{d.rTotal >= 0 ? '+' : ''}{d.rTotal.toFixed(2)}R</span>
-              </div>
-            </button>
-          ))}
-          </div>
-        </>
-      )}
-
-      {Object.keys(grouped).map(dateKey => {
-        const trades = grouped[dateKey];
-        const counts = mode === 'live' ? summarizeLiveCounts(trades) : summarizeBacktestCounts(trades);
+      {Object.keys(groupedLive).map((dateKey) => {
+        const trades = groupedLive[dateKey];
+        const counts = summarizeLiveCounts(trades);
 
         return (
           <div key={dateKey} className="day-notebook">
@@ -234,84 +435,7 @@ const Dashboard = () => {
                 </span>
               </div>
             </div>
-
-            <div className="trade-grid">
-              {trades.map(sig => {
-                const pnl = calculatePnL(sig);
-                const liveStatus = mode === 'live' ? liveStatuses[sig.id]?.status : '';
-                const liveLastPrice = mode === 'live' ? liveStatuses[sig.id]?.lastPrice : null;
-                const liveMeta = resolveLiveMeta(liveStatus);
-                const pnlClass = mode === 'live'
-                  ? liveMeta.cls
-                  : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
-                const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-
-                return (
-                  <div
-                    key={sig.id}
-                    className="trade-card"
-                    onClick={() => {
-                      setChartView('journal');
-                      setActiveSignal(sig);
-                    }}
-                  >
-                    <div className="trade-head">
-                      <span className="symbol-box">{sig.symbol}</span>
-                      <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
-                      <span className="time-detail">{timeLabel}</span>
-                    </div>
-                    <div className="trade-body">
-                      <div className="trade-metric">
-                        <span className="metric-label">Durum</span>
-                        <span className={`status-text ${pnlClass}`}>
-                          {mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}
-                        </span>
-                      </div>
-                      <div className="trade-metric">
-                        <span className="metric-label">P/L</span>
-                        {mode === 'live' ? (
-                          liveMeta.label === 'AKTIF' ? (
-                            <span className="pnl-text live-pnl-stack">
-                              <span className="live-price">{formatLivePrice(liveLastPrice)}</span>
-                              <span className={formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}>
-                                {formatLiveDelta(sig, liveLastPrice)}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className={`pnl-text ${getLiveRLabel(liveStatus).cls}`}>
-                              {getLiveRLabel(liveStatus).label}
-                            </span>
-                          )
-                        ) : (
-                          <span className={`pnl-text ${pnlClass}`}>{pnl !== 0 ? formatBacktestPnl(sig, pnl) : '--'}</span>
-                        )}
-                      </div>
-                      <div className="trade-metric">
-                        <span className="metric-label">Entry</span>
-                        <span className="metric-value">{sig.entry?.toFixed(4)}</span>
-                      </div>
-                      <div className="trade-metric">
-                        <span className="metric-label">TP/SL</span>
-                        <span className="metric-value">{sig.tp?.toFixed(4)} / {sig.sl?.toFixed(4)}</span>
-                      </div>
-                    </div>
-                    <div className="trade-foot">
-                      <div className={`chip ${pnlClass}`}>{mode === 'live' ? liveMeta.label : (pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL'))}</div>
-                    </div>
-                    <button
-                      className="live-graph-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setChartView('tv');
-                        setActiveSignal(sig);
-                      }}
-                    >
-                      Live <span className="live-graph-dot">•</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            {renderTradeCards(trades)}
           </div>
         );
       })}

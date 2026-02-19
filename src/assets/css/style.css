@@ -301,6 +301,8 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
 }
 
 .quick-range-btn {
@@ -317,12 +319,35 @@ a {
   background: transparent;
 }
 
+.year-jump-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.year-jump-btn {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.year-jump-btn.active {
+  border-color: rgba(48, 209, 88, 0.65);
+  background: rgba(48, 209, 88, 0.2);
+}
+
 .range-preview {
   color: var(--muted);
   font-size: 12px;
   border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .apply-btn.ghost {
@@ -550,6 +575,31 @@ a {
   gap: 24px;
 }
 
+.backtest-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+}
+
+.shortcut-btn {
+  border: 1px solid var(--border);
+  background: rgba(123, 140, 255, 0.14);
+  color: var(--text);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+
+.shortcut-btn.ghost {
+  background: transparent;
+}
+
 .day-strip {
   display: flex;
   gap: 12px;
@@ -634,6 +684,96 @@ a {
   padding: 20px;
   display: grid;
   gap: 16px;
+}
+
+.backtest-flow {
+  display: grid;
+  gap: 16px;
+}
+
+.drill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.drill-path {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.drill-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.drill-back-btn {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.drill-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.drill-grid.years {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.drill-grid.months {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.drill-grid.days {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.drill-card {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  color: var(--text);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 5px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border 0.15s ease;
+}
+
+.drill-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(123, 140, 255, 0.55);
+}
+
+.drill-card.active {
+  border-color: rgba(48, 209, 88, 0.65);
+  background: linear-gradient(145deg, rgba(48, 209, 88, 0.18), rgba(48, 209, 88, 0.05));
+}
+
+.drill-title {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.drill-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.drill-r {
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .day-header {

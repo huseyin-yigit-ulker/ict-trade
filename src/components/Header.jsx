@@ -32,11 +32,17 @@ const Header = () => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  const formatLocalIso = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
 
   const uniqueSymbols = [...new Set(allSignals.map(s => s.symbol))].sort();
   const availableDaySet = useMemo(() => {
     const scoped = allSignals.filter((s) => pendingSymbols.has(s.symbol) || selectedSymbols.has(s.symbol));
-    return new Set(scoped.map((s) => s.dateObj.toISOString().slice(0, 10)));
+    return new Set(scoped.map((s) => formatLocalIso(s.dateObj)));
   }, [allSignals, pendingSymbols, selectedSymbols]);
   const filteredSymbols = useMemo(() => {
     if (!symbolQuery) return uniqueSymbols;
@@ -71,50 +77,12 @@ const Header = () => {
 
   const isSameDay = (day, value) => {
     if (!day || !value) return false;
-    const d = day.toISOString().slice(0, 10);
+    const d = formatLocalIso(day);
     return d === value;
   };
 
-  const toIso = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  const applyQuickRange = (kind) => {
-    const now = new Date();
-    const todayIso = toIso(now);
-    if (kind === 'today') {
-      setPendingDateStart(todayIso);
-      setPendingDateEnd(todayIso);
-      return;
-    }
-    if (kind === '7d') {
-      const start = new Date(now);
-      start.setDate(now.getDate() - 6);
-      setPendingDateStart(toIso(start));
-      setPendingDateEnd(todayIso);
-      return;
-    }
-    if (kind === '30d') {
-      const start = new Date(now);
-      start.setDate(now.getDate() - 29);
-      setPendingDateStart(toIso(start));
-      setPendingDateEnd(todayIso);
-      return;
-    }
-    if (kind === 'month') {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      setPendingDateStart(toIso(start));
-      setPendingDateEnd(toIso(end));
-      return;
-    }
-    if (kind === 'clear') {
-      setPendingDateStart('');
-      setPendingDateEnd('');
-    }
+  const shiftCalendarMonth = (deltaMonths) => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + deltaMonths, 1));
   };
 
   useEffect(() => {
@@ -200,110 +168,6 @@ const Header = () => {
 
         {mode !== 'live' && (
           <>
-            <div className="date-filters">
-              <button
-                className="date-picker-btn"
-                onClick={() => {
-                  if (!dateOpen) {
-                    setPendingDateStart(dateStart);
-                    setPendingDateEnd(dateEnd);
-                  }
-                  setDateOpen(!dateOpen);
-                }}
-              >
-                📅 {dateStart || dateEnd ? `${dateStart || '...'} → ${dateEnd || '...'}` : 'Tarih Seçimi'}
-              </button>
-              {dateOpen && (
-                <div className="date-popover centered" onClick={(e) => e.stopPropagation()}>
-                  <div className="quick-range-row">
-                    <button className="quick-range-btn" onClick={() => applyQuickRange('today')}>Bugün</button>
-                    <button className="quick-range-btn" onClick={() => applyQuickRange('7d')}>Son 7 Gün</button>
-                    <button className="quick-range-btn" onClick={() => applyQuickRange('30d')}>Son 30 Gün</button>
-                    <button className="quick-range-btn" onClick={() => applyQuickRange('month')}>Bu Ay</button>
-                    <button className="quick-range-btn ghost" onClick={() => applyQuickRange('clear')}>Sıfırla</button>
-                  </div>
-
-                  <div className="calendar-header">
-                    <button
-                      className="cal-nav"
-                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
-                    >
-                      ‹
-                    </button>
-                    <div className="cal-title">{monthLabel}</div>
-                    <button
-                      className="cal-nav"
-                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
-                    >
-                      ›
-                    </button>
-                  </div>
-                  <div className="calendar-grid">
-                    {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((d) => (
-                      <div key={d} className="cal-day cal-day-label">{d}</div>
-                    ))}
-                    {daysGrid.map((day, idx) => {
-                      if (!day) return <div key={`empty-${idx}`} className="cal-day empty"></div>;
-                      const iso = day.toISOString().slice(0, 10);
-                      const inRange = isInRange(day);
-                      const isStart = isSameDay(day, pendingDateStart);
-                      const isEnd = isSameDay(day, pendingDateEnd);
-                      const hasTrades = availableDaySet.has(iso);
-                      return (
-                        <button
-                          key={iso}
-                          className={`cal-day ${inRange ? 'in-range' : ''} ${isStart ? 'start' : ''} ${isEnd ? 'end' : ''} ${hasTrades ? 'has-trades' : ''}`}
-                          onClick={() => {
-                            if (!pendingDateStart || (pendingDateStart && pendingDateEnd)) {
-                              setPendingDateStart(iso);
-                              setPendingDateEnd('');
-                            } else {
-                              if (new Date(iso) < new Date(pendingDateStart)) {
-                                setPendingDateEnd(pendingDateStart);
-                                setPendingDateStart(iso);
-                              } else {
-                                setPendingDateEnd(iso);
-                              }
-                            }
-                          }}
-                        >
-                          {day.getDate()}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="range-preview">
-                    {pendingDateStart || pendingDateEnd
-                      ? `${pendingDateStart || '...'} → ${pendingDateEnd || '...'}`
-                      : 'Aralık seçilmedi'}
-                  </div>
-                  <div className="date-actions">
-                    <button
-                      className="apply-btn"
-                      onClick={() => {
-                        applyDates();
-                        setDateOpen(false);
-                      }}
-                    >
-                      ✅ Uygula
-                    </button>
-                    <button
-                      className="apply-btn ghost"
-                      onClick={() => {
-                        setPendingDateStart('');
-                        setPendingDateEnd('');
-                        setDateStart('');
-                        setDateEnd('');
-                        setDateOpen(false);
-                      }}
-                    >
-                      🧹 Temizle
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <button id="btn-summary" className="header-btn" onClick={() => setShowSummary(true)}>📈 Başarı Geçmişi</button>
           </>
         )}
