@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
+const LIVE_MODEL_ACTIVE_UTC_HOURS = new Set([5, 7, 8, 9, 12, 13, 14, 16, 20, 21]);
+
 const Dashboard = () => {
   const {
     filteredSignals,
@@ -14,6 +16,7 @@ const Dashboard = () => {
   const BACKTEST_PASSWORD = 'ict-trade26';
   const [backtestPasswordInput, setBacktestPasswordInput] = useState('');
   const [backtestPasswordError, setBacktestPasswordError] = useState('');
+  const [utcHour, setUtcHour] = useState(new Date().getUTCHours());
 
   useEffect(() => {
     if (mode !== 'backtest') {
@@ -21,6 +24,16 @@ const Dashboard = () => {
       setBacktestPasswordError('');
     }
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'live') return () => {};
+    const updateHour = () => setUtcHour(new Date().getUTCHours());
+    updateHour();
+    const intervalId = setInterval(updateHour, 30000);
+    return () => clearInterval(intervalId);
+  }, [mode]);
+
+  const isLiveModelActive = LIVE_MODEL_ACTIVE_UTC_HOURS.has(utcHour);
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -481,6 +494,13 @@ const Dashboard = () => {
                   <span className={counts.rScore >= 0 ? 'win' : 'loss'}>
                     {counts.rScore >= 0 ? '+' : ''}{counts.rScore}
                   </span>
+                </span>
+                <span className="tp-sl-ratio">
+                  Model:{' '}
+                  <span className={isLiveModelActive ? 'win' : 'loss'}>
+                    {isLiveModelActive ? 'AKTİF' : 'İNATİF'}
+                  </span>{' '}
+                  (UTC {utcHour})
                 </span>
               </div>
             </div>

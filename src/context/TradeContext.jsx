@@ -187,6 +187,7 @@ export const TradeProvider = ({ children }) => {
       });
       params.append('signal_time', `gte.${start.toISOString()}`);
       params.append('signal_time', `lt.${end.toISOString()}`);
+      params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
       const res = await fetch(url, {
@@ -200,7 +201,8 @@ export const TradeProvider = ({ children }) => {
       if (!res.ok) throw new Error('Live veri alınamadı');
 
       const rows = await res.json();
-      const mapped = rows.map((r) => ({
+      const filteredRows = rows.filter((r) => isAllowedBacktestHour(r.signal_time));
+      const mapped = filteredRows.map((r) => ({
         symbol: r.symbol,
         trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
         entry_price: r.entry,
@@ -216,7 +218,7 @@ export const TradeProvider = ({ children }) => {
       setIsLoaded(true);
       console.error(err);
     }
-  }, [processData]);
+  }, [processData, isAllowedBacktestHour]);
 
   const loadBacktest = useCallback(async () => {
     const supabaseUrl = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
