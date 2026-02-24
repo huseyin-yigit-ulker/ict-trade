@@ -2,8 +2,9 @@ import { createContext, useState, useEffect, useContext, useRef, useCallback, us
 
 const TradeContext = createContext();
 
-const BACKTEST_ALLOWED_HOURS = new Set([5, 7, 8, 9, 12, 13, 14, 16, 20, 21]);
-const BACKTEST_ALLOWED_SYMBOLS = ['SOLUSDT', 'BTCUSDT', 'BNBUSDT', 'ETHUSDT', 'DOGEUSDT', 'LINKUSDT', 'XAGUSDT', 'XAUUSDT'];
+//const BACKTEST_ALLOWED_HOURS = new Set([5, 7, 8, 9, 12, 13, 14,15, 16, 20, 21]);
+const BACKTEST_ALLOWED_HOURS = new Set([1,2,3,4,5, 6,7, 8, 9, 10,11,12, 13, 14, 15, 16, 17,18,19, 20, 21,22,23,24]);
+const BACKTEST_ALLOWED_SYMBOLS = ['SOLUSDT', 'BTCUSDT', 'AVAXUSDT','BNBUSDT', 'XRPUSDT','TRXUSDT','ETHUSDT', 'DOGEUSDT', 'LINKUSDT', 'XAGUSDT', 'XAUUSDT'];
 
 const parseLocalDate = (value) => {
   if (!value || typeof value !== 'string') return null;
@@ -185,8 +186,8 @@ export const TradeProvider = ({ children }) => {
         select: '*',
         order: 'signal_time.desc'
       });
-      params.append('signal_time', `gte.${start.toISOString()}`);
-      params.append('signal_time', `lt.${end.toISOString()}`);
+      /*params.append('signal_time', `gte.${start.toISOString()}`);
+      params.append('signal_time', `lt.${end.toISOString()}`);*/
       params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
