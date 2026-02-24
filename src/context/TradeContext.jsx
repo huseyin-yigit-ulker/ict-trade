@@ -186,8 +186,8 @@ export const TradeProvider = ({ children }) => {
         select: '*',
         order: 'signal_time.desc'
       });
-      /*params.append('signal_time', `gte.${start.toISOString()}`);
-      params.append('signal_time', `lt.${end.toISOString()}`);*/
+      params.append('signal_time', `gte.${start.toISOString()}`);
+      params.append('signal_time', `lt.${end.toISOString()}`);
       params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
