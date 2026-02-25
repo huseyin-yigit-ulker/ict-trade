@@ -1,0 +1,112 @@
+{
+    "ict_signal": [
+        {
+            "id": 1070,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T22:30:18.876204+00:00",
+            "entry_price": 5149.64,
+            "sl_price": 5158.94,
+            "tp_price": 5131.040000000002,
+            "created_at": "2026-02-24T22:30:18.888532+00:00",
+            "status": "OPEN",
+            "signal_price": 5149.64
+        },
+        {
+            "id": 1069,
+            "symbol": "AVAXUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T22:00:16.109512+00:00",
+            "entry_price": 8.31,
+            "sl_price": 8.352,
+            "tp_price": 8.226,
+            "created_at": "2026-02-24T22:00:16.122166+00:00",
+            "status": "OPEN",
+            "signal_price": 8.31
+        },
+        {
+            "id": 1068,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T22:00:07.652139+00:00",
+            "entry_price": 64060.3,
+            "sl_price": 64430.8,
+            "tp_price": 63319.3,
+            "created_at": "2026-02-24T22:00:07.664820+00:00",
+            "status": "OPEN",
+            "signal_price": 64060.3
+        },
+        {
+            "id": 1067,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-02-24T15:30:17.324063+00:00",
+            "entry_price": 8.143,
+            "sl_price": 8.05,
+            "tp_price": 8.329,
+            "created_at": "2026-02-24T15:30:17.337003+00:00",
+            "status": "OPEN",
+            "signal_price": 8.143
+        },
+        {
+            "id": 1066,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T14:30:18.724950+00:00",
+            "entry_price": 5130.74,
+            "sl_price": 5160.89,
+            "tp_price": 5070.439999999999,
+            "created_at": "2026-02-24T14:30:18.735627+00:00",
+            "status": "OPEN",
+            "signal_price": 5130.74
+        },
+        {
+            "id": 1065,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T13:00:18.701236+00:00",
+            "entry_price": 5167.04,
+            "sl_price": 5175.6,
+            "tp_price": 5149.919999999999,
+            "created_at": "2026-02-24T13:00:18.715034+00:00",
+            "status": "OPEN",
+            "signal_price": 5167.04
+        },
+        {
+            "id": 1064,
+            "symbol": "AVAXUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T04:00:17.203892+00:00",
+            "entry_price": 8.312,
+            "sl_price": 8.378,
+            "tp_price": 8.179999999999998,
+            "created_at": "2026-02-24T04:00:17.215264+00:00",
+            "status": "OPEN",
+            "signal_price": 8.312
+        },
+        {
+            "id": 1063,
+            "symbol": "XRPUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T04:00:13.531127+00:00",
+            "entry_price": 1.3347,
+            "sl_price": 1.3471,
+            "tp_price": 1.3099,
+            "created_at": "2026-02-24T04:00:13.542825+00:00",
+            "status": "OPEN",
+            "signal_price": 1.3347
+        },
+        {
+            "id": 1062,
+            "symbol": "SOLUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-02-24T04:00:11.915105+00:00",
+            "entry_price": 77.02,
+            "sl_price": 77.59,
+            "tp_price": 75.87999999999998,
+            "created_at": "2026-02-24T04:00:11.927046+00:00",
+            "status": "OPEN",
+            "signal_price": 77.02
+        }
+    ]
+}
