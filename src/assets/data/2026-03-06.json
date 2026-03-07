@@ -1,0 +1,88 @@
+{
+    "ict_signal": [
+        {
+            "id": 1245,
+            "symbol": "DOGEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-03-06T14:30:13.295938+00:00",
+            "entry_price": 0.09163,
+            "sl_price": 0.0935,
+            "tp_price": 0.08789000000000001,
+            "created_at": "2026-03-06T14:30:13.307897+00:00",
+            "status": "OPEN",
+            "signal_price": 0.09163
+        },
+        {
+            "id": 1244,
+            "symbol": "XRPUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-03-06T11:00:11.783008+00:00",
+            "entry_price": 1.4016,
+            "sl_price": 1.3964,
+            "tp_price": 1.4119999999999997,
+            "created_at": "2026-03-06T11:00:11.793722+00:00",
+            "status": "OPEN",
+            "signal_price": 1.4016
+        },
+        {
+            "id": 1243,
+            "symbol": "TRXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-03-06T10:00:16.152710+00:00",
+            "entry_price": 0.28622,
+            "sl_price": 0.28575,
+            "tp_price": 0.2871599999999999,
+            "created_at": "2026-03-06T10:00:16.164916+00:00",
+            "status": "OPEN",
+            "signal_price": 0.28622
+        },
+        {
+            "id": 1242,
+            "symbol": "DOGEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-03-06T09:00:13.358197+00:00",
+            "entry_price": 0.09339,
+            "sl_price": 0.09393,
+            "tp_price": 0.09231,
+            "created_at": "2026-03-06T09:00:13.370978+00:00",
+            "status": "OPEN",
+            "signal_price": 0.09339
+        },
+        {
+            "id": 1241,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-03-06T08:00:16.311001+00:00",
+            "entry_price": 9.425,
+            "sl_price": 9.343,
+            "tp_price": 9.589000000000002,
+            "created_at": "2026-03-06T08:00:16.323257+00:00",
+            "status": "OPEN",
+            "signal_price": 9.425
+        },
+        {
+            "id": 1240,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-03-06T08:00:14.664537+00:00",
+            "entry_price": 0.2708,
+            "sl_price": 0.2681,
+            "tp_price": 0.27619999999999995,
+            "created_at": "2026-03-06T08:00:14.677129+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2708
+        },
+        {
+            "id": 1239,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-03-06T02:30:14.525459+00:00",
+            "entry_price": 0.27,
+            "sl_price": 0.2673,
+            "tp_price": 0.2754000000000001,
+            "created_at": "2026-03-06T02:30:14.537223+00:00",
+            "status": "OPEN",
+            "signal_price": 0.27
+        }
+    ]
+}
