@@ -1,0 +1,136 @@
+{
+    "ict_signal": [
+        {
+            "id": 1674,
+            "symbol": "DOGEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-04-13T23:00:14.943152+00:00",
+            "entry_price": 0.09355,
+            "sl_price": 0.09266,
+            "tp_price": 0.09532999999999997,
+            "created_at": "2026-04-13T23:00:14.955013+00:00",
+            "status": "OPEN",
+            "signal_price": 0.09355
+        },
+        {
+            "id": 1673,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-04-13T23:00:11.728221+00:00",
+            "entry_price": 613.52,
+            "sl_price": 608.35,
+            "tp_price": 623.8599999999999,
+            "created_at": "2026-04-13T23:00:11.739628+00:00",
+            "status": "OPEN",
+            "signal_price": 613.52
+        },
+        {
+            "id": 1672,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-04-13T23:00:09.263557+00:00",
+            "entry_price": 74011.0,
+            "sl_price": 73130.0,
+            "tp_price": 75773.0,
+            "created_at": "2026-04-13T23:00:09.274137+00:00",
+            "status": "OPEN",
+            "signal_price": 74011.0
+        },
+        {
+            "id": 1671,
+            "symbol": "DOGEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-04-13T20:00:16.528980+00:00",
+            "entry_price": 0.09222,
+            "sl_price": 0.09166,
+            "tp_price": 0.09333999999999998,
+            "created_at": "2026-04-13T20:00:16.544224+00:00",
+            "status": "OPEN",
+            "signal_price": 0.09222
+        },
+        {
+            "id": 1670,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-04-13T20:00:09.722533+00:00",
+            "entry_price": 72780.0,
+            "sl_price": 72248.5,
+            "tp_price": 73843.0,
+            "created_at": "2026-04-13T20:00:09.737744+00:00",
+            "status": "OPEN",
+            "signal_price": 72780.0
+        },
+        {
+            "id": 1669,
+            "symbol": "ADAUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-04-13T16:00:18.063802+00:00",
+            "entry_price": 0.2399,
+            "sl_price": 0.2429,
+            "tp_price": 0.2339,
+            "created_at": "2026-04-13T16:00:18.075297+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2399
+        },
+        {
+            "id": 1668,
+            "symbol": "TRXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-04-13T08:30:17.387979+00:00",
+            "entry_price": 0.32152,
+            "sl_price": 0.32083,
+            "tp_price": 0.3228999999999999,
+            "created_at": "2026-04-13T08:30:17.401665+00:00",
+            "status": "OPEN",
+            "signal_price": 0.32152
+        },
+        {
+            "id": 1667,
+            "symbol": "LINKUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-04-13T08:00:22.197269+00:00",
+            "entry_price": 8.736,
+            "sl_price": 8.785,
+            "tp_price": 8.638000000000002,
+            "created_at": "2026-04-13T08:00:22.208981+00:00",
+            "status": "OPEN",
+            "signal_price": 8.736
+        },
+        {
+            "id": 1666,
+            "symbol": "AVAXUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-04-13T08:00:19.025173+00:00",
+            "entry_price": 9.081,
+            "sl_price": 9.158,
+            "tp_price": 8.927,
+            "created_at": "2026-04-13T08:00:19.037160+00:00",
+            "status": "OPEN",
+            "signal_price": 9.081
+        },
+        {
+            "id": 1665,
+            "symbol": "ETHUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-04-13T08:00:12.501968+00:00",
+            "entry_price": 2188.68,
+            "sl_price": 2199.0,
+            "tp_price": 2168.0399999999995,
+            "created_at": "2026-04-13T08:00:12.514075+00:00",
+            "status": "OPEN",
+            "signal_price": 2188.68
+        },
+        {
+            "id": 1664,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-04-13T08:00:10.281273+00:00",
+            "entry_price": 70807.9,
+            "sl_price": 71045.1,
+            "tp_price": 70333.49999999997,
+            "created_at": "2026-04-13T08:00:10.293685+00:00",
+            "status": "OPEN",
+            "signal_price": 70807.9
+        }
+    ]
+}
