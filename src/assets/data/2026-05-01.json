@@ -1,0 +1,64 @@
+{
+    "ict_signal": [
+        {
+            "id": 1995,
+            "symbol": "LINKUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-01T23:30:19.131569+00:00",
+            "entry_price": 9.086,
+            "sl_price": 9.115,
+            "tp_price": 9.028,
+            "created_at": "2026-05-01T23:30:19.147600+00:00",
+            "status": "OPEN",
+            "signal_price": 9.086
+        },
+        {
+            "id": 1994,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-01T23:30:12.960811+00:00",
+            "entry_price": 615.99,
+            "sl_price": 617.81,
+            "tp_price": 612.3500000000001,
+            "created_at": "2026-05-01T23:30:12.976971+00:00",
+            "status": "OPEN",
+            "signal_price": 615.99
+        },
+        {
+            "id": 1993,
+            "symbol": "LINKUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-01T21:30:19.127419+00:00",
+            "entry_price": 9.107,
+            "sl_price": 9.146,
+            "tp_price": 9.028999999999996,
+            "created_at": "2026-05-01T21:30:19.140345+00:00",
+            "status": "OPEN",
+            "signal_price": 9.107
+        },
+        {
+            "id": 1992,
+            "symbol": "XAGUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-01T15:30:18.092260+00:00",
+            "entry_price": 75.97,
+            "sl_price": 76.59,
+            "tp_price": 74.72999999999999,
+            "created_at": "2026-05-01T15:30:18.103833+00:00",
+            "status": "OPEN",
+            "signal_price": 75.97
+        },
+        {
+            "id": 1991,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-01T05:00:11.306314+00:00",
+            "entry_price": 617.74,
+            "sl_price": 619.41,
+            "tp_price": 614.4000000000001,
+            "created_at": "2026-05-01T05:00:11.318770+00:00",
+            "status": "OPEN",
+            "signal_price": 617.74
+        }
+    ]
+}
