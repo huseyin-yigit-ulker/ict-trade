@@ -1,0 +1,172 @@
+{
+    "ict_signal": [
+        {
+            "id": 2083,
+            "symbol": "DOGEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T22:30:13.802077+00:00",
+            "entry_price": 0.11533,
+            "sl_price": 0.11348,
+            "tp_price": 0.11903000000000001,
+            "created_at": "2026-05-05T22:30:13.819674+00:00",
+            "status": "OPEN",
+            "signal_price": 0.11533
+        },
+        {
+            "id": 2082,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T22:00:13.812511+00:00",
+            "entry_price": 0.2627,
+            "sl_price": 0.261,
+            "tp_price": 0.26609999999999995,
+            "created_at": "2026-05-05T22:00:13.825461+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2627
+        },
+        {
+            "id": 2081,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T21:30:13.522603+00:00",
+            "entry_price": 0.261,
+            "sl_price": 0.2588,
+            "tp_price": 0.2654000000000001,
+            "created_at": "2026-05-05T21:30:13.533086+00:00",
+            "status": "OPEN",
+            "signal_price": 0.261
+        },
+        {
+            "id": 2080,
+            "symbol": "SOLUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T20:00:10.119421+00:00",
+            "entry_price": 86.14,
+            "sl_price": 85.76,
+            "tp_price": 86.89999999999999,
+            "created_at": "2026-05-05T20:00:10.148694+00:00",
+            "status": "OPEN",
+            "signal_price": 86.14
+        },
+        {
+            "id": 2079,
+            "symbol": "DOGEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T18:00:11.693393+00:00",
+            "entry_price": 0.11357,
+            "sl_price": 0.11241,
+            "tp_price": 0.11589000000000002,
+            "created_at": "2026-05-05T18:00:11.708233+00:00",
+            "status": "OPEN",
+            "signal_price": 0.11357
+        },
+        {
+            "id": 2078,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-05T17:30:10.992413+00:00",
+            "entry_price": 629.84,
+            "sl_price": 631.72,
+            "tp_price": 626.08,
+            "created_at": "2026-05-05T17:30:11.010227+00:00",
+            "status": "OPEN",
+            "signal_price": 629.84
+        },
+        {
+            "id": 2077,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-05T16:30:16.019482+00:00",
+            "entry_price": 4571.47,
+            "sl_price": 4583.22,
+            "tp_price": 4547.97,
+            "created_at": "2026-05-05T16:30:16.031741+00:00",
+            "status": "OPEN",
+            "signal_price": 4571.47
+        },
+        {
+            "id": 2076,
+            "symbol": "TRXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T16:00:14.947317+00:00",
+            "entry_price": 0.3419,
+            "sl_price": 0.34088,
+            "tp_price": 0.3439399999999999,
+            "created_at": "2026-05-05T16:00:14.963170+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3419
+        },
+        {
+            "id": 2075,
+            "symbol": "TRXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T15:00:14.249703+00:00",
+            "entry_price": 0.34028,
+            "sl_price": 0.33961,
+            "tp_price": 0.34162000000000003,
+            "created_at": "2026-05-05T15:00:14.261818+00:00",
+            "status": "OPEN",
+            "signal_price": 0.34028
+        },
+        {
+            "id": 2074,
+            "symbol": "TRXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T14:30:14.231512+00:00",
+            "entry_price": 0.33961,
+            "sl_price": 0.33854,
+            "tp_price": 0.34175000000000005,
+            "created_at": "2026-05-05T14:30:14.244246+00:00",
+            "status": "OPEN",
+            "signal_price": 0.33961
+        },
+        {
+            "id": 2073,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T13:00:14.837819+00:00",
+            "entry_price": 9.769,
+            "sl_price": 9.73,
+            "tp_price": 9.847,
+            "created_at": "2026-05-05T13:00:14.855464+00:00",
+            "status": "OPEN",
+            "signal_price": 9.769
+        },
+        {
+            "id": 2072,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T12:30:14.767716+00:00",
+            "entry_price": 9.73,
+            "sl_price": 9.68,
+            "tp_price": 9.830000000000002,
+            "created_at": "2026-05-05T12:30:14.785039+00:00",
+            "status": "OPEN",
+            "signal_price": 9.73
+        },
+        {
+            "id": 2071,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T11:00:15.318902+00:00",
+            "entry_price": 9.652,
+            "sl_price": 9.557,
+            "tp_price": 9.841999999999997,
+            "created_at": "2026-05-05T11:00:15.331545+00:00",
+            "status": "OPEN",
+            "signal_price": 9.652
+        },
+        {
+            "id": 2070,
+            "symbol": "TRXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-05T07:30:13.846540+00:00",
+            "entry_price": 0.33993,
+            "sl_price": 0.33921,
+            "tp_price": 0.34137,
+            "created_at": "2026-05-05T07:30:13.861713+00:00",
+            "status": "OPEN",
+            "signal_price": 0.33993
+        }
+    ]
+}
