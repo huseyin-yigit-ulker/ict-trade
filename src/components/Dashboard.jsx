@@ -1,7 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 
-const LIVE_MODEL_ACTIVE_UTC_HOURS = new Set([5, 7, 8, 9, 12, 13, 14, 16, 20, 21]);
+// Dynamic decimal precision: small-cap tokens (PEPE, SHIB, ...) have many
+// significant digits below the decimal — `toFixed(4)` would round them to 0.
+const formatPrice = (value) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  const abs = Math.abs(value);
+  if (abs === 0) return '0';
+  if (abs >= 100)  return value.toFixed(2);
+  if (abs >= 1)    return value.toFixed(4);
+  if (abs >= 0.01) return value.toFixed(5);
+  if (abs >= 0.0001) return value.toFixed(7);
+  return value.toPrecision(4);
+};
+
+// Compute the realised R-multiple for a live trade outcome from its
+// entry/tp/sl. Replaces the hard-coded "2R for TP" assumption.
+const liveOutcomeR = (sig, status) => {
+  if (!sig?.entry || !sig?.tp || !sig?.sl) return 0;
+  const risk = Math.abs(sig.entry - sig.sl);
+  if (risk === 0) return 0;
+  const reward = Math.abs(sig.tp - sig.entry);
+  if (status === 'TP Oldu') return reward / risk;
+  if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return -1;
+  return 0;
+};
 
 const Dashboard = () => {
   const {
@@ -16,7 +39,6 @@ const Dashboard = () => {
   const BACKTEST_PASSWORD = 'ict-trade26';
   const [backtestPasswordInput, setBacktestPasswordInput] = useState('');
   const [backtestPasswordError, setBacktestPasswordError] = useState('');
-  const [utcHour, setUtcHour] = useState(new Date().getUTCHours());
 
   useEffect(() => {
     if (mode !== 'backtest') {
@@ -24,16 +46,6 @@ const Dashboard = () => {
       setBacktestPasswordError('');
     }
   }, [mode]);
-
-  useEffect(() => {
-    if (mode !== 'live') return () => {};
-    const updateHour = () => setUtcHour(new Date().getUTCHours());
-    updateHour();
-    const intervalId = setInterval(updateHour, 30000);
-    return () => clearInterval(intervalId);
-  }, [mode]);
-
-  const isLiveModelActive = LIVE_MODEL_ACTIVE_UTC_HOURS.has(utcHour);
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -63,25 +75,39 @@ const Dashboard = () => {
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
   };
 
-  const formatLivePrice = (value) => (typeof value === 'number' ? value.toFixed(5) : '--');
+  const formatLivePrice = (value) => formatPrice(value);
 
-  const getLiveRLabel = (status) => {
+  const getLiveRLabel = (sig, status) => {
     if (!status) return { label: '--', cls: 'waiting' };
-    if (status === 'TP Oldu') return { label: '2R', cls: 'win' };
-    if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return { label: '-R', cls: 'loss' };
+    if (status === 'TP Oldu') {
+      const r = liveOutcomeR(sig, status);
+      return { label: `+${r.toFixed(2)}R`, cls: 'win' };
+    }
+    if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') {
+      return { label: '-1R', cls: 'loss' };
+    }
     if (status.startsWith('İptal')) return { label: '0', cls: 'waiting' };
     return { label: '--', cls: 'waiting' };
   };
 
+  // Sum the realised R across live trades, computed from each signal's actual
+  // RR (not a hard-coded 2R like before).
   const summarizeLiveCounts = (list) => {
     let tp = 0;
     let sl = 0;
+    let rScore = 0;
     list.forEach((sig) => {
-      const meta = resolveLiveMeta(liveStatuses[sig.id]?.status);
-      if (meta.label === 'TP') tp += 1;
-      else if (meta.label === 'SL' || meta.label === 'TP/SL') sl += 1;
+      const status = liveStatuses[sig.id]?.status;
+      const meta = resolveLiveMeta(status);
+      if (meta.label === 'TP') {
+        tp += 1;
+        rScore += liveOutcomeR(sig, status);
+      } else if (meta.label === 'SL' || meta.label === 'TP/SL') {
+        sl += 1;
+        rScore -= 1;
+      }
     });
-    return { tp, sl, rScore: (2 * tp) - sl };
+    return { tp, sl, rScore };
   };
 
   const summarizeBacktestCounts = (list) => {
@@ -307,8 +333,8 @@ const Dashboard = () => {
                       </span>
                     </span>
                   ) : (
-                    <span className={`pnl-text ${getLiveRLabel(liveStatus).cls}`}>
-                      {getLiveRLabel(liveStatus).label}
+                    <span className={`pnl-text ${getLiveRLabel(sig, liveStatus).cls}`}>
+                      {getLiveRLabel(sig, liveStatus).label}
                     </span>
                   )
                 ) : (
@@ -319,11 +345,11 @@ const Dashboard = () => {
               </div>
               <div className="trade-metric">
                 <span className="metric-label">Entry</span>
-                <span className="metric-value">{sig.entry?.toFixed(4)}</span>
+                <span className="metric-value">{formatPrice(sig.entry)}</span>
               </div>
               <div className="trade-metric">
                 <span className="metric-label">TP/SL</span>
-                <span className="metric-value">{sig.tp?.toFixed(4)} / {sig.sl?.toFixed(4)}</span>
+                <span className="metric-value">{formatPrice(sig.tp)} / {formatPrice(sig.sl)}</span>
               </div>
             </div>
 
@@ -492,15 +518,8 @@ const Dashboard = () => {
                 <span className="tp-sl-ratio">
                   TP/SL: {counts.tp}/{counts.sl} • R:{' '}
                   <span className={counts.rScore >= 0 ? 'win' : 'loss'}>
-                    {counts.rScore >= 0 ? '+' : ''}{counts.rScore}
+                    {counts.rScore >= 0 ? '+' : ''}{counts.rScore.toFixed(2)}
                   </span>
-                </span>
-                <span className="tp-sl-ratio">
-                  Model:{' '}
-                  <span className={isLiveModelActive ? 'win' : 'loss'}>
-                    {isLiveModelActive ? 'AKTİF' : 'İNATİF'}
-                  </span>{' '}
-                  (UTC {utcHour})
                 </span>
               </div>
             </div>
