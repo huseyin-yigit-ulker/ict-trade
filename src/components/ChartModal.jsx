@@ -127,34 +127,76 @@ const ChartModal = () => {
         const entryTime = activeSignal.dateObj.getTime();
         const fallbackBacktestEnd = entryTime + (60 * 1000 * 240);
         const backtestExitTsMs = Number.isFinite(activeSignal?.exitTs) ? activeSignal.exitTs : fallbackBacktestEnd;
-        // Live modda "şu ana kadar", backtest modunda "signal_time -> exit_time" aralığı
+        // Backend records exit_time as the OPEN of the bar that hit TP/SL.
+        // Add a buffer so the actual hit wick is within the dataset; trim on the
+        // frontend to stop at the real touch.
+        const exitBufferMs = 2 * 60 * 60 * 1000; // 2h headroom to capture the hit bar
         const fetchEndTime = mode === 'live'
           ? Date.now()
-          : Math.max(backtestExitTsMs, entryTime + (60 * 1000));
+          : Math.max(backtestExitTsMs + exitBufferMs, entryTime + (60 * 1000));
         const fetchStartTime = mode === 'live'
           ? (entryTime - (60 * 1000 * 120))
           : entryTime;
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
+        // Backtest trades can span days (1500 1m bars = ~25h). Pick a coarser
+        // interval automatically so the full signal-to-close window fits.
+        const pickInterval = () => {
+          if (mode === 'live') return '1m';
+          const hours = (fetchEndTime - fetchStartTime) / 3600000;
+          if (hours <= 25) return '1m';
+          if (hours <= 125) return '5m';     // up to ~5 days
+          if (hours <= 375) return '15m';    // up to ~15 days
+          return '1h';                        // long trades
+        };
+        const klineInterval = pickInterval();
+
         // 1. Veriyi Çek
         let rawData = [];
-        const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+        const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
         const res = await fetch(urlFutures);
         rawData = await res.json();
 
         // Futures yoksa Spot dene
         if (!Array.isArray(rawData)) {
-            const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+            const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
             const resSpot = await fetch(urlSpot);
             rawData = await resSpot.json();
         }
 
         if (!Array.isArray(rawData) || rawData.length === 0) throw new Error('Kline verisi boş');
 
-        const candles = rawData.map(d => ({
+        let candles = rawData.map(d => ({
           time: d[0] / 1000,
           open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4])
         }));
+
+        // Backtest: trim candles to the first 1m bar that touches TP, SL or pre-entry invalidation.
+        // This makes the chart show only the signal-to-close window even though we fetched extra.
+        if (mode === 'backtest' && activeSignal.entry && activeSignal.tp && activeSignal.sl && candles.length > 0) {
+          const isLongTrade = activeSignal.dir === 'LONG';
+          const entrySec = Math.floor(entryTime / 1000);
+          let entryHitLocal = false;
+          let cutIdx = candles.length;
+          for (let idx = 0; idx < candles.length; idx++) {
+            const c = candles[idx];
+            if (c.time < entrySec) continue;
+            const tpHit = isLongTrade ? c.high >= activeSignal.tp : c.low <= activeSignal.tp;
+            const slHit = isLongTrade ? c.low <= activeSignal.sl : c.high >= activeSignal.sl;
+            if (!entryHitLocal) {
+              const entryHit = isLongTrade ? c.low <= activeSignal.entry : c.high >= activeSignal.entry;
+              if (!entryHit && (tpHit || slHit)) { cutIdx = idx + 1; break; }
+              if (entryHit) {
+                entryHitLocal = true;
+                if (tpHit || slHit) { cutIdx = idx + 1; break; }
+              }
+            } else if (tpHit || slHit) {
+              cutIdx = idx + 1;
+              break;
+            }
+          }
+          candles = candles.slice(0, cutIdx);
+        }
 
         mainSeries.setData(candles);
 
@@ -166,9 +208,8 @@ const ChartModal = () => {
         let statusText = '⏳ Sinyal Bekliyor';
         let isTerminalState = false; // İşlem bitti mi?
         let isCancelled = false;
-        let endTimeForGraph = mode === 'backtest'
-          ? Math.floor(backtestExitTsMs / 1000)
-          : candles[candles.length - 1].time; // Varsayılan: Son mum
+        // After trimming in backtest mode, the last candle IS the close bar.
+        let endTimeForGraph = candles[candles.length - 1].time;
 
         if (mode === 'live' && entry && tp && sl && candles.length > 0) {
              let entryHit = false;

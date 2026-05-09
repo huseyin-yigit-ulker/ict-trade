@@ -9,3 +9,9 @@ dist/
 dist-ssr
 *.local
 .env
+
+# Python
+__pycache__/
+*.pyc
+backtest/out/
+.DS_Store

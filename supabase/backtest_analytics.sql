@@ -167,3 +167,16 @@ grant execute on function ict_trade.backtest_summary_metrics() to anon, authenti
 grant execute on function ict_trade.backtest_symbol_metrics() to anon, authenticated;
 grant execute on function ict_trade.backtest_weekday_metrics() to anon, authenticated;
 grant execute on function ict_trade.backtest_session_metrics() to anon, authenticated;
+
+-- read access for the React dashboard (anon role via PostgREST)
+grant select on ict_trade.trading_signals to anon, authenticated;
+alter table ict_trade.trading_signals enable row level security;
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname='ict_trade' and tablename='trading_signals' and policyname='read_all'
+  ) then
+    create policy read_all on ict_trade.trading_signals for select using (true);
+  end if;
+end$$;

@@ -1,0 +1,209 @@
+"""Backtest engine: simulate signal lifecycle bar-by-bar.
+
+State machine per spec §7:
+    PENDING -> ACTIVE -> (FILLED -> TP_HIT | SL_HIT) | EXPIRED | INVALIDATED
+"""
+
+from __future__ import annotations
+from dataclasses import dataclass, field, asdict
+from enum import Enum
+from typing import Optional
+import json
+from pathlib import Path
+
+import pandas as pd
+
+from ict.strategies import Signal
+
+
+class TradeStatus(str, Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    INVALIDATED = "invalidated"
+    TP_HIT = "tp_hit"
+    SL_HIT = "sl_hit"
+
+
+@dataclass
+class TradeResult:
+    signal: Signal
+    status: TradeStatus
+    entry_index: Optional[int] = None
+    exit_index: Optional[int] = None
+    exit_price: Optional[float] = None
+    pnl_r: Optional[float] = None    # in R units
+    pnl_pct: Optional[float] = None  # raw % move from entry
+    bars_to_exit: Optional[int] = None
+
+    def to_dict(self) -> dict:
+        d = {
+            "signal": self.signal.to_dict(),
+            "status": self.status.value,
+            "entry_index": self.entry_index,
+            "exit_index": self.exit_index,
+            "exit_price": self.exit_price,
+            "pnl_r": self.pnl_r,
+            "pnl_pct": self.pnl_pct,
+            "bars_to_exit": self.bars_to_exit,
+        }
+        return d
+
+
+def simulate_signal(sig: Signal, df: pd.DataFrame, *,
+                    use_tp1_only: bool = True) -> TradeResult:
+    """Walk forward from sig.bar_index+1 to fill / TP / SL / expiry."""
+    n = len(df)
+    expiry = sig.expires_at_index or (sig.bar_index + 12)
+
+    entry_idx: Optional[int] = None
+    for i in range(sig.bar_index + 1, min(expiry, n - 1) + 1):
+        bar = df.iloc[i]
+        if sig.direction == "long":
+            entry_touched = bar["low"] <= sig.entry
+            tp_touched = bar["high"] >= sig.take_profit_1
+            sl_touched = bar["low"] <= sig.stop_loss
+        else:
+            entry_touched = bar["high"] >= sig.entry
+            tp_touched = bar["low"] <= sig.take_profit_1
+            sl_touched = bar["high"] >= sig.stop_loss
+
+        if not entry_touched and (tp_touched or sl_touched):
+            return TradeResult(sig, TradeStatus.INVALIDATED, exit_index=i, bars_to_exit=i - sig.bar_index)
+
+        if entry_touched:
+            entry_idx = i
+            # within same bar, decide TP or SL by which extreme is closer to open (worst-case heuristic)
+            risk = abs(sig.entry - sig.stop_loss)
+            if sl_touched and tp_touched:
+                # ambiguous in same bar — worst case: assume SL hits first
+                return TradeResult(sig, TradeStatus.SL_HIT, entry_index=i, exit_index=i,
+                                   exit_price=sig.stop_loss, pnl_r=-1.0,
+                                   pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                                   bars_to_exit=i - sig.bar_index)
+            if tp_touched:
+                return TradeResult(sig, TradeStatus.TP_HIT, entry_index=i, exit_index=i,
+                                   exit_price=sig.take_profit_1,
+                                   pnl_r=abs(sig.take_profit_1 - sig.entry) / risk if risk > 0 else 0.0,
+                                   pnl_pct=(sig.take_profit_1 - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                                   bars_to_exit=i - sig.bar_index)
+            if sl_touched:
+                return TradeResult(sig, TradeStatus.SL_HIT, entry_index=i, exit_index=i,
+                                   exit_price=sig.stop_loss, pnl_r=-1.0,
+                                   pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                                   bars_to_exit=i - sig.bar_index)
+            break
+
+    if entry_idx is None:
+        return TradeResult(sig, TradeStatus.EXPIRED)
+
+    # entered but not exited within signal expiry — keep walking until TP/SL or end of data
+    risk = abs(sig.entry - sig.stop_loss)
+    for j in range(entry_idx + 1, n):
+        bar = df.iloc[j]
+        if sig.direction == "long":
+            tp_touched = bar["high"] >= sig.take_profit_1
+            sl_touched = bar["low"] <= sig.stop_loss
+        else:
+            tp_touched = bar["low"] <= sig.take_profit_1
+            sl_touched = bar["high"] >= sig.stop_loss
+
+        if tp_touched and sl_touched:
+            return TradeResult(sig, TradeStatus.SL_HIT, entry_index=entry_idx, exit_index=j,
+                               exit_price=sig.stop_loss, pnl_r=-1.0,
+                               pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                               bars_to_exit=j - sig.bar_index)
+        if tp_touched:
+            return TradeResult(sig, TradeStatus.TP_HIT, entry_index=entry_idx, exit_index=j,
+                               exit_price=sig.take_profit_1,
+                               pnl_r=abs(sig.take_profit_1 - sig.entry) / risk if risk > 0 else 0.0,
+                               pnl_pct=(sig.take_profit_1 - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                               bars_to_exit=j - sig.bar_index)
+        if sl_touched:
+            return TradeResult(sig, TradeStatus.SL_HIT, entry_index=entry_idx, exit_index=j,
+                               exit_price=sig.stop_loss, pnl_r=-1.0,
+                               pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                               bars_to_exit=j - sig.bar_index)
+
+    return TradeResult(sig, TradeStatus.ACTIVE, entry_index=entry_idx)
+
+
+def simulate_signals(signals: list[Signal], df: pd.DataFrame) -> list[TradeResult]:
+    return [simulate_signal(s, df) for s in signals]
+
+
+# ----------------------------- metrics -----------------------------
+
+def compute_metrics(results: list[TradeResult]) -> dict:
+    closed = [r for r in results if r.status in (TradeStatus.TP_HIT, TradeStatus.SL_HIT)]
+    expired = [r for r in results if r.status == TradeStatus.EXPIRED]
+    invalidated = [r for r in results if r.status == TradeStatus.INVALIDATED]
+    open_ = [r for r in results if r.status == TradeStatus.ACTIVE]
+
+    wins = [r for r in closed if r.status == TradeStatus.TP_HIT]
+    losses = [r for r in closed if r.status == TradeStatus.SL_HIT]
+
+    total_r = sum((r.pnl_r or 0) for r in closed)
+    avg_r_win = (sum(r.pnl_r for r in wins) / len(wins)) if wins else 0.0
+    avg_r_loss = (sum(r.pnl_r for r in losses) / len(losses)) if losses else 0.0
+
+    cumulative = []
+    cum = 0.0
+    peak = 0.0
+    max_dd = 0.0
+    for r in closed:
+        cum += r.pnl_r or 0
+        cumulative.append(cum)
+        peak = max(peak, cum)
+        max_dd = min(max_dd, cum - peak)
+
+    expectancy = (total_r / len(closed)) if closed else 0.0
+    win_rate = (len(wins) / len(closed)) if closed else 0.0
+
+    return {
+        "total_signals": len(results),
+        "closed": len(closed),
+        "expired": len(expired),
+        "invalidated": len(invalidated),
+        "still_open": len(open_),
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": round(win_rate, 4),
+        "total_r": round(total_r, 4),
+        "expectancy_r": round(expectancy, 4),
+        "avg_r_win": round(avg_r_win, 4),
+        "avg_r_loss": round(avg_r_loss, 4),
+        "max_drawdown_r": round(max_dd, 4),
+        "by_strategy": _group_by_strategy(results),
+    }
+
+
+def _group_by_strategy(results: list[TradeResult]) -> dict:
+    out: dict = {}
+    for r in results:
+        key = r.signal.strategy
+        if key not in out:
+            out[key] = {"n": 0, "wins": 0, "losses": 0, "total_r": 0.0}
+        out[key]["n"] += 1
+        if r.status == TradeStatus.TP_HIT:
+            out[key]["wins"] += 1
+            out[key]["total_r"] += r.pnl_r or 0
+        elif r.status == TradeStatus.SL_HIT:
+            out[key]["losses"] += 1
+            out[key]["total_r"] += r.pnl_r or 0
+
+    for key, v in out.items():
+        closed_n = v["wins"] + v["losses"]
+        v["win_rate"] = round(v["wins"] / closed_n, 4) if closed_n else 0.0
+        v["expectancy_r"] = round(v["total_r"] / closed_n, 4) if closed_n else 0.0
+        v["total_r"] = round(v["total_r"], 4)
+    return out
+
+
+def export_results(results: list[TradeResult], path: str | Path) -> None:
+    path = Path(path)
+    payload = {
+        "metrics": compute_metrics(results),
+        "trades": [r.to_dict() for r in results],
+    }
+    path.write_text(json.dumps(payload, indent=2, default=str))
