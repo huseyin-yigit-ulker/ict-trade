@@ -1,72 +1,61 @@
-"""ICT Live Signal DAG.
+"""ICT Live Signal DAG — STANDALONE.
 
-Replaces the legacy single-FVG heuristic with the full ICT backtest engine
-(5 strategies A-E, MTF 4h-bias, time-aware OB/FVG state). The engine is
-verified look-ahead-free by backtest/test_no_lookahead.py — meaning the
-signal produced live at bar T is identical to the signal the same engine
-produces at bar T in a backtest replay.
+Self-contained Airflow DAG: requires no sibling Python packages, just drop
+this single file into the Airflow DAGs folder. Engine logic for the 5 ICT
+strategies (A-E) is inlined below. The same engine ran in the backtest
+under backtest/ — this file is the production-deployable mirror.
 
-Hourly at HH:05 UTC: pulls 30 days of recent 1h klines per symbol from
-Binance, runs the engine ONLY on the last fully-closed bar, then for any
-new signal:
+Hourly at HH:05 UTC: pulls 6000h (~250d) of recent 1h klines per symbol from
+Binance Futures (spot fallback), runs the engine ONLY on the last fully-
+closed bar, then for any new signal:
   - INSERT into ict_trade.signals (live dashboard table)
   - send Telegram alert
 Idempotent on (symbol, signal_time, direction).
+
+Look-ahead safety:
+  - Detectors expose `confirmed_at` / `created_at_index` / `mitigation_index`
+    so strategies can ask "was this fact known by bar T?"
+  - Engine never reads bars after the requested at_index.
+  - The open (forming) bar is dropped before engine call (`trim_open_bar`).
+  Verified by backtest/test_no_lookahead.py + backtest/test_dag_parity.py.
 """
 
+from __future__ import annotations
+
+# ============================================================================
+# AIRFLOW
+# ============================================================================
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 from airflow.timetables.trigger import CronTriggerTimetable
 
-import sys
+# ============================================================================
+# STDLIB / THIRD-PARTY
+# ============================================================================
 import time
+import uuid
 import datetime as dt
-from pathlib import Path
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Optional
 
 import pandas as pd
 import requests
 from sqlalchemy import create_engine, text
 
-# Make backtest/ package importable from this DAG file (sibling directory).
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BACKTEST_DIR = PROJECT_ROOT / "backtest"
-if str(BACKTEST_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKTEST_DIR))
 
-from ict.data import fetch_klines       # noqa: E402
-from engine import run_engine            # noqa: E402
+# ============================================================================
+# CONFIG (kept inline so DAG is fully standalone)
+# ============================================================================
 
-
-# ----------------------------
-# Default DAG arguments
-# ----------------------------
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'start_date': days_ago(1),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': dt.timedelta(minutes=2),
-}
-
-# ----------------------------
-# Configuration
-# ----------------------------
 TELEGRAM_BOT_TOKEN = 'your_telegram_bot_token'
 TELEGRAM_CHAT_ID = 'your_telegram_chat_id'
 
 DB_CONNECTION_STRING = "postgresql://postgres.xxxx:your_password@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
 
-# Engine knobs — must match backtest config.py to keep parity.
 INTERVAL = "1h"
 HTF_RULE = "4h"
-# 6000h ≈ 250 days. The HTF structure walk accumulates state from past swings;
-# a longer warmup ensures the DAG sees the same structure events a long-history
-# backtest would. test_dag_parity.py shows ~99% parity at this size — DAG never
-# emits EXTRA signals vs backtest, only occasionally suppresses one whose bias
-# depends on structure events older than the warmup.
-WARMUP_HOURS = 6000
+WARMUP_HOURS = 6000   # ~250 days; verified ~99% backtest-DAG parity
 
 SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT",
@@ -76,10 +65,1102 @@ SYMBOLS = [
     "XAUUSDT", "XAGUSDT",
 ]
 
+# --- engine knobs ---
+ATR_PERIOD = 14
+SWING_N_ITF = 3
+SWING_N_HTF = 5
+EQUAL_LEVEL_TOL_PCT = 0.0005
+EQUAL_LEVEL_TOL_ATR = 0.3
+IMPULSE_ATR_MULT = 2.0
+IMPULSE_BAR_WINDOW = 5
+IMPULSE_CONSEC_BARS = 3
+OB_FVG_OVERLAP_MIN = 0.3
+STRAT_C_PROXIMITY_ATR = 2.0
+ZONE_MAX_AGE_BARS = 100
+SWEEP_LOOKBACK_BARS = 5
+CHOCH_AFTER_SWEEP_BARS = 5
+ENTRY_EXPIRY_BARS = 12
+EXPIRY_MINUTES = 180
+SL_ATR_BUFFER = 0.2
+SL_ATR_BUFFER_C = 0.3
+MIN_RR_DEFAULT = 2.0
+MIN_RR_SILVER_BULLET = 3.0
+TP_MAX_ATR_MULT = 4.0
+ASIA_RANGE_MAX_ATR = 3.0
+OTE_LOW = 0.62
+OTE_HIGH = 0.79
 
-# ----------------------------
-# Utility functions
-# ----------------------------
+NY_TZ = "America/New_York"
+
+# (start_hour, end_hour) NY local; end exclusive. crosses midnight if start>end.
+KILLZONES_NY = {
+    "asia_range":       (19, 24),
+    "london_open":      (2, 5),
+    "ny_open":          (7, 10),
+    "silver_bullet_am": (10, 11),
+    "london_close":     (10, 12),
+    "silver_bullet_pm": (14, 15),
+}
+
+CONFLUENCE_WEIGHTS = {
+    "htf_aligned":      3, "liquidity_swept":  2, "ltf_choch":        2,
+    "discount_premium": 1, "ote_zone":         1, "in_killzone":      1,
+    "ob_fvg_overlap":   2, "eqh_eql_swept":    1, "silver_bullet":    2,
+    "power_of_three":   2, "multi_strategy":   3,
+}
+CONFLUENCE_MIN_PUBLISH = 6
+CONFLUENCE_HIGH = 9
+CONFLUENCE_MAX = 12
+
+OHLCV_COLS = ["open", "high", "low", "close", "volume"]
+BINANCE_FAPI = "https://fapi.binance.com/fapi/v1/klines"
+BINANCE_API  = "https://api.binance.com/api/v3/klines"
+
+
+# ============================================================================
+# DATA FETCH (Binance Futures with Spot fallback) + MTF aggregation
+# ============================================================================
+
+def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int,
+                 futures: bool = True, limit: int = 1500) -> pd.DataFrame:
+    base = BINANCE_FAPI if futures else BINANCE_API
+    rows: list = []
+    cursor = start_ms
+    while cursor < end_ms:
+        params = {"symbol": symbol, "interval": interval,
+                  "startTime": cursor, "endTime": end_ms, "limit": limit}
+        try:
+            r = requests.get(base, params=params, timeout=20)
+            r.raise_for_status()
+            chunk = r.json()
+        except Exception as e:
+            print(f"  fetch error ({base}): {e}")
+            return pd.DataFrame(columns=OHLCV_COLS)
+        if not chunk:
+            break
+        rows.extend(chunk)
+        if len(chunk) < limit:
+            break
+        cursor = chunk[-1][0] + 1
+        time.sleep(0.1)
+
+    if not rows and futures:
+        return fetch_klines(symbol, interval, start_ms, end_ms, futures=False, limit=limit)
+    if not rows:
+        return pd.DataFrame(columns=OHLCV_COLS)
+
+    df = pd.DataFrame(rows, columns=[
+        "ts", "open", "high", "low", "close", "volume",
+        "_ct", "_qv", "_n", "_tbb", "_tbq", "_i"
+    ])
+    df["timestamp"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
+    df = df.set_index("timestamp")[OHLCV_COLS].astype(float)
+    return df[~df.index.duplicated(keep="last")].sort_index()
+
+
+_AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+
+def aggregate(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    return df.resample(rule, label="right", closed="right").agg(_AGG).dropna()
+
+
+# ============================================================================
+# INDICATORS
+# ============================================================================
+
+def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    high = df["high"]
+    low = df["low"]
+    prev_close = df["close"].shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    return tr.rolling(period, min_periods=period).mean()
+
+
+# ============================================================================
+# DETECTOR DATACLASSES
+# ============================================================================
+
+@dataclass
+class Swing:
+    type: str
+    index: int
+    timestamp: pd.Timestamp
+    price: float
+    confirmed_at: int
+
+@dataclass
+class StructureEvent:
+    type: str
+    direction: str
+    broken_level: float
+    broken_at_index: int
+    broken_at_ts: pd.Timestamp
+    trend_before: str
+    trend_after: str
+
+@dataclass
+class LiquidityLevel:
+    type: str
+    level: float
+    created_at_index: int
+    swept: bool = False
+    swept_at_index: Optional[int] = None
+    sweep_extreme: Optional[float] = None
+
+@dataclass
+class OrderBlock:
+    type: str
+    top: float
+    bottom: float
+    created_at_index: int
+    impulse_size_atr: float
+    confirmed_at_index: int = 0
+    mitigated: bool = False
+    mitigation_index: Optional[int] = None
+
+@dataclass
+class FVG:
+    type: str
+    top: float
+    bottom: float
+    created_at_index: int
+    fill_status: str = "open"
+    fill_pct: float = 0.0
+    filled_at_index: Optional[int] = None
+    partial_at_index: Optional[int] = None
+
+@dataclass
+class PDZone:
+    high: float
+    low: float
+    @property
+    def equilibrium(self) -> float:
+        return (self.high + self.low) / 2
+    def is_premium(self, price: float) -> bool:
+        return price >= self.equilibrium
+    def is_discount(self, price: float) -> bool:
+        return price <= self.equilibrium
+    def ote(self, direction: str) -> tuple[float, float]:
+        size = self.high - self.low
+        if direction == "bullish":
+            return (self.high - OTE_HIGH * size, self.high - OTE_LOW * size)
+        return (self.low + OTE_LOW * size, self.low + OTE_HIGH * size)
+
+
+# ============================================================================
+# DETECTORS
+# ============================================================================
+
+def detect_swings(df: pd.DataFrame, n: int = SWING_N_ITF) -> list[Swing]:
+    out: list[Swing] = []
+    high = df["high"].values
+    low = df["low"].values
+    idx = df.index
+    for i in range(n, len(df) - n):
+        win_h = high[i - n:i + n + 1]
+        win_l = low[i - n:i + n + 1]
+        if high[i] == win_h.max() and (win_h == high[i]).sum() == 1:
+            out.append(Swing("swing_high", i, idx[i], float(high[i]), i + n))
+        if low[i] == win_l.min() and (win_l == low[i]).sum() == 1:
+            out.append(Swing("swing_low", i, idx[i], float(low[i]), i + n))
+    return out
+
+
+def detect_structure(df: pd.DataFrame, swings: list[Swing]) -> list[StructureEvent]:
+    if not swings:
+        return []
+    swings_sorted = sorted(swings, key=lambda s: s.confirmed_at)
+    closes = df["close"].values
+    idx = df.index
+    events: list[StructureEvent] = []
+    trend = "range"
+    last_high: Optional[Swing] = None
+    last_low: Optional[Swing] = None
+    s_pos = 0
+    for i in range(len(df)):
+        while s_pos < len(swings_sorted) and swings_sorted[s_pos].confirmed_at <= i:
+            sw = swings_sorted[s_pos]
+            if sw.type == "swing_high":
+                last_high = sw
+            else:
+                last_low = sw
+            s_pos += 1
+        c = closes[i]
+        if last_high and c > last_high.price:
+            new_trend = "up"
+            evt_type = "BOS" if trend == "up" else "CHoCH"
+            events.append(StructureEvent(evt_type, "bullish", last_high.price, i, idx[i], trend, new_trend))
+            trend = new_trend
+            last_high = None
+        elif last_low and c < last_low.price:
+            new_trend = "down"
+            evt_type = "BOS" if trend == "down" else "CHoCH"
+            events.append(StructureEvent(evt_type, "bearish", last_low.price, i, idx[i], trend, new_trend))
+            trend = new_trend
+            last_low = None
+    return events
+
+
+def htf_bias_lookup(structure_events: list[StructureEvent], at_index: int) -> str:
+    last = None
+    for e in structure_events:
+        if e.broken_at_index > at_index:
+            break
+        last = e
+    if not last:
+        return "range"
+    return "bullish" if last.trend_after == "up" else ("bearish" if last.trend_after == "down" else "range")
+
+
+def _level_tolerance(price: float, atr_value: float) -> float:
+    return max(EQUAL_LEVEL_TOL_PCT * price, EQUAL_LEVEL_TOL_ATR * atr_value)
+
+
+def detect_persistent_liquidity(df: pd.DataFrame) -> list[LiquidityLevel]:
+    out: list[LiquidityLevel] = []
+    if df.empty:
+        return out
+    daily = df.resample("1D").agg({"high": "max", "low": "min"}).dropna()
+    weekly = df.resample("1W").agg({"high": "max", "low": "min"}).dropna()
+    daily_by_date = {ts.date(): row for ts, row in daily.iterrows()}
+    weekly_by_iso = {(ts.isocalendar().year, ts.isocalendar().week): row for ts, row in weekly.iterrows()}
+
+    seen_day = None
+    seen_week = None
+    prev_day_row = None
+    prev_week_row = None
+    for i in range(len(df)):
+        ts = df.index[i]
+        d = ts.date()
+        iso = ts.isocalendar()
+        w = (iso.year, iso.week)
+        if d != seen_day:
+            if prev_day_row is not None:
+                out.append(LiquidityLevel("PDH", float(prev_day_row["high"]), i))
+                out.append(LiquidityLevel("PDL", float(prev_day_row["low"]), i))
+            if d in daily_by_date:
+                prev_day_row = daily_by_date[d]
+            seen_day = d
+        if w != seen_week:
+            if prev_week_row is not None:
+                out.append(LiquidityLevel("PWH", float(prev_week_row["high"]), i))
+                out.append(LiquidityLevel("PWL", float(prev_week_row["low"]), i))
+            if w in weekly_by_iso:
+                prev_week_row = weekly_by_iso[w]
+            seen_week = w
+    return out
+
+
+def detect_equal_levels(swings: list[Swing], atr_series: pd.Series) -> list[LiquidityLevel]:
+    out: list[LiquidityLevel] = []
+    highs = [s for s in swings if s.type == "swing_high"]
+    lows = [s for s in swings if s.type == "swing_low"]
+    for i in range(1, len(highs)):
+        a, b = highs[i - 1], highs[i]
+        a_atr = float(atr_series.iloc[a.index]) if not pd.isna(atr_series.iloc[a.index]) else 0
+        if abs(a.price - b.price) <= _level_tolerance(b.price, a_atr):
+            level = (a.price + b.price) / 2
+            out.append(LiquidityLevel("EQH", level, b.confirmed_at))
+    for i in range(1, len(lows)):
+        a, b = lows[i - 1], lows[i]
+        a_atr = float(atr_series.iloc[a.index]) if not pd.isna(atr_series.iloc[a.index]) else 0
+        if abs(a.price - b.price) <= _level_tolerance(b.price, a_atr):
+            level = (a.price + b.price) / 2
+            out.append(LiquidityLevel("EQL", level, b.confirmed_at))
+    return out
+
+
+def mark_sweeps(df: pd.DataFrame, levels: list[LiquidityLevel]) -> None:
+    high = df["high"].values
+    low = df["low"].values
+    close = df["close"].values
+    for lvl in levels:
+        if lvl.swept:
+            continue
+        is_high_level = lvl.type in ("PDH", "PWH", "EQH")
+        for i in range(lvl.created_at_index, len(df)):
+            if is_high_level:
+                if high[i] > lvl.level and close[i] < lvl.level:
+                    lvl.swept = True
+                    lvl.swept_at_index = i
+                    lvl.sweep_extreme = float(high[i])
+                    break
+            else:
+                if low[i] < lvl.level and close[i] > lvl.level:
+                    lvl.swept = True
+                    lvl.swept_at_index = i
+                    lvl.sweep_extreme = float(low[i])
+                    break
+
+
+def _is_impulse(df: pd.DataFrame, start: int, end: int, atr_value: float) -> Optional[str]:
+    if end <= start or atr_value <= 0:
+        return None
+    move = df["close"].iloc[end] - df["close"].iloc[start]
+    if abs(move) >= IMPULSE_ATR_MULT * atr_value:
+        return "bullish" if move > 0 else "bearish"
+    direction = None
+    streak = 0
+    for i in range(start + 1, end + 1):
+        d = "bullish" if df["close"].iloc[i] > df["open"].iloc[i] else "bearish"
+        if d == direction:
+            streak += 1
+        else:
+            direction = d
+            streak = 1
+        if streak >= IMPULSE_CONSEC_BARS:
+            return direction
+    return None
+
+
+def detect_order_blocks(df: pd.DataFrame, atr_series: pd.Series) -> list[OrderBlock]:
+    out: list[OrderBlock] = []
+    n = len(df)
+    o = df["open"].values
+    c = df["close"].values
+    i = IMPULSE_BAR_WINDOW
+    while i < n:
+        a_val = atr_series.iloc[i] if not pd.isna(atr_series.iloc[i]) else 0
+        impulse = _is_impulse(df, i - IMPULSE_BAR_WINDOW, i, float(a_val))
+        if impulse:
+            base_dir = "bullish" if impulse == "bearish" else "bearish"
+            ob_idx = None
+            for j in range(i - 1, max(i - IMPULSE_BAR_WINDOW - 5, -1), -1):
+                bar_dir = "bullish" if c[j] > o[j] else "bearish"
+                if bar_dir == base_dir:
+                    ob_idx = j
+                    break
+            if ob_idx is not None:
+                top = max(o[ob_idx], c[ob_idx])
+                bot = min(o[ob_idx], c[ob_idx])
+                ob_type = "bullish_ob" if impulse == "bullish" else "bearish_ob"
+                out.append(OrderBlock(
+                    ob_type, float(top), float(bot), ob_idx,
+                    abs(c[i] - c[i - IMPULSE_BAR_WINDOW]) / max(float(a_val), 1e-9),
+                    confirmed_at_index=i,
+                ))
+            i += IMPULSE_BAR_WINDOW
+        else:
+            i += 1
+    _mark_ob_mitigation(df, out)
+    return out
+
+
+def _mark_ob_mitigation(df: pd.DataFrame, obs: list[OrderBlock]) -> None:
+    """An OB is mitigated only after price has moved ≥ body away then returned."""
+    high = df["high"].values
+    low = df["low"].values
+    for ob in obs:
+        body = max(ob.top - ob.bottom, 1e-9)
+        moved_away = False
+        for i in range(ob.created_at_index + 1, len(df)):
+            if ob.type == "bullish_ob":
+                if not moved_away:
+                    if low[i] > ob.top + body:
+                        moved_away = True
+                    continue
+                if low[i] <= ob.top:
+                    ob.mitigated = True
+                    ob.mitigation_index = i
+                    break
+            else:
+                if not moved_away:
+                    if high[i] < ob.bottom - body:
+                        moved_away = True
+                    continue
+                if high[i] >= ob.bottom:
+                    ob.mitigated = True
+                    ob.mitigation_index = i
+                    break
+
+
+def detect_fvgs(df: pd.DataFrame) -> list[FVG]:
+    out: list[FVG] = []
+    high = df["high"].values
+    low = df["low"].values
+    for i in range(1, len(df) - 1):
+        if low[i + 1] > high[i - 1]:
+            out.append(FVG("bullish_fvg", float(low[i + 1]), float(high[i - 1]), i + 1))
+        if high[i + 1] < low[i - 1]:
+            out.append(FVG("bearish_fvg", float(low[i - 1]), float(high[i + 1]), i + 1))
+    _update_fvg_fill(df, out)
+    return out
+
+
+def _update_fvg_fill(df: pd.DataFrame, fvgs: list[FVG]) -> None:
+    high = df["high"].values
+    low = df["low"].values
+    for fvg in fvgs:
+        size = max(fvg.top - fvg.bottom, 1e-9)
+        for i in range(fvg.created_at_index + 1, len(df)):
+            if fvg.type == "bullish_fvg":
+                if low[i] <= fvg.bottom:
+                    fvg.fill_status = "filled"
+                    fvg.fill_pct = 1.0
+                    fvg.filled_at_index = i
+                    break
+                if low[i] < fvg.top:
+                    pen = (fvg.top - low[i]) / size
+                    if pen > fvg.fill_pct:
+                        fvg.fill_pct = float(pen)
+                        fvg.fill_status = "partial"
+                        if fvg.partial_at_index is None:
+                            fvg.partial_at_index = i
+            else:
+                if high[i] >= fvg.top:
+                    fvg.fill_status = "filled"
+                    fvg.fill_pct = 1.0
+                    fvg.filled_at_index = i
+                    break
+                if high[i] > fvg.bottom:
+                    pen = (high[i] - fvg.bottom) / size
+                    if pen > fvg.fill_pct:
+                        fvg.fill_pct = float(pen)
+                        fvg.fill_status = "partial"
+                        if fvg.partial_at_index is None:
+                            fvg.partial_at_index = i
+
+
+def killzone_at(ts: pd.Timestamp) -> list[str]:
+    if ts.tz is None:
+        ts = ts.tz_localize("UTC")
+    ny = ts.tz_convert(NY_TZ)
+    h = ny.hour
+    active = []
+    for name, (start_h, end_h) in KILLZONES_NY.items():
+        if start_h <= end_h:
+            if start_h <= h < end_h:
+                active.append(name)
+        else:
+            if h >= start_h or h < end_h:
+                active.append(name)
+    return active
+
+
+def in_killzones(ts: pd.Timestamp, names: list[str]) -> bool:
+    a = killzone_at(ts)
+    return any(n in a for n in names)
+
+
+def in_ote(zone: PDZone, price: float, direction: str) -> bool:
+    lo, hi = zone.ote(direction)
+    return lo <= price <= hi
+
+
+# ============================================================================
+# SIGNAL + STRATEGY HELPERS
+# ============================================================================
+
+@dataclass
+class Signal:
+    signal_id: str
+    timestamp: pd.Timestamp
+    strategy: str
+    symbol: str
+    direction: str
+    entry: float
+    stop_loss: float
+    take_profit_1: float
+    take_profit_2: Optional[float]
+    risk_reward_1: float
+    risk_reward_2: Optional[float]
+    quality: str = "medium"
+    confluence_score: int = 0
+    confluence_factors: list[str] = field(default_factory=list)
+    context: dict = field(default_factory=dict)
+    expires_at_index: Optional[int] = None
+    bar_index: int = 0
+
+
+def _atr_at(atr_series: pd.Series, idx: int) -> float:
+    if idx >= len(atr_series):
+        return 0.0
+    val = atr_series.iloc[idx]
+    return float(val) if not pd.isna(val) else 0.0
+
+
+def _next_opposite_liquidity(price, direction, levels, at_index):
+    candidates = []
+    for lvl in levels:
+        if lvl.created_at_index > at_index:
+            continue
+        if lvl.swept and lvl.swept_at_index is not None and lvl.swept_at_index <= at_index:
+            continue
+        if direction == "long" and lvl.level > price:
+            candidates.append(lvl.level)
+        elif direction == "short" and lvl.level < price:
+            candidates.append(lvl.level)
+    if not candidates:
+        return None
+    return min(candidates) if direction == "long" else max(candidates)
+
+
+def _next_persistent_liquidity(price, direction, levels, at_index):
+    persistent = [l for l in levels if l.type in ("PDH", "PDL", "PWH", "PWL")]
+    return _next_opposite_liquidity(price, direction, persistent, at_index)
+
+
+def _cap_tp(entry, tp, direction, atr_value):
+    if tp is None or atr_value <= 0 or TP_MAX_ATR_MULT <= 0:
+        return tp
+    max_dist = TP_MAX_ATR_MULT * atr_value
+    if direction == "long":
+        return min(tp, entry + max_dist)
+    return max(tp, entry - max_dist)
+
+
+def _resolve_bias(structure_events, at_index, htf_bias_series):
+    if htf_bias_series is not None and at_index < len(htf_bias_series):
+        v = htf_bias_series.iloc[at_index]
+        if isinstance(v, str):
+            return v
+    return htf_bias_lookup(structure_events, at_index)
+
+
+def _expiry(at_index, expiry_bars):
+    return at_index + (expiry_bars if expiry_bars is not None else ENTRY_EXPIRY_BARS)
+
+
+def _ob_alive_at(ob, at_index):
+    if ob.confirmed_at_index > at_index:
+        return False
+    if not ob.mitigated:
+        return True
+    return ob.mitigation_index is None or ob.mitigation_index > at_index
+
+
+def _fvg_alive_at(fvg, at_index):
+    return fvg.filled_at_index is None or fvg.filled_at_index > at_index
+
+
+def _rr(entry, stop, target, direction):
+    risk = abs(entry - stop)
+    reward = abs(target - entry)
+    if risk == 0:
+        return 0.0
+    valid = (direction == "long" and target > entry) or (direction == "short" and target < entry)
+    return reward / risk if valid else 0.0
+
+
+def _overlap_pct(a_top, a_bot, b_top, b_bot):
+    inter = max(0.0, min(a_top, b_top) - max(a_bot, b_bot))
+    union = max(a_top, b_top) - min(a_bot, b_bot)
+    return inter / union if union > 0 else 0.0
+
+
+# ============================================================================
+# STRATEGIES (A-E)
+# ============================================================================
+
+def strategy_a(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    ts = df.index[at_index]
+    if not in_killzones(ts, ["london_open", "ny_open", "silver_bullet_am", "silver_bullet_pm"]):
+        return None
+    bias = _resolve_bias(structure_events, at_index, htf_bias_series)
+    if bias == "range":
+        return None
+    recent = [
+        l for l in liquidity_levels
+        if l.swept and l.swept_at_index is not None
+        and at_index - SWEEP_LOOKBACK_BARS <= l.swept_at_index <= at_index
+    ]
+    if not recent:
+        return None
+    swept = recent[-1]
+
+    choch = next(
+        (e for e in structure_events
+         if e.type == "CHoCH"
+         and e.broken_at_index <= at_index
+         and swept.swept_at_index <= e.broken_at_index <= swept.swept_at_index + CHOCH_AFTER_SWEEP_BARS
+         and ((bias == "bullish" and e.direction == "bullish") or (bias == "bearish" and e.direction == "bearish"))),
+        None
+    )
+    if not choch:
+        return None
+
+    impulse_window = range(swept.swept_at_index, choch.broken_at_index + 1)
+    candidate_obs = [o for o in obs if o.created_at_index in impulse_window
+                     and _ob_alive_at(o, at_index)
+                     and ((bias == "bullish" and o.type == "bullish_ob") or (bias == "bearish" and o.type == "bearish_ob"))]
+    candidate_fvgs = [f for f in fvgs if f.created_at_index in impulse_window
+                      and _fvg_alive_at(f, at_index)
+                      and ((bias == "bullish" and f.type == "bullish_fvg") or (bias == "bearish" and f.type == "bearish_fvg"))]
+    if not candidate_obs and not candidate_fvgs:
+        return None
+
+    if candidate_obs:
+        zone_top, zone_bot = candidate_obs[-1].top, candidate_obs[-1].bottom
+    else:
+        zone_top, zone_bot = candidate_fvgs[-1].top, candidate_fvgs[-1].bottom
+
+    direction = "long" if bias == "bullish" else "short"
+    entry = (zone_top + zone_bot) / 2
+    a = _atr_at(atr_series, at_index)
+    stop = (swept.sweep_extreme - SL_ATR_BUFFER * a) if direction == "long" else (swept.sweep_extreme + SL_ATR_BUFFER * a)
+
+    tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
+    tp1 = _cap_tp(entry, tp1, direction, a)
+    tp2 = _next_persistent_liquidity(entry, direction, liquidity_levels, at_index)
+    if tp1 is None:
+        return None
+    rr1 = _rr(entry, stop, tp1, direction)
+    if rr1 < MIN_RR_DEFAULT:
+        return None
+    rr2 = _rr(entry, stop, tp2, direction) if tp2 is not None else None
+
+    leg_high = max(swept.sweep_extreme, df["high"].iloc[choch.broken_at_index])
+    leg_low = min(swept.sweep_extreme, df["low"].iloc[choch.broken_at_index])
+    zone = PDZone(leg_high, leg_low)
+    ote = in_ote(zone, entry, "bullish" if direction == "long" else "bearish")
+
+    factors = ["htf_aligned", "liquidity_swept", "ltf_choch", "in_killzone"]
+    if ote:
+        factors.append("ote_zone")
+    if (direction == "long" and zone.is_discount(entry)) or (direction == "short" and zone.is_premium(entry)):
+        factors.append("discount_premium")
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=ts, strategy="A_liquidity_sweep_reversal",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=float(tp2) if tp2 is not None else None,
+        risk_reward_1=float(rr1), risk_reward_2=float(rr2) if rr2 is not None else None,
+        quality="high" if ote else "medium", confluence_factors=factors,
+        context={"htf_bias": bias, "swept_liquidity": swept.type, "ote_zone": ote, "killzone": killzone_at(ts)},
+        expires_at_index=_expiry(at_index, expiry_bars), bar_index=at_index,
+    )
+
+
+def _asia_range_for(df, at_index):
+    ts = df.index[at_index]
+    ny = ts.tz_convert(NY_TZ) if ts.tz is not None else ts.tz_localize("UTC").tz_convert(NY_TZ)
+    ny_today = ny.normalize()
+    asia_start_ny = ny_today - pd.Timedelta(days=1) + pd.Timedelta(hours=19)
+    asia_end_ny = ny_today
+    asia_start = asia_start_ny.tz_convert("UTC")
+    asia_end = asia_end_ny.tz_convert("UTC")
+    mask = (df.index >= asia_start) & (df.index < asia_end)
+    sub = df.loc[mask]
+    if sub.empty:
+        return None
+    return float(sub["high"].max()), float(sub["low"].min()), df.index.get_loc(sub.index[0]), df.index.get_loc(sub.index[-1])
+
+
+def strategy_b(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    ts = df.index[at_index]
+    if not in_killzones(ts, ["london_open", "ny_open"]):
+        return None
+    rng = _asia_range_for(df, at_index)
+    if not rng:
+        return None
+    a_hi, a_lo, _, asia_end_i = rng
+    a = _atr_at(atr_series, at_index)
+    if a <= 0:
+        return None
+    if (a_hi - a_lo) > ASIA_RANGE_MAX_ATR * a:
+        return None
+
+    sweep_dir = None
+    sweep_idx = None
+    for j in range(asia_end_i + 1, at_index + 1):
+        if df["high"].iloc[j] > a_hi and df["close"].iloc[j] < a_hi:
+            sweep_dir, sweep_idx = "above", j
+            break
+        if df["low"].iloc[j] < a_lo and df["close"].iloc[j] > a_lo:
+            sweep_dir, sweep_idx = "below", j
+            break
+    if sweep_dir is None:
+        return None
+
+    direction = "short" if sweep_dir == "above" else "long"
+    choch = next(
+        (e for e in structure_events
+         if e.type == "CHoCH" and sweep_idx <= e.broken_at_index <= at_index
+         and ((direction == "short" and e.direction == "bearish") or (direction == "long" and e.direction == "bullish"))),
+        None
+    )
+    if not choch:
+        return None
+
+    impulse_range = range(sweep_idx, choch.broken_at_index + 1)
+    candidate_obs = [o for o in obs if o.created_at_index in impulse_range
+                     and _ob_alive_at(o, at_index)
+                     and ((direction == "long" and o.type == "bullish_ob") or (direction == "short" and o.type == "bearish_ob"))]
+    candidate_fvgs = [f for f in fvgs if f.created_at_index in impulse_range
+                      and _fvg_alive_at(f, at_index)
+                      and ((direction == "long" and f.type == "bullish_fvg") or (direction == "short" and f.type == "bearish_fvg"))]
+    if not candidate_obs and not candidate_fvgs:
+        return None
+
+    if candidate_obs:
+        zone_top, zone_bot = candidate_obs[-1].top, candidate_obs[-1].bottom
+    else:
+        zone_top, zone_bot = candidate_fvgs[-1].top, candidate_fvgs[-1].bottom
+
+    entry = (zone_top + zone_bot) / 2
+    sweep_extreme = float(df["high"].iloc[sweep_idx]) if sweep_dir == "above" else float(df["low"].iloc[sweep_idx])
+    stop = (sweep_extreme + SL_ATR_BUFFER * a) if direction == "short" else (sweep_extreme - SL_ATR_BUFFER * a)
+
+    tp1 = a_lo if direction == "short" else a_hi
+    tp1 = _cap_tp(entry, tp1, direction, a)
+    tp2 = _next_persistent_liquidity(entry, direction, liquidity_levels, at_index)
+    rr1 = _rr(entry, stop, tp1, direction)
+    if rr1 < MIN_RR_DEFAULT:
+        return None
+    rr2 = _rr(entry, stop, tp2, direction) if tp2 is not None else None
+
+    factors = ["liquidity_swept", "ltf_choch", "in_killzone", "power_of_three"]
+    bias_now = _resolve_bias(structure_events, at_index, htf_bias_series)
+    if (direction == "long" and bias_now == "bullish") or (direction == "short" and bias_now == "bearish"):
+        factors.append("htf_aligned")
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=ts, strategy="B_power_of_three",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=float(tp2) if tp2 is not None else None,
+        risk_reward_1=float(rr1), risk_reward_2=float(rr2) if rr2 is not None else None,
+        quality="medium", confluence_factors=factors,
+        context={"asia_high": a_hi, "asia_low": a_lo, "sweep_dir": sweep_dir, "killzone": killzone_at(ts)},
+        expires_at_index=_expiry(at_index, expiry_bars), bar_index=at_index,
+    )
+
+
+def strategy_c(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    bias = _resolve_bias(structure_events, at_index, htf_bias_series)
+    if bias == "range":
+        return None
+    bos_seq = [e for e in structure_events if e.type == "BOS" and e.broken_at_index <= at_index]
+    if len(bos_seq) < 2 or bos_seq[-1].direction != bos_seq[-2].direction:
+        return None
+
+    direction = "long" if bias == "bullish" else "short"
+    side = "bullish" if direction == "long" else "bearish"
+    a = _atr_at(atr_series, at_index)
+    if a <= 0:
+        return None
+    price = float(df["close"].iloc[at_index])
+    age_floor = at_index - ZONE_MAX_AGE_BARS
+    valid_obs = [o for o in obs if age_floor <= o.created_at_index <= at_index
+                 and _ob_alive_at(o, at_index) and o.type == f"{side}_ob"]
+    valid_fvgs = [f for f in fvgs if age_floor <= f.created_at_index <= at_index
+                  and _fvg_alive_at(f, at_index) and f.type == f"{side}_fvg"]
+
+    best = None
+    for o in valid_obs:
+        for f in valid_fvgs:
+            ovl = _overlap_pct(o.top, o.bottom, f.top, f.bottom)
+            if ovl >= OB_FVG_OVERLAP_MIN:
+                top = max(o.top, f.top)
+                bot = min(o.bottom, f.bottom)
+                mid = (top + bot) / 2
+                dist = abs(price - mid)
+                if best is None or dist < best[0]:
+                    best = (dist, ovl, top, bot)
+    if not best:
+        return None
+    dist, _, top, bot = best
+    if dist > STRAT_C_PROXIMITY_ATR * a:
+        return None
+
+    entry = bot if direction == "long" else top
+    stop = (bot - SL_ATR_BUFFER_C * a) if direction == "long" else (top + SL_ATR_BUFFER_C * a)
+    tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
+    tp1 = _cap_tp(entry, tp1, direction, a)
+    tp2 = _next_persistent_liquidity(entry, direction, liquidity_levels, at_index)
+    if tp1 is None:
+        return None
+    rr1 = _rr(entry, stop, tp1, direction)
+    if rr1 < MIN_RR_DEFAULT:
+        return None
+    rr2 = _rr(entry, stop, tp2, direction) if tp2 is not None else None
+
+    factors = ["htf_aligned", "ob_fvg_overlap"]
+    if in_killzones(df.index[at_index], ["london_open", "ny_open"]):
+        factors.append("in_killzone")
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=df.index[at_index], strategy="C_fvg_ob_confluence",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=float(tp2) if tp2 is not None else None,
+        risk_reward_1=float(rr1), risk_reward_2=float(rr2) if rr2 is not None else None,
+        quality="high", confluence_factors=factors,
+        context={"htf_bias": bias, "killzone": killzone_at(df.index[at_index])},
+        expires_at_index=_expiry(at_index, expiry_bars), bar_index=at_index,
+    )
+
+
+def strategy_d(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    ts = df.index[at_index]
+    if not in_killzones(ts, ["silver_bullet_am", "silver_bullet_pm"]):
+        return None
+    bias = _resolve_bias(structure_events, at_index, htf_bias_series)
+    if bias == "range":
+        return None
+    direction = "long" if bias == "bullish" else "short"
+    side = "bullish" if direction == "long" else "bearish"
+
+    sweep = next(
+        (l for l in liquidity_levels
+         if l.swept and l.swept_at_index is not None
+         and at_index - 60 <= l.swept_at_index <= at_index),
+        None
+    )
+    if not sweep:
+        return None
+
+    today_start = at_index - 60
+    fvg = next(
+        (f for f in reversed(fvgs)
+         if today_start <= f.created_at_index <= at_index
+         and _fvg_alive_at(f, at_index)
+         and f.type == f"{side}_fvg"),
+        None
+    )
+    if not fvg:
+        return None
+
+    a = _atr_at(atr_series, at_index)
+    if a <= 0:
+        return None
+
+    entry = (fvg.top + fvg.bottom) / 2
+    stop = (fvg.bottom - SL_ATR_BUFFER * a) if direction == "long" else (fvg.top + SL_ATR_BUFFER * a)
+
+    tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
+    tp1 = _cap_tp(entry, tp1, direction, a)
+    tp2 = _next_persistent_liquidity(entry, direction, liquidity_levels, at_index)
+    if tp1 is None:
+        return None
+    rr1 = _rr(entry, stop, tp1, direction)
+    if rr1 < MIN_RR_SILVER_BULLET:
+        return None
+    rr2 = _rr(entry, stop, tp2, direction) if tp2 is not None else None
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=ts, strategy="D_silver_bullet",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=float(tp2) if tp2 is not None else None,
+        risk_reward_1=float(rr1), risk_reward_2=float(rr2) if rr2 is not None else None,
+        quality="high",
+        confluence_factors=["htf_aligned", "liquidity_swept", "silver_bullet", "in_killzone"],
+        context={"htf_bias": bias, "killzone": killzone_at(ts), "sweep_type": sweep.type},
+        expires_at_index=_expiry(at_index, expiry_bars), bar_index=at_index,
+    )
+
+
+def strategy_e(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    ts = df.index[at_index]
+    if not in_killzones(ts, ["london_open", "ny_open"]):
+        return None
+    bias = _resolve_bias(structure_events, at_index, htf_bias_series)
+    if bias == "range":
+        return None
+
+    eq_recent = [
+        l for l in liquidity_levels
+        if l.type in ("EQH", "EQL") and l.swept and l.swept_at_index is not None
+        and at_index - 3 <= l.swept_at_index <= at_index
+    ]
+    if not eq_recent:
+        return None
+    swept = eq_recent[-1]
+    direction = "short" if swept.type == "EQH" else "long"
+    if (direction == "long" and bias != "bullish") or (direction == "short" and bias != "bearish"):
+        return None
+
+    side = "bullish" if direction == "long" else "bearish"
+    impulse_range = range(swept.swept_at_index, at_index + 1)
+    candidate_obs = [o for o in obs if o.created_at_index in impulse_range
+                     and _ob_alive_at(o, at_index) and o.type == f"{side}_ob"]
+    candidate_fvgs = [f for f in fvgs if f.created_at_index in impulse_range
+                      and _fvg_alive_at(f, at_index) and f.type == f"{side}_fvg"]
+    if not candidate_obs and not candidate_fvgs:
+        return None
+
+    if candidate_obs:
+        zone_top, zone_bot = candidate_obs[-1].top, candidate_obs[-1].bottom
+    else:
+        zone_top, zone_bot = candidate_fvgs[-1].top, candidate_fvgs[-1].bottom
+
+    entry = (zone_top + zone_bot) / 2
+    a = _atr_at(atr_series, at_index)
+    if a <= 0:
+        return None
+    stop = (swept.sweep_extreme - SL_ATR_BUFFER * a) if direction == "long" else (swept.sweep_extreme + SL_ATR_BUFFER * a)
+
+    tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
+    tp1 = _cap_tp(entry, tp1, direction, a)
+    tp2 = _next_persistent_liquidity(entry, direction, liquidity_levels, at_index)
+    if tp1 is None:
+        return None
+    rr1 = _rr(entry, stop, tp1, direction)
+    if rr1 < MIN_RR_DEFAULT:
+        return None
+    rr2 = _rr(entry, stop, tp2, direction) if tp2 is not None else None
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=ts, strategy="E_eqh_eql_run",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=float(tp2) if tp2 is not None else None,
+        risk_reward_1=float(rr1), risk_reward_2=float(rr2) if rr2 is not None else None,
+        quality="medium",
+        confluence_factors=["htf_aligned", "eqh_eql_swept", "in_killzone"],
+        context={"htf_bias": bias, "killzone": killzone_at(ts), "swept": swept.type},
+        expires_at_index=_expiry(at_index, expiry_bars), bar_index=at_index,
+    )
+
+
+STRATEGIES = [strategy_a, strategy_b, strategy_c, strategy_d, strategy_e]
+
+
+# ============================================================================
+# CONFLUENCE
+# ============================================================================
+
+def _score(sig: Signal) -> int:
+    return sum(CONFLUENCE_WEIGHTS.get(f, 0) for f in sig.confluence_factors)
+
+
+def merge_same_bar(signals: list[Signal]) -> list[Signal]:
+    if not signals:
+        return []
+    by_key = defaultdict(list)
+    for s in signals:
+        by_key[(s.symbol, s.bar_index)].append(s)
+
+    out = []
+    for (symbol, bar_idx), group in by_key.items():
+        longs = [s for s in group if s.direction == "long"]
+        shorts = [s for s in group if s.direction == "short"]
+        for direction_group in (longs, shorts):
+            if not direction_group:
+                continue
+            scored = [(_score(s) + (CONFLUENCE_WEIGHTS["multi_strategy"] if len(direction_group) > 1 else 0), s)
+                      for s in direction_group]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            top_score = scored[0][0]
+            top_signal = scored[0][1]
+            top_signal.confluence_score = min(top_score, CONFLUENCE_MAX)
+            if len(direction_group) > 1:
+                top_signal.strategy = "composite"
+                top_signal.context["composing_strategies"] = [s.strategy for s in direction_group]
+                if "multi_strategy" not in top_signal.confluence_factors:
+                    top_signal.confluence_factors.append("multi_strategy")
+            if top_signal.confluence_score >= CONFLUENCE_HIGH:
+                top_signal.quality = "high"
+            elif top_signal.confluence_score >= CONFLUENCE_MIN_PUBLISH:
+                top_signal.quality = "medium"
+            else:
+                continue
+            out.append(top_signal)
+
+        if longs and shorts:
+            l_top = max((_score(s) for s in longs), default=0)
+            s_top = max((_score(s) for s in shorts), default=0)
+            if l_top == s_top:
+                out = [o for o in out if not (o.symbol == symbol and o.bar_index == bar_idx)]
+    return out
+
+
+# ============================================================================
+# ENGINE
+# ============================================================================
+
+@dataclass
+class DetectorBundle:
+    df: pd.DataFrame
+    atr: pd.Series
+    swings: list = field(default_factory=list)
+    structure: list = field(default_factory=list)
+    liquidity: list = field(default_factory=list)
+    order_blocks: list = field(default_factory=list)
+    fvgs: list = field(default_factory=list)
+    htf_bias_series: Optional[pd.Series] = None
+    expiry_bars: int = ENTRY_EXPIRY_BARS
+
+
+def _bar_minutes(df: pd.DataFrame) -> float:
+    if len(df) < 2:
+        return 60.0
+    return float((df.index[1] - df.index[0]).total_seconds()) / 60.0
+
+
+def _compute_htf_bias_series(df: pd.DataFrame, htf_rule: str = HTF_RULE) -> pd.Series:
+    df_htf = aggregate(df, htf_rule)
+    if df_htf.empty:
+        return pd.Series(["range"] * len(df), index=df.index)
+    htf_swings = detect_swings(df_htf, n=SWING_N_HTF)
+    htf_structure = detect_structure(df_htf, htf_swings)
+    bias_per_htf_bar = [htf_bias_lookup(htf_structure, i) for i in range(len(df_htf))]
+    htf_bias_at_htf = pd.Series(bias_per_htf_bar, index=df_htf.index)
+    return htf_bias_at_htf.reindex(df.index, method="ffill").fillna("range")
+
+
+def build_detectors(df: pd.DataFrame) -> DetectorBundle:
+    a = atr(df, ATR_PERIOD)
+    sw = detect_swings(df, n=SWING_N_ITF)
+    st = detect_structure(df, sw)
+    pl = detect_persistent_liquidity(df)
+    eq = detect_equal_levels(sw, a)
+    levels = pl + eq
+    mark_sweeps(df, levels)
+    obs = detect_order_blocks(df, a)
+    fv = detect_fvgs(df)
+    htf_series = _compute_htf_bias_series(df)
+    bm = _bar_minutes(df)
+    expiry = max(2, int(EXPIRY_MINUTES / bm)) if bm > 0 else ENTRY_EXPIRY_BARS
+    return DetectorBundle(df=df, atr=a, swings=sw, structure=st,
+                          liquidity=levels, order_blocks=obs, fvgs=fv,
+                          htf_bias_series=htf_series, expiry_bars=expiry)
+
+
+def run_engine(symbol: str, df: pd.DataFrame, *,
+               start_index: Optional[int] = None,
+               end_index: Optional[int] = None) -> list[Signal]:
+    bundle = build_detectors(df)
+    n = len(df)
+    if start_index is None:
+        start_index = max(ATR_PERIOD + 5, SWING_N_ITF + 5)
+    if end_index is None:
+        end_index = n - 1
+    raw: list[Signal] = []
+    for i in range(start_index, end_index + 1):
+        for strat_fn in STRATEGIES:
+            try:
+                sig = strat_fn(symbol, df, i, bundle.atr, bundle.structure,
+                               bundle.liquidity, bundle.order_blocks, bundle.fvgs,
+                               htf_bias_series=bundle.htf_bias_series,
+                               expiry_bars=bundle.expiry_bars)
+            except Exception:
+                continue
+            if sig is not None:
+                raw.append(sig)
+    return merge_same_bar(raw)
+
+
+# ============================================================================
+# AIRFLOW INFRASTRUCTURE — DB + Telegram + per-symbol runner
+# ============================================================================
+
 def send_telegram_message(text_msg: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text_msg, "parse_mode": "HTML"}
@@ -98,33 +1179,24 @@ def get_db_engine():
 def signal_already_exists(conn, symbol: str, signal_time, direction: str) -> bool:
     q = text("""
         SELECT 1 FROM ict_trade.signals
-        WHERE symbol = :symbol
-          AND signal_time = :signal_time
-          AND direction = :direction
+        WHERE symbol = :symbol AND signal_time = :signal_time AND direction = :direction
         LIMIT 1
     """)
     return conn.execute(q, {
-        "symbol": symbol,
-        "signal_time": signal_time,
-        "direction": direction,
+        "symbol": symbol, "signal_time": signal_time, "direction": direction,
     }).fetchone() is not None
 
 
-def save_signal_to_db(sig) -> bool:
-    """Insert into ict_trade.signals if not already present.
-
-    Returns True only if a NEW row was inserted, so the caller knows whether
-    to fire the Telegram alert."""
+def save_signal_to_db(sig: Signal) -> bool:
+    """Returns True only when a new row is inserted."""
     try:
         engine = get_db_engine()
         with engine.connect() as conn:
             direction = sig.direction.upper()
             sig_time = sig.timestamp.to_pydatetime()
-
             if signal_already_exists(conn, sig.symbol, sig_time, direction):
                 print(f"  dup {sig.symbol} {direction} @ {sig_time} (skipped)")
                 return False
-
             q = text("""
                 INSERT INTO ict_trade.signals
                 (symbol, direction, entry, sl, tp, signal_time, mode, ltf_timeframe, htf_timeframe)
@@ -132,15 +1204,11 @@ def save_signal_to_db(sig) -> bool:
                 (:symbol, :direction, :entry, :sl, :tp, :signal_time, :mode, :ltf, :htf)
             """)
             conn.execute(q, {
-                "symbol": sig.symbol,
-                "direction": direction,
-                "entry": float(sig.entry),
-                "sl": float(sig.stop_loss),
+                "symbol": sig.symbol, "direction": direction,
+                "entry": float(sig.entry), "sl": float(sig.stop_loss),
                 "tp": float(sig.take_profit_1) if sig.take_profit_1 is not None else None,
-                "signal_time": sig_time,
-                "mode": "live",
-                "ltf": INTERVAL,
-                "htf": HTF_RULE,
+                "signal_time": sig_time, "mode": "live",
+                "ltf": INTERVAL, "htf": HTF_RULE,
             })
             conn.commit()
             print(f"  ✅ saved {sig.symbol} {direction} @ {sig_time}")
@@ -150,7 +1218,7 @@ def save_signal_to_db(sig) -> bool:
         return False
 
 
-def format_telegram_message(sig) -> str:
+def format_telegram_message(sig: Signal) -> str:
     arrow = "🟢 LONG" if sig.direction == "long" else "🔴 SHORT"
     rr = sig.risk_reward_1 if sig.risk_reward_1 else 0
     risk_pct = abs(sig.entry - sig.stop_loss) / sig.entry * 100
@@ -169,31 +1237,25 @@ def format_telegram_message(sig) -> str:
 
 
 def trim_open_bar(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop the most recent bar if it hasn't fully closed yet — guarantees
-    real-time parity with backtest (which only consumes closed bars)."""
     if df.empty or len(df) < 2:
         return df
-    bar_minutes = (df.index[1] - df.index[0]).total_seconds() / 60
+    bm = _bar_minutes(df)
     last_open = df.index[-1]
-    expected_close = last_open + pd.Timedelta(minutes=bar_minutes)
+    expected_close = last_open + pd.Timedelta(minutes=bm)
     if pd.Timestamp.now(tz="UTC") < expected_close:
         return df.iloc[:-1]
     return df
 
 
 def process_symbol(symbol: str) -> int:
-    """Fetch → engine on last closed bar → emit any new signal. Returns count."""
     end = pd.Timestamp.now(tz="UTC")
     start = end - pd.Timedelta(hours=WARMUP_HOURS)
-    df = fetch_klines(
-        symbol, INTERVAL,
-        int(start.timestamp() * 1000),
-        int(end.timestamp() * 1000),
-    )
+    df = fetch_klines(symbol, INTERVAL,
+                      int(start.timestamp() * 1000),
+                      int(end.timestamp() * 1000))
     if df.empty:
         print(f"  {symbol}: no data")
         return 0
-
     df = trim_open_bar(df)
     if len(df) < 60:
         print(f"  {symbol}: only {len(df)} bars after trim, skipping")
@@ -207,21 +1269,29 @@ def process_symbol(symbol: str) -> int:
         if save_signal_to_db(sig):
             send_telegram_message(format_telegram_message(sig))
             n_emitted += 1
-
     if not signals:
         print(f"  {symbol}: no signal at last closed bar ({df.index[-1]})")
     return n_emitted
 
 
-# ----------------------------
-# DAG Definition
-# ----------------------------
+# ============================================================================
+# DAG
+# ============================================================================
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'start_date': days_ago(1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': dt.timedelta(minutes=2),
+}
+
 
 @dag(
     dag_id="huseyin_llm_hybrid_ict",
     default_args=default_args,
-    # Hourly at HH:05 UTC — engine is 1h-based; HH:05 ensures the previous
-    # 1h bar is fully closed and finalized at Binance.
     schedule=CronTriggerTimetable("5 * * * *", timezone="UTC"),
     catchup=False,
     tags=['trading', 'ict', 'crypto', 'mtf'],
