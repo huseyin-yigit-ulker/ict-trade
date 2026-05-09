@@ -104,8 +104,12 @@ def _insert_signal(conn, schema: str, table: str, sig: Signal) -> None:
     with conn.cursor() as cur:
         cur.execute(
             f'''insert into "{schema}"."{table}"
-                (symbol, direction, entry, sl, tp, signal_time, mode, ltf_timeframe, htf_timeframe, created_at)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())''',
+                (symbol, direction, entry, sl, tp, signal_time,
+                 mode, ltf_timeframe, htf_timeframe,
+                 strategy, quality, confluence_score, created_at)
+                values (%s, %s, %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s, now())''',
             (
                 sig.symbol,
                 sig.direction.upper(),
@@ -116,6 +120,9 @@ def _insert_signal(conn, schema: str, table: str, sig: Signal) -> None:
                 "live",
                 INTERVAL,
                 HTF_RULE,
+                sig.strategy,
+                sig.quality,
+                int(sig.confluence_score),
             )
         )
     conn.commit()

@@ -1199,9 +1199,13 @@ def save_signal_to_db(sig: Signal) -> bool:
                 return False
             q = text("""
                 INSERT INTO ict_trade.signals
-                (symbol, direction, entry, sl, tp, signal_time, mode, ltf_timeframe, htf_timeframe)
+                (symbol, direction, entry, sl, tp, signal_time,
+                 mode, ltf_timeframe, htf_timeframe,
+                 strategy, quality, confluence_score)
                 VALUES
-                (:symbol, :direction, :entry, :sl, :tp, :signal_time, :mode, :ltf, :htf)
+                (:symbol, :direction, :entry, :sl, :tp, :signal_time,
+                 :mode, :ltf, :htf,
+                 :strategy, :quality, :confluence_score)
             """)
             conn.execute(q, {
                 "symbol": sig.symbol, "direction": direction,
@@ -1209,6 +1213,9 @@ def save_signal_to_db(sig: Signal) -> bool:
                 "tp": float(sig.take_profit_1) if sig.take_profit_1 is not None else None,
                 "signal_time": sig_time, "mode": "live",
                 "ltf": INTERVAL, "htf": HTF_RULE,
+                "strategy": sig.strategy,
+                "quality": sig.quality,
+                "confluence_score": int(sig.confluence_score),
             })
             conn.commit()
             print(f"  ✅ saved {sig.symbol} {direction} @ {sig_time}")

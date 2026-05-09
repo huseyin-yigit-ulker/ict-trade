@@ -829,6 +829,33 @@ a {
   gap: 8px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.strategy-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: rgba(123, 140, 255, 0.08);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.strategy-badge.high {
+  color: var(--accent);
+  border-color: rgba(123, 140, 255, 0.45);
+  background: rgba(123, 140, 255, 0.18);
+}
+
+.strategy-score {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
 }
 
 .symbol-box {

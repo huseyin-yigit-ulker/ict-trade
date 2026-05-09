@@ -14,6 +14,19 @@ const formatPrice = (value) => {
   return value.toPrecision(4);
 };
 
+// Short label + full title for each strategy id the engine emits, so the
+// trade card stays compact while the tooltip carries the full name.
+const STRATEGY_META = {
+  A_liquidity_sweep_reversal: { short: 'A • Sweep',     full: 'Liquidity Sweep Reversal' },
+  B_power_of_three:           { short: 'B • AMD',       full: 'Power of Three (AMD)' },
+  C_fvg_ob_confluence:        { short: 'C • FVG+OB',    full: 'FVG + OB Confluence' },
+  D_silver_bullet:            { short: 'D • Silver',    full: 'Silver Bullet' },
+  E_eqh_eql_run:              { short: 'E • EQ Run',    full: 'EQH/EQL Liquidity Run' },
+  composite:                  { short: 'Composite',     full: 'Multi-strategy composite' },
+};
+const strategyLabel = (id) => STRATEGY_META[id]?.short || (id ? id.slice(0, 14) : null);
+const strategyFull  = (id) => STRATEGY_META[id]?.full  || id || '';
+
 // Compute the realised R-multiple for a live trade outcome from its
 // entry/tp/sl. Replaces the hard-coded "2R for TP" assumption.
 const liveOutcomeR = (sig, status) => {
@@ -313,6 +326,17 @@ const Dashboard = () => {
               <span className="symbol-box">{sig.symbol}</span>
               <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
               <span className="time-detail">{timeLabel}</span>
+              {sig.strategy && (
+                <span
+                  className={`strategy-badge ${sig.quality === 'high' ? 'high' : 'medium'}`}
+                  title={`${strategyFull(sig.strategy)}${sig.confluenceScore != null ? ` · score ${sig.confluenceScore}` : ''}`}
+                >
+                  {sig.quality === 'high' ? '⭐ ' : ''}{strategyLabel(sig.strategy)}
+                  {sig.confluenceScore != null && (
+                    <span className="strategy-score"> {sig.confluenceScore}</span>
+                  )}
+                </span>
+              )}
             </div>
 
             <div className="trade-body">

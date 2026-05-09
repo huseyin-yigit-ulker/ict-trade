@@ -146,7 +146,10 @@ export const TradeProvider = ({ children }) => {
           dateObj: signalDate,
           exitTs,
           status,
-          exitPrice
+          exitPrice,
+          strategy: item.strategy ?? null,
+          quality: item.quality ?? null,
+          confluenceScore: Number.isFinite(Number(item.confluence_score)) ? Number(item.confluence_score) : null,
         };
       })
       .filter(Boolean)
@@ -189,7 +192,7 @@ export const TradeProvider = ({ children }) => {
       const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
 
       const params = new URLSearchParams({
-        select: '*',
+        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score',
         order: 'signal_time.desc'
       });
       params.append('signal_time', `gte.${start.toISOString()}`);
@@ -210,13 +213,17 @@ export const TradeProvider = ({ children }) => {
       const rows = await res.json();
       const filteredRows = rows.filter((r) => isAllowedBacktestHour(r.signal_time));
       const mapped = filteredRows.map((r) => ({
+        id: r.id,
         symbol: r.symbol,
         trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
         entry_price: r.entry,
         tp_price: r.tp,
         sl_price: r.sl,
         signal_time: r.signal_time,
-        status: 'WAITING'
+        status: 'WAITING',
+        strategy: r.strategy,
+        quality: r.quality,
+        confluence_score: r.confluence_score,
       }));
 
       processData(mapped);
@@ -296,7 +303,7 @@ export const TradeProvider = ({ children }) => {
       setLiveError('');
 
       const params = new URLSearchParams({
-        select: 'id,symbol,trade_type,signal_time,real_entry_time,exit_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,version,created_at',
+        select: 'id,symbol,trade_type,signal_time,real_entry_time,exit_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,version,created_at,strategy,quality,confluence_score',
         order: 'signal_time.desc'
       });
       params.append('version', 'eq.v1');
