@@ -61,7 +61,12 @@ DB_CONNECTION_STRING = "postgresql://postgres.xxxx:your_password@aws-1-eu-centra
 # Engine knobs — must match backtest config.py to keep parity.
 INTERVAL = "1h"
 HTF_RULE = "4h"
-WARMUP_HOURS = 720   # ~30 days; enough for swings, HTF aggregate, age filter
+# 6000h ≈ 250 days. The HTF structure walk accumulates state from past swings;
+# a longer warmup ensures the DAG sees the same structure events a long-history
+# backtest would. test_dag_parity.py shows ~99% parity at this size — DAG never
+# emits EXTRA signals vs backtest, only occasionally suppresses one whose bias
+# depends on structure events older than the warmup.
+WARMUP_HOURS = 6000
 
 SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT",

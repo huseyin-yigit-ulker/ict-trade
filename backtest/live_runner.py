@@ -55,7 +55,11 @@ SYMBOLS = [
 
 INTERVAL = "1h"          # primary timeframe (matches backtest "winner" config)
 HTF_RULE = "4h"          # HTF bias source
-WARMUP_HOURS = 720       # ~30 days of 1h bars; plenty for swings + HTF + age filter
+# 6000h ≈ 250 days. HTF structure walk accumulates state from past swings;
+# a longer warmup keeps the DAG ~99% bit-parity with a long-history backtest.
+# Verified by test_dag_parity.py — DAG never emits EXTRA signals vs backtest,
+# only occasionally suppresses one whose bias depends on very deep history.
+WARMUP_HOURS = 6000
 
 DSN = os.getenv("DB_CONNECTION_STRING")
 DB_TABLE = os.getenv("DB_TABLE", "ict_trade.signals")
