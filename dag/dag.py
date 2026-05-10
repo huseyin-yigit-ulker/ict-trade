@@ -57,11 +57,14 @@ INTERVAL = "1h"
 HTF_RULE = "4h"
 WARMUP_HOURS = 6000   # ~250 days; verified ~99% backtest-DAG parity
 
+# Production set — TON, XRP, 1000SHIB, LINK, OP excluded after their negative
+# 2025+2026 backtest performance. Strategy A is also disabled in STRATEGIES
+# below; both years showed it net negative.
 SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT",
-    "1000PEPEUSDT", "1000SHIBUSDT", "WIFUSDT", "TONUSDT", "SUIUSDT",
-    "NEARUSDT", "FETUSDT", "ADAUSDT", "LINKUSDT", "SUSDT",
-    "ARBUSDT", "OPUSDT", "ORDIUSDT", "ONDOUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
+    "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
+    "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
+    "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
 ]
 
@@ -1029,7 +1032,11 @@ def strategy_e(symbol, df, at_index, atr_series, structure_events,
     )
 
 
-STRATEGIES = [strategy_a, strategy_b, strategy_c, strategy_d, strategy_e]
+# Production: strategy_a (liquidity sweep reversal) excluded — backtest
+# showed it consistently net-negative on both 2025 (-37R) and 2026 (-11R).
+# All function definitions stay above so they can be re-enabled by simply
+# adding `strategy_a` back to this list.
+STRATEGIES = [strategy_b, strategy_c, strategy_d, strategy_e]
 
 
 # ============================================================================

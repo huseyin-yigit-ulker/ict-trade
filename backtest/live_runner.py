@@ -37,7 +37,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from ict.data import fetch_klines
 from engine import run_engine
-from ict.strategies import Signal
+from ict.strategies import (
+    Signal, strategy_b, strategy_c, strategy_d, strategy_e,
+)
 
 
 # ---------------- config ----------------
@@ -45,13 +47,19 @@ from ict.strategies import Signal
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ENV_PATH)  # silent if missing (CI passes via env)
 
+# Production set — TON, XRP, 1000SHIB, LINK, OP excluded after their negative
+# 2025+2026 backtest performance. Strategy A also disabled below.
 SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT",
-    "1000PEPEUSDT", "1000SHIBUSDT", "WIFUSDT", "TONUSDT", "SUIUSDT",
-    "NEARUSDT", "FETUSDT", "ADAUSDT", "LINKUSDT", "SUSDT",
-    "ARBUSDT", "OPUSDT", "ORDIUSDT", "ONDOUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
+    "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
+    "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
+    "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
 ]
+
+# Strategy A excluded — net negative on backtest (-37R 2025, -11R 2026).
+# composite still forms naturally from any 2+ of B/C/D/E firing on the same bar.
+LIVE_STRATEGIES = [strategy_b, strategy_c, strategy_d, strategy_e]
 
 INTERVAL = "1h"          # primary timeframe (matches backtest "winner" config)
 HTF_RULE = "4h"          # HTF bias source
@@ -197,7 +205,8 @@ def process_symbol(conn, schema: str, table: str, symbol: str) -> int:
         return 0
 
     last_idx = len(df) - 1
-    signals = run_engine(symbol, df, start_index=last_idx, end_index=last_idx)
+    signals = run_engine(symbol, df, start_index=last_idx, end_index=last_idx,
+                         strategies=LIVE_STRATEGIES)
 
     new_count = 0
     for sig in signals:

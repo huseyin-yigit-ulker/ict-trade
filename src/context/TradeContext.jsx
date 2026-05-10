@@ -4,11 +4,14 @@ const TradeContext = createContext();
 
 //const BACKTEST_ALLOWED_HOURS = new Set([5, 7, 8, 9, 12, 13, 14,15, 16, 20, 21]);
 const BACKTEST_ALLOWED_HOURS = new Set([1,2,3,4,5, 6,7, 8, 9, 10,11,12, 13, 14, 15, 16, 17,18,19, 20, 21,22,23,24]);
+// Production set — XRP, TON, 1000SHIB, LINK, OP excluded after negative
+// 2025+2026 backtest performance. Old rows for these symbols stay in the
+// database but the dashboard hides them.
 const BACKTEST_ALLOWED_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT', 'DOGEUSDT',
-  '1000PEPEUSDT', '1000SHIBUSDT', 'WIFUSDT', 'TONUSDT', 'SUIUSDT',
-  'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'LINKUSDT', 'SUSDT',
-  'ARBUSDT', 'OPUSDT', 'ORDIUSDT', 'ONDOUSDT',
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'DOGEUSDT',
+  '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
+  'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'SUSDT',
+  'ARBUSDT', 'ORDIUSDT', 'ONDOUSDT',
   'XAUUSDT', 'XAGUSDT'
 ];
 

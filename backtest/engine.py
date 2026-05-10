@@ -78,8 +78,13 @@ def build_detectors(df: pd.DataFrame, swing_n: int = C.SWING_N_ITF) -> DetectorB
 
 
 def run_engine(symbol: str, df: pd.DataFrame, *, start_index: Optional[int] = None,
-               end_index: Optional[int] = None) -> list[Signal]:
-    """Walk bars [start..end] and run all strategies. Returns merged/scored signals."""
+               end_index: Optional[int] = None,
+               strategies: Optional[list] = None) -> list[Signal]:
+    """Walk bars [start..end] and run the given strategies (default: all 5).
+
+    Pass `strategies=[strategy_b, strategy_c, ...]` to filter — the live runner
+    uses this to exclude underperformers (e.g. strategy_a) without touching
+    backtest behaviour."""
     bundle = build_detectors(df)
     n = len(df)
     if start_index is None:
@@ -87,9 +92,11 @@ def run_engine(symbol: str, df: pd.DataFrame, *, start_index: Optional[int] = No
     if end_index is None:
         end_index = n - 1
 
+    strats = strategies if strategies is not None else STRATEGIES
+
     raw: list[Signal] = []
     for i in range(start_index, end_index + 1):
-        for strat_fn in STRATEGIES:
+        for strat_fn in strats:
             try:
                 sig = strat_fn(symbol, df, i, bundle.atr, bundle.structure,
                                bundle.liquidity, bundle.order_blocks, bundle.fvgs,
