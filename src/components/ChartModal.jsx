@@ -55,18 +55,20 @@ const ChartModal = () => {
     const width = rect.width > 0 ? rect.width : 900;
     const height = rect.height > 0 ? rect.height : 520;
 
+    // Binance-aligned palette: yellow accents not used here, but candle/wick
+    // colors and crosshair match the dashboard's --win / --loss / --muted tokens.
     const themeConfig = {
-      bg: '#131722', text: '#d1d4dc', grid: 'transparent',
-      upColor: '#089981', downColor: '#F23645',
-      wickUp: '#089981', wickDown: '#F23645',
+      bg: '#0B0E11', text: '#EAECEF', grid: 'transparent',
+      upColor: '#0ECB81', downColor: '#F6465D',
+      wickUp: '#0ECB81', wickDown: '#F6465D',
     };
 
     // 1. CHART OLUŞTURMA
     const chart = createChart(chartContainerRef.current, {
-      layout: { 
-        background: { type: 'solid', color: themeConfig.bg }, 
+      layout: {
+        background: { type: 'solid', color: themeConfig.bg },
         textColor: themeConfig.text,
-        fontFamily: "'Trebuchet MS', Roboto, Ubuntu, sans-serif"
+        fontFamily: "'JetBrains Mono', 'SF Mono', 'Roboto Mono', Consolas, monospace"
       },
       localization: {
         locale: 'tr-TR', dateFormat: 'dd MMM yyyy',
@@ -77,9 +79,9 @@ const ChartModal = () => {
       },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       width, height,
-      rightPriceScale: { borderColor: 'rgba(197, 203, 206, 0.2)', scaleMargins: { top: 0.2, bottom: 0.2 } },
-      timeScale: { 
-        timeVisible: true, secondsVisible: false, borderColor: 'rgba(197, 203, 206, 0.2)',
+      rightPriceScale: { borderColor: '#2B3139', scaleMargins: { top: 0.2, bottom: 0.2 } },
+      timeScale: {
+        timeVisible: true, secondsVisible: false, borderColor: '#2B3139',
         tickMarkFormatter: (time, tickMarkType) => {
             const date = new Date(time * 1000);
             if (tickMarkType < 3) return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
@@ -88,8 +90,8 @@ const ChartModal = () => {
       },
       crosshair: {
         mode: 1,
-        vertLine: { color: '#9598a1', style: 2, labelBackgroundColor: '#9598a1' },
-        horzLine: { color: '#9598a1', style: 2, labelBackgroundColor: '#9598a1' }
+        vertLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#181A20' },
+        horzLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#181A20' }
       }
     });
     chartRef.current = chart;
@@ -293,21 +295,21 @@ const ChartModal = () => {
         if (isLong) {
             // LONG: TP (Üst) Yeşil, SL (Alt) Kırmızı
             tpAreaSeries.applyOptions({
-                topLineColor: '#089981', topFillColor1: 'rgba(8, 153, 129, 0.25)', topFillColor2: 'rgba(8, 153, 129, 0.05)',
+                topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.25)', topFillColor2: 'rgba(14, 203, 129, 0.05)',
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
             slAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#F23645', bottomFillColor1: 'rgba(242, 54, 69, 0.25)', bottomFillColor2: 'rgba(242, 54, 69, 0.05)'
+                bottomLineColor: '#F6465D', bottomFillColor1: 'rgba(246, 70, 93, 0.25)', bottomFillColor2: 'rgba(246, 70, 93, 0.05)'
             });
         } else {
             // SHORT: TP (Alt) Yeşil, SL (Üst) Kırmızı
             tpAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#089981', bottomFillColor1: 'rgba(8, 153, 129, 0.25)', bottomFillColor2: 'rgba(8, 153, 129, 0.05)'
+                bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.25)', bottomFillColor2: 'rgba(14, 203, 129, 0.05)'
             });
             slAreaSeries.applyOptions({
-                topLineColor: '#F23645', topFillColor1: 'rgba(242, 54, 69, 0.25)', topFillColor2: 'rgba(242, 54, 69, 0.05)',
+                topLineColor: '#F6465D', topFillColor1: 'rgba(246, 70, 93, 0.25)', topFillColor2: 'rgba(246, 70, 93, 0.05)',
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
         }
@@ -324,13 +326,13 @@ const ChartModal = () => {
 
         // 5. Referans Çizgileri (tek sefer)
         if (!chartRef.current._priceLinesAdded) {
-          if (entry) mainSeries.createPriceLine({ price: entry, color: '#787B86', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
-          if (tp) mainSeries.createPriceLine({ price: tp, color: '#089981', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
-          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F23645', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
+          if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
+          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
+          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
             mainSeries.createPriceLine({
               price: activeSignal.exitPrice,
-              color: '#f4bf50',
+              color: '#F0B90B',
               lineWidth: 1,
               lineStyle: 1,
               title: 'Çıkış',
@@ -401,10 +403,10 @@ const ChartModal = () => {
   useEffect(() => { setShowTv(chartView === 'tv'); }, [activeSignal, chartView]);
 
   return (
-    <div id="modal" style={{ display: 'block', backgroundColor: '#131722', color: '#d1d4dc' }}>
+    <div id="modal" style={{ display: 'block', backgroundColor: '#0B0E11', color: '#EAECEF' }}>
       <div id="chart-header" style={{ borderBottom: '1px solid #2a2e39', padding: '10px' }}>
         <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
-          {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#089981' : '#F23645'}}>{activeSignal?.dir}</span>
+          {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
         </h2>
         {!showTv && hoverInfo && (
           <div className="chart-hover-info">
@@ -423,18 +425,18 @@ const ChartModal = () => {
           <div className="position-row"><span>Giriş</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
              <span>Hedef/Stop</span>
-             <b><span style={{color:'#089981'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F23645'}}>{formatPrice(activeSignal.sl)}</span></b>
+             <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span></b>
           </div>
           <div className="position-row">
             <span>PnL</span>
-            <b style={{color: activePnL === null || activePnL >= 0 ? '#089981' : '#F23645'}}>
+            <b style={{color: activePnL === null || activePnL >= 0 ? '#0ECB81' : '#F6465D'}}>
               {activePnL !== null ? formatPnL(activeSignal, activePnL) : '--'}
             </b>
           </div>
           {mode === 'live' && (
             <div className="position-row">
               <span>Canlı Durum</span>
-              <b style={{ color: liveTradeStatus.includes('İptal') || liveTradeStatus.includes('Stop') ? '#F23645' : liveTradeStatus.includes('Hedef') ? '#089981' : '#d1d4dc' }}>
+              <b style={{ color: liveTradeStatus.includes('İptal') || liveTradeStatus.includes('Stop') ? '#F6465D' : liveTradeStatus.includes('Hedef') ? '#0ECB81' : '#EAECEF' }}>
                 {liveTradeStatus || 'Hesaplanıyor...'}
               </b>
             </div>
@@ -447,7 +449,7 @@ const ChartModal = () => {
           <div className="position-row"><span>Sembol</span><b>{activeSignal.symbol}</b></div>
           <div className="position-row">
             <span>Yön</span>
-            <b style={{ color: activeSignal.dir === 'LONG' ? '#089981' : '#F23645' }}>
+            <b style={{ color: activeSignal.dir === 'LONG' ? '#0ECB81' : '#F6465D' }}>
               {activeSignal.dir}
             </b>
           </div>
@@ -455,19 +457,19 @@ const ChartModal = () => {
           <div className="position-row"><span>Entry</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
             <span>TP / SL</span>
-            <b><span style={{color:'#089981'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F23645'}}>{formatPrice(activeSignal.sl)}</span></b>
+            <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span></b>
           </div>
         </div>
       )}
 
-      {chartError && !showTv && <div className="chart-warning" style={{color:'#F23645'}}>{chartError}</div>}
+      {chartError && !showTv && <div className="chart-warning" style={{color:'#F6465D'}}>{chartError}</div>}
       {chartLoading && !showTv && <div className="chart-warning">Veriler yükleniyor...</div>}
 
       <div
         ref={chartContainerRef}
         id="chart-container"
         className="journal-chart"
-        style={{ width: '100%', height: '100%', minHeight: '520px', display: showTv ? 'none' : 'block', backgroundColor: '#131722' }}
+        style={{ width: '100%', height: '100%', minHeight: '520px', display: showTv ? 'none' : 'block', backgroundColor: '#0B0E11' }}
       ></div>
 
       {showTv && (
