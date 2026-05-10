@@ -3,7 +3,7 @@ import { createChart, CandlestickSeries, BaselineSeries } from 'lightweight-char
 import { useTradeContext } from '../context/TradeContext';
 
 const ChartModal = () => {
-  const { activeSignal, setActiveSignal, chartView, setChartView, mode } = useTradeContext();
+  const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses } = useTradeContext();
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
@@ -12,7 +12,19 @@ const ChartModal = () => {
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
   const [hoverInfo, setHoverInfo] = useState(null);
-  const [liveTradeStatus, setLiveTradeStatus] = useState('');
+
+  // Single source of truth for live status: TradeContext.liveStatuses
+  // (the dashboard's polled value). Mapped to a friendly label here.
+  const LIVE_STATUS_LABELS = {
+    'TP Oldu': '✅ Hedef (TP) Alındı',
+    'SL Oldu': '🛑 Stop (SL) Oldu',
+    'TP/SL Aynı Mum': '⚠️ TP/SL Aynı Mum',
+    'İşlem Aktif (Entry Geldi)': '⚡ İşlem Aktif',
+    'İptal (Entry Gelmeden TP/SL)': '❌ İptal (Entry Öncesi Temas)',
+    'Sinyal Bekliyor': '⏳ Sinyal Bekliyor',
+  };
+  const ctxLiveStatus = (mode === 'live' && activeSignal) ? liveStatuses[activeSignal.id]?.status : null;
+  const liveTradeStatus = LIVE_STATUS_LABELS[ctxLiveStatus] || (mode === 'live' ? 'Hesaplanıyor...' : '');
 
   // --- Yardımcı Fonksiyonlar ---
   const calculatePnL = (sig) => {
@@ -217,82 +229,38 @@ const ChartModal = () => {
         const entryTs = Math.floor(entryTime / 1000);
         const isLong = dir === 'LONG';
         
-        let statusText = '⏳ Sinyal Bekliyor';
-        let isTerminalState = false; // İşlem bitti mi?
-        let isCancelled = false;
+        let isTerminalState = false;
         // After trimming in backtest mode, the last candle IS the close bar.
         let endTimeForGraph = candles[candles.length - 1].time;
 
-        if (mode === 'live' && entry && tp && sl && candles.length > 0) {
-             let entryHit = false;
-
-             for (const c of candles) {
-                 if (c.time < entryTs) continue; 
-
-                 const cHigh = c.high;
-                 const cLow = c.low;
-
-                 // A) Henüz giriş yapılmadıysa
-                 if (!entryHit) {
-                     const hitEntryLevel = isLong ? cLow <= entry : cHigh >= entry;
-                     const hitTpLevel = isLong ? cHigh >= tp : cLow <= tp;
-                     const hitSlLevel = isLong ? cLow <= sl : cHigh >= sl;
-
-                     // İPTAL KONTROLÜ: Entry'ye gelmeden TP veya SL'ye değdi mi?
-                     if (!hitEntryLevel && (hitTpLevel || hitSlLevel)) {
-                         isCancelled = true;
-                         isTerminalState = true;
-                         statusText = '❌ İptal (Entry Öncesi Temas)';
-                         endTimeForGraph = c.time; // Grafiği burada kes
-                         break;
-                     }
-
-                     if (hitEntryLevel) {
-                         entryHit = true;
-                         statusText = '⚡ İşlem Aktif';
-                     }
-                 }
-
-                 // B) Giriş yapıldıysa -> TP/SL Kontrolü
-                 if (entryHit) {
-                     const hitTpLevel = isLong ? cHigh >= tp : cLow <= tp;
-                     const hitSlLevel = isLong ? cLow <= sl : cHigh >= sl;
-
-                     if (hitTpLevel && hitSlLevel) {
-                         statusText = '⚠️ TP/SL Aynı Mum';
-                         isTerminalState = true;
-                         endTimeForGraph = c.time;
-                         break;
-                     } else if (hitTpLevel) {
-                         statusText = '✅ Hedef (TP) Alındı';
-                         isTerminalState = true;
-                         endTimeForGraph = c.time;
-                         break;
-                     } else if (hitSlLevel) {
-                         statusText = '🛑 Stop (SL) Oldu';
-                         isTerminalState = true;
-                         endTimeForGraph = c.time;
-                         break;
-                     }
-                 }
-             }
-        }
-        if (mode === 'backtest') {
-          if (activeSignal.status === 'TP') {
-            statusText = '✅ Kapanış: TP';
+        // Live mode: detect terminal state for endTimeForGraph + interval shutoff.
+        // The displayed status string is derived in render from context, so the
+        // chart panel and dashboard card stay consistent.
+        if (mode === 'live' && entry && tp && sl) {
+          const ctxStatus = liveStatuses[activeSignal.id]?.status;
+          const terminalSet = new Set(['TP Oldu', 'SL Oldu', 'TP/SL Aynı Mum']);
+          if (ctxStatus && (terminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'))) {
             isTerminalState = true;
-          } else if (activeSignal.status === 'SL') {
-            statusText = '🛑 Kapanış: SL';
-            isTerminalState = true;
-          } else if (activeSignal.status === 'WAITING') {
-            statusText = '⏳ Beklemede';
+            let entryHit = false;
+            for (const c of candles) {
+              if (c.time < entryTs) continue;
+              const hitEntry = isLong ? c.low <= entry : c.high >= entry;
+              const hitTp    = isLong ? c.high >= tp  : c.low  <= tp;
+              const hitSl    = isLong ? c.low <= sl   : c.high >= sl;
+              if (!entryHit) {
+                if (!hitEntry && (hitTp || hitSl)) { endTimeForGraph = c.time; break; }
+                if (hitEntry) entryHit = true;
+              }
+              if (entryHit && (hitTp || hitSl)) { endTimeForGraph = c.time; break; }
+            }
           }
         }
+        if (mode === 'backtest' && (activeSignal.status === 'TP' || activeSignal.status === 'SL')) {
+          isTerminalState = true;
+        }
 
-        setLiveTradeStatus(statusText);
-
-        // 3. Veri Akışını Durdurma (Live Mode & Aktif Değilse)
-        if (mode === 'live' && (isTerminalState || statusText !== '⚡ İşlem Aktif')) {
+        // Stop refresh interval only when trade has terminated.
+        if (mode === 'live' && isTerminalState) {
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
