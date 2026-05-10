@@ -24,7 +24,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from ict.data import fetch_klines
 from engine import run_engine
+from ict.strategies import strategy_b, strategy_c, strategy_d, strategy_e
 from backtester import simulate_signals, TradeStatus, TradeResult
+
+# Production set (no Strategy A) — matches dag/dag.py and live_runner.
+PRODUCTION_STRATEGIES = [strategy_b, strategy_c, strategy_d, strategy_e]
 
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ENV_PATH)
@@ -181,8 +185,10 @@ def count_rows(conn, schema: str, table: str) -> int:
 @click.option("--clear/--no-clear", default=False,
               help="Truncate destination table before inserting. Destructive.")
 @click.option("--dry-run", is_flag=True, help="Run engine + simulate but don't write.")
+@click.option("--exclude-a", is_flag=True,
+              help="Use production strategies (B/C/D/E) only. Mirrors live filter.")
 def main(symbols: str, days: int, start: str | None, end: str | None,
-         interval: str, clear: bool, dry_run: bool) -> None:
+         interval: str, clear: bool, dry_run: bool, exclude_a: bool) -> None:
     if not DSN:
         raise SystemExit("BACKTESTING_DB_CONNECTION_STRING missing in .env")
 
@@ -211,7 +217,9 @@ def main(symbols: str, days: int, start: str | None, end: str | None,
             start_ts = end_ts - pd.Timedelta(days=days)
             actual_days = days
         click.echo(f"period: {start_ts.isoformat()} -> {end_ts.isoformat()}  ({actual_days} days)")
-        click.echo(f"interval: {interval}\n")
+        strategies = PRODUCTION_STRATEGIES if exclude_a else None
+        click.echo(f"interval: {interval}  strategies: "
+                   f"{'B/C/D/E (production)' if exclude_a else 'A/B/C/D/E (default)'}\n")
 
         total_signals = 0
         total_inserted = 0
@@ -224,7 +232,7 @@ def main(symbols: str, days: int, start: str | None, end: str | None,
             if df.empty:
                 click.echo("  no data, skipping")
                 continue
-            sigs = run_engine(sym, df)
+            sigs = run_engine(sym, df, strategies=strategies)
             click.echo(f"  signals (post-confluence): {len(sigs)}")
             trades = simulate_signals(sigs, df)
             tp = sum(1 for t in trades if t.status == TradeStatus.TP_HIT)

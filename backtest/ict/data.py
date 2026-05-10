@@ -28,9 +28,13 @@ def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int,
             "endTime": end_ms,
             "limit": limit,
         }
-        r = requests.get(base, params=params, timeout=20)
-        r.raise_for_status()
-        chunk = r.json()
+        try:
+            r = requests.get(base, params=params, timeout=20)
+            r.raise_for_status()
+            chunk = r.json()
+        except requests.exceptions.RequestException as e:
+            print(f"  fetch error ({base} {symbol}): {e}")
+            return pd.DataFrame(columns=OHLCV_COLS)
         if not chunk:
             break
         rows.extend(chunk)
