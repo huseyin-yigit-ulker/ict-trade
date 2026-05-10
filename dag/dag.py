@@ -1188,12 +1188,17 @@ def signal_already_exists(conn, symbol: str, signal_time, direction: str) -> boo
 
 
 def save_signal_to_db(sig: Signal) -> bool:
-    """Returns True only when a new row is inserted."""
+    """Returns True only when a new row is inserted.
+
+    Uses ``engine.begin()`` so the transaction is committed on context-exit;
+    this works on SQLAlchemy 1.4 (Airflow's typical version) where
+    ``Connection.commit`` is not exposed, as well as on 2.x.
+    """
+    direction = sig.direction.upper()
+    sig_time = sig.timestamp.to_pydatetime()
     try:
         engine = get_db_engine()
-        with engine.connect() as conn:
-            direction = sig.direction.upper()
-            sig_time = sig.timestamp.to_pydatetime()
+        with engine.begin() as conn:
             if signal_already_exists(conn, sig.symbol, sig_time, direction):
                 print(f"  dup {sig.symbol} {direction} @ {sig_time} (skipped)")
                 return False
@@ -1217,9 +1222,8 @@ def save_signal_to_db(sig: Signal) -> bool:
                 "quality": sig.quality,
                 "confluence_score": int(sig.confluence_score),
             })
-            conn.commit()
-            print(f"  ✅ saved {sig.symbol} {direction} @ {sig_time}")
-            return True
+        print(f"  ✅ saved {sig.symbol} {direction} @ {sig_time}")
+        return True
     except Exception as e:
         print(f"  ❌ DB save error: {e}")
         return False
