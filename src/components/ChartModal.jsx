@@ -365,8 +365,45 @@ const ChartModal = () => {
   // UI Formatters
   const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
   const formatHoverTime = (t) => t ? new Date(t * 1000).toLocaleString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
-  const formatPrice = (value) => typeof value === 'number' ? value.toFixed(5) : '--';
+  // Dynamic decimal precision (matches Dashboard's formatter)
+  const formatPrice = (value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+    const abs = Math.abs(value);
+    if (abs === 0) return '0';
+    if (abs >= 100)  return value.toFixed(2);
+    if (abs >= 1)    return value.toFixed(4);
+    if (abs >= 0.01) return value.toFixed(5);
+    if (abs >= 0.0001) return value.toFixed(7);
+    return value.toPrecision(4);
+  };
   const activePnL = calculatePnL(activeSignal);
+
+  // Pre-trade analytics: RR, target%, risk%, duration, current-price distance
+  const computeRR = (sig) => {
+    if (!sig?.entry || !sig?.sl || !sig?.tp) return null;
+    const risk = Math.abs(sig.entry - sig.sl);
+    const reward = Math.abs(sig.tp - sig.entry);
+    if (risk === 0) return null;
+    return reward / risk;
+  };
+  const pctDist = (a, b) => (!a || !b) ? null : ((b - a) / a) * 100;
+  const formatDuration = (ms) => {
+    if (!Number.isFinite(ms) || ms < 0) return '--';
+    const mins = Math.floor(ms / 60000);
+    if (mins < 60) return `${mins} dk`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} sa ${mins % 60} dk`;
+    const days = Math.floor(hrs / 24);
+    return `${days} gün ${hrs % 24} sa`;
+  };
+  const STRATEGY_LABEL = {
+    A_liquidity_sweep_reversal: 'Liquidity Sweep Reversal',
+    B_power_of_three: 'Power of Three',
+    C_fvg_ob_confluence: 'FVG + OB Confluence',
+    D_silver_bullet: 'Silver Bullet',
+    E_eqh_eql_run: 'EQH/EQL Run',
+    composite: 'Composite (multi)',
+  };
 
   useEffect(() => {
     if (!showTv && chartContainerRef.current) {}
@@ -397,14 +434,83 @@ const ChartModal = () => {
         <span className="close-label">Kapat</span><span className="esc-pill neo">ESC</span>
       </button>
 
-      {!showTv && activeSignal && (
-        <div className="position-panel" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>
+      {!showTv && activeSignal && (() => {
+        const rr = computeRR(activeSignal);
+        const targetPct = pctDist(activeSignal.entry, activeSignal.tp);
+        const riskPct = pctDist(activeSignal.entry, activeSignal.sl);
+        const liveLastPrice = mode === 'live' ? liveStatuses[activeSignal.id]?.lastPrice : null;
+        const distToEntry = mode === 'live' ? pctDist(liveLastPrice, activeSignal.entry) : null;
+        const ageMs = activeSignal.dateObj ? (Date.now() - activeSignal.dateObj.getTime()) : null;
+        // For closed backtest trades, duration is signal_time → exit_time.
+        const closedDurationMs = mode === 'backtest' && activeSignal.exitTs && activeSignal.dateObj
+          ? activeSignal.exitTs - activeSignal.dateObj.getTime()
+          : null;
+        const exitPrice = mode === 'backtest' ? activeSignal.exitPrice : null;
+
+        return (
+        <div className="position-panel" style={{ backgroundColor: '#181A20', borderRight: '1px solid #2B3139' }}>
           <div className="position-row"><span>Tarih</span><b>{formatSignalTime(activeSignal.dateObj)}</b></div>
+          <div className="position-row">
+            <span>{mode === 'live' ? 'Süre (canlı)' : 'Süre'}</span>
+            <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
+          </div>
+          {activeSignal.strategy && (
+            <div className="position-row">
+              <span>Strateji</span>
+              <b style={{ color: activeSignal.quality === 'high' ? '#FCD535' : '#EAECEF' }}>
+                {activeSignal.quality === 'high' ? '⭐ ' : ''}
+                {STRATEGY_LABEL[activeSignal.strategy] || activeSignal.strategy}
+                {activeSignal.confluenceScore != null && ` · ${activeSignal.confluenceScore}`}
+              </b>
+            </div>
+          )}
+          {(activeSignal.ltfTimeframe || activeSignal.htfTimeframe) && (
+            <div className="position-row">
+              <span>Timeframe</span>
+              <b>{activeSignal.ltfTimeframe || '?'}{activeSignal.htfTimeframe ? ` · HTF ${activeSignal.htfTimeframe}` : ''}</b>
+            </div>
+          )}
           <div className="position-row"><span>Giriş</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
-             <span>Hedef/Stop</span>
-             <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span> / <span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span></b>
+             <span>Hedef</span>
+             <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span>
+               {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
+             </b>
           </div>
+          <div className="position-row">
+             <span>Stop</span>
+             <b><span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span>
+               {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · {riskPct.toFixed(2)}%</span>}
+             </b>
+          </div>
+          {rr != null && (
+            <div className="position-row">
+              <span>Risk-Reward</span>
+              <b style={{ color: '#FCD535' }}>1:{rr.toFixed(2)}</b>
+            </div>
+          )}
+          {mode === 'live' && Number.isFinite(liveLastPrice) && (
+            <>
+              <div className="position-row">
+                <span>Anlık Fiyat</span>
+                <b>{formatPrice(liveLastPrice)}</b>
+              </div>
+              {distToEntry != null && (
+                <div className="position-row">
+                  <span>Entry'ye Uzaklık</span>
+                  <b style={{ color: Math.abs(distToEntry) < 0.5 ? '#FCD535' : '#EAECEF' }}>
+                    {distToEntry >= 0 ? '+' : ''}{distToEntry.toFixed(2)}%
+                  </b>
+                </div>
+              )}
+            </>
+          )}
+          {mode === 'backtest' && Number.isFinite(exitPrice) && exitPrice !== activeSignal.entry && (
+            <div className="position-row">
+              <span>Çıkış</span>
+              <b>{formatPrice(exitPrice)}</b>
+            </div>
+          )}
           <div className="position-row">
             <span>PnL</span>
             <b style={{color: activePnL === null || activePnL >= 0 ? '#0ECB81' : '#F6465D'}}>
@@ -420,7 +526,8 @@ const ChartModal = () => {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {showTv && activeSignal && mode === 'live' && (
         <div className="position-panel horizontal bottom-left" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>

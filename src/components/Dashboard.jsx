@@ -27,6 +27,35 @@ const STRATEGY_META = {
 const strategyLabel = (id) => STRATEGY_META[id]?.short || (id ? id.slice(0, 14) : null);
 const strategyFull  = (id) => STRATEGY_META[id]?.full  || id || '';
 
+// Risk-reward ratio from entry/SL/TP (pre-trade, what the engine targeted).
+const computeRR = (sig) => {
+  if (!sig?.entry || !sig?.sl || !sig?.tp) return null;
+  const risk = Math.abs(sig.entry - sig.sl);
+  const reward = Math.abs(sig.tp - sig.entry);
+  if (risk === 0) return null;
+  return reward / risk;
+};
+
+// Risk % and reward % relative to entry price.
+const pctDist = (a, b) => {
+  if (!a || !b) return null;
+  return ((b - a) / a) * 100;
+};
+
+// "5 dk önce" / "2 sa 14 dk" / "3 gün önce" — relative time label.
+const timeAgo = (date) => {
+  if (!(date instanceof Date)) return '--';
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return 'şimdi';
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1)  return 'az önce';
+  if (mins < 60) return `${mins} dk önce`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} sa ${mins % 60} dk`;
+  const days = Math.floor(hrs / 24);
+  return `${days} gün ${hrs % 24} sa`;
+};
+
 // Compute the realised R-multiple for a live trade outcome from its
 // entry/tp/sl. Replaces the hard-coded "2R for TP" assumption.
 const liveOutcomeR = (sig, status) => {
@@ -312,6 +341,9 @@ const Dashboard = () => {
           : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
 
         const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const rr = computeRR(sig);
+        const targetPct = pctDist(sig.entry, sig.tp);
+        const riskPct = pctDist(sig.entry, sig.sl);
 
         return (
           <div
@@ -325,7 +357,12 @@ const Dashboard = () => {
             <div className="trade-head">
               <span className="symbol-box">{sig.symbol}</span>
               <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
-              <span className="time-detail">{timeLabel}</span>
+              <span className="time-detail">
+                {timeLabel}
+                {mode === 'live' && (
+                  <span className="time-ago"> · {timeAgo(sig.dateObj)}</span>
+                )}
+              </span>
               {sig.strategy && (
                 <span
                   className={`strategy-badge ${sig.quality === 'high' ? 'high' : 'medium'}`}
@@ -335,6 +372,11 @@ const Dashboard = () => {
                   {sig.confluenceScore != null && (
                     <span className="strategy-score"> {sig.confluenceScore}</span>
                   )}
+                </span>
+              )}
+              {rr != null && (
+                <span className="rr-pill" title={`Risk-Reward · 1:${rr.toFixed(2)}`}>
+                  1:{rr.toFixed(2)}
                 </span>
               )}
             </div>
@@ -374,6 +416,18 @@ const Dashboard = () => {
               <div className="trade-metric">
                 <span className="metric-label">TP/SL</span>
                 <span className="metric-value">{formatPrice(sig.tp)} / {formatPrice(sig.sl)}</span>
+              </div>
+              <div className="trade-metric">
+                <span className="metric-label">Hedef</span>
+                <span className="metric-value win">
+                  {targetPct != null ? `${targetPct >= 0 ? '+' : ''}${targetPct.toFixed(2)}%` : '--'}
+                </span>
+              </div>
+              <div className="trade-metric">
+                <span className="metric-label">Risk</span>
+                <span className="metric-value loss">
+                  {riskPct != null ? `${riskPct.toFixed(2)}%` : '--'}
+                </span>
               </div>
             </div>
 
