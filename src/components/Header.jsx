@@ -36,7 +36,18 @@ const Header = () => {
   return (
     <div className="app-header">
       <div className="header-title">
-        <div className="brand-mark">ICT NOTEBOOK</div>
+        <div className="brand-mark">
+          <svg className="brand-icon" viewBox="0 0 18 18" aria-hidden="true">
+            <polyline points="2,13 6,9 9,11 13,5 16,3"
+              stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+              strokeLinejoin="round" fill="none" />
+            <circle cx="16" cy="3" r="1.6" fill="currentColor" />
+          </svg>
+          ICT NOTEBOOK
+          {mode === 'live' && (
+            <span className="brand-live-pulse" title="Live mode active" />
+          )}
+        </div>
         <div className="brand-sub">ICT Engine • 1h MTF • {selectedSymbols.size} Sembol</div>
       </div>
 

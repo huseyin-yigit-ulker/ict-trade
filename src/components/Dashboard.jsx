@@ -384,7 +384,10 @@ const Dashboard = () => {
           >
             <div className="trade-head">
               <span className="symbol-box">{sig.symbol}</span>
-              <span className={`dir-badge ${sig.dir.toLowerCase()}`}>{sig.dir}</span>
+              <span className={`dir-badge ${sig.dir.toLowerCase()}`}>
+                <span className="dir-arrow" aria-hidden="true">{sig.dir === 'LONG' ? '↗' : '↘'}</span>
+                {sig.dir}
+              </span>
               <span className="time-detail">
                 {timeLabel}
                 {mode === 'live' && (
