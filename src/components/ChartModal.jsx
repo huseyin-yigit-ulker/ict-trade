@@ -378,6 +378,18 @@ const ChartModal = () => {
   };
   const activePnL = calculatePnL(activeSignal);
 
+  // signal_time in DB = bar OPEN; the signal actually fires at bar CLOSE.
+  // Use this everywhere the UI shows "Tarih" / computes "Süre".
+  const intervalMsLocal = (tf) => {
+    const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
+    if (!m) return 60 * 60 * 1000;
+    const u = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+    return Number(m[1]) * (u[m[2].toLowerCase()] || 0);
+  };
+  const effectiveSignalDate = (sig) => sig?.dateObj
+    ? new Date(sig.dateObj.getTime() + intervalMsLocal(sig.ltfTimeframe))
+    : null;
+
   // Pre-trade analytics: RR, target%, risk%, duration, current-price distance
   const computeRR = (sig) => {
     if (!sig?.entry || !sig?.sl || !sig?.tp) return null;
@@ -440,16 +452,17 @@ const ChartModal = () => {
         const riskPct = pctDist(activeSignal.entry, activeSignal.sl);
         const liveLastPrice = mode === 'live' ? liveStatuses[activeSignal.id]?.lastPrice : null;
         const distToEntry = mode === 'live' ? pctDist(liveLastPrice, activeSignal.entry) : null;
-        const ageMs = activeSignal.dateObj ? (Date.now() - activeSignal.dateObj.getTime()) : null;
-        // For closed backtest trades, duration is signal_time → exit_time.
-        const closedDurationMs = mode === 'backtest' && activeSignal.exitTs && activeSignal.dateObj
-          ? activeSignal.exitTs - activeSignal.dateObj.getTime()
+        const effDate = effectiveSignalDate(activeSignal);
+        const ageMs = effDate ? (Date.now() - effDate.getTime()) : null;
+        // For closed backtest trades, duration is bar-close → exit_time.
+        const closedDurationMs = mode === 'backtest' && activeSignal.exitTs && effDate
+          ? activeSignal.exitTs - effDate.getTime()
           : null;
         const exitPrice = mode === 'backtest' ? activeSignal.exitPrice : null;
 
         return (
         <div className="position-panel" style={{ backgroundColor: '#181A20', borderRight: '1px solid #2B3139' }}>
-          <div className="position-row"><span>Tarih</span><b>{formatSignalTime(activeSignal.dateObj)}</b></div>
+          <div className="position-row"><span>Tarih</span><b>{formatSignalTime(effDate)}</b></div>
           <div className="position-row">
             <span>{mode === 'live' ? 'Süre (canlı)' : 'Süre'}</span>
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
@@ -538,7 +551,7 @@ const ChartModal = () => {
               {activeSignal.dir}
             </b>
           </div>
-          <div className="position-row"><span>Sinyal</span><b>{formatSignalTime(activeSignal.dateObj)}</b></div>
+          <div className="position-row"><span>Sinyal</span><b>{formatSignalTime(effectiveSignalDate(activeSignal))}</b></div>
           <div className="position-row"><span>Entry</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
             <span>TP / SL</span>

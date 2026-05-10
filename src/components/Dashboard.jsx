@@ -42,6 +42,21 @@ const pctDist = (a, b) => {
   return ((b - a) / a) * 100;
 };
 
+// signal_time in DB is the OPEN of the trigger bar; the signal actually
+// fires at bar CLOSE (engine runs after the bar closes). Shift the
+// "effective signal time" forward by the LTF duration so all UI labels
+// (Tarih, Süre, "X dk önce") reflect the real emission moment.
+const intervalMs = (tf) => {
+  const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
+  if (!m) return 60 * 60 * 1000;
+  const u = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  return Number(m[1]) * (u[m[2].toLowerCase()] || 0);
+};
+const effectiveSignalTime = (sig) => {
+  if (!sig?.dateObj) return null;
+  return new Date(sig.dateObj.getTime() + intervalMs(sig.ltfTimeframe));
+};
+
 // "5 dk önce" / "2 sa 14 dk" / "3 gün önce" — relative time label.
 const timeAgo = (date) => {
   if (!(date instanceof Date)) return '--';
@@ -340,7 +355,8 @@ const Dashboard = () => {
           ? liveMeta.cls
           : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
 
-        const timeLabel = sig.dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const effDate = effectiveSignalTime(sig) || sig.dateObj;
+        const timeLabel = effDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
         const rr = computeRR(sig);
         const targetPct = pctDist(sig.entry, sig.tp);
         const riskPct = pctDist(sig.entry, sig.sl);
@@ -360,7 +376,7 @@ const Dashboard = () => {
               <span className="time-detail">
                 {timeLabel}
                 {mode === 'live' && (
-                  <span className="time-ago"> · {timeAgo(sig.dateObj)}</span>
+                  <span className="time-ago"> · {timeAgo(effDate)}</span>
                 )}
               </span>
               {sig.strategy && (
