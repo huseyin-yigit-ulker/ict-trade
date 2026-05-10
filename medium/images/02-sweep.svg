@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="Inter, system-ui, sans-serif">
+  <style>
+    .bg { fill: #0B0E11; }
+    .green { fill: #0ECB81; }
+    .red { fill: #F6465D; }
+    .wick-g { stroke: #0ECB81; stroke-width: 1.5; }
+    .wick-r { stroke: #F6465D; stroke-width: 1.5; }
+    .level { stroke: #FCD535; stroke-width: 1.8; stroke-dasharray: 4 4; }
+    .grid { stroke: #2B3139; stroke-width: 0.5; stroke-dasharray: 2 4; }
+    .label { fill: #EAECEF; font-size: 12px; font-weight: 600; }
+    .accent { fill: #FCD535; font-size: 13px; font-weight: 700; }
+    .muted { fill: #848E9C; font-size: 11px; }
+    .title { fill: #EAECEF; font-size: 16px; font-weight: 700; letter-spacing: 0.05em; }
+  </style>
+
+  <rect class="bg" width="800" height="360"/>
+
+  <text class="title" x="20" y="30">Liquidity Sweep — "Stop'ları topla, ters dön"</text>
+  <text class="muted" x="20" y="50">Wick yatay seviyeyi aştı, kapanış geri döndü. Stop'lar tetiklendi, momentum yön değiştirdi.</text>
+
+  <!-- main level -->
+  <line class="level" x1="40" y1="120" x2="760" y2="120"/>
+  <text class="accent" x="660" y="112">PDL / Likidite</text>
+
+  <!-- candles approaching from left, building down -->
+  <g>
+    <!-- c1 normal -->
+    <line class="wick-r" x1="80" y1="105" x2="80" y2="155"/>
+    <rect class="red" x="74" y="108" width="12" height="38"/>
+    <!-- c2 -->
+    <line class="wick-r" x1="120" y1="115" x2="120" y2="160"/>
+    <rect class="red" x="114" y="118" width="12" height="36"/>
+    <!-- c3 hovering above -->
+    <line class="wick-g" x1="160" y1="135" x2="160" y2="105"/>
+    <rect class="green" x="154" y="110" width="12" height="22"/>
+    <!-- c4 — THE SWEEP CANDLE -->
+    <line stroke="#FCD535" stroke-width="2" x1="200" y1="170" x2="200" y2="105"/>
+    <rect fill="#FCD535" stroke="#0B0E11" stroke-width="0.5" x="194" y="110" width="12" height="22"/>
+    <!-- continuation up -->
+    <line class="wick-g" x1="240" y1="115" x2="240" y2="80"/>
+    <rect class="green" x="234" y="84" width="12" height="28"/>
+    <line class="wick-g" x1="280" y1="95" x2="280" y2="50"/>
+    <rect class="green" x="274" y="55" width="12" height="38"/>
+    <line class="wick-g" x1="320" y1="65" x2="320" y2="30"/>
+    <rect class="green" x="314" y="35" width="12" height="28"/>
+  </g>
+
+  <!-- annotations -->
+  <text class="accent" x="180" y="195">SWEEP</text>
+  <path d="M200 175 L200 165" stroke="#FCD535" stroke-width="2" fill="none" marker-end="url(#arrY)"/>
+
+  <text class="muted" x="60" y="215">1) Fiyat seviyenin altına wick atıyor (stop'lar tetikleniyor)</text>
+  <text class="muted" x="60" y="232">2) Aynı bar'ın kapanışı seviyenin ÜSTÜNDE — fake breakout</text>
+  <text class="muted" x="60" y="249">3) Sonraki bar'larda ters yönde momentum başlıyor</text>
+
+  <!-- right side legend / formula -->
+  <g transform="translate(440, 200)">
+    <rect fill="#181A20" stroke="#2B3139" x="0" y="0" width="320" height="120" rx="6"/>
+    <text class="title" x="14" y="22" font-size="13">Bullish Sweep Koşulu</text>
+    <text class="muted" x="14" y="44" font-family="JetBrains Mono, monospace" font-size="11">bar.low &lt; level</text>
+    <text class="muted" x="14" y="62" font-family="JetBrains Mono, monospace" font-size="11">AND bar.close &gt; level</text>
+    <line stroke="#2B3139" stroke-dasharray="2 4" x1="14" y1="74" x2="306" y2="74"/>
+    <text class="accent" x="14" y="92" font-size="11">→ likidite alınmış,</text>
+    <text class="accent" x="14" y="108" font-size="11">  asıl yön YUKARI</text>
+  </g>
+
+  <defs>
+    <marker id="arrY" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#FCD535"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="Inter, system-ui, sans-serif">
+  <style>
+    .bg { fill: #0B0E11; }
+    .panel { fill: #181A20; stroke: #2B3139; stroke-width: 1; }
+    .label { fill: #EAECEF; font-size: 12px; font-weight: 600; }
+    .accent { fill: #FCD535; font-size: 13px; font-weight: 700; }
+    .muted { fill: #848E9C; font-size: 11px; }
+    .title { fill: #EAECEF; font-size: 16px; font-weight: 700; letter-spacing: 0.05em; }
+    .hr { fill: #848E9C; font-family: JetBrains Mono, monospace; font-size: 11px; }
+  </style>
+
+  <rect class="bg" width="800" height="360"/>
+
+  <text class="title" x="20" y="30">Killzone'lar — Setup Saatleri (NY Local Time)</text>
+  <text class="muted" x="20" y="50">Likidite ve volatilitenin yoğun olduğu pencereler. ICT setup'larının çoğu bu saatlerde gelir.</text>
+
+  <!-- 24-hour timeline -->
+  <g transform="translate(40, 90)">
+    <!-- bg track -->
+    <rect fill="#181A20" stroke="#2B3139" x="0" y="0" width="720" height="40" rx="4"/>
+
+    <!-- hour gridlines -->
+    <g stroke="#2B3139" stroke-width="0.5">
+      <line x1="0" y1="0" x2="0" y2="40"/>
+      <line x1="180" y1="0" x2="180" y2="40"/>
+      <line x1="360" y1="0" x2="360" y2="40"/>
+      <line x1="540" y1="0" x2="540" y2="40"/>
+      <line x1="720" y1="0" x2="720" y2="40"/>
+    </g>
+
+    <!-- killzone bands (each hour = 30px) -->
+    <!-- Asia: 19:00 - 24:00 -->
+    <rect fill="rgba(132, 142, 156, 0.18)" stroke="#848E9C" stroke-width="0.8" x="570" y="2" width="150" height="36" rx="2"/>
+    <text class="muted" x="595" y="24" font-size="11">Asia 19→24</text>
+
+    <!-- London Open: 02:00 - 05:00 -->
+    <rect fill="rgba(252, 213, 53, 0.20)" stroke="#FCD535" stroke-width="0.8" x="60" y="2" width="90" height="36" rx="2"/>
+    <text class="accent" x="64" y="24" font-size="11">London 02→05</text>
+
+    <!-- NY Open: 07:00 - 10:00 -->
+    <rect fill="rgba(252, 213, 53, 0.20)" stroke="#FCD535" stroke-width="0.8" x="210" y="2" width="90" height="36" rx="2"/>
+    <text class="accent" x="220" y="24" font-size="11">NY 07→10</text>
+
+    <!-- Silver Bullet AM: 10:00-11:00 -->
+    <rect fill="rgba(14, 203, 129, 0.30)" stroke="#0ECB81" stroke-width="1" x="300" y="2" width="30" height="36" rx="2"/>
+
+    <!-- Silver Bullet PM: 14:00-15:00 -->
+    <rect fill="rgba(14, 203, 129, 0.30)" stroke="#0ECB81" stroke-width="1" x="420" y="2" width="30" height="36" rx="2"/>
+
+    <!-- hour ticks -->
+    <g class="hr" font-family="JetBrains Mono, monospace" font-size="10">
+      <text x="0"   y="60" text-anchor="middle">00</text>
+      <text x="90"  y="60" text-anchor="middle">03</text>
+      <text x="180" y="60" text-anchor="middle">06</text>
+      <text x="270" y="60" text-anchor="middle">09</text>
+      <text x="360" y="60" text-anchor="middle">12</text>
+      <text x="450" y="60" text-anchor="middle">15</text>
+      <text x="540" y="60" text-anchor="middle">18</text>
+      <text x="630" y="60" text-anchor="middle">21</text>
+      <text x="720" y="60" text-anchor="middle">24</text>
+    </g>
+  </g>
+
+  <!-- Legend cards -->
+  <g transform="translate(40, 200)">
+    <!-- card 1 -->
+    <rect fill="#181A20" stroke="#FCD535" stroke-width="0.5" x="0" y="0" width="170" height="120" rx="6"/>
+    <rect fill="#FCD535" x="0" y="0" width="6" height="120" rx="2"/>
+    <text class="accent" x="20" y="22" font-size="12">London Open</text>
+    <text class="muted" x="20" y="40" font-size="11">NY 02:00 → 05:00</text>
+    <text class="muted" x="20" y="60" font-size="10">Asya range manipülasyonu,</text>
+    <text class="muted" x="20" y="74" font-size="10">fake-out senaryoları.</text>
+    <text class="hr" x="20" y="100" font-size="10">Strategy A, B</text>
+
+    <!-- card 2 -->
+    <rect fill="#181A20" stroke="#FCD535" stroke-width="0.5" x="185" y="0" width="170" height="120" rx="6"/>
+    <rect fill="#FCD535" x="185" y="0" width="6" height="120" rx="2"/>
+    <text class="accent" x="205" y="22" font-size="12">NY Open</text>
+    <text class="muted" x="205" y="40" font-size="11">NY 07:00 → 10:00</text>
+    <text class="muted" x="205" y="60" font-size="10">Birincil setup penceresi.</text>
+    <text class="muted" x="205" y="74" font-size="10">En yoğun likidite.</text>
+    <text class="hr" x="205" y="100" font-size="10">Strategy A, B, E</text>
+
+    <!-- card 3 -->
+    <rect fill="#181A20" stroke="#0ECB81" stroke-width="0.5" x="370" y="0" width="170" height="120" rx="6"/>
+    <rect fill="#0ECB81" x="370" y="0" width="6" height="120" rx="2"/>
+    <text fill="#0ECB81" x="390" y="22" font-size="12" font-weight="700">Silver Bullet AM</text>
+    <text class="muted" x="390" y="40" font-size="11">NY 10:00 → 11:00</text>
+    <text class="muted" x="390" y="60" font-size="10">Dar pencere, raid hareketi.</text>
+    <text class="muted" x="390" y="74" font-size="10">Sweep + FVG entry.</text>
+    <text class="hr" x="390" y="100" font-size="10">Strategy D</text>
+
+    <!-- card 4 -->
+    <rect fill="#181A20" stroke="#0ECB81" stroke-width="0.5" x="555" y="0" width="170" height="120" rx="6"/>
+    <rect fill="#0ECB81" x="555" y="0" width="6" height="120" rx="2"/>
+    <text fill="#0ECB81" x="575" y="22" font-size="12" font-weight="700">Silver Bullet PM</text>
+    <text class="muted" x="575" y="40" font-size="11">NY 14:00 → 15:00</text>
+    <text class="muted" x="575" y="60" font-size="10">İkinci raid penceresi,</text>
+    <text class="muted" x="575" y="74" font-size="10">London close yakını.</text>
+    <text class="hr" x="575" y="100" font-size="10">Strategy D</text>
+  </g>
+</svg>

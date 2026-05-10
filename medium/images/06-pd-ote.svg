@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="Inter, system-ui, sans-serif">
+  <style>
+    .bg { fill: #0B0E11; }
+    .premium { fill: rgba(246, 70, 93, 0.10); }
+    .discount { fill: rgba(14, 203, 129, 0.10); }
+    .ote { fill: rgba(252, 213, 53, 0.18); stroke: #FCD535; stroke-width: 1.2; stroke-dasharray: 4 4; }
+    .leg { stroke: #EAECEF; stroke-width: 2; fill: none; }
+    .label { fill: #EAECEF; font-size: 12px; font-weight: 600; }
+    .accent { fill: #FCD535; font-size: 13px; font-weight: 700; }
+    .muted { fill: #848E9C; font-size: 11px; }
+    .title { fill: #EAECEF; font-size: 16px; font-weight: 700; letter-spacing: 0.05em; }
+    .grid { stroke: #2B3139; stroke-width: 0.5; stroke-dasharray: 2 4; }
+  </style>
+
+  <rect class="bg" width="800" height="360"/>
+
+  <text class="title" x="20" y="30">Premium / Discount + OTE — Doğru Tarafından Al</text>
+  <text class="muted" x="20" y="50">Bir leg'in üst yarısı = premium (pahalı), alt yarısı = discount (ucuz). OTE = %62-79 retracement.</text>
+
+  <!-- Visualisation: a swing low → swing high leg, then retracement zones -->
+  <g transform="translate(60, 80)">
+    <!-- vertical scale lines -->
+    <!-- top (swing high) -->
+    <line class="grid" x1="0" y1="0" x2="700" y2="0"/>
+    <text class="muted" x="0" y="-4" font-size="10">SWING HIGH (100%)</text>
+    <!-- 50% midpoint (equilibrium) -->
+    <line class="grid" x1="0" y1="115" x2="700" y2="115"/>
+    <text class="muted" x="0" y="111" font-size="10">EQUILIBRIUM (50%)</text>
+    <!-- 62% -->
+    <line class="grid" x1="0" y1="143" x2="700" y2="143"/>
+    <!-- 79% -->
+    <line class="grid" x1="0" y1="182" x2="700" y2="182"/>
+    <!-- bottom (swing low) -->
+    <line class="grid" x1="0" y1="230" x2="700" y2="230"/>
+    <text class="muted" x="0" y="244" font-size="10">SWING LOW (0%)</text>
+
+    <!-- premium zone (50% to 100%) -->
+    <rect class="premium" x="320" y="0" width="380" height="115"/>
+    <text fill="#F6465D" x="490" y="50" font-size="14" font-weight="700">PREMIUM</text>
+    <text fill="#F6465D" x="490" y="70" font-size="11">→ short bul</text>
+
+    <!-- discount zone (0% to 50%) -->
+    <rect class="discount" x="320" y="115" width="380" height="115"/>
+    <text fill="#0ECB81" x="490" y="160" font-size="14" font-weight="700">DISCOUNT</text>
+    <text fill="#0ECB81" x="490" y="180" font-size="11">→ long bul</text>
+
+    <!-- OTE zone (62-79%) -->
+    <rect class="ote" x="320" y="143" width="380" height="40"/>
+    <text class="accent" x="490" y="170" font-size="13">OTE 62-79%</text>
+
+    <!-- the leg itself: from bottom-left to top-middle -->
+    <polyline class="leg" points="0,230 60,210 120,200 180,140 240,80 300,15"
+      stroke-linecap="round" marker-end="url(#arrW)"/>
+
+    <!-- pullback: from peak back into discount/OTE -->
+    <polyline class="leg" points="300,15 350,40 380,80 410,115 440,143 460,165"
+      stroke="#FCD535" stroke-dasharray="4 4" marker-end="url(#arrY)"/>
+
+    <text class="muted" x="160" y="270" font-size="11">leg yukarı yönlü = swing low → swing high</text>
+    <text class="accent" x="370" y="270" font-size="11">retracement OTE'ye giriyor → long entry zone</text>
+  </g>
+
+  <defs>
+    <marker id="arrW" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#EAECEF"/>
+    </marker>
+    <marker id="arrY" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#FCD535"/>
+    </marker>
+  </defs>
+</svg>

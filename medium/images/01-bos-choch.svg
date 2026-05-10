@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="Inter, system-ui, sans-serif">
+  <style>
+    .bg { fill: #0B0E11; }
+    .panel { fill: #181A20; stroke: #2B3139; stroke-width: 1; }
+    .green { fill: #0ECB81; }
+    .red { fill: #F6465D; }
+    .wick-g { stroke: #0ECB81; stroke-width: 1.5; }
+    .wick-r { stroke: #F6465D; stroke-width: 1.5; }
+    .level { stroke: #FCD535; stroke-width: 1.5; stroke-dasharray: 4 4; }
+    .grid { stroke: #2B3139; stroke-width: 0.5; stroke-dasharray: 2 4; }
+    .label { fill: #EAECEF; font-size: 12px; font-weight: 600; }
+    .accent { fill: #FCD535; font-size: 13px; font-weight: 700; }
+    .muted { fill: #848E9C; font-size: 11px; }
+    .title { fill: #EAECEF; font-size: 16px; font-weight: 700; letter-spacing: 0.05em; }
+  </style>
+
+  <rect class="bg" width="800" height="360"/>
+
+  <!-- LEFT PANEL: BOS -->
+  <text class="title" x="20" y="30">BOS — Break of Structure</text>
+  <text class="muted" x="20" y="50">Trend devam ediyor: son swing high kırıldı.</text>
+
+  <!-- candles for BOS pattern: HL, HH, HL, HH, HL, breakout -->
+  <g transform="translate(40, 80)">
+    <!-- baseline -->
+    <line class="grid" x1="0" y1="180" x2="320" y2="180"/>
+    <line class="grid" x1="0" y1="80" x2="320" y2="80"/>
+
+    <!-- candle stack: ascending HH/HL with breakout last -->
+    <!-- c1 -->
+    <line class="wick-g" x1="20" y1="170" x2="20" y2="140"/>
+    <rect class="green" x="14" y="148" width="12" height="18"/>
+    <!-- c2 (LL pullback) -->
+    <line class="wick-r" x1="50" y1="180" x2="50" y2="158"/>
+    <rect class="red" x="44" y="160" width="12" height="14"/>
+    <!-- c3 (HH) -->
+    <line class="wick-g" x1="80" y1="160" x2="80" y2="115"/>
+    <rect class="green" x="74" y="120" width="12" height="34"/>
+    <!-- c4 (HL) -->
+    <line class="wick-r" x1="110" y1="170" x2="110" y2="138"/>
+    <rect class="red" x="104" y="142" width="12" height="22"/>
+    <!-- c5 (small) -->
+    <line class="wick-g" x1="140" y1="155" x2="140" y2="124"/>
+    <rect class="green" x="134" y="128" width="12" height="22"/>
+    <!-- swing high level -->
+    <line class="level" x1="0" y1="115" x2="320" y2="115"/>
+    <text class="accent" x="160" y="108">SWING HIGH</text>
+    <!-- c6 (breakout above swing high) -->
+    <line class="wick-g" x1="180" y1="155" x2="180" y2="80"/>
+    <rect class="green" x="174" y="86" width="12" height="56"/>
+    <!-- c7 close above -->
+    <line class="wick-g" x1="210" y1="115" x2="210" y2="60"/>
+    <rect class="green" x="204" y="64" width="12" height="44"/>
+    <!-- c8 -->
+    <line class="wick-g" x1="240" y1="80" x2="240" y2="40"/>
+    <rect class="green" x="234" y="46" width="12" height="32"/>
+    <!-- BOS arrow + label -->
+    <path d="M195 130 L240 35" stroke="#0ECB81" stroke-width="2" fill="none" marker-end="url(#arrG)"/>
+  </g>
+  <text class="accent" x="265" y="100" font-size="14">↑ BOS</text>
+  <text class="muted" x="265" y="118">trend devam</text>
+
+
+  <!-- RIGHT PANEL: CHoCH -->
+  <text class="title" x="420" y="30">CHoCH — Change of Character</text>
+  <text class="muted" x="420" y="50">Trend kırıldı: ters yöne yapısal kırılım.</text>
+
+  <g transform="translate(440, 80)">
+    <line class="grid" x1="0" y1="180" x2="320" y2="180"/>
+    <line class="grid" x1="0" y1="80" x2="320" y2="80"/>
+
+    <!-- ascending phase first 5 candles -->
+    <line class="wick-g" x1="20" y1="170" x2="20" y2="115"/>
+    <rect class="green" x="14" y="118" width="12" height="48"/>
+    <line class="wick-r" x1="50" y1="170" x2="50" y2="138"/>
+    <rect class="red" x="44" y="142" width="12" height="22"/>
+    <line class="wick-g" x1="80" y1="160" x2="80" y2="80"/>
+    <rect class="green" x="74" y="86" width="12" height="68"/>
+    <line class="wick-r" x1="110" y1="170" x2="110" y2="120"/>
+    <rect class="red" x="104" y="124" width="12" height="36"/>
+    <!-- swing low marker -->
+    <line class="level" x1="0" y1="160" x2="320" y2="160"/>
+    <text class="accent" x="160" y="155">LAST HL</text>
+    <!-- big bearish breakdown -->
+    <line class="wick-r" x1="140" y1="100" x2="140" y2="180"/>
+    <rect class="red" x="134" y="108" width="12" height="60"/>
+    <line class="wick-r" x1="170" y1="160" x2="170" y2="220"/>
+    <rect class="red" x="164" y="164" width="12" height="48"/>
+    <line class="wick-r" x1="200" y1="180" x2="200" y2="245"/>
+    <rect class="red" x="194" y="186" width="12" height="50"/>
+
+    <!-- arrow -->
+    <path d="M155 95 L195 240" stroke="#F6465D" stroke-width="2" fill="none" marker-end="url(#arrR)"/>
+  </g>
+  <text class="accent" x="660" y="240" font-size="14" fill="#F6465D">↓ CHoCH</text>
+  <text class="muted" x="660" y="258">karakter değişti</text>
+
+  <defs>
+    <marker id="arrG" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#0ECB81"/>
+    </marker>
+    <marker id="arrR" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#F6465D"/>
+    </marker>
+  </defs>
+</svg>
