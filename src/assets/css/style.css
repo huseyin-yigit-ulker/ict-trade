@@ -587,7 +587,42 @@ a {
 
 .status-text {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.04em;
+}
+
+.status-dot {
+  font-size: 8px;
+  line-height: 1;
+  display: inline-block;
+}
+
+/* Status palette — distinct color per state for at-a-glance reading */
+.status-text.st-tp,     .status-dot.st-tp,     .chip.st-tp     { color: var(--win); }
+.status-text.st-sl,     .status-dot.st-sl,     .chip.st-sl     { color: var(--loss); }
+.status-text.st-mixed,  .status-dot.st-mixed,  .chip.st-mixed  { color: #FF9332; }   /* deep orange */
+.status-text.st-active, .status-dot.st-active, .chip.st-active { color: var(--accent); }  /* Binance yellow */
+.status-text.st-cancel, .status-dot.st-cancel, .chip.st-cancel { color: var(--muted-2); }
+.status-text.st-wait,   .status-dot.st-wait,   .chip.st-wait   { color: var(--warn); }   /* yellow-orange */
+
+/* Subtle backgrounds for foot chips */
+.chip.st-tp     { background: var(--win-soft); }
+.chip.st-sl     { background: var(--loss-soft); }
+.chip.st-mixed  { background: rgba(255, 147, 50, 0.12); }
+.chip.st-active { background: rgba(252, 213, 53, 0.14); }
+.chip.st-cancel { background: rgba(132, 142, 156, 0.10); }
+.chip.st-wait   { background: rgba(240, 185, 11, 0.10); }
+
+/* Active state pulses to indicate "running trade" */
+.status-dot.st-active {
+  animation: status-pulse 1.4s ease-in-out infinite;
+}
+@keyframes status-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.8); }
 }
 
 .pnl-text {

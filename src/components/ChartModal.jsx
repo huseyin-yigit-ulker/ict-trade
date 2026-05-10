@@ -14,17 +14,19 @@ const ChartModal = () => {
   const [hoverInfo, setHoverInfo] = useState(null);
 
   // Single source of truth for live status: TradeContext.liveStatuses
-  // (the dashboard's polled value). Mapped to a friendly label here.
-  const LIVE_STATUS_LABELS = {
-    'TP Oldu': '✅ Hedef (TP) Alındı',
-    'SL Oldu': '🛑 Stop (SL) Oldu',
-    'TP/SL Aynı Mum': '⚠️ TP/SL Aynı Mum',
-    'İşlem Aktif (Entry Geldi)': '⚡ İşlem Aktif',
-    'İptal (Entry Gelmeden TP/SL)': '❌ İptal (Entry Öncesi Temas)',
-    'Sinyal Bekliyor': '⏳ Sinyal Bekliyor',
+  // (the dashboard's polled value). Compact label + colored dot — same
+  // mapping as the dashboard so the two views read identical.
+  const LIVE_STATUS_DISPLAY = {
+    'TP Oldu':                      { label: 'TP',       cls: 'st-tp' },
+    'SL Oldu':                      { label: 'SL',       cls: 'st-sl' },
+    'TP/SL Aynı Mum':               { label: 'TP+SL',    cls: 'st-mixed' },
+    'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    cls: 'st-active' },
+    'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    cls: 'st-cancel' },
+    'Sinyal Bekliyor':              { label: 'BEKLİYOR', cls: 'st-wait' },
   };
   const ctxLiveStatus = (mode === 'live' && activeSignal) ? liveStatuses[activeSignal.id]?.status : null;
-  const liveTradeStatus = LIVE_STATUS_LABELS[ctxLiveStatus] || (mode === 'live' ? 'Hesaplanıyor...' : '');
+  const liveDisplay = LIVE_STATUS_DISPLAY[ctxLiveStatus] || (ctxLiveStatus ? null : null);
+  const liveTradeStatus = liveDisplay ? liveDisplay.label : (mode === 'live' ? 'Hesaplanıyor...' : '');
 
   // --- Yardımcı Fonksiyonlar ---
   const calculatePnL = (sig) => {
@@ -533,8 +535,9 @@ const ChartModal = () => {
           {mode === 'live' && (
             <div className="position-row">
               <span>Canlı Durum</span>
-              <b style={{ color: liveTradeStatus.includes('İptal') || liveTradeStatus.includes('Stop') ? '#F6465D' : liveTradeStatus.includes('Hedef') ? '#0ECB81' : '#EAECEF' }}>
-                {liveTradeStatus || 'Hesaplanıyor...'}
+              <b className={liveDisplay ? `status-text ${liveDisplay.cls}` : ''}>
+                {liveDisplay && <span className={`status-dot ${liveDisplay.cls}`}>●</span>}
+                {liveTradeStatus}
               </b>
             </div>
           )}

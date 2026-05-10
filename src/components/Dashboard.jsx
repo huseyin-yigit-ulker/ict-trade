@@ -42,6 +42,18 @@ const pctDist = (a, b) => {
   return ((b - a) / a) * 100;
 };
 
+// Compact status display for live trades — short label + colored icon.
+// Each variant has its own dot color so the dashboard reads at-a-glance.
+const LIVE_STATUS_DISPLAY = {
+  'TP Oldu':                      { label: 'TP',       icon: '●', cls: 'st-tp' },
+  'SL Oldu':                      { label: 'SL',       icon: '●', cls: 'st-sl' },
+  'TP/SL Aynı Mum':               { label: 'TP+SL',    icon: '●', cls: 'st-mixed' },
+  'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    icon: '●', cls: 'st-active' },
+  'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
+  'Sinyal Bekliyor':              { label: 'BEKLİYOR', icon: '●', cls: 'st-wait' },
+};
+const liveStatusDisplay = (s) => LIVE_STATUS_DISPLAY[s] || LIVE_STATUS_DISPLAY['Sinyal Bekliyor'];
+
 // signal_time in DB is the OPEN of the trigger bar; the signal actually
 // fires at bar CLOSE (engine runs after the bar closes). Shift the
 // "effective signal time" forward by the LTF duration so all UI labels
@@ -400,9 +412,19 @@ const Dashboard = () => {
             <div className="trade-body">
               <div className="trade-metric">
                 <span className="metric-label">Durum</span>
-                <span className={`status-text ${pnlClass}`}>
-                  {mode === 'live' ? (liveStatus || 'Beklemede') : sig.status}
-                </span>
+                {mode === 'live' ? (
+                  (() => {
+                    const sd = liveStatusDisplay(liveStatus);
+                    return (
+                      <span className={`status-text ${sd.cls}`}>
+                        <span className={`status-dot ${sd.cls}`}>{sd.icon}</span>
+                        {sd.label}
+                      </span>
+                    );
+                  })()
+                ) : (
+                  <span className={`status-text ${pnlClass}`}>{sig.status}</span>
+                )}
               </div>
               <div className="trade-metric">
                 <span className="metric-label">P/L</span>
@@ -448,9 +470,21 @@ const Dashboard = () => {
             </div>
 
             <div className="trade-foot">
-              <div className={`chip ${pnlClass}`}>
-                {mode === 'live' ? liveMeta.label : (pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL'))}
-              </div>
+              {mode === 'live' ? (
+                (() => {
+                  const sd = liveStatusDisplay(liveStatus);
+                  return (
+                    <div className={`chip ${sd.cls}`}>
+                      <span className={`status-dot ${sd.cls}`}>{sd.icon}</span>
+                      {sd.label}
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className={`chip ${pnlClass}`}>
+                  {pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL')}
+                </div>
+              )}
             </div>
 
             <button
