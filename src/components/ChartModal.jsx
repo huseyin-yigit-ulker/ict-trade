@@ -136,10 +136,19 @@ const ChartModal = () => {
         const fetchEndTime = mode === 'live'
           ? Date.now()
           : Math.max(backtestExitTsMs + exitBufferMs, entryTime + (60 * 1000));
-        // Live mode used to lookback 2h before the signal for "context"; user
-        // preference is to start the chart exactly at the signal bar so the
-        // post-signal price action is the focus.
-        const fetchStartTime = entryTime;
+        // signal_time is the OPEN of the bar that triggered the signal; the
+        // signal is actually emitted at bar CLOSE (engine runs after the bar
+        // closes). For live mode we want to see price action from that
+        // moment, so push the chart start forward by one bar duration.
+        const intervalMs = (tf) => {
+          const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
+          if (!m) return 60 * 60 * 1000;
+          const units = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+          return Number(m[1]) * units[m[2].toLowerCase()];
+        };
+        const fetchStartTime = mode === 'live'
+          ? entryTime + intervalMs(activeSignal.ltfTimeframe)
+          : entryTime;
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
         // Backtest trades can span days (1500 1m bars = ~25h). Pick a coarser

@@ -153,6 +153,7 @@ export const TradeProvider = ({ children }) => {
           strategy: item.strategy ?? null,
           quality: item.quality ?? null,
           confluenceScore: Number.isFinite(Number(item.confluence_score)) ? Number(item.confluence_score) : null,
+          ltfTimeframe: item.ltf_timeframe ?? null,
         };
       })
       .filter(Boolean)
