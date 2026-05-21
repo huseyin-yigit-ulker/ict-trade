@@ -1,0 +1,136 @@
+{
+    "ict_signal": [
+        {
+            "id": 2423,
+            "symbol": "XAGUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-20T18:00:00+00:00",
+            "entry_price": 76.85,
+            "sl_price": 77.09628571428571,
+            "tp_price": 73.72428571428571,
+            "created_at": "2026-05-20T19:06:17.337817+00:00",
+            "status": "OPEN",
+            "signal_price": 76.85
+        },
+        {
+            "id": 2418,
+            "symbol": "SOLUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-20T18:00:00+00:00",
+            "entry_price": 85.24000000000001,
+            "sl_price": 84.96842857142857,
+            "tp_price": 87.235,
+            "created_at": "2026-05-20T19:05:21.883765+00:00",
+            "status": "OPEN",
+            "signal_price": 85.24000000000001
+        },
+        {
+            "id": 2419,
+            "symbol": "WIFUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-20T18:00:00+00:00",
+            "entry_price": 0.1915,
+            "sl_price": 0.19062285714285715,
+            "tp_price": 0.1949,
+            "created_at": "2026-05-20T19:05:38.218765+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1915
+        },
+        {
+            "id": 2420,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-20T18:00:00+00:00",
+            "entry_price": 1.6235,
+            "sl_price": 1.5958428571428571,
+            "tp_price": 1.7466428571428574,
+            "created_at": "2026-05-20T19:05:46.417721+00:00",
+            "status": "OPEN",
+            "signal_price": 1.6235
+        },
+        {
+            "id": 2421,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-20T18:00:00+00:00",
+            "entry_price": 0.38939999999999997,
+            "sl_price": 0.3855342857142857,
+            "tp_price": 0.4152,
+            "created_at": "2026-05-20T19:06:11.596646+00:00",
+            "status": "OPEN",
+            "signal_price": 0.38939999999999997
+        },
+        {
+            "id": 2422,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-20T18:00:00+00:00",
+            "entry_price": 4576.25,
+            "sl_price": 4580.993571428571,
+            "tp_price": 4500.1785714285725,
+            "created_at": "2026-05-20T19:06:14.675884+00:00",
+            "status": "OPEN",
+            "signal_price": 4576.25
+        },
+        {
+            "id": 2414,
+            "symbol": "SUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-20T14:00:00+00:00",
+            "entry_price": 0.044645,
+            "sl_price": 0.04475657142857142,
+            "tp_price": 0.04311357142857142,
+            "created_at": "2026-05-20T15:05:54.856206+00:00",
+            "status": "OPEN",
+            "signal_price": 0.044645
+        },
+        {
+            "id": 2415,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-05-20T14:00:00+00:00",
+            "entry_price": 0.36375,
+            "sl_price": 0.35311714285714285,
+            "tp_price": 0.3994,
+            "created_at": "2026-05-20T15:06:08.830031+00:00",
+            "status": "OPEN",
+            "signal_price": 0.36375
+        },
+        {
+            "id": 2416,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-20T14:00:00+00:00",
+            "entry_price": 4576.25,
+            "sl_price": 4581.564857142856,
+            "tp_price": 4488.7528571428575,
+            "created_at": "2026-05-20T15:06:12.065159+00:00",
+            "status": "OPEN",
+            "signal_price": 4576.25
+        },
+        {
+            "id": 2417,
+            "symbol": "XAGUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-20T14:00:00+00:00",
+            "entry_price": 76.85,
+            "sl_price": 77.11542857142857,
+            "tp_price": 73.34142857142857,
+            "created_at": "2026-05-20T15:06:15.545388+00:00",
+            "status": "OPEN",
+            "signal_price": 76.85
+        },
+        {
+            "id": 2413,
+            "symbol": "SUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-05-20T06:00:00+00:00",
+            "entry_price": 0.04477,
+            "sl_price": 0.04486985714285714,
+            "tp_price": 0.043438571428571424,
+            "created_at": "2026-05-20T07:05:55.478374+00:00",
+            "status": "OPEN",
+            "signal_price": 0.04477
+        }
+    ]
+}
