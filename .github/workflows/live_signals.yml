@@ -1,9 +1,11 @@
 name: Live ICT Signal Bot
 
 on:
-  schedule:
-    # Every hour at HH:05 UTC — gives Binance ~5 minutes to finalize the 1h bar.
-    - cron: '5 * * * *'
+  # DEVRE DIŞI: saatlik sinyal üretimi artık dag/dag.py üzerinden ict_signals.yml ile
+  # yapılıyor. Çift Telegram/DB insert olmaması için bu workflow'un cron'u kapatıldı.
+  # live_runner.py hâlâ geçerli (test_dag_parity ile parity) — yalnızca manuel tetiklenir.
+  # schedule:
+  #   - cron: '5 * * * *'
   workflow_dispatch:
 
 permissions:

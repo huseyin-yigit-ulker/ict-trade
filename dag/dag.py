@@ -25,13 +25,20 @@ from __future__ import annotations
 # ============================================================================
 # AIRFLOW
 # ============================================================================
-from airflow.decorators import dag, task
-from airflow.utils.dates import days_ago
-from airflow.timetables.trigger import CronTriggerTimetable
+# Airflow is optional: present when deployed as an Airflow DAG, absent when this
+# same file is run standalone (e.g. on a GitHub Actions runner via `python dag/dag.py`).
+try:
+    from airflow.decorators import dag, task
+    from airflow.utils.dates import days_ago
+    from airflow.timetables.trigger import CronTriggerTimetable
+    _AIRFLOW_AVAILABLE = True
+except ImportError:
+    _AIRFLOW_AVAILABLE = False
 
 # ============================================================================
 # STDLIB / THIRD-PARTY
 # ============================================================================
+import os
 import time
 import uuid
 import datetime as dt
@@ -48,10 +55,18 @@ from sqlalchemy import create_engine, text
 # CONFIG (kept inline so DAG is fully standalone)
 # ============================================================================
 
-TELEGRAM_BOT_TOKEN = 'your_telegram_bot_token'
-TELEGRAM_CHAT_ID = 'your_telegram_chat_id'
+# Secrets come from the environment (GitHub Actions secrets / Airflow env / local .env).
+# NEVER hard-code credentials here — this file is committed to git.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # silently loads a local .env if present; no-op in CI
+except Exception:
+    pass
 
-DB_CONNECTION_STRING = "postgresql://postgres.xxxx:your_password@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+DB_CONNECTION_STRING = os.getenv("DB_CONNECTION_STRING", "")
 
 INTERVAL = "1h"
 HTF_RULE = "4h"
@@ -1169,6 +1184,9 @@ def run_engine(symbol: str, df: pd.DataFrame, *,
 # ============================================================================
 
 def send_telegram_message(text_msg: str):
+    if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
+        print("  telegram skipped (TELEGRAM_BOT_TOKEN/CHAT_ID not set)")
+        return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text_msg, "parse_mode": "HTML"}
     try:
@@ -1293,43 +1311,70 @@ def process_symbol(symbol: str) -> int:
 
 
 # ============================================================================
-# DAG
+# SCAN LOOP (shared by Airflow task and standalone runner)
 # ============================================================================
 
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'start_date': days_ago(1),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': dt.timedelta(minutes=2),
-}
+def run_scan() -> int:
+    """Walk every symbol once at its last closed bar. Used by both Airflow and CLI."""
+    print(f"Toplam Taranacak Sembol Sayısı: {len(SYMBOLS)}")
+    total = 0
+    for sym in SYMBOLS:
+        print(f"=== {sym} ===")
+        try:
+            total += process_symbol(sym)
+        except Exception as e:
+            print(f"  ERROR analyzing {sym}: {e}")
+    print(f"\nDone. {total} new signal(s) emitted.")
+    return total
 
 
-@dag(
-    dag_id="huseyin_llm_hybrid_ict",
-    default_args=default_args,
-    schedule=CronTriggerTimetable("5 * * * *", timezone="UTC"),
-    catchup=False,
-    tags=['trading', 'ict', 'crypto', 'mtf'],
-)
-def ict_dag():
+# ============================================================================
+# AIRFLOW DAG (only built when Airflow is installed)
+# ============================================================================
 
-    @task()
-    def scan_market():
-        time.sleep(2)
-        print(f"Toplam Taranacak Sembol Sayısı: {len(SYMBOLS)}")
-        total = 0
-        for sym in SYMBOLS:
-            print(f"=== {sym} ===")
-            try:
-                total += process_symbol(sym)
-            except Exception as e:
-                print(f"  ERROR analyzing {sym}: {e}")
-        print(f"\nDone. {total} new signal(s) emitted.")
+if _AIRFLOW_AVAILABLE:
+    default_args = {
+        'owner': 'airflow',
+        'depends_on_past': False,
+        'start_date': days_ago(1),
+        'email_on_failure': False,
+        'email_on_retry': False,
+        'retries': 1,
+        'retry_delay': dt.timedelta(minutes=2),
+    }
 
-    scan_market()
+    @dag(
+        dag_id="huseyin_llm_hybrid_ict",
+        default_args=default_args,
+        schedule=CronTriggerTimetable("5 * * * *", timezone="UTC"),
+        catchup=False,
+        tags=['trading', 'ict', 'crypto', 'mtf'],
+    )
+    def ict_dag():
+
+        @task()
+        def scan_market():
+            time.sleep(2)
+            run_scan()
+
+        scan_market()
+
+    dag = ict_dag()
 
 
-dag = ict_dag()
+# ============================================================================
+# STANDALONE ENTRY POINT (GitHub Actions / cron / local)
+#   python dag/dag.py
+# Reads DB_CONNECTION_STRING, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID from env.
+# ============================================================================
+
+def main() -> None:
+    if not DB_CONNECTION_STRING:
+        raise SystemExit("DB_CONNECTION_STRING ortam değişkeni eksik.")
+    if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
+        print("UYARI: Telegram env (TOKEN/CHAT_ID) yok — sinyaller DB'ye yazılır ama mesaj atılmaz.")
+    run_scan()
+
+
+if __name__ == "__main__":
+    main()
