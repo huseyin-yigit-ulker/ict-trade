@@ -134,6 +134,13 @@ OHLCV_COLS = ["open", "high", "low", "close", "volume"]
 BINANCE_FAPI = "https://fapi.binance.com/fapi/v1/klines"
 BINANCE_API  = "https://api.binance.com/api/v3/klines"
 
+# Optional outbound proxy for Binance. US-based runners (e.g. GitHub-hosted)
+# get HTTP 451 from Binance; routing through a proxy in an allowed region (TR/EU)
+# fixes it. Set BINANCE_PROXY to a full proxy URL, e.g.:
+#   http://user:pass@host:port   or   socks5://host:port   (socks needs PySocks)
+BINANCE_PROXY = os.getenv("BINANCE_PROXY", "").strip()
+_PROXIES = {"http": BINANCE_PROXY, "https": BINANCE_PROXY} if BINANCE_PROXY else None
+
 
 # ============================================================================
 # DATA FETCH (Binance Futures with Spot fallback) + MTF aggregation
@@ -148,12 +155,12 @@ def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int,
         params = {"symbol": symbol, "interval": interval,
                   "startTime": cursor, "endTime": end_ms, "limit": limit}
         try:
-            r = requests.get(base, params=params, timeout=20)
+            r = requests.get(base, params=params, timeout=20, proxies=_PROXIES)
             r.raise_for_status()
             chunk = r.json()
         except Exception as e:
             print(f"  fetch error ({base}): {e}")
-            return pd.DataFrame(columns=OHLCV_COLS)
+            break  # let the spot fallback below run (e.g. on a 451 from futures)
         if not chunk:
             break
         rows.extend(chunk)

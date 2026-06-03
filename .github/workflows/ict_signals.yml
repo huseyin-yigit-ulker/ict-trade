@@ -31,11 +31,14 @@ jobs:
 
       - name: Bağımlılıkları yükle
         # dag/dag.py tek dosya, Airflow GEREKMEZ (try/except ile opsiyonel).
-        run: pip install pandas requests sqlalchemy psycopg2-binary python-dotenv
+        # requests[socks] -> socks5:// proxy desteği (PySocks).
+        run: pip install "pandas" "requests[socks]" sqlalchemy psycopg2-binary python-dotenv
 
       - name: DAG sinyal üreticiyi çalıştır
         env:
           DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Binance 451 (ABD bloğu) için TR/EU proxy. Repo secret olarak ekle.
+          BINANCE_PROXY: ${{ secrets.BINANCE_PROXY }}
         run: python dag/dag.py
