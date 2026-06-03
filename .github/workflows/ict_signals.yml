@@ -1,9 +1,11 @@
 name: ICT Signal Bot (DAG standalone)
 
 on:
-  schedule:
-    # Every hour at HH:05 UTC — Binance has ~5 min to finalize the closed 1h bar.
-    - cron: '5 * * * *'
+  # Saatlik üretim artık Oracle Cloud VM'de cron ile yapılıyor (bkz. dag/DEPLOY_ORACLE.md).
+  # GitHub'ın ABD runner'ları Binance'ten 451 aldığı için buradaki cron kapatıldı.
+  # Manuel tetiklenebilir (ama 451 alır; sadece proxy eklenirse anlamlı).
+  # schedule:
+  #   - cron: '5 * * * *'
   workflow_dispatch:
 
 permissions:

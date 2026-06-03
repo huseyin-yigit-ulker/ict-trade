@@ -1,0 +1,7 @@
+# Standalone deps for running dag/dag.py outside Airflow (VM / cron / GitHub).
+# Airflow is intentionally NOT listed — dag.py imports it optionally.
+pandas>=2.0
+requests>=2.31
+SQLAlchemy>=1.4
+psycopg2-binary>=2.9
+python-dotenv>=1.0
