@@ -17,3 +17,8 @@ backtest/out/
 .venv/
 venv/
 .DS_Store
+
+# SSH keys / secrets — ASLA commit etme
+keys/
+*.key
+*.pem

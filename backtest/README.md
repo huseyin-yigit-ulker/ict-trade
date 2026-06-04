@@ -80,29 +80,21 @@ weight table is recommended before any live use.
 
 ## Live Mode
 
-[`live_runner.py`](live_runner.py) runs the same engine on the most recent
-closed bar and writes new signals to the **live** Supabase table
-(`ict_trade.signals`) plus an optional Telegram notification.
+Production live signals run from [`../dag/dag.py`](../dag/dag.py) — the same engine,
+standalone (no Airflow required). It runs the engine on the most recent closed bar
+and writes new signals to the **live** Supabase table (`ict_trade.signals`) plus an
+optional Telegram notification.
 
-Required env (locally via `.env`, in CI via secrets):
+Required env (via `.env` or process env):
 
 | Var | Purpose |
 |---|---|
 | `DB_CONNECTION_STRING` | Postgres DSN to the **live** Supabase project |
-| `DB_TABLE` | `ict_trade.signals` (default) |
 | `TELEGRAM_BOT_TOKEN` | optional — without it Telegram is skipped |
 | `TELEGRAM_CHAT_ID` | optional — channel/group id |
+| `BINANCE_PROXY` | optional — proxy URL for geo-blocked (US 451) runners |
 
-Local dry-run:
-```bash
-cd backtest
-pip install -r requirements.txt
-python live_runner.py   # walks the 22 symbols, only emits at last closed bar
-```
-
-CI: [`.github/workflows/live_signals.yml`](../.github/workflows/live_signals.yml)
-runs at HH:05 UTC every hour. Configure these GitHub Secrets:
-`DB_CONNECTION_STRING`, `DB_TABLE`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-
-The runner is idempotent: it checks `(symbol, signal_time, direction)` before
-inserting, so re-running the same hour is safe.
+Deployment is an hourly cron on a EU-region VM (Binance blocks US IPs with 451).
+See [`../dag/DEPLOY_ORACLE.md`](../dag/DEPLOY_ORACLE.md) for the Oracle Cloud
+Always Free setup. The runner is idempotent: it checks
+`(symbol, signal_time, direction)` before inserting, so re-running an hour is safe.

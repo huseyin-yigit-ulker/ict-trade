@@ -1,6 +1,6 @@
 """DAG-vs-backtest parity test.
 
-The DAG and live_runner only fetch the last WARMUP_HOURS of data, then run
+The DAG (dag/dag.py) only fetches the last WARMUP_HOURS of data, then runs
 the engine on the last bar. This tests whether that limited-window run
 produces the same signal as a long-history backtest at the same bar T.
 
@@ -22,7 +22,7 @@ from ict.data import fetch_klines
 from engine import run_engine
 
 
-WARMUP_HOURS = 6000   # must match dag/dag.py and live_runner.py (~250 days)
+WARMUP_HOURS = 6000   # must match dag/dag.py (~250 days)
 
 
 def signal_key(s) -> tuple:
