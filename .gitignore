@@ -22,3 +22,9 @@ venv/
 keys/
 *.key
 *.pem
+
+# Generated sync/validation artifacts (DB dumps, kline caches, previews)
+sync/backup/
+sync/out/
+backtest/validation/klines/
+backtest/validation/out/

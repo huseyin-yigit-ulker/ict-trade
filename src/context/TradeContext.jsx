@@ -258,7 +258,10 @@ export const TradeProvider = ({ children }) => {
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
+          // RPC is a POST: PostgREST resolves the function schema from Content-Profile,
+          // not Accept-Profile. Without it the call hits public.* and 404s (PGRST202).
           'Accept-Profile': backtestSchema,
+          'Content-Profile': backtestSchema,
           'Content-Type': 'application/json'
         },
         body: '{}'

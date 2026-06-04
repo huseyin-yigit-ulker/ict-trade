@@ -45,8 +45,11 @@ nano .env
 DB_CONNECTION_STRING=postgresql://postgres.xxxx:SIFRE@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
 TELEGRAM_BOT_TOKEN=123456789:AAH...
 TELEGRAM_CHAT_ID=your_telegram_chat_id
+# Günlük backtest senkronu (sync/) için — backtest Supabase'inin yazma yetkili postgres bağlantısı:
+BACKTESTING_DB_CONNECTION_STRING=postgresql://postgres.yyyy:SIFRE@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
 ```
 > Not: Eski hardcoded DB şifreni ve Telegram token'ını **yenilemen** önerilir (git geçmişinde açıktalar).
+> `BACKTESTING_DB_CONNECTION_STRING` sadece `sync/` işleri (canlı→backtest aktarımı) için gerekir; saatlik DAG kullanmaz.
 
 ## 5. Kurulum + test
 
@@ -73,6 +76,27 @@ En alta ekle (HH:05'te, bar kapandıktan sonra):
 5 * * * * cd /home/ubuntu/ict-trade && /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-bot.log 2>&1
 ```
 > VM saati UTC'dir (cron UTC çalışır) — bot zaten UTC bar mantığında, uyumlu.
+
+## 7b. Günlük backtest senkronu (canlı sinyaller → trading_signals)
+
+Her gün, **1 gün geriden** (sinyaller TP/SL ile sonuçlansın diye) canlı sinyalleri sonuçlarıyla
+backtest Supabase'indeki `ict_trade.trading_signals`'a aktarır. Son 3 günü her koşuda yeniden
+tarar (gecikmeli sonuçlananları yakalar) ve idempotenttir (tekrar çalışmak çift kayıt üretmez).
+`.env`'de `BACKTESTING_DB_CONNECTION_STRING` gerektirir (bkz. adım 4). Binance erişimi gerektiği için
+bu da VM'de çalışmalı (GitHub runner 451 alır).
+
+Saatlik DAG'ın altına ekle (00:30 UTC, "dün" tamamen kapanmışken):
+```
+30 0 * * * cd /home/ubuntu/ict-trade && /home/ubuntu/ict-trade/.venv/bin/python sync/sync_daily.py >> /home/ubuntu/ict-sync.log 2>&1
+```
+
+İlgili komutlar:
+```
+./.venv/bin/python sync/sync_daily.py --dry-run        # DB'ye yazmadan önizle
+./.venv/bin/python sync/backfill_2026.py --dry-run     # 2026 backfill önizleme
+./.venv/bin/python sync/backfill_2026.py --wipe-scope all   # tek seferlik: sil + 2026'yı doldur
+```
+> Şema/RPC: `supabase/trading_signals_schema.sql` + `supabase/backtest_analytics.sql` bir kez uygulanır.
 
 ## 8. İzleme
 
