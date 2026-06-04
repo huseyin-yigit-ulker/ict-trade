@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
+import EquityCurvePanel from './viz/EquityCurvePanel';
 
 const SummaryModal = () => {
   const { allSignals, selectedSymbols, setShowSummary, mode, liveStatuses, backtestInsights } = useTradeContext();
@@ -111,6 +112,23 @@ const SummaryModal = () => {
   const sqlWeekdays = Array.isArray(backtestInsights?.weekdays) ? backtestInsights.weekdays.slice(0, 7) : [];
   const sqlSessions = Array.isArray(backtestInsights?.sessions) ? backtestInsights.sessions.slice(0, 4) : [];
 
+  // `filtered` is DESC by dateObj — equity needs ASC so the curve runs left→right.
+  const curveSignals = mode === 'backtest'
+    ? [...filtered].sort((a, b) => a.dateObj - b.dateObj)
+    : [];
+
+  // Per-TRADE biggest winners (not per-symbol) + how much of all profit the top 5 carry.
+  const winnerStats = (() => {
+    const pos = filtered
+      .map((s) => ({ s, r: calculatePnL(s) }))
+      .filter((x) => Number.isFinite(x.r) && x.r > 0)
+      .sort((a, b) => b.r - a.r);
+    const top5 = pos.slice(0, 5);
+    const totalPos = pos.reduce((sum, x) => sum + x.r, 0);
+    const top5Sum = top5.reduce((sum, x) => sum + x.r, 0);
+    return { top5, share: totalPos > 0 ? (top5Sum / totalPos) * 100 : 0, topR: top5[0]?.r || 1 };
+  })();
+
   return (
     <div id="summary-modal" className="summary-screen" style={{ display: 'block' }}>
       <div className="summary-hero">
@@ -204,6 +222,66 @@ const SummaryModal = () => {
           </button>
         </div>
       </div>
+
+      {mode === 'backtest' && curveSignals.length >= 2 && (
+        <div className="summary-overview">
+          <EquityCurvePanel
+            signals={curveSignals}
+            calculatePnL={calculatePnL}
+            profitFactor={sqlSummary?.profit_factor}
+          />
+        </div>
+      )}
+
+      {mode === 'backtest' && (sqlSummary || winnerStats.top5.length > 0) && (
+        <div className="summary-overview">
+          <div className="overview-card asym-card">
+            <div className="summary-title">Asimetri</div>
+            <div className="asym-headline">DÜŞÜK İSABET · YÜKSEK GETİRİ</div>
+            <div className="summary-metric">
+              <span>Kazanç (Win Rate)</span>
+              <b className={Number(sqlSummary?.win_rate || 0) >= 50 ? 'win' : 'loss'}>
+                {Number(sqlSummary?.win_rate || 0).toFixed(1)}%
+              </b>
+            </div>
+            <div className="summary-metric">
+              <span>Beklenti</span>
+              <b className={Number(sqlSummary?.expectancy_r || 0) >= 0 ? 'win' : 'loss'}>
+                {Number(sqlSummary?.expectancy_r || 0) >= 0 ? '+' : ''}{Number(sqlSummary?.expectancy_r || 0).toFixed(2)}R
+              </b>
+            </div>
+            <div className="asym-bar">
+              <div className="asym-bar__fill" style={{ width: `${Math.min(100, winnerStats.share)}%` }} />
+            </div>
+            <div className="asym-note">
+              En iyi 5 işlem toplam brüt kârın %{winnerStats.share.toFixed(0)}'ini taşıyor — az kazanır, büyük kazanır; sistem böyle tasarlandı.
+            </div>
+          </div>
+
+          <div className="overview-card">
+            <div className="summary-title">En Büyük Kazançlar</div>
+            {winnerStats.top5.length === 0 && <div className="summary-empty">Kayıt yok</div>}
+            <div className="big-win-list">
+              {winnerStats.top5.map((w, i) => (
+                <div key={w.s.id} className="big-win-row">
+                  <span className="big-win-rank">{i === 0 ? '⭐' : i + 1}</span>
+                  <span className="symbol-box">{w.s.symbol}</span>
+                  <span className={`big-win-dir ${w.s.dir === 'LONG' ? 'win' : 'loss'}`}>
+                    {w.s.dir === 'LONG' ? '↗' : '↘'}
+                  </span>
+                  <span className="big-win-date">
+                    {w.s.dateObj.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}
+                  </span>
+                  <span className="big-win-bar">
+                    <span className="big-win-bar__fill" style={{ width: `${(w.r / winnerStats.topR) * 100}%` }} />
+                  </span>
+                  <b className="big-win-r">+{w.r.toFixed(1)}R</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="summary-overview">
         <div className="overview-card">

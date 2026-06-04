@@ -1,5 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
+import Sparkline from './viz/Sparkline';
+
+// Stride-sample a long series down to ~max points so a several-thousand-trade
+// bucket doesn't collapse into an unreadable smear in a tiny sparkline.
+const downsample = (arr, max = 60) => {
+  if (arr.length <= max) return arr;
+  const out = [];
+  const step = arr.length / max;
+  for (let i = 0; i < max; i++) out.push(arr[Math.floor(i * step)]);
+  out.push(arr[arr.length - 1]);
+  return out;
+};
+
+// Time-ascending cumulative-R series for a list of signals (uses caller's pnl fn).
+const cumulativeR = (list, pnl) => {
+  const asc = [...list].sort((a, b) => a.dateObj - b.dateObj);
+  let c = 0;
+  return asc.map((s) => (c += Number(pnl(s)) || 0));
+};
+
+// 5-bin R distribution — losses, 0–1, 1–2, 2–4, 4+. Zero/non-finite (unfilled) ignored.
+const rHistogram = (rs) => {
+  const bins = [0, 0, 0, 0, 0];
+  rs.forEach((r) => {
+    if (!Number.isFinite(r) || r === 0) return;
+    if (r < 0) bins[0] += 1;
+    else if (r < 1) bins[1] += 1;
+    else if (r < 2) bins[2] += 1;
+    else if (r < 4) bins[3] += 1;
+    else bins[4] += 1;
+  });
+  return bins;
+};
 
 // Dynamic decimal precision: small-cap tokens (PEPE, SHIB, ...) have many
 // significant digits below the decimal — `toFixed(4)` would round them to 0.
@@ -105,7 +138,7 @@ const Dashboard = () => {
     backtestAccessGranted,
     setBacktestAccessGranted
   } = useTradeContext();
-  const BACKTEST_PASSWORD = 'ict-trade26';
+  const BACKTEST_PASSWORD = '2020';
   const [backtestPasswordInput, setBacktestPasswordInput] = useState('');
   const [backtestPasswordError, setBacktestPasswordError] = useState('');
 
@@ -355,6 +388,131 @@ const Dashboard = () => {
     });
   }, [selectedDay]);
 
+  // Always-visible "edge cockpit" strip. Backtest pulls authoritative numbers
+  // from the SQL summary RPC; live derives them from the per-signal live status.
+  // Deliberately NO win-rate ring — a 17.9% arc misreads as "failing" on a
+  // healthy +428R book; the rising Toplam-R spark carries the real story.
+  const renderKpiHero = () => {
+    let winRate, totalR, pf, exp, totalTrades, closedTrades, cum, hist;
+    if (mode === 'backtest') {
+      // Derive everything from the SAME filtered, in-view set as the spark/histogram,
+      // so headline + curve + bins stay consistent and react to symbol/date filters.
+      if (!filteredSignals.length) return null;
+      const closedList = filteredSignals.filter((x) => x.status === 'TP' || x.status === 'SL');
+      const closedR = closedList.map((x) => (Number.isFinite(x.pnlR) ? x.pnlR : 0));
+      const sumPos = closedR.reduce((a, r) => a + (r > 0 ? r : 0), 0);
+      const sumNeg = closedR.reduce((a, r) => a + (r < 0 ? r : 0), 0);
+      const wins = closedList.filter((x) => x.status === 'TP').length;
+      closedTrades = closedList.length;
+      totalTrades = filteredSignals.length;
+      winRate = closedTrades ? (wins / closedTrades) * 100 : 0;
+      totalR = closedR.reduce((a, r) => a + r, 0);
+      exp = closedTrades ? totalR / closedTrades : 0;
+      pf = sumNeg !== 0 ? sumPos / Math.abs(sumNeg) : null;
+      cum = downsample(cumulativeR(filteredSignals, calculatePnL), 80);
+      hist = rHistogram(filteredSignals.map((x) => x.pnlR));
+    } else {
+      if (!filteredSignals.length) return null;
+      const c = summarizeLiveCounts(filteredSignals);
+      const denom = c.tp + c.sl;
+      winRate = denom ? (c.tp / denom) * 100 : 0;
+      totalR = c.rScore;
+      pf = null;
+      exp = denom ? c.rScore / denom : 0;
+      totalTrades = filteredSignals.length;
+      closedTrades = denom;
+      const asc = [...filteredSignals].sort((a, b) => a.dateObj - b.dateObj);
+      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status));
+      let cc = 0;
+      cum = downsample(rs.map((r) => (cc += r)), 80);
+      hist = rHistogram(rs);
+    }
+    const histMax = Math.max(1, ...hist);
+    const HIST_LABELS = ['<0', '0-1', '1-2', '2-4', '4+'];
+
+    return (
+      <div className="kpi-hero">
+        <div className="kpi-cell">
+          <div className="kpi-cell__label">Win Rate</div>
+          <div className="kpi-cell__value">{winRate.toFixed(1)}%</div>
+          <div className="kpi-cell__sub">{closedTrades} kapanan</div>
+        </div>
+        <div className="kpi-cell kpi-cell--wide">
+          <div className="kpi-cell__label">Toplam R</div>
+          <div className={`kpi-cell__value ${totalR >= 0 ? 'win' : 'loss'}`}>
+            {totalR >= 0 ? '+' : ''}{totalR.toFixed(1)}R
+          </div>
+          <div className="kpi-spark">
+            {cum.length >= 2 && <Sparkline values={cum} width={120} height={22} variant="area" />}
+          </div>
+        </div>
+        {pf != null && (
+          <div className="kpi-cell">
+            <div className="kpi-cell__label">Profit Factor</div>
+            <div className="kpi-cell__value">{Number.isFinite(pf) ? pf.toFixed(2) : '--'}</div>
+            <div className="kpi-cell__sub">
+              {pf >= 1.3 ? <span className="win">sağlıklı</span>
+                : pf >= 1 ? 'pozitif' : <span className="loss">negatif</span>}
+            </div>
+          </div>
+        )}
+        <div className="kpi-cell">
+          <div className="kpi-cell__label">Beklenti</div>
+          <div className={`kpi-cell__value ${exp >= 0 ? 'win' : 'loss'}`}>
+            {exp >= 0 ? '+' : ''}{exp.toFixed(2)}R
+          </div>
+          <div className="kpi-cell__sub">işlem başına</div>
+        </div>
+        <div className="kpi-cell">
+          <div className="kpi-cell__label">İşlem</div>
+          <div className="kpi-cell__value">{totalTrades}</div>
+          <div className="kpi-cell__sub">{mode === 'backtest' ? 'sinyal' : 'canlı'}</div>
+        </div>
+        <div className="kpi-cell kpi-cell--hist">
+          <div className="kpi-cell__label">R Dağılımı</div>
+          <div className="r-hist">
+            {hist.map((cnt, i) => (
+              <div key={i} className="r-hist__col" title={`${HIST_LABELS[i]}R: ${cnt}`}>
+                {cnt > 0 && (
+                  <div className={`r-hist__bar ${i === 0 ? 'r-hist__bar--loss' : 'r-hist__bar--win'}`}
+                       style={{ height: `${(cnt / histMax) * 100}%` }} />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="r-hist__axis">
+            {HIST_LABELS.map((l) => <span key={l}>{l}</span>)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Per-period R-bar (scaled to the level's max |R|) + a downsampled cumulative
+  // spark, so the Years→Months→Days drill is instantly comparable at a glance.
+  const drillExtra = (bucket, maxAbs) => (
+    <>
+      <div className="drill-rbar">
+        <div
+          className="drill-rbar__fill"
+          style={{
+            width: `${Math.min(100, (Math.abs(bucket.totalR) / maxAbs) * 100)}%`,
+            background: bucket.totalR >= 0 ? 'var(--win)' : 'var(--loss)',
+          }}
+        />
+      </div>
+      {bucket.list.length >= 2 && (
+        <Sparkline
+          className="drill-spark"
+          values={downsample(cumulativeR(bucket.list, calculatePnL), 60)}
+          width={150}
+          height={20}
+          variant="area"
+        />
+      )}
+    </>
+  );
+
   const renderTradeCards = (trades) => (
     <div className="trade-grid">
       {trades.map((sig) => {
@@ -472,6 +630,36 @@ const Dashboard = () => {
               </div>
             </div>
 
+            {(() => {
+              const rk = Math.abs(riskPct ?? 0);
+              const rw = Math.abs(targetPct ?? 0);
+              if (!(rk > 0 && rw > 0)) return null;
+              const riskW = (rk / (rk + rw)) * 100;
+              let nowLeft = null;
+              if (mode === 'live' && liveMeta.label === 'AKTIF'
+                  && typeof liveLastPrice === 'number' && sig.tp !== sig.sl) {
+                const frac = sig.dir === 'LONG'
+                  ? (liveLastPrice - sig.sl) / (sig.tp - sig.sl)
+                  : (sig.sl - liveLastPrice) / (sig.sl - sig.tp);
+                nowLeft = Math.max(0, Math.min(1, frac)) * 100;
+              }
+              return (
+                <div className="rr-bar" title={`Risk ${rk.toFixed(2)}% · Ödül ${rw.toFixed(2)}%`}>
+                  <div className="rr-bar__track">
+                    <div className="rr-bar__risk" style={{ width: `${riskW}%` }} />
+                    <div className="rr-bar__reward" style={{ width: `${100 - riskW}%` }} />
+                    <div className="rr-bar__entry" style={{ left: `${riskW}%` }} />
+                    {nowLeft != null && (
+                      <div
+                        className={`rr-bar__now rr-bar__now--${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'down' : 'up'}`}
+                        style={{ left: `${nowLeft}%` }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="trade-foot">
               {mode === 'live' ? (
                 (() => {
@@ -505,6 +693,10 @@ const Dashboard = () => {
       })}
     </div>
   );
+
+  const yearsMaxR = Math.max(1, ...yearBuckets.map((b) => Math.abs(b.totalR)));
+  const monthsMaxR = Math.max(1, ...monthBuckets.map((b) => Math.abs(b.totalR)));
+  const daysMaxR = Math.max(1, ...dayBuckets.map((b) => Math.abs(b.totalR)));
 
   if (mode === 'backtest') {
     if (!backtestAccessGranted) {
@@ -547,6 +739,7 @@ const Dashboard = () => {
     return (
       <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
         <div className="backtest-flow">
+          {renderKpiHero()}
           <div className="drill-header">
             <div className="drill-path">
               {!selectedYear && 'Yıllar'}
@@ -575,6 +768,7 @@ const Dashboard = () => {
                   <div className="drill-meta">{y.count} işlem</div>
                   <div className="drill-meta">TP/SL: <span className="win">{y.tp}</span>/<span className="loss">{y.sl}</span></div>
                   <div className={`drill-r ${y.totalR >= 0 ? 'win' : 'loss'}`}>{y.totalR >= 0 ? '+' : ''}{y.totalR.toFixed(2)}R</div>
+                  {drillExtra(y, yearsMaxR)}
                 </button>
               ))}
             </div>
@@ -588,6 +782,7 @@ const Dashboard = () => {
                   <div className="drill-meta">{m.count} işlem</div>
                   <div className="drill-meta">TP/SL: <span className="win">{m.tp}</span>/<span className="loss">{m.sl}</span></div>
                   <div className={`drill-r ${m.totalR >= 0 ? 'win' : 'loss'}`}>{m.totalR >= 0 ? '+' : ''}{m.totalR.toFixed(2)}R</div>
+                  {drillExtra(m, monthsMaxR)}
                 </button>
               ))}
             </div>
@@ -606,6 +801,7 @@ const Dashboard = () => {
                     <div className="drill-meta">{d.count} işlem</div>
                     <div className="drill-meta">TP/SL: <span className="win">{d.tp}</span>/<span className="loss">{d.sl}</span></div>
                     <div className={`drill-r ${d.totalR >= 0 ? 'win' : 'loss'}`}>{d.totalR >= 0 ? '+' : ''}{d.totalR.toFixed(2)}R</div>
+                    {drillExtra(d, daysMaxR)}
                   </button>
                 ))}
               </div>
@@ -636,6 +832,7 @@ const Dashboard = () => {
 
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+      {renderKpiHero()}
       {Object.keys(groupedLive).map((dateKey) => {
         const trades = groupedLive[dateKey];
         const counts = summarizeLiveCounts(trades);
