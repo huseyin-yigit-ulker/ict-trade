@@ -1141,3 +1141,103 @@ button.chip   { cursor: pointer; }
   .summary-screen { padding: 16px; }
   .day-pill { min-width: 165px; }
 }
+
+/***************************
+  Live price ticker (bottom)
+***************************/
+body { padding-bottom: 40px; }   /* room for the fixed ticker */
+
+.live-ticker {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #20242C;                 /* lighter than body for separation */
+  border-top: 1px solid #3a4150;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+  z-index: 60;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 13.5px;
+}
+
+.live-ticker__label {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  height: 100%;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: var(--accent);               /* Binance yellow — high contrast */
+  background: #14171C;
+  border-right: 1px solid #3a4150;
+}
+
+.live-ticker__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: #C7CBD1;
+}
+
+.live-ticker__dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted-2);
+}
+.live-ticker__dot.live {
+  background: var(--win);
+  box-shadow: 0 0 0 0 rgba(14, 203, 129, 0.6);
+  animation: lt-pulse 1.6s infinite;
+}
+@keyframes lt-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(14, 203, 129, 0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(14, 203, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(14, 203, 129, 0); }
+}
+
+.live-ticker__viewport {
+  flex: 1 1 auto;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+          mask-image: linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+}
+
+.live-ticker__track {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  will-change: transform;
+  animation: lt-scroll 60s linear infinite;
+}
+.live-ticker__viewport:hover .live-ticker__track { animation-play-state: paused; }
+
+@keyframes lt-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.lt-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 20px;
+  border-right: 1px solid #2f3641;
+}
+.lt-sym   { color: #FFFFFF; font-weight: 800; letter-spacing: 0.3px; }
+.lt-price { color: #EAECEF; font-weight: 500; }   /* bright, readable */
+.lt-chg { font-weight: 700; }
+.lt-chg.up   { color: #2EE6A6; }                  /* brighter green */
+.lt-chg.down { color: #FF6175; }                  /* brighter red */
+
+@media (prefers-reduced-motion: reduce) {
+  .live-ticker__track { animation: none; }
+}

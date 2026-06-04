@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import ChartModal from './components/ChartModal';
 import StatsModal from './components/StatsModal';
 import SummaryModal from './components/SummaryModal';
+import LiveTicker from './components/LiveTicker';
 
 const MainContent = () => {
   const { isLoaded, activeSignal, showStats, showSummary } = useTradeContext();
@@ -18,6 +19,7 @@ const MainContent = () => {
       {activeSignal && <ChartModal />}
       {showStats && <StatsModal />}
       {showSummary && <SummaryModal />}
+      <LiveTicker />
     </>
   );
 };
