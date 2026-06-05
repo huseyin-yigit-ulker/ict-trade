@@ -1321,17 +1321,40 @@ def process_symbol(symbol: str) -> int:
 # SCAN LOOP (shared by Airflow task and standalone runner)
 # ============================================================================
 
+# Per-run heartbeat: confirms the hourly cron actually fired even on hours that
+# emit no new signal (most hours do). Without it, Telegram silence is ambiguous
+# — "no setup" vs "bot is down". Toggle off with HEARTBEAT=0 in the environment.
+HEARTBEAT_ENABLED = os.getenv("HEARTBEAT", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def send_heartbeat(new_signals: int, n_symbols: int, errors: int = 0) -> None:
+    if not HEARTBEAT_ENABLED:
+        return
+    now = pd.Timestamp.now(tz="UTC")
+    warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
+    msg = (
+        f"🤖 <b>ICT Saatlik Tarama</b>\n"
+        f"⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"📊 {n_symbols} sembol tarandı\n"
+        f"✅ {new_signals} yeni sinyal{warn}"
+    )
+    send_telegram_message(msg)
+
+
 def run_scan() -> int:
     """Walk every symbol once at its last closed bar. Used by both Airflow and CLI."""
     print(f"Toplam Taranacak Sembol Sayısı: {len(SYMBOLS)}")
     total = 0
+    errors = 0
     for sym in SYMBOLS:
         print(f"=== {sym} ===")
         try:
             total += process_symbol(sym)
         except Exception as e:
+            errors += 1
             print(f"  ERROR analyzing {sym}: {e}")
     print(f"\nDone. {total} new signal(s) emitted.")
+    send_heartbeat(total, len(SYMBOLS), errors)
     return total
 
 
