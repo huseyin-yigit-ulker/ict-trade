@@ -71,9 +71,9 @@ cd ~/ict-trade && ./.venv/bin/python dag/dag.py
 ```bash
 crontab -e
 ```
-En alta ekle (HH:05'te, bar kapandıktan sonra):
+En alta ekle (HH:01'de, bar kapandıktan ~1 dk sonra):
 ```
-5 * * * * cd /home/ubuntu/ict-trade && /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-bot.log 2>&1
+1 * * * * cd /home/ubuntu/ict-trade && /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-bot.log 2>&1
 ```
 > VM saati UTC'dir (cron UTC çalışır) — bot zaten UTC bar mantığında, uyumlu.
 

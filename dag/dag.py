@@ -5,7 +5,7 @@ this single file into the Airflow DAGs folder. Engine logic for the 5 ICT
 strategies (A-E) is inlined below. The same engine ran in the backtest
 under backtest/ — this file is the production-deployable mirror.
 
-Hourly at HH:05 UTC: pulls 6000h (~250d) of recent 1h klines per symbol from
+Hourly at HH:01 UTC: pulls 6000h (~250d) of recent 1h klines per symbol from
 Binance Futures (spot fallback), runs the engine ONLY on the last fully-
 closed bar, then for any new signal:
   - INSERT into ict_trade.signals (live dashboard table)
@@ -1376,7 +1376,7 @@ if _AIRFLOW_AVAILABLE:
     @dag(
         dag_id="huseyin_llm_hybrid_ict",
         default_args=default_args,
-        schedule=CronTriggerTimetable("5 * * * *", timezone="UTC"),
+        schedule=CronTriggerTimetable("1 * * * *", timezone="UTC"),
         catchup=False,
         tags=['trading', 'ict', 'crypto', 'mtf'],
     )

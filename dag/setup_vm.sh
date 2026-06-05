@@ -44,4 +44,4 @@ PY
 
 echo
 echo "Kurulum tamam. Crontab eklemek için:"
-echo "  crontab -e   →   5 * * * * cd $REPO_DIR && $REPO_DIR/.venv/bin/python dag/dag.py >> $REPO_DIR/ict-bot.log 2>&1"
+echo "  crontab -e   →   1 * * * * cd $REPO_DIR && $REPO_DIR/.venv/bin/python dag/dag.py >> $REPO_DIR/ict-bot.log 2>&1"
