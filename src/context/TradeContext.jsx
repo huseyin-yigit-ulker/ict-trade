@@ -51,6 +51,21 @@ export const TradeProvider = ({ children }) => {
   const [pendingDateStart, setPendingDateStart] = useState('');
   const [pendingDateEnd, setPendingDateEnd] = useState('');
   const [mode, setMode] = useState(null); // backtest | live
+  // Top-bar system mode: LIVE / OBSERVE / BACKTEST. OBSERVE shares the live data
+  // source but is framed as passive monitoring. Maps onto `mode` for data loads.
+  const [appMode, setAppModeState] = useState(() => {
+    try { return localStorage.getItem('pusu.appmode') || 'live'; } catch { return 'live'; }
+  });
+  const setAppMode = useCallback((m) => {
+    setAppModeState(m);
+    try { localStorage.setItem('pusu.appmode', m); } catch { /* ignore */ }
+    setMode(m === 'backtest' ? 'backtest' : 'live');
+  }, []);
+  useEffect(() => {
+    // Initialise the data mode from the persisted appMode once, on mount.
+    setMode(appMode === 'backtest' ? 'backtest' : 'live');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [liveError, setLiveError] = useState('');
   const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
   const [dbMessage, setDbMessage] = useState('');
@@ -619,6 +634,8 @@ export const TradeProvider = ({ children }) => {
     applyDates,
     mode,
     setMode,
+    appMode,
+    setAppMode,
     liveError,
     liveStatuses,
     backtestAccessGranted,
@@ -648,6 +665,8 @@ export const TradeProvider = ({ children }) => {
     pendingDateEnd,
     applyDates,
     mode,
+    appMode,
+    setAppMode,
     liveError,
     liveStatuses,
     backtestAccessGranted,

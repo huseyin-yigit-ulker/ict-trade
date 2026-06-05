@@ -1,34 +1,35 @@
-import { TradeProvider, useTradeContext } from './context/TradeContext';
-import FileLoader from './components/FileLoader';
-import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import ChartModal from './components/ChartModal';
-import StatsModal from './components/StatsModal';
-import SummaryModal from './components/SummaryModal';
-import LiveTicker from './components/LiveTicker';
-
-const MainContent = () => {
-  const { isLoaded, activeSignal, showStats, showSummary } = useTradeContext();
-
-  if (!isLoaded) return <FileLoader />;
-
-  return (
-    <>
-      <Header />
-      <Dashboard />
-      {activeSignal && <ChartModal />}
-      {showStats && <StatsModal />}
-      {showSummary && <SummaryModal />}
-      <LiveTicker />
-    </>
-  );
-};
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { LanguageProvider } from './context/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider, RequireAuth } from './context/AuthContext';
+import { TradeProvider } from './context/TradeContext';
+import LoginScreen from './components/LoginScreen';
+import AppShell from './components/layout/AppShell';
+import CommandCenterPage from './pages/CommandCenterPage';
+import IntelligencePage from './pages/IntelligencePage';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   return (
-    <TradeProvider>
-      <MainContent />
-    </TradeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <TradeProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<LoginScreen />} />
+                <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+                  <Route path="/command" element={<CommandCenterPage />} />
+                  <Route path="/intelligence" element={<IntelligencePage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
+                <Route path="*" element={<Navigate to="/command" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </TradeProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }
 

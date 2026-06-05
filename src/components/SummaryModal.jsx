@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
+import { useLang } from '../context/LanguageContext';
 import EquityCurvePanel from './viz/EquityCurvePanel';
 
-const SummaryModal = () => {
+const SummaryModal = ({ asPage = false }) => {
   const { allSignals, selectedSymbols, setShowSummary, mode, liveStatuses, backtestInsights } = useTradeContext();
+  const { t } = useLang();
   const [localSymbols, setLocalSymbols] = useState(new Set(selectedSymbols));
   const [filterOpen, setFilterOpen] = useState(false);
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
@@ -130,20 +132,20 @@ const SummaryModal = () => {
   })();
 
   return (
-    <div id="summary-modal" className="summary-screen" style={{ display: 'block' }}>
+    <div id="summary-modal" className={asPage ? 'summary-page' : 'summary-screen'} style={asPage ? undefined : { display: 'block' }}>
       <div className="summary-hero">
         <div>
-          <div className="summary-kicker">ICT TRADE BOT</div>
-          <h2>Başarı Paneli</h2>
-          <p>Günlük, haftalık, aylık ve yıllık performans analizi.</p>
+          <div className="summary-kicker">PUSU</div>
+          <h2>{t('Başarı Paneli')}</h2>
+          <p>{t('Günlük, haftalık, aylık ve yıllık performans analizi.')}</p>
         </div>
         <div className="summary-actions">
           <button className="date-picker-btn" onClick={() => setFilterOpen(!filterOpen)}>
-            Sembol Filtre
+            {t('Sembol Filtre')}
           </button>
           {mode === 'live' && (
             <button className="date-picker-btn" onClick={() => setStatusFilterOpen(!statusFilterOpen)}>
-              Durum Filtre
+              {t('Durum Filtre')}
             </button>
           )}
           {filterOpen && (
@@ -170,13 +172,13 @@ const SummaryModal = () => {
                   className="apply-btn"
                   onClick={() => setLocalSymbols(new Set(uniqueSymbols))}
                 >
-                  Tümü
+                  {t('Tümü')}
                 </button>
                 <button
                   className="apply-btn ghost"
                   onClick={() => setLocalSymbols(new Set())}
                 >
-                  Temizle
+                  {t('Temizle')}
                 </button>
               </div>
             </div>
@@ -196,7 +198,7 @@ const SummaryModal = () => {
                         setStatusFilters(next);
                       }}
                     />
-                    {status}
+                    {t(status)}
                   </label>
                 ))}
               </div>
@@ -205,21 +207,23 @@ const SummaryModal = () => {
                   className="apply-btn"
                   onClick={() => setStatusFilters(new Set(['TP', 'SL', 'AKTIF', 'BEKLEMEDE', 'IPTAL']))}
                 >
-                  Tümü
+                  {t('Tümü')}
                 </button>
                 <button
                   className="apply-btn ghost"
                   onClick={() => setStatusFilters(new Set())}
                 >
-                  Temizle
+                  {t('Temizle')}
                 </button>
               </div>
             </div>
           )}
-          <button className="close-modern" onClick={() => setShowSummary(false)}>
-            <span className="close-label">Kapat</span>
-            <span className="esc-pill">ESC</span>
-          </button>
+          {!asPage && (
+            <button className="close-modern" onClick={() => setShowSummary(false)}>
+              <span className="close-label">{t('Kapat')}</span>
+              <span className="esc-pill">ESC</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -236,16 +240,16 @@ const SummaryModal = () => {
       {mode === 'backtest' && (sqlSummary || winnerStats.top5.length > 0) && (
         <div className="summary-overview">
           <div className="overview-card asym-card">
-            <div className="summary-title">Asimetri</div>
-            <div className="asym-headline">DÜŞÜK İSABET · YÜKSEK GETİRİ</div>
+            <div className="summary-title">{t('Asimetri')}</div>
+            <div className="asym-headline">{t('DÜŞÜK İSABET · YÜKSEK GETİRİ')}</div>
             <div className="summary-metric">
-              <span>Kazanç (Win Rate)</span>
+              <span>{t('Kazanç (Win Rate)')}</span>
               <b className={Number(sqlSummary?.win_rate || 0) >= 50 ? 'win' : 'loss'}>
                 {Number(sqlSummary?.win_rate || 0).toFixed(1)}%
               </b>
             </div>
             <div className="summary-metric">
-              <span>Beklenti</span>
+              <span>{t('Beklenti')}</span>
               <b className={Number(sqlSummary?.expectancy_r || 0) >= 0 ? 'win' : 'loss'}>
                 {Number(sqlSummary?.expectancy_r || 0) >= 0 ? '+' : ''}{Number(sqlSummary?.expectancy_r || 0).toFixed(2)}R
               </b>
@@ -254,13 +258,13 @@ const SummaryModal = () => {
               <div className="asym-bar__fill" style={{ width: `${Math.min(100, winnerStats.share)}%` }} />
             </div>
             <div className="asym-note">
-              En iyi 5 işlem toplam brüt kârın %{winnerStats.share.toFixed(0)}'ini taşıyor — az kazanır, büyük kazanır; sistem böyle tasarlandı.
+              {t("En iyi 5 işlem toplam brüt kârın %{share}'ini taşıyor — az kazanır, büyük kazanır; sistem böyle tasarlandı.", { share: winnerStats.share.toFixed(0) })}
             </div>
           </div>
 
           <div className="overview-card">
-            <div className="summary-title">En Büyük Kazançlar</div>
-            {winnerStats.top5.length === 0 && <div className="summary-empty">Kayıt yok</div>}
+            <div className="summary-title">{t('En Büyük Kazançlar')}</div>
+            {winnerStats.top5.length === 0 && <div className="summary-empty">{t('Kayıt yok')}</div>}
             <div className="big-win-list">
               {winnerStats.top5.map((w, i) => (
                 <div key={w.s.id} className="big-win-row">
@@ -285,46 +289,46 @@ const SummaryModal = () => {
 
       <div className="summary-overview">
         <div className="overview-card">
-          <div className="summary-title">Genel Özet</div>
+          <div className="summary-title">{t('Genel Özet')}</div>
           <div className="summary-metric">
-            <span>Toplam İşlem</span>
+            <span>{t('Toplam İşlem')}</span>
             <b>{overall.count}</b>
           </div>
           {mode === 'live' ? (
             <>
               <div className="summary-metric">
-                <span>Başarı</span>
+                <span>{t('Başarı')}</span>
                 <b className={overall.successRate >= 50 ? 'win' : 'loss'}>{overall.successRate.toFixed(1)}%</b>
               </div>
               <div className="summary-metric">
-                <span>TP / SL</span>
+                <span>{t('TP / SL')}</span>
                 <b><span className="win">{overall.tp}</span> / <span className="loss">{overall.sl}</span></b>
               </div>
               <div className="summary-metric">
-                <span>Aktif / İptal</span>
+                <span>{t('Aktif / İptal')}</span>
                 <b>{overall.aktif} / {overall.iptal}</b>
               </div>
             </>
           ) : (
             <>
               <div className="summary-metric">
-                <span>Win Rate</span>
+                <span>{t('Win Rate')}</span>
                 <b className={overall.winRate >= 50 ? 'win' : 'loss'}>{overall.winRate.toFixed(1)}%</b>
               </div>
               <div className="summary-metric">
-                <span>Toplam PnL</span>
+                <span>{t('Toplam PnL')}</span>
                 <b className={overall.pnlSum >= 0 ? 'win' : 'loss'}>{overall.pnlSum.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
               </div>
               <div className="summary-metric">
-                <span>Ortalama PnL</span>
+                <span>{t('Ortalama PnL')}</span>
                 <b className={overall.avgPnl >= 0 ? 'win' : 'loss'}>{overall.avgPnl.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
               </div>
             </>
           )}
         </div>
         <div className="overview-card">
-          <div className="summary-title">En İyi Semboller</div>
-          {topSymbols.length === 0 && <div className="summary-empty">Kayıt yok</div>}
+          <div className="summary-title">{t('En İyi Semboller')}</div>
+          {topSymbols.length === 0 && <div className="summary-empty">{t('Kayıt yok')}</div>}
           {topSymbols.map(item => (
             <div key={item.sym} className="summary-metric">
               <span>{item.sym}</span>
@@ -337,38 +341,38 @@ const SummaryModal = () => {
       <div className="summary-metrics">
         {cards.map((c) => (
           <div key={c.title} className="summary-card modern">
-            <div className="summary-title">{c.title}</div>
+            <div className="summary-title">{t(c.title)}</div>
             <div className="summary-metric">
-              <span>İşlem</span>
+              <span>{t('İşlem')}</span>
               <b>{c.data.count}</b>
             </div>
             {mode === 'live' ? (
               <>
                 <div className="summary-metric">
-                  <span>Başarı</span>
+                  <span>{t('Başarı')}</span>
                   <b className={c.data.successRate >= 50 ? 'win' : 'loss'}>{c.data.successRate.toFixed(1)}%</b>
                 </div>
                 <div className="summary-metric">
-                  <span>TP / SL</span>
+                  <span>{t('TP / SL')}</span>
                   <b><span className="win">{c.data.tp}</span> / <span className="loss">{c.data.sl}</span></b>
                 </div>
                 <div className="summary-metric">
-                  <span>Aktif / İptal</span>
+                  <span>{t('Aktif / İptal')}</span>
                   <b>{c.data.aktif} / {c.data.iptal}</b>
                 </div>
               </>
             ) : (
               <>
                 <div className="summary-metric">
-                  <span>Win Rate</span>
+                  <span>{t('Win Rate')}</span>
                   <b className={c.data.winRate >= 50 ? 'win' : 'loss'}>{c.data.winRate.toFixed(1)}%</b>
                 </div>
                 <div className="summary-metric">
-                  <span>Toplam PnL</span>
+                  <span>{t('Toplam PnL')}</span>
                   <b className={c.data.pnlSum >= 0 ? 'win' : 'loss'}>{c.data.pnlSum.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
                 </div>
                 <div className="summary-metric">
-                  <span>Ortalama PnL</span>
+                  <span>{t('Ortalama PnL')}</span>
                   <b className={c.data.avgPnl >= 0 ? 'win' : 'loss'}>{c.data.avgPnl.toFixed(2)}{hasDbPnl ? 'R' : '%'}</b>
                 </div>
               </>
@@ -380,23 +384,23 @@ const SummaryModal = () => {
       {mode === 'backtest' && sqlSummary && (
         <div className="summary-overview">
           <div className="overview-card">
-            <div className="summary-title">SQL Analiz Özeti</div>
+            <div className="summary-title">{t('SQL Analiz Özeti')}</div>
             <div className="summary-metric">
-              <span>Profit Factor</span>
+              <span>{t('Profit Factor')}</span>
               <b>{Number(sqlSummary.profit_factor || 0).toFixed(2)}</b>
             </div>
             <div className="summary-metric">
-              <span>Expectancy</span>
+              <span>{t('Expectancy')}</span>
               <b className={Number(sqlSummary.expectancy_r || 0) >= 0 ? 'win' : 'loss'}>
                 {Number(sqlSummary.expectancy_r || 0).toFixed(2)}R
               </b>
             </div>
             <div className="summary-metric">
-              <span>Ortalama Süre</span>
-              <b>{Number(sqlSummary.avg_minutes || 0).toFixed(1)} dk</b>
+              <span>{t('Ortalama Süre')}</span>
+              <b>{Number(sqlSummary.avg_minutes || 0).toFixed(1)}{t(' dk')}</b>
             </div>
             <div className="summary-metric">
-              <span>TP / SL / Cancel</span>
+              <span>{t('TP / SL / Cancel')}</span>
               <b>
                 <span className="win">{sqlSummary.tp_count || 0}</span> / <span className="loss">{sqlSummary.sl_count || 0}</span> / {sqlSummary.cancelled_count || 0}
               </b>
@@ -404,8 +408,8 @@ const SummaryModal = () => {
           </div>
 
           <div className="overview-card">
-            <div className="summary-title">SQL Sembol Analizi</div>
-            {sqlSymbols.length === 0 && <div className="summary-empty">Kayıt yok</div>}
+            <div className="summary-title">{t('SQL Sembol Analizi')}</div>
+            {sqlSymbols.length === 0 && <div className="summary-empty">{t('Kayıt yok')}</div>}
             {sqlSymbols.map((row) => (
               <div key={row.symbol} className="summary-metric">
                 <span>{row.symbol} ({row.total_trades})</span>
@@ -415,16 +419,16 @@ const SummaryModal = () => {
           </div>
 
           <div className="overview-card">
-            <div className="summary-title">SQL Zaman Analizi</div>
+            <div className="summary-title">{t('SQL Zaman Analizi')}</div>
             {sqlWeekdays.map((row) => (
               <div key={row.weekday_name} className="summary-metric">
-                <span>{row.weekday_name}</span>
+                <span>{t(row.weekday_name)}</span>
                 <b className={Number(row.total_r || 0) >= 0 ? 'win' : 'loss'}>{Number(row.total_r || 0).toFixed(2)}R</b>
               </div>
             ))}
             {sqlSessions.map((row) => (
               <div key={row.session_name} className="summary-metric">
-                <span>{row.session_name}</span>
+                <span>{t(row.session_name)}</span>
                 <b className={Number(row.total_r || 0) >= 0 ? 'win' : 'loss'}>{Number(row.total_r || 0).toFixed(2)}R</b>
               </div>
             ))}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
+import { useLang } from '../context/LanguageContext';
 import Sparkline from './viz/Sparkline';
 
 // Stride-sample a long series down to ~max points so a several-thousand-trade
@@ -75,6 +76,50 @@ const pctDist = (a, b) => {
   return ((b - a) / a) * 100;
 };
 
+// --- Derived intelligence (from available fields only: strategy, confluence,
+// signal time, prices). The engine detects these internally; here we re-read
+// them on the frontend until they're persisted with each signal.
+const LIQ_EVENT = {
+  D_silver_bullet:            { kind: 'SWEEP',      label: 'FVG Sweep + Rejection' },
+  B_power_of_three:           { kind: 'GRAB',       label: 'Asian Range Liquidity Grab' },
+  E_eqh_eql_run:              { kind: 'GRAB',       label: 'EQH / EQL Liquidity Run' },
+  C_fvg_ob_confluence:        { kind: 'INDUCEMENT', label: 'OB + FVG Inducement' },
+  A_liquidity_sweep_reversal: { kind: 'SWEEP',      label: 'Liquidity Sweep Reversal' },
+  composite:                  { kind: 'MULTI',      label: 'Multi-Strategy Confluence' },
+};
+const liquidityEvent = (sig) => LIQ_EVENT[sig?.strategy] || { kind: 'SETUP', label: strategyFull(sig?.strategy) || 'Setup' };
+
+const structureShift = (sig) => ({
+  type: sig?.strategy === 'C_fvg_ob_confluence' ? 'BOS' : 'CHoCH',
+  side: sig?.dir === 'LONG' ? 'Bullish' : 'Bearish',
+});
+
+const confidenceScoreOf = (sig) => {
+  if (Number.isFinite(sig?.confluenceScore)) return Math.max(0, Math.min(100, Math.round((sig.confluenceScore / 12) * 100)));
+  const r = computeRR(sig);
+  return r ? Math.min(95, Math.round(40 + r * 7)) : 50;
+};
+
+const KZ = [
+  { name: 'Silver Bullet AM', lo: 10, hi: 11, sb: true },
+  { name: 'Silver Bullet PM', lo: 14, hi: 15, sb: true },
+  { name: 'London Open',  lo: 2,  hi: 5,  sb: false },
+  { name: 'NY Open',      lo: 7,  hi: 10, sb: false },
+  { name: 'London Close', lo: 10, hi: 12, sb: false },
+  { name: 'Asia Range',   lo: 19, hi: 24, sb: false },
+];
+const killzoneOf = (sig) => {
+  if (!sig?.dateObj) return { name: '—', hour: null };
+  let h = 12;
+  try {
+    h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(sig.dateObj)) % 24;
+  } catch { /* fallback */ }
+  const inWin = (k) => (k.lo <= k.hi ? (h >= k.lo && h < k.hi) : (h >= k.lo || h < k.hi));
+  const sb = sig.strategy === 'D_silver_bullet';
+  const match = (sb ? KZ.find((k) => k.sb && inWin(k)) : null) || KZ.find(inWin);
+  return { name: match ? match.name : 'Off-Session', hour: h };
+};
+
 // Compact status display for live trades — short label + colored icon.
 // Each variant has its own dot color so the dashboard reads at-a-glance.
 const LIVE_STATUS_DISPLAY = {
@@ -103,17 +148,17 @@ const effectiveSignalTime = (sig) => {
 };
 
 // "5 dk önce" / "2 sa 14 dk" / "3 gün önce" — relative time label.
-const timeAgo = (date) => {
+const timeAgo = (date, t) => {
   if (!(date instanceof Date)) return '--';
   const diffMs = Date.now() - date.getTime();
-  if (diffMs < 0) return 'şimdi';
+  if (diffMs < 0) return t('şimdi');
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1)  return 'az önce';
-  if (mins < 60) return `${mins} dk önce`;
+  if (mins < 1)  return t('az önce');
+  if (mins < 60) return t('{n} dk önce', { n: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} sa ${mins % 60} dk`;
+  if (hrs < 24) return t('{h} sa {m} dk', { h: hrs, m: mins % 60 });
   const days = Math.floor(hrs / 24);
-  return `${days} gün ${hrs % 24} sa`;
+  return t('{d} gün {h} sa', { d: days, h: hrs % 24 });
 };
 
 // Compute the realised R-multiple for a live trade outcome from its
@@ -138,6 +183,7 @@ const Dashboard = () => {
     backtestAccessGranted,
     setBacktestAccessGranted
   } = useTradeContext();
+  const { t, locale } = useLang();
   const BACKTEST_PASSWORD = '2020';
   const [backtestPasswordInput, setBacktestPasswordInput] = useState('');
   const [backtestPasswordError, setBacktestPasswordError] = useState('');
@@ -240,14 +286,14 @@ const Dashboard = () => {
   const groupedLive = useMemo(() => {
     if (mode !== 'live') return {};
     return filteredSignals.reduce((acc, sig) => {
-      const dateKey = sig.dateObj.toLocaleDateString('tr-TR', {
+      const dateKey = sig.dateObj.toLocaleDateString(locale, {
         year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
       });
       if (!acc[dateKey]) acc[dateKey] = [];
       acc[dateKey].push(sig);
       return acc;
     }, {});
-  }, [filteredSignals, mode]);
+  }, [filteredSignals, mode, locale]);
 
   // Backtest hiyerarşik veri seti
   const backtestSignals = useMemo(() => {
@@ -313,7 +359,7 @@ const Dashboard = () => {
       .map(([monthKey, monthList]) => {
         const counts = summarizeBacktestCounts(monthList);
         const totalR = getTotalR(monthList);
-        const label = parseIsoDate(`${monthKey}-01`).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+        const label = parseIsoDate(`${monthKey}-01`).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
         return {
           monthKey,
           label,
@@ -325,7 +371,7 @@ const Dashboard = () => {
         };
       })
       .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
-  }, [selectedYear, yearBuckets]);
+  }, [selectedYear, yearBuckets, locale]);
 
   useEffect(() => {
     if (!selectedMonth) return;
@@ -351,7 +397,7 @@ const Dashboard = () => {
       .map(([dayKey, dayList]) => {
         const counts = summarizeBacktestCounts(dayList);
         const totalR = getTotalR(dayList);
-        const label = parseIsoDate(dayKey).toLocaleDateString('tr-TR', { weekday: 'short', day: '2-digit', month: 'short' });
+        const label = parseIsoDate(dayKey).toLocaleDateString(locale, { weekday: 'short', day: '2-digit', month: 'short' });
         return {
           dayKey,
           label,
@@ -363,7 +409,7 @@ const Dashboard = () => {
         };
       })
       .sort((a, b) => b.dayKey.localeCompare(a.dayKey));
-  }, [selectedMonth, monthBuckets]);
+  }, [selectedMonth, monthBuckets, locale]);
 
   useEffect(() => {
     if (!selectedMonth) return;
@@ -383,10 +429,10 @@ const Dashboard = () => {
 
   const selectedDayLabel = useMemo(() => {
     if (!selectedDay) return '';
-    return parseIsoDate(selectedDay).toLocaleDateString('tr-TR', {
+    return parseIsoDate(selectedDay).toLocaleDateString(locale, {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
-  }, [selectedDay]);
+  }, [selectedDay, locale]);
 
   // Always-visible "edge cockpit" strip. Backtest pulls authoritative numbers
   // from the SQL summary RPC; live derives them from the per-signal live status.
@@ -433,12 +479,12 @@ const Dashboard = () => {
     return (
       <div className="kpi-hero">
         <div className="kpi-cell">
-          <div className="kpi-cell__label">Win Rate</div>
+          <div className="kpi-cell__label">{t('Win Rate')}</div>
           <div className="kpi-cell__value">{winRate.toFixed(1)}%</div>
-          <div className="kpi-cell__sub">{closedTrades} kapanan</div>
+          <div className="kpi-cell__sub">{closedTrades} {t('kapanan')}</div>
         </div>
         <div className="kpi-cell kpi-cell--wide">
-          <div className="kpi-cell__label">Toplam R</div>
+          <div className="kpi-cell__label">{t('Toplam R')}</div>
           <div className={`kpi-cell__value ${totalR >= 0 ? 'win' : 'loss'}`}>
             {totalR >= 0 ? '+' : ''}{totalR.toFixed(1)}R
           </div>
@@ -448,28 +494,28 @@ const Dashboard = () => {
         </div>
         {pf != null && (
           <div className="kpi-cell">
-            <div className="kpi-cell__label">Profit Factor</div>
+            <div className="kpi-cell__label">{t('Profit Factor')}</div>
             <div className="kpi-cell__value">{Number.isFinite(pf) ? pf.toFixed(2) : '--'}</div>
             <div className="kpi-cell__sub">
-              {pf >= 1.3 ? <span className="win">sağlıklı</span>
-                : pf >= 1 ? 'pozitif' : <span className="loss">negatif</span>}
+              {pf >= 1.3 ? <span className="win">{t('sağlıklı')}</span>
+                : pf >= 1 ? t('pozitif') : <span className="loss">{t('negatif')}</span>}
             </div>
           </div>
         )}
         <div className="kpi-cell">
-          <div className="kpi-cell__label">Beklenti</div>
+          <div className="kpi-cell__label">{t('Beklenti')}</div>
           <div className={`kpi-cell__value ${exp >= 0 ? 'win' : 'loss'}`}>
             {exp >= 0 ? '+' : ''}{exp.toFixed(2)}R
           </div>
-          <div className="kpi-cell__sub">işlem başına</div>
+          <div className="kpi-cell__sub">{t('işlem başına')}</div>
         </div>
         <div className="kpi-cell">
-          <div className="kpi-cell__label">İşlem</div>
+          <div className="kpi-cell__label">{t('İşlem')}</div>
           <div className="kpi-cell__value">{totalTrades}</div>
-          <div className="kpi-cell__sub">{mode === 'backtest' ? 'sinyal' : 'canlı'}</div>
+          <div className="kpi-cell__sub">{mode === 'backtest' ? t('sinyal') : t('canlı')}</div>
         </div>
         <div className="kpi-cell kpi-cell--hist">
-          <div className="kpi-cell__label">R Dağılımı</div>
+          <div className="kpi-cell__label">{t('R Dağılımı')}</div>
           <div className="r-hist">
             {hist.map((cnt, i) => (
               <div key={i} className="r-hist__col" title={`${HIST_LABELS[i]}R: ${cnt}`}>
@@ -526,7 +572,7 @@ const Dashboard = () => {
           : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
 
         const effDate = effectiveSignalTime(sig) || sig.dateObj;
-        const timeLabel = effDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const timeLabel = effDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         const rr = computeRR(sig);
         const targetPct = pctDist(sig.entry, sig.tp);
         const riskPct = pctDist(sig.entry, sig.sl);
@@ -540,7 +586,7 @@ const Dashboard = () => {
               setActiveSignal(sig);
             }}
           >
-            <div className="trade-head">
+            <div className="intel-head">
               <span className="symbol-box">{sig.symbol}</span>
               <span className={`dir-badge ${sig.dir.toLowerCase()}`}>
                 <span className="dir-arrow" aria-hidden="true">{sig.dir === 'LONG' ? '↗' : '↘'}</span>
@@ -549,37 +595,72 @@ const Dashboard = () => {
               <span className="time-detail">
                 {timeLabel}
                 {mode === 'live' && (
-                  <span className="time-ago"> · {timeAgo(effDate)}</span>
+                  <span className="time-ago"> · {timeAgo(effDate, t)}</span>
                 )}
               </span>
-              {sig.strategy && (
-                <span
-                  className={`strategy-badge ${sig.quality === 'high' ? 'high' : 'medium'}`}
-                  title={`${strategyFull(sig.strategy)}${sig.confluenceScore != null ? ` · score ${sig.confluenceScore}` : ''}`}
-                >
-                  {sig.quality === 'high' ? '⭐ ' : ''}{strategyLabel(sig.strategy)}
-                  {sig.confluenceScore != null && (
-                    <span className="strategy-score"> {sig.confluenceScore}</span>
-                  )}
-                </span>
-              )}
-              {rr != null && (
-                <span className="rr-pill" title={`Risk-Reward · 1:${rr.toFixed(2)}`}>
-                  1:{rr.toFixed(2)}
-                </span>
-              )}
+              {(() => {
+                const conf = confidenceScoreOf(sig);
+                const tier = conf >= 75 ? 'hi' : conf >= 55 ? 'mid' : 'lo';
+                return (
+                  <span className={`intel-conf intel-conf--${tier}`} title={`${t('Güven Skoru')} · ${conf}/100`}>
+                    <b>{conf}</b><i>{t('GÜVEN')}</i>
+                  </span>
+                );
+              })()}
             </div>
 
-            <div className="trade-body">
+            {(() => {
+              const ev = liquidityEvent(sig);
+              const ss = structureShift(sig);
+              const kz = killzoneOf(sig);
+              return (
+                <>
+                  <div className={`intel-event intel-event--${ev.kind.toLowerCase()}`}>
+                    <span className="intel-tag">{t('LİKİDİTE OLAYI')}</span>
+                    <span className="intel-event__row">
+                      <span className="intel-event__kind">{ev.kind}</span>
+                      <span className="intel-event__desc">{ev.label}</span>
+                    </span>
+                  </div>
+                  <div className="intel-rows">
+                    <div className="intel-row">
+                      <span className="intel-row__k">◷ {t('Killzone')}</span>
+                      <span className="intel-row__v">{kz.name}{kz.hour != null ? ` · ${String(kz.hour).padStart(2, '0')}:00 NY` : ''}</span>
+                    </div>
+                    <div className="intel-row">
+                      <span className="intel-row__k">⟲ {t('Yapı Kırılımı')}</span>
+                      <span className={`intel-row__v ${sig.dir === 'LONG' ? 'win' : 'loss'}`}>{ss.type} · {t(ss.side)}</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            <div className="intel-exec">
+              <div className="intel-exec__head">
+                <span className="intel-tag">{t('Uygulama Planı')}</span>
+                {sig.strategy && (
+                  <span
+                    className={`strategy-badge ${sig.quality === 'high' ? 'high' : 'medium'}`}
+                    title={`${strategyFull(sig.strategy)}${sig.confluenceScore != null ? ` · score ${sig.confluenceScore}` : ''}`}
+                  >
+                    {sig.quality === 'high' ? '⭐ ' : ''}{strategyLabel(sig.strategy)}
+                  </span>
+                )}
+                {rr != null && (
+                  <span className="rr-pill" title={`Risk-Reward · 1:${rr.toFixed(2)}`}>1:{rr.toFixed(2)}</span>
+                )}
+              </div>
+              <div className="trade-body intel-exec__grid">
               <div className="trade-metric">
-                <span className="metric-label">Durum</span>
+                <span className="metric-label">{t('Durum')}</span>
                 {mode === 'live' ? (
                   (() => {
                     const sd = liveStatusDisplay(liveStatus);
                     return (
                       <span className={`status-text ${sd.cls}`}>
                         <span className={`status-dot ${sd.cls}`}>{sd.icon}</span>
-                        {sd.label}
+                        {t(sd.label)}
                       </span>
                     );
                   })()
@@ -588,7 +669,7 @@ const Dashboard = () => {
                 )}
               </div>
               <div className="trade-metric">
-                <span className="metric-label">P/L</span>
+                <span className="metric-label">{t('P/L')}</span>
                 {mode === 'live' ? (
                   liveMeta.label === 'AKTIF' ? (
                     <span className="pnl-text live-pnl-stack">
@@ -609,56 +690,51 @@ const Dashboard = () => {
                 )}
               </div>
               <div className="trade-metric">
-                <span className="metric-label">Entry</span>
+                <span className="metric-label">{t('Entry')}</span>
                 <span className="metric-value">{formatPrice(sig.entry)}</span>
               </div>
-              <div className="trade-metric">
-                <span className="metric-label">TP/SL</span>
-                <span className="metric-value">{formatPrice(sig.tp)} / {formatPrice(sig.sl)}</span>
-              </div>
-              <div className="trade-metric">
-                <span className="metric-label">Hedef</span>
-                <span className="metric-value win">
-                  {targetPct != null ? `${targetPct >= 0 ? '+' : ''}${targetPct.toFixed(2)}%` : '--'}
+              <div className="trade-metric intel-exec__tpsl">
+                <span className="metric-label">{t('Hedef')} / {t('Risk')}</span>
+                <span className="metric-value">
+                  <span className="win">{formatPrice(sig.tp)}</span>
+                  {targetPct != null && <span className="intel-pct win"> {targetPct >= 0 ? '+' : ''}{targetPct.toFixed(2)}%</span>}
+                  <span className="intel-sep"> · </span>
+                  <span className="loss">{formatPrice(sig.sl)}</span>
+                  {riskPct != null && <span className="intel-pct loss"> {riskPct.toFixed(2)}%</span>}
                 </span>
               </div>
-              <div className="trade-metric">
-                <span className="metric-label">Risk</span>
-                <span className="metric-value loss">
-                  {riskPct != null ? `${riskPct.toFixed(2)}%` : '--'}
-                </span>
               </div>
-            </div>
 
-            {(() => {
-              const rk = Math.abs(riskPct ?? 0);
-              const rw = Math.abs(targetPct ?? 0);
-              if (!(rk > 0 && rw > 0)) return null;
-              const riskW = (rk / (rk + rw)) * 100;
-              let nowLeft = null;
-              if (mode === 'live' && liveMeta.label === 'AKTIF'
-                  && typeof liveLastPrice === 'number' && sig.tp !== sig.sl) {
-                const frac = sig.dir === 'LONG'
-                  ? (liveLastPrice - sig.sl) / (sig.tp - sig.sl)
-                  : (sig.sl - liveLastPrice) / (sig.sl - sig.tp);
-                nowLeft = Math.max(0, Math.min(1, frac)) * 100;
-              }
-              return (
-                <div className="rr-bar" title={`Risk ${rk.toFixed(2)}% · Ödül ${rw.toFixed(2)}%`}>
-                  <div className="rr-bar__track">
-                    <div className="rr-bar__risk" style={{ width: `${riskW}%` }} />
-                    <div className="rr-bar__reward" style={{ width: `${100 - riskW}%` }} />
-                    <div className="rr-bar__entry" style={{ left: `${riskW}%` }} />
-                    {nowLeft != null && (
-                      <div
-                        className={`rr-bar__now rr-bar__now--${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'down' : 'up'}`}
-                        style={{ left: `${nowLeft}%` }}
-                      />
-                    )}
+              {(() => {
+                const rk = Math.abs(riskPct ?? 0);
+                const rw = Math.abs(targetPct ?? 0);
+                if (!(rk > 0 && rw > 0)) return null;
+                const riskW = (rk / (rk + rw)) * 100;
+                let nowLeft = null;
+                if (mode === 'live' && liveMeta.label === 'AKTIF'
+                    && typeof liveLastPrice === 'number' && sig.tp !== sig.sl) {
+                  const frac = sig.dir === 'LONG'
+                    ? (liveLastPrice - sig.sl) / (sig.tp - sig.sl)
+                    : (sig.sl - liveLastPrice) / (sig.sl - sig.tp);
+                  nowLeft = Math.max(0, Math.min(1, frac)) * 100;
+                }
+                return (
+                  <div className="rr-bar" title={t('Risk {risk}% · Ödül {reward}%', { risk: rk.toFixed(2), reward: rw.toFixed(2) })}>
+                    <div className="rr-bar__track">
+                      <div className="rr-bar__risk" style={{ width: `${riskW}%` }} />
+                      <div className="rr-bar__reward" style={{ width: `${100 - riskW}%` }} />
+                      <div className="rr-bar__entry" style={{ left: `${riskW}%` }} />
+                      {nowLeft != null && (
+                        <div
+                          className={`rr-bar__now rr-bar__now--${formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'down' : 'up'}`}
+                          style={{ left: `${nowLeft}%` }}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
+            </div>
 
             <div className="trade-foot">
               {mode === 'live' ? (
@@ -667,13 +743,13 @@ const Dashboard = () => {
                   return (
                     <div className={`chip ${sd.cls}`}>
                       <span className={`status-dot ${sd.cls}`}>{sd.icon}</span>
-                      {sd.label}
+                      {t(sd.label)}
                     </div>
                   );
                 })()
               ) : (
                 <div className={`chip ${pnlClass}`}>
-                  {pnlClass === 'waiting' ? 'BEKLEMEDE' : (pnl > 0 ? 'TP' : 'SL')}
+                  {pnlClass === 'waiting' ? t('BEKLEMEDE') : (pnl > 0 ? 'TP' : 'SL')}
                 </div>
               )}
             </div>
@@ -704,7 +780,7 @@ const Dashboard = () => {
         <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
           <div className="day-notebook" style={{ maxWidth: 480, margin: '40px auto' }}>
             <div className="day-header">
-              <div className="day-title">Backtest Kilidi</div>
+              <div className="day-title">{t('Backtest Kilidi')}</div>
             </div>
             <form
               onSubmit={(e) => {
@@ -714,14 +790,14 @@ const Dashboard = () => {
                   setBacktestPasswordError('');
                   return;
                 }
-                setBacktestPasswordError('Şifre hatalı.');
+                setBacktestPasswordError(t('Şifre hatalı.'));
               }}
               style={{ display: 'grid', gap: 10 }}
             >
               <input
                 type="password"
                 className="symbol-search"
-                placeholder="Şifre"
+                placeholder={t('Şifre')}
                 value={backtestPasswordInput}
                 onChange={(e) => {
                   setBacktestPasswordInput(e.target.value);
@@ -729,7 +805,7 @@ const Dashboard = () => {
                 }}
               />
               {backtestPasswordError && <div className="status-error">{backtestPasswordError}</div>}
-              <button className="apply-btn" type="submit">Backtest Aç</button>
+              <button className="apply-btn" type="submit">{t('Backtest Aç')}</button>
             </form>
           </div>
         </div>
@@ -742,19 +818,19 @@ const Dashboard = () => {
           {renderKpiHero()}
           <div className="drill-header">
             <div className="drill-path">
-              {!selectedYear && 'Yıllar'}
-              {selectedYear && !selectedMonth && `${selectedYear} / Aylar`}
-              {selectedYear && selectedMonth && `${selectedYear} / ${parseIsoDate(`${selectedMonth}-01`).toLocaleDateString('tr-TR', { month: 'long' })} / Günler`}
+              {!selectedYear && t('Yıllar')}
+              {selectedYear && !selectedMonth && `${selectedYear} / ${t('Aylar')}`}
+              {selectedYear && selectedMonth && `${selectedYear} / ${parseIsoDate(`${selectedMonth}-01`).toLocaleDateString(locale, { month: 'long' })} / ${t('Günler')}`}
             </div>
             <div className="drill-actions">
               {selectedMonth && (
                 <button className="drill-back-btn" onClick={() => { setSelectedMonth(''); setSelectedDay(''); }}>
-                  Aylara Dön
+                  {t('Aylara Dön')}
                 </button>
               )}
               {selectedYear && !selectedMonth && (
                 <button className="drill-back-btn" onClick={() => { setSelectedYear(null); setSelectedMonth(''); setSelectedDay(''); }}>
-                  Yıllara Dön
+                  {t('Yıllara Dön')}
                 </button>
               )}
             </div>
@@ -765,7 +841,7 @@ const Dashboard = () => {
               {yearBuckets.map((y) => (
                 <button key={y.year} className="drill-card" onClick={() => setSelectedYear(y.year)}>
                   <div className="drill-title">{y.year}</div>
-                  <div className="drill-meta">{y.count} işlem</div>
+                  <div className="drill-meta">{y.count} {t('işlem')}</div>
                   <div className="drill-meta">TP/SL: <span className="win">{y.tp}</span>/<span className="loss">{y.sl}</span></div>
                   <div className={`drill-r ${y.totalR >= 0 ? 'win' : 'loss'}`}>{y.totalR >= 0 ? '+' : ''}{y.totalR.toFixed(2)}R</div>
                   {drillExtra(y, yearsMaxR)}
@@ -779,7 +855,7 @@ const Dashboard = () => {
               {monthBuckets.map((m) => (
                 <button key={m.monthKey} className="drill-card" onClick={() => setSelectedMonth(m.monthKey)}>
                   <div className="drill-title">{m.label}</div>
-                  <div className="drill-meta">{m.count} işlem</div>
+                  <div className="drill-meta">{m.count} {t('işlem')}</div>
                   <div className="drill-meta">TP/SL: <span className="win">{m.tp}</span>/<span className="loss">{m.sl}</span></div>
                   <div className={`drill-r ${m.totalR >= 0 ? 'win' : 'loss'}`}>{m.totalR >= 0 ? '+' : ''}{m.totalR.toFixed(2)}R</div>
                   {drillExtra(m, monthsMaxR)}
@@ -798,7 +874,7 @@ const Dashboard = () => {
                     onClick={() => setSelectedDay(d.dayKey)}
                   >
                     <div className="drill-title">{d.label}</div>
-                    <div className="drill-meta">{d.count} işlem</div>
+                    <div className="drill-meta">{d.count} {t('işlem')}</div>
                     <div className="drill-meta">TP/SL: <span className="win">{d.tp}</span>/<span className="loss">{d.sl}</span></div>
                     <div className={`drill-r ${d.totalR >= 0 ? 'win' : 'loss'}`}>{d.totalR >= 0 ? '+' : ''}{d.totalR.toFixed(2)}R</div>
                     {drillExtra(d, daysMaxR)}
@@ -811,9 +887,9 @@ const Dashboard = () => {
                   <div className="day-header">
                     <div className="day-title">{selectedDayLabel}</div>
                     <div className="day-summary">
-                      <span>{selectedDayTrades.length} işlem</span>
+                      <span>{selectedDayTrades.length} {t('işlem')}</span>
                       <span className="tp-sl-ratio">
-                        Toplam R:{' '}
+                        {t('Toplam R')}:{' '}
                         <span className={getTotalR(selectedDayTrades) >= 0 ? 'win' : 'loss'}>
                           {getTotalR(selectedDayTrades) >= 0 ? '+' : ''}{getTotalR(selectedDayTrades).toFixed(2)}
                         </span>
@@ -842,7 +918,7 @@ const Dashboard = () => {
             <div className="day-header">
               <div className="day-title">{dateKey}</div>
               <div className="day-summary">
-                <span>{trades.length} işlem</span>
+                <span>{trades.length} {t('işlem')}</span>
                 <span className="tp-sl-ratio">
                   TP/SL: {counts.tp}/{counts.sl} • R:{' '}
                   <span className={counts.rScore >= 0 ? 'win' : 'loss'}>

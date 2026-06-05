@@ -1,7 +1,9 @@
 import { useTradeContext } from '../context/TradeContext';
+import { useLang } from '../context/LanguageContext';
 
 const StatsModal = () => {
   const { allSignals, setShowStats } = useTradeContext();
+  const { t } = useLang();
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -24,17 +26,17 @@ const StatsModal = () => {
     <div id="stats-modal" className="modal-overlay" style={{ display: 'block' }}>
       <div className="stats-box">
         <div className="stats-header">
-          <h2>PORTFÖY KARNESİ</h2>
-          <button id="close-stats" onClick={() => setShowStats(false)}>KAPAT</button>
+          <h2>{t('PORTFÖY KARNESİ')}</h2>
+          <button id="close-stats" onClick={() => setShowStats(false)}>{t('KAPAT')}</button>
         </div>
         <div className="stats-content">
           <table className="stats-table">
             <thead>
               <tr>
-                <th>Sembol</th>
-                <th>İşlem</th>
-                <th>Win Rate</th>
-                <th>Toplam PnL</th>
+                <th>{t('Sembol')}</th>
+                <th>{t('İşlem')}</th>
+                <th>{t('Win Rate')}</th>
+                <th>{t('Toplam PnL')}</th>
               </tr>
             </thead>
             <tbody>

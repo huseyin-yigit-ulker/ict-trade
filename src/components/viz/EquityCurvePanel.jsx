@@ -1,4 +1,5 @@
 import { useId, useMemo } from 'react';
+import { useLang } from '../../context/LanguageContext';
 
 // The centrepiece the dashboard lacked: the actual SHAPE of a low-win /
 // big-payoff edge. Cumulative-R line + soft area, underwater drawdown band,
@@ -6,6 +7,7 @@ import { useId, useMemo } from 'react';
 // peak dot — all from the same cumulative-R math used by the KPI/drill sparks.
 // Pure: give it ASC-sorted signals + the caller's calculatePnL.
 const EquityCurvePanel = ({ signals, calculatePnL, profitFactor }) => {
+  const { t } = useLang();
   const gid = useId();
 
   const model = useMemo(() => {
@@ -52,7 +54,7 @@ const EquityCurvePanel = ({ signals, calculatePnL, profitFactor }) => {
   return (
     <div className="overview-card equity-panel" style={{ gridColumn: '1 / -1' }}>
       <div className="equity-head">
-        <div className="summary-title equity-title">Sermaye Eğrisi (R)</div>
+        <div className="summary-title equity-title">{t('Sermaye Eğrisi (R)')}</div>
         <div className="equity-readout">
           <span className={pos ? 'win' : 'loss'}>{pos ? '+' : ''}{total.toFixed(1)}R</span>
           {Number.isFinite(pf) && pf > 0 && <span className="equity-pf"> · PF {pf.toFixed(2)}</span>}
@@ -79,9 +81,9 @@ const EquityCurvePanel = ({ signals, calculatePnL, profitFactor }) => {
         <circle className="equity-peak-dot" cx={x(peakIdx).toFixed(1)} cy={y(peak).toFixed(1)} r="3" fill="var(--accent)" />
       </svg>
       <div className="equity-caption">
-        Tepe <b className="win">+{peak.toFixed(1)}R</b> · Max DD <b className="loss">-{maxDD.toFixed(1)}R</b>
+        {t('Tepe')} <b className="win">+{peak.toFixed(1)}R</b> · {t('Max DD')} <b className="loss">-{maxDD.toFixed(1)}R</b>
         {jumps.length > 0 && (
-          <> · <span className="equity-legend-dot">◆</span> en büyük {jumps.length} kazanç</>
+          <> · <span className="equity-legend-dot">◆</span> {t('en büyük {n} kazanç', { n: jumps.length })}</>
         )}
       </div>
     </div>

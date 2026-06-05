@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLang } from '../context/LanguageContext';
 
 // Liquid Binance USDⓈ-M perps — overlaps the bot's traded set.
 const SYMBOLS = [
@@ -21,6 +22,7 @@ const formatPrice = (p) => {
 const baseOf = (sym) => sym.replace(/USDT$/, '');
 
 const LiveTicker = () => {
+  const { t } = useLang();
   const [prices, setPrices] = useState({});
 
   useEffect(() => {
@@ -63,7 +65,7 @@ const LiveTicker = () => {
     return (
       <div className="live-ticker">
         <div className="live-ticker__status">
-          <span className="live-ticker__dot" /> Canlı fiyatlar bağlanıyor…
+          <span className="live-ticker__dot" /> {t('Canlı fiyatlar bağlanıyor…')}
         </div>
       </div>
     );
@@ -87,7 +89,7 @@ const LiveTicker = () => {
   return (
     <div className="live-ticker" title="Binance Futures canlı fiyatlar (24s değişim)">
       <div className="live-ticker__label">
-        <span className="live-ticker__dot live" /> CANLI · FUTURES
+        <span className="live-ticker__dot live" /> {t('CANLI · FUTURES')}
       </div>
       <div className="live-ticker__viewport">
         <div className="live-ticker__track">

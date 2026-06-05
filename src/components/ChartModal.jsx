@@ -1,9 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, BaselineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { useTradeContext } from '../context/TradeContext';
+import { useLang } from '../context/LanguageContext';
+
+// Killzone (NY session) the signal fired in — derived from the bar's NY hour.
+const killzoneName = (h) => {
+  if (h == null) return null;
+  if (h >= 2 && h < 5) return 'London Open';
+  if (h >= 7 && h < 10) return 'NY Open';
+  if (h >= 10 && h < 11) return 'Silver Bullet AM';
+  if (h >= 14 && h < 15) return 'Silver Bullet PM';
+  if (h >= 10 && h < 12) return 'London Close';
+  if (h >= 19 || h < 1) return 'Asia Range';
+  return 'Off-Session';
+};
 
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses } = useTradeContext();
+  const { t, locale } = useLang();
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
@@ -12,6 +26,7 @@ const ChartModal = () => {
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
   const [hoverInfo, setHoverInfo] = useState(null);
+  const [chartIntel, setChartIntel] = useState(null);   // liquidity badges: order flow / killzone / sweep
 
   // Single source of truth for live status: TradeContext.liveStatuses
   // (the dashboard's polled value). Compact label + colored dot — same
@@ -26,7 +41,7 @@ const ChartModal = () => {
   };
   const ctxLiveStatus = (mode === 'live' && activeSignal) ? liveStatuses[activeSignal.id]?.status : null;
   const liveDisplay = LIVE_STATUS_DISPLAY[ctxLiveStatus] || (ctxLiveStatus ? null : null);
-  const liveTradeStatus = liveDisplay ? liveDisplay.label : (mode === 'live' ? 'Hesaplanıyor...' : '');
+  const liveTradeStatus = liveDisplay ? liveDisplay.label : (mode === 'live' ? t('Hesaplanıyor...') : '');
 
   // --- Yardımcı Fonksiyonlar ---
   const calculatePnL = (sig) => {
@@ -86,10 +101,10 @@ const ChartModal = () => {
         fontFamily: "'JetBrains Mono', 'SF Mono', 'Roboto Mono', Consolas, monospace"
       },
       localization: {
-        locale: 'tr-TR', dateFormat: 'dd MMM yyyy',
+        locale: locale, dateFormat: 'dd MMM yyyy',
         timeFormatter: (timestamp) => {
             const date = new Date(timestamp * 1000);
-            return date.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
         }
       },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
@@ -99,8 +114,8 @@ const ChartModal = () => {
         timeVisible: true, secondsVisible: false, borderColor: '#2B3139',
         tickMarkFormatter: (time, tickMarkType) => {
             const date = new Date(time * 1000);
-            if (tickMarkType < 3) return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-            return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            if (tickMarkType < 3) return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+            return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         }
       },
       crosshair: {
@@ -265,11 +280,28 @@ const ChartModal = () => {
           candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + padBarsDisplay));
         }
 
-        // --- Per-bar dimming: ÖNCE/SONRA context ghosted, the trade window stays bright ---
+        // --- Liquidity intelligence: pools resting before the signal + the sweep bar ---
         const signalSec = snapBar(signalOpenMs);
+        const preCandles = candles.filter((c) => c.time < signalSec);
+        let bslPool = null, sslPool = null, sweepSec = null;
+        if (preCandles.length >= 4) {
+          const formN = Math.max(3, Math.floor(preCandles.length * 0.6));
+          const form = preCandles.slice(0, formN);                  // pool-formation window
+          bslPool = Math.max(...form.map((c) => c.high));           // buy-side liquidity (resting highs)
+          sslPool = Math.min(...form.map((c) => c.low));            // sell-side liquidity (resting lows)
+          // Sweep = a later pre-bar (or the signal bar) that pierces the pool then closes back inside.
+          const zone = candles.filter((c) => c.time >= form[form.length - 1].time && c.time <= signalSec);
+          for (let i = 0; i < zone.length; i++) {
+            const c = zone[i];
+            if (isLong && c.low < sslPool && c.close > sslPool) { sweepSec = c.time; break; }
+            if (!isLong && c.high > bslPool && c.close < bslPool) { sweepSec = c.time; break; }
+          }
+        }
+
+        // --- Per-bar dimming: manipulation phase (pre-signal) tinted violet, post-trade ghosted gray ---
         candles = candles.map((c) => {
-          const isCtx = c.time < signalSec || (closeBarSec != null && c.time > closeBarSec);
-          if (isCtx) return { ...c, color: '#2B3139', wickColor: '#5E6673', borderColor: '#2B3139' };
+          if (c.time < signalSec) return { ...c, color: '#322B45', wickColor: '#7C6BB0', borderColor: '#473A66' };
+          if (closeBarSec != null && c.time > closeBarSec) return { ...c, color: '#2B3139', wickColor: '#5E6673', borderColor: '#2B3139' };
           return { ...c, borderColor: c.close >= c.open ? themeConfig.upColor : themeConfig.downColor };
         });
 
@@ -325,11 +357,14 @@ const ChartModal = () => {
         if (!chartRef.current._priceLinesAdded) {
           const targetPct = entry && tp ? ((tp - entry) / entry) * 100 : null;
           const riskPct = entry && sl ? ((sl - entry) / entry) * 100 : null;
-          if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `Giriş ${formatPrice(entry)}`, axisLabelVisible: true });
-          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `TP${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
-          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `SL${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')} ${formatPrice(entry)}`, axisLabelVisible: true });
+          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // Liquidity pools the setup targets; the swept side is tagged as the TRAP.
+          if (bslPool != null) mainSeries.createPriceLine({ price: bslPool, color: 'rgba(167, 139, 250, 0.75)', lineWidth: 1, lineStyle: 1, title: `BSL${!isLong && sweepSec != null ? ' ⚡ TRAP' : ''}`, axisLabelVisible: false });
+          if (sslPool != null) mainSeries.createPriceLine({ price: sslPool, color: 'rgba(167, 139, 250, 0.75)', lineWidth: 1, lineStyle: 1, title: `SSL${isLong && sweepSec != null ? ' ⚡ TRAP' : ''}`, axisLabelVisible: false });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
-            mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `Çıkış ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
           }
           chartRef.current._priceLinesAdded = true;
         }
@@ -338,13 +373,14 @@ const ChartModal = () => {
         const isTP = (mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu');
         const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
         const exitColor = isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
-        const exitText = isTP ? 'TP' : isSL ? 'SL' : 'Çıkış';
+        const exitText = isTP ? t('TP') : isSL ? t('SL') : t('Çıkış');
         const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(activeSignal.exitTs) ? snapBar(activeSignal.exitTs) : null);
 
         const markers = [];
-        if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: 'Sinyal', size: 1 });
+        if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
+        if (sweepSec != null) markers.push({ time: sweepSec, position: isLong ? 'belowBar' : 'aboveBar', shape: 'circle', color: '#A78BFA', text: '⚡', size: 2 });
         if (entryFilled && entryFillSec != null && entryFillSec !== signalSec) {
-          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#FCD535', text: 'Giriş', size: 1 });
+          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: t('Giriş'), size: 1 });
         }
         if (isTerminalState && exitSec != null) {
           markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar', shape: isLong ? 'arrowDown' : 'arrowUp', color: exitColor, text: exitText, size: 1 });
@@ -371,10 +407,21 @@ const ChartModal = () => {
           }
           chartRef.current._framed = true;
         }
+
+        // Liquidity badges: order flow = trade bias; killzone from the signal's NY hour.
+        let nyHour = null;
+        try { nyHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(activeSignal.dateObj)) % 24; } catch { /* fallback */ }
+        setChartIntel({
+          orderFlow: isLong ? 'LONG' : 'SHORT',
+          killzone: killzoneName(nyHour),
+          nyHour,
+          swept: isLong ? 'SSL' : 'BSL',
+          hasSweep: sweepSec != null,
+        });
         setChartLoading(false);
 
       } catch (err) {
-        setChartError('Veri alınamadı.');
+        setChartError(t('Veri alınamadı.'));
         setChartLoading(false);
         console.error(err);
       }
@@ -415,8 +462,8 @@ const ChartModal = () => {
   }, [activeSignal, showTv, mode]);
 
   // UI Formatters
-  const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
-  const formatHoverTime = (t) => t ? new Date(t * 1000).toLocaleString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+  const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+  const formatHoverTime = (ts) => ts ? new Date(ts * 1000).toLocaleString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
   // Dynamic decimal precision (matches Dashboard's formatter)
   const formatPrice = (value) => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
@@ -484,9 +531,23 @@ const ChartModal = () => {
   return (
     <div id="modal" style={{ display: 'block', backgroundColor: '#0B0E11', color: '#EAECEF' }}>
       <div id="chart-header" style={{ borderBottom: '1px solid #2a2e39', padding: '10px' }}>
-        <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
-          {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
-        </h2>
+        <div className="chart-header-top">
+          <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
+            {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
+          </h2>
+          {!showTv && chartIntel && (
+            <div className="chart-intel-bar">
+              <span className={`ci-flow ${chartIntel.orderFlow === 'LONG' ? 'up' : 'down'}`}>
+                {chartIntel.orderFlow === 'LONG' ? '▲' : '▼'} {chartIntel.orderFlow === 'LONG' ? 'BULLISH' : 'BEARISH'} {t('Order Flow')}
+              </span>
+              {chartIntel.killzone && (
+                <span className="ci-kz">◷ {chartIntel.killzone}{chartIntel.nyHour != null ? ` · ${String(chartIntel.nyHour).padStart(2, '0')}:00 NY` : ''}</span>
+              )}
+              {chartIntel.hasSweep && <span className="ci-sweep">⚡ {chartIntel.swept} {t('Sweep')}</span>}
+              <span className="ci-manip">◍ {t('Manipülasyon Fazı')}</span>
+            </div>
+          )}
+        </div>
         {!showTv && hoverInfo && (
           <div className="chart-hover-info">
             {formatHoverTime(hoverInfo.time)} • O {formatPrice(hoverInfo.open)} H {formatPrice(hoverInfo.high)} L {formatPrice(hoverInfo.low)} C {formatPrice(hoverInfo.close)}
@@ -495,7 +556,7 @@ const ChartModal = () => {
       </div>
       
       <button id="close-modal" className="close-modern" onClick={() => setActiveSignal(null)}>
-        <span className="close-label">Kapat</span><span className="esc-pill neo">ESC</span>
+        <span className="close-label">{t('Kapat')}</span><span className="esc-pill neo">ESC</span>
       </button>
 
       {!showTv && activeSignal && (() => {
@@ -514,15 +575,15 @@ const ChartModal = () => {
 
         return (
         <div className="position-panel" style={{ backgroundColor: '#181A20', borderRight: '1px solid #2B3139' }}>
-          <div className="position-row"><span>Tarih</span><b>{formatSignalTime(effDate)}</b></div>
+          <div className="position-row"><span>{t('Tarih')}</span><b>{formatSignalTime(effDate)}</b></div>
           <div className="position-row">
-            <span>{mode === 'live' ? 'Süre (canlı)' : 'Süre'}</span>
+            <span>{mode === 'live' ? t('Süre (canlı)') : t('Süre')}</span>
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
           </div>
           {activeSignal.strategy && (
             <div className="position-row">
-              <span>Strateji</span>
-              <b style={{ color: activeSignal.quality === 'high' ? '#FCD535' : '#EAECEF' }}>
+              <span>{t('Strateji')}</span>
+              <b style={{ color: activeSignal.quality === 'high' ? '#F5B942' : '#EAECEF' }}>
                 {activeSignal.quality === 'high' ? '⭐ ' : ''}
                 {STRATEGY_LABEL[activeSignal.strategy] || activeSignal.strategy}
                 {activeSignal.confluenceScore != null && ` · ${activeSignal.confluenceScore}`}
@@ -531,39 +592,39 @@ const ChartModal = () => {
           )}
           {(activeSignal.ltfTimeframe || activeSignal.htfTimeframe) && (
             <div className="position-row">
-              <span>Timeframe</span>
+              <span>{t('Timeframe')}</span>
               <b>{activeSignal.ltfTimeframe || '?'}{activeSignal.htfTimeframe ? ` · HTF ${activeSignal.htfTimeframe}` : ''}</b>
             </div>
           )}
-          <div className="position-row"><span>Giriş</span><b>{formatPrice(activeSignal.entry)}</b></div>
+          <div className="position-row"><span>{t('Giriş')}</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
-             <span>Hedef</span>
+             <span>{t('Hedef')}</span>
              <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span>
                {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
              </b>
           </div>
           <div className="position-row">
-             <span>Stop</span>
+             <span>{t('Stop')}</span>
              <b><span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span>
                {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · {riskPct.toFixed(2)}%</span>}
              </b>
           </div>
           {rr != null && (
             <div className="position-row">
-              <span>Risk-Reward</span>
-              <b style={{ color: '#FCD535' }}>1:{rr.toFixed(2)}</b>
+              <span>{t('Risk-Reward')}</span>
+              <b style={{ color: '#F5B942' }}>1:{rr.toFixed(2)}</b>
             </div>
           )}
           {mode === 'live' && Number.isFinite(liveLastPrice) && (
             <>
               <div className="position-row">
-                <span>Anlık Fiyat</span>
+                <span>{t('Anlık Fiyat')}</span>
                 <b>{formatPrice(liveLastPrice)}</b>
               </div>
               {distToEntry != null && (
                 <div className="position-row">
-                  <span>Entry'ye Uzaklık</span>
-                  <b style={{ color: Math.abs(distToEntry) < 0.5 ? '#FCD535' : '#EAECEF' }}>
+                  <span>{t("Entry'ye Uzaklık")}</span>
+                  <b style={{ color: Math.abs(distToEntry) < 0.5 ? '#F5B942' : '#EAECEF' }}>
                     {distToEntry >= 0 ? '+' : ''}{distToEntry.toFixed(2)}%
                   </b>
                 </div>
@@ -572,19 +633,19 @@ const ChartModal = () => {
           )}
           {mode === 'backtest' && Number.isFinite(exitPrice) && exitPrice !== activeSignal.entry && (
             <div className="position-row">
-              <span>Çıkış</span>
+              <span>{t('Çıkış')}</span>
               <b>{formatPrice(exitPrice)}</b>
             </div>
           )}
           <div className="position-row">
-            <span>PnL</span>
+            <span>{t('PnL')}</span>
             <b style={{color: activePnL === null || activePnL >= 0 ? '#0ECB81' : '#F6465D'}}>
               {activePnL !== null ? formatPnL(activeSignal, activePnL) : '--'}
             </b>
           </div>
           {mode === 'live' && (
             <div className="position-row">
-              <span>Canlı Durum</span>
+              <span>{t('Canlı Durum')}</span>
               <b className={liveDisplay ? `status-text ${liveDisplay.cls}` : ''}>
                 {liveDisplay && <span className={`status-dot ${liveDisplay.cls}`}>●</span>}
                 {liveTradeStatus}
@@ -597,14 +658,14 @@ const ChartModal = () => {
 
       {showTv && activeSignal && mode === 'live' && (
         <div className="position-panel horizontal bottom-left" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>
-          <div className="position-row"><span>Sembol</span><b>{activeSignal.symbol}</b></div>
+          <div className="position-row"><span>{t('Sembol')}</span><b>{activeSignal.symbol}</b></div>
           <div className="position-row">
-            <span>Yön</span>
+            <span>{t('Yön')}</span>
             <b style={{ color: activeSignal.dir === 'LONG' ? '#0ECB81' : '#F6465D' }}>
               {activeSignal.dir}
             </b>
           </div>
-          <div className="position-row"><span>Sinyal</span><b>{formatSignalTime(effectiveSignalDate(activeSignal))}</b></div>
+          <div className="position-row"><span>{t('Sinyal')}</span><b>{formatSignalTime(effectiveSignalDate(activeSignal))}</b></div>
           <div className="position-row"><span>Entry</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
             <span>TP / SL</span>
@@ -614,7 +675,7 @@ const ChartModal = () => {
       )}
 
       {chartError && !showTv && <div className="chart-warning" style={{color:'#F6465D'}}>{chartError}</div>}
-      {chartLoading && !showTv && <div className="chart-warning">Veriler yükleniyor...</div>}
+      {chartLoading && !showTv && <div className="chart-warning">{t('Veriler yükleniyor...')}</div>}
 
       <div
         ref={chartContainerRef}
