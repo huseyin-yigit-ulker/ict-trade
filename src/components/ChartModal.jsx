@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, BaselineSeries } from 'lightweight-charts';
+import { createChart, CandlestickSeries, BaselineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { useTradeContext } from '../context/TradeContext';
 
 const ChartModal = () => {
@@ -62,6 +62,7 @@ const ChartModal = () => {
   useEffect(() => {
     if (!activeSignal || !chartContainerRef.current || showTv) return;
 
+    let cancelled = false;   // guards async resume after cleanup (modal close / StrictMode)
     setChartLoading(true);
     chartContainerRef.current.innerHTML = '';
 
@@ -104,8 +105,8 @@ const ChartModal = () => {
       },
       crosshair: {
         mode: 1,
-        vertLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#181A20' },
-        horzLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#181A20' }
+        vertLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#1E2329' },
+        horzLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#1E2329' }
       }
     });
     chartRef.current = chart;
@@ -130,7 +131,7 @@ const ChartModal = () => {
     // --- KATMAN 2: MUM GRAFİĞİ ---
     const mainSeries = chart.addSeries(CandlestickSeries, {
       upColor: themeConfig.upColor, downColor: themeConfig.downColor,
-      borderVisible: false, wickUpColor: themeConfig.wickUp, wickDownColor: themeConfig.wickDown,
+      borderVisible: true, wickUpColor: themeConfig.wickUp, wickDownColor: themeConfig.wickDown,
       priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
@@ -140,55 +141,76 @@ const ChartModal = () => {
     const fetchAndRender = async () => {
       setChartError('');
       try {
-        const entryTime = activeSignal.dateObj.getTime();
+        const entryTime = activeSignal.dateObj.getTime();   // signal bar OPEN
+        const signalOpenMs = entryTime;
         const fallbackBacktestEnd = entryTime + (60 * 1000 * 240);
         const backtestExitTsMs = Number.isFinite(activeSignal?.exitTs) ? activeSignal.exitTs : fallbackBacktestEnd;
-        // Backend records exit_time as the OPEN of the bar that hit TP/SL.
-        // Add a buffer so the actual hit wick is within the dataset; trim on the
-        // frontend to stop at the real touch.
-        const exitBufferMs = 2 * 60 * 60 * 1000; // 2h headroom to capture the hit bar
-        const fetchEndTime = mode === 'live'
-          ? Date.now()
-          : Math.max(backtestExitTsMs + exitBufferMs, entryTime + (60 * 1000));
-        // signal_time is the OPEN of the bar that triggered the signal; the
-        // signal is actually emitted at bar CLOSE (engine runs after the bar
-        // closes). For live mode we want to see price action from that
-        // moment, so push the chart start forward by one bar duration.
+        const exitBufferMs = 2 * 60 * 60 * 1000; // headroom so the hit wick is in the dataset
+
         const intervalMs = (tf) => {
           const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
           if (!m) return 60 * 60 * 1000;
           const units = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
           return Number(m[1]) * units[m[2].toLowerCase()];
         };
-        const fetchStartTime = mode === 'live'
-          ? entryTime + intervalMs(activeSignal.ltfTimeframe)
-          : entryTime;
-        const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
-        // Backtest trades can span days (1500 1m bars = ~25h). Pick a coarser
-        // interval automatically so the full signal-to-close window fits.
+        // --- Context padding, measured in SIGNAL-timeframe periods ---
+        // Show ~PAD_BARS bars BEFORE the signal (ÖNCE) and AFTER the close (SONRA)
+        // so the trade is never glued to the chart edge.
+        const PAD_BARS = 6;          // 5-10 band
+        const MIN_PAD_DISPLAY = 8;   // floor in display bars so short-TF (1m live) still breathes
+        const ltfMs = intervalMs(activeSignal.ltfTimeframe);
+        let padMs = PAD_BARS * ltfMs;
+
+        // Window extends BACKWARD before the signal in BOTH modes (drop the old
+        // live "+1 bar push-forward" so the run-up into the signal is visible).
+        let fetchStartTime = signalOpenMs - padMs;
+        const fetchEndTime = mode === 'live'
+          ? Date.now()
+          : Math.max(backtestExitTsMs + Math.max(exitBufferMs, padMs), signalOpenMs + 60 * 1000);
+
+        // Display interval chosen over the PADDED span; coarsen so it fits <=1500 bars.
+        const ladder = ['1m', '5m', '15m', '1h', '4h', '1d', '1w'];
         const pickInterval = () => {
           if (mode === 'live') return '1m';
           const hours = (fetchEndTime - fetchStartTime) / 3600000;
           if (hours <= 25) return '1m';
-          if (hours <= 125) return '5m';     // up to ~5 days
-          if (hours <= 375) return '15m';    // up to ~15 days
-          return '1h';                        // long trades
+          if (hours <= 125) return '5m';     // ~5 days
+          if (hours <= 375) return '15m';    // ~15 days
+          return '1h';
         };
-        const klineInterval = pickInterval();
+        let klineInterval = pickInterval();
+        while (mode !== 'live' && (fetchEndTime - fetchStartTime) / intervalMs(klineInterval) > 1450) {
+          const i = ladder.indexOf(klineInterval);
+          if (i < 0 || i === ladder.length - 1) break;
+          klineInterval = ladder[i + 1];
+        }
+        // Live stays 1m — clamp the start so it never exceeds ~1450 bars.
+        if (mode === 'live') {
+          const liveMaxStart = Date.now() - 1450 * 60000;
+          if (fetchStartTime < liveMaxStart) fetchStartTime = liveMaxStart;
+        }
+        // Pad floor in display bars (visible context even on coarse intervals).
+        const displayMs = intervalMs(klineInterval);
+        padMs = Math.max(PAD_BARS * ltfMs, MIN_PAD_DISPLAY * displayMs);
+        const padBarsDisplay = Math.ceil(padMs / displayMs);
+
+        const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
         // 1. Veriyi Çek
         let rawData = [];
-        const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+        const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${Math.floor(fetchStartTime)}&endTime=${Math.floor(fetchEndTime)}&limit=1500`;
         const res = await fetch(urlFutures);
         rawData = await res.json();
 
         // Futures yoksa Spot dene
         if (!Array.isArray(rawData)) {
-            const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+            const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${Math.floor(fetchStartTime)}&endTime=${Math.floor(fetchEndTime)}&limit=1500`;
             const resSpot = await fetch(urlSpot);
             rawData = await resSpot.json();
         }
+
+        if (cancelled || !chartRef.current) return;   // modal closed / re-opened while fetching
 
         if (!Array.isArray(rawData) || rawData.length === 0) throw new Error('Kline verisi boş');
 
@@ -197,106 +219,101 @@ const ChartModal = () => {
           open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4])
         }));
 
-        // Backtest: trim candles to the first 1m bar that touches TP, SL or pre-entry invalidation.
-        // This makes the chart show only the signal-to-close window even though we fetched extra.
-        if (mode === 'backtest' && activeSignal.entry && activeSignal.tp && activeSignal.sl && candles.length > 0) {
-          const isLongTrade = activeSignal.dir === 'LONG';
-          const entrySec = Math.floor(entryTime / 1000);
-          let entryHitLocal = false;
-          let cutIdx = candles.length;
+        const { entry, tp, sl, dir } = activeSignal;
+        const isLong = dir === 'LONG';
+        const entryTs = Math.floor(signalOpenMs / 1000);
+
+        // Snap a target ms to the first real candle at/after it (markers must land on a bar).
+        const snapBar = (targetMs) => {
+          const t = Math.floor(targetMs / 1000);
+          const c = candles.find(cd => cd.time >= t);
+          return c ? c.time : (candles.length ? candles[candles.length - 1].time : t);
+        };
+        // Is the signal bar inside the loaded window? (live clamp can push it out of view.)
+        const signalVisible = candles.length > 0 && entryTs >= candles[0].time;
+
+        // --- Touch scan (both modes): entry-fill bar + the bar that closed the trade ---
+        let entryFilled = false, entryFillSec = null, closeBarSec = null, closeBarIdx = -1;
+        if (entry && tp && sl && signalVisible) {
+          let hit = false;
           for (let idx = 0; idx < candles.length; idx++) {
             const c = candles[idx];
-            if (c.time < entrySec) continue;
-            const tpHit = isLongTrade ? c.high >= activeSignal.tp : c.low <= activeSignal.tp;
-            const slHit = isLongTrade ? c.low <= activeSignal.sl : c.high >= activeSignal.sl;
-            if (!entryHitLocal) {
-              const entryHit = isLongTrade ? c.low <= activeSignal.entry : c.high >= activeSignal.entry;
-              if (!entryHit && (tpHit || slHit)) { cutIdx = idx + 1; break; }
-              if (entryHit) {
-                entryHitLocal = true;
-                if (tpHit || slHit) { cutIdx = idx + 1; break; }
+            if (c.time < entryTs) continue;
+            const tpHit = isLong ? c.high >= tp : c.low <= tp;
+            const slHit = isLong ? c.low <= sl : c.high >= sl;
+            if (!hit) {
+              const eHit = isLong ? c.low <= entry : c.high >= entry;
+              if (!eHit && (tpHit || slHit)) { closeBarSec = c.time; closeBarIdx = idx; break; } // pre-entry iptal
+              if (eHit) {
+                hit = true; entryFilled = true; entryFillSec = c.time;
+                if (tpHit || slHit) { closeBarSec = c.time; closeBarIdx = idx; break; }
               }
-            } else if (tpHit || slHit) {
-              cutIdx = idx + 1;
-              break;
-            }
+            } else if (tpHit || slHit) { closeBarSec = c.time; closeBarIdx = idx; break; }
           }
-          candles = candles.slice(0, cutIdx);
         }
+
+        // Fallback: a closed backtest trade whose coarse re-fetch missed the exact touch —
+        // anchor the close to the DB exit_time so zone/trim/dimming/marker all agree.
+        const backtestClosed = mode === 'backtest' && (activeSignal.status === 'TP' || activeSignal.status === 'SL');
+        if (closeBarSec == null && backtestClosed && Number.isFinite(activeSignal.exitTs)) {
+          closeBarSec = snapBar(activeSignal.exitTs);
+          closeBarIdx = candles.findIndex(c => c.time === closeBarSec);
+        }
+
+        // Backtest: keep ~PAD_BARS of SONRA context past the close (was: cut AT close).
+        if (mode === 'backtest' && closeBarIdx >= 0) {
+          candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + padBarsDisplay));
+        }
+
+        // --- Per-bar dimming: ÖNCE/SONRA context ghosted, the trade window stays bright ---
+        const signalSec = snapBar(signalOpenMs);
+        candles = candles.map((c) => {
+          const isCtx = c.time < signalSec || (closeBarSec != null && c.time > closeBarSec);
+          if (isCtx) return { ...c, color: '#2B3139', wickColor: '#5E6673', borderColor: '#2B3139' };
+          return { ...c, borderColor: c.close >= c.open ? themeConfig.upColor : themeConfig.downColor };
+        });
 
         mainSeries.setData(candles);
 
-        // 2. İşlem Durumunu Analiz Et (Trading Logic)
-        const { entry, tp, sl, dir } = activeSignal;
-        const entryTs = Math.floor(entryTime / 1000);
-        const isLong = dir === 'LONG';
-        
-        let isTerminalState = false;
-        // After trimming in backtest mode, the last candle IS the close bar.
-        let endTimeForGraph = candles[candles.length - 1].time;
+        // 2. Terminal state + zone right edge
+        const ctxStatus = liveStatuses[activeSignal.id]?.status;
+        const liveTerminalSet = new Set(['TP Oldu', 'SL Oldu', 'TP/SL Aynı Mum']);
+        const liveTerminal = !!ctxStatus && (liveTerminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'));
+        const isTerminalState = mode === 'backtest'
+          ? (activeSignal.status === 'TP' || activeSignal.status === 'SL')
+          : liveTerminal;
 
-        // Live mode: detect terminal state for endTimeForGraph + interval shutoff.
-        // The displayed status string is derived in render from context, so the
-        // chart panel and dashboard card stay consistent.
-        if (mode === 'live' && entry && tp && sl) {
-          const ctxStatus = liveStatuses[activeSignal.id]?.status;
-          const terminalSet = new Set(['TP Oldu', 'SL Oldu', 'TP/SL Aynı Mum']);
-          if (ctxStatus && (terminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'))) {
-            isTerminalState = true;
-            let entryHit = false;
-            for (const c of candles) {
-              if (c.time < entryTs) continue;
-              const hitEntry = isLong ? c.low <= entry : c.high >= entry;
-              const hitTp    = isLong ? c.high >= tp  : c.low  <= tp;
-              const hitSl    = isLong ? c.low <= sl   : c.high >= sl;
-              if (!entryHit) {
-                if (!hitEntry && (hitTp || hitSl)) { endTimeForGraph = c.time; break; }
-                if (hitEntry) entryHit = true;
-              }
-              if (entryHit && (hitTp || hitSl)) { endTimeForGraph = c.time; break; }
-            }
-          }
-        }
-        if (mode === 'backtest' && (activeSignal.status === 'TP' || activeSignal.status === 'SL')) {
-          isTerminalState = true;
+        // Zone box ends at the real close (backtest / terminal live); runs to last bar while live-open.
+        let endTimeForGraph = candles.length ? candles[candles.length - 1].time : entryTs;
+        if (closeBarSec != null && (mode === 'backtest' || liveTerminal)) endTimeForGraph = closeBarSec;
+
+        // Stop the live refresh once the trade has terminated.
+        if (mode === 'live' && isTerminalState && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
 
-        // Stop refresh interval only when trade has terminated.
-        if (mode === 'live' && isTerminalState) {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-        }
-
-        // 4. Modern Pozisyon Görünümü (TradingView Style)
-        // BaselineSeries kullanarak Entry'nin üstünü/altını boyuyoruz.
-        
+        // 3. Pozisyon bölgesi (entry baz; TP yeşil / SL kırmızı yarı-saydam, kapanışta biter)
         if (isLong) {
-            // LONG: TP (Üst) Yeşil, SL (Alt) Kırmızı
             tpAreaSeries.applyOptions({
-                topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.25)', topFillColor2: 'rgba(14, 203, 129, 0.05)',
+                topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.16)', topFillColor2: 'rgba(14, 203, 129, 0.03)',
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
             slAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#F6465D', bottomFillColor1: 'rgba(246, 70, 93, 0.25)', bottomFillColor2: 'rgba(246, 70, 93, 0.05)'
+                bottomLineColor: '#F6465D', bottomFillColor1: 'rgba(246, 70, 93, 0.16)', bottomFillColor2: 'rgba(246, 70, 93, 0.03)'
             });
         } else {
-            // SHORT: TP (Alt) Yeşil, SL (Üst) Kırmızı
             tpAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.25)', bottomFillColor2: 'rgba(14, 203, 129, 0.05)'
+                bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.16)', bottomFillColor2: 'rgba(14, 203, 129, 0.03)'
             });
             slAreaSeries.applyOptions({
-                topLineColor: '#F6465D', topFillColor1: 'rgba(246, 70, 93, 0.25)', topFillColor2: 'rgba(246, 70, 93, 0.05)',
+                topLineColor: '#F6465D', topFillColor1: 'rgba(246, 70, 93, 0.16)', topFillColor2: 'rgba(246, 70, 93, 0.03)',
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
         }
-
-        // Veriyi Serilere Ata
         if (entry && tp && sl) {
-          // Entry anından -> Bitiş anına kadar bir kutu çiz (iptalde de)
           tpAreaSeries.setData([ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]);
           slAreaSeries.setData([ { time: entryTs, value: sl }, { time: endTimeForGraph, value: sl } ]);
         } else {
@@ -304,25 +321,56 @@ const ChartModal = () => {
           slAreaSeries.setData([]);
         }
 
-        // 5. Referans Çizgileri (tek sefer)
+        // 4. Referans çizgileri (tek sefer) — eksen etiketine fiyat/yüzde
         if (!chartRef.current._priceLinesAdded) {
-          if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: 'Giriş', axisLabelVisible: true });
-          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: 'TP', axisLabelVisible: true });
-          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: 'SL', axisLabelVisible: true });
+          const targetPct = entry && tp ? ((tp - entry) / entry) * 100 : null;
+          const riskPct = entry && sl ? ((sl - entry) / entry) * 100 : null;
+          if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `Giriş ${formatPrice(entry)}`, axisLabelVisible: true });
+          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `TP${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `SL${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
-            mainSeries.createPriceLine({
-              price: activeSignal.exitPrice,
-              color: '#F0B90B',
-              lineWidth: 1,
-              lineStyle: 1,
-              title: 'Çıkış',
-              axisLabelVisible: true
-            });
+            mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `Çıkış ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
           }
           chartRef.current._priceLinesAdded = true;
         }
 
-        chart.timeScale().fitContent();
+        // 5. Zaman-bağlı işaretler: Sinyal / Giriş / Çıkış (çıkış rengi sonuca göre)
+        const isTP = (mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu');
+        const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
+        const exitColor = isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
+        const exitText = isTP ? 'TP' : isSL ? 'SL' : 'Çıkış';
+        const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(activeSignal.exitTs) ? snapBar(activeSignal.exitTs) : null);
+
+        const markers = [];
+        if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: 'Sinyal', size: 1 });
+        if (entryFilled && entryFillSec != null && entryFillSec !== signalSec) {
+          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#FCD535', text: 'Giriş', size: 1 });
+        }
+        if (isTerminalState && exitSec != null) {
+          markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar', shape: isLong ? 'arrowDown' : 'arrowUp', color: exitColor, text: exitText, size: 1 });
+        }
+        markers.sort((a, b) => a.time - b.time);   // v5 requires ascending time
+        if (!chartRef.current._markersApi) {
+          chartRef.current._markersApi = createSeriesMarkers(mainSeries, markers);
+        } else {
+          chartRef.current._markersApi.setMarkers(markers);
+        }
+
+        // 6. Çerçeveleme: ÖNCE + İŞLEM + SONRA — yalnız ilk render'da (canlı yenilemede
+        // kullanıcının pan/zoom'unu ezmemek için _priceLinesAdded gibi guard'lı).
+        if (!chartRef.current._framed) {
+          const tsApi = chart.timeScale();
+          let toTime = candles.length ? candles[candles.length - 1].time : endTimeForGraph;
+          if (isTerminalState && closeBarSec != null) {
+            toTime = Math.min(toTime, closeBarSec + padBarsDisplay * (displayMs / 1000));
+          }
+          try {
+            tsApi.setVisibleRange({ from: candles[0].time, to: toTime });
+          } catch {
+            tsApi.fitContent();
+          }
+          chartRef.current._framed = true;
+        }
         setChartLoading(false);
 
       } catch (err) {
@@ -356,9 +404,11 @@ const ChartModal = () => {
     observer.observe(chartContainerRef.current);
 
     return () => {
+      cancelled = true;
       observer.disconnect();
       if (intervalRef.current) clearInterval(intervalRef.current);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      if (chartRef.current?._markersApi) { chartRef.current._markersApi.detach(); chartRef.current._markersApi = null; }
       chart.remove();
       chartRef.current = null;
     };
