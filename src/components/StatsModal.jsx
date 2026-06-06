@@ -15,6 +15,7 @@ const StatsModal = () => {
 
   const stats = {};
   allSignals.forEach(s => {
+    if (s.status === 'NOFILL') return;   // no-fill = no trade taken
     if (!stats[s.symbol]) stats[s.symbol] = { count: 0, wins: 0, pnl: 0 };
     stats[s.symbol].count++;
     const pnl = calculatePnL(s);

@@ -7,6 +7,7 @@ import LoginScreen from './components/LoginScreen';
 import AppShell from './components/layout/AppShell';
 import CommandCenterPage from './pages/CommandCenterPage';
 import IntelligencePage from './pages/IntelligencePage';
+import VolumeRadarPage from './pages/VolumeRadarPage';
 import SettingsPage from './pages/SettingsPage';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
                 <Route element={<RequireAuth><AppShell /></RequireAuth>}>
                   <Route path="/command" element={<CommandCenterPage />} />
                   <Route path="/intelligence" element={<IntelligencePage />} />
+                  <Route path="/radar" element={<VolumeRadarPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/command" replace />} />

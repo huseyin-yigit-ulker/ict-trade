@@ -8,10 +8,10 @@ import SummaryModal from '../SummaryModal';
 import { useTradeContext } from '../../context/TradeContext';
 
 const AppShell = () => {
-  const { activeSignal, showStats, showSummary } = useTradeContext();
+  const { activeSignal, showStats, showSummary, sidebarHidden } = useTradeContext();
   return (
-    <div className="app-shell">
-      <Sidebar />
+    <div className={`app-shell ${sidebarHidden ? 'is-collapsed' : ''}`}>
+      {!sidebarHidden && <Sidebar />}
       <div className="app-main">
         <Topbar />
         <main className="app-content"><Outlet /></main>

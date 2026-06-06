@@ -83,6 +83,29 @@ SYMBOLS = [
     "XAUUSDT", "XAGUSDT",
 ]
 
+# --- dynamic volume-anomaly picks ---
+# Each run, IN ADDITION to SYMBOLS, scan up to DYN_MAX_PICKS extra symbols whose
+# last-closed 1h bar quote-volume spiked vs their own recent baseline. Written with
+# mode='dynamic' (kept out of the main live view + backtest sync).
+DYN_ENABLED         = os.getenv("DYN_SYMBOLS", "1").strip().lower() not in ("0", "false", "no", "off")
+DYN_MAX_PICKS       = 5
+DYN_CANDIDATE_CAP   = 50        # top-N by 24h quoteVolume probed with kline fetches
+DYN_KLINE_WINDOW    = 50        # bars fetched per candidate
+DYN_BASELINE_BARS   = 24        # baseline = median of the N bars before the last closed bar
+DYN_SPIKE_RATIO     = 3.0       # last_qv / baseline_median >= this -> anomaly
+DYN_MIN_BASELINE_QV = 50_000.0  # USDT: skip dust (baseline median below this)
+DYN_TICKER_URL      = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+DYN_EXINFO_URL      = "https://fapi.binance.com/fapi/v1/exchangeInfo"
+# Drop stablecoin / fiat / wrapped bases (they trade ~1.00 -> nonsense structure).
+# NOTE: performance-excluded names (XRP/TON/1000SHIB/LINK/OP) are intentionally NOT
+# blocked here — a real volume spike makes them eligible (user decision).
+DYN_BASE_BLOCKLIST = {
+    "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDP", "UST", "USTC", "PAX", "SUSD",
+    "USDE", "USDD", "AEUR", "BFUSD", "EUR", "GBP", "TRY", "BRL", "AUD", "JPY",
+    "ARS", "PLN", "ZAR", "MXN", "RUB", "UAH",
+    "WBTC", "WETH", "WBETH", "BETH", "STETH", "WSTETH",
+}
+
 # --- engine knobs ---
 ATR_PERIOD = 14
 SWING_N_ITF = 3
@@ -187,6 +210,117 @@ _AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume":
 
 def aggregate(df: pd.DataFrame, rule: str) -> pd.DataFrame:
     return df.resample(rule, label="right", closed="right").agg(_AGG).dropna()
+
+
+# ============================================================================
+# DYNAMIC VOLUME-ANOMALY SYMBOL PICKS
+# Picks up to DYN_MAX_PICKS symbols (outside the static SYMBOLS) whose last closed
+# 1h bar quote-volume spiked vs their own recent baseline. All Binance calls reuse
+# the existing _PROXIES; every function fails closed so the core scan never breaks.
+# ============================================================================
+
+def _fetch_24h_tickers() -> list:
+    """Market-wide 24h ticker: [{symbol, quoteVolume, ...}, ...]. [] on any error."""
+    try:
+        r = requests.get(DYN_TICKER_URL, timeout=20, proxies=_PROXIES)
+        r.raise_for_status()
+        data = r.json()
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        print(f"  [dyn] 24h ticker fetch failed: {e}")
+        return []
+
+
+def _active_usdt_perps() -> Optional[set]:
+    """Active PERPETUAL USDT contracts. None on error (caller falls back to suffix filter)."""
+    try:
+        r = requests.get(DYN_EXINFO_URL, timeout=20, proxies=_PROXIES)
+        r.raise_for_status()
+        syms = r.json().get("symbols", [])
+        return {s["symbol"] for s in syms
+                if s.get("contractType") == "PERPETUAL"
+                and s.get("status") == "TRADING"
+                and s.get("quoteAsset") == "USDT"}
+    except Exception as e:
+        print(f"  [dyn] exchangeInfo fetch failed: {e}; using suffix filter")
+        return None
+
+
+def _shortlist_candidates(tickers: list, exclude: set, active: Optional[set]) -> list:
+    """USDT-perps outside `exclude`, ranked by 24h quoteVolume, top DYN_CANDIDATE_CAP."""
+    rows = []
+    for t in tickers:
+        sym = t.get("symbol", "")
+        if not sym.endswith("USDT") or sym in exclude:
+            continue
+        if active is not None and sym not in active:
+            continue
+        if "_" in sym or sym.endswith(("UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT")):
+            continue
+        if sym[:-4] in DYN_BASE_BLOCKLIST:
+            continue
+        try:
+            qv = float(t.get("quoteVolume", 0.0))
+        except (TypeError, ValueError):
+            continue
+        if qv > 0:
+            rows.append((sym, qv))
+    rows.sort(key=lambda x: x[1], reverse=True)
+    return [s for s, _ in rows[:DYN_CANDIDATE_CAP]]
+
+
+def _volume_anomaly_score(symbol: str) -> Optional[tuple]:
+    """Score the last CLOSED 1h bar's quote-volume vs the median of the prior
+    DYN_BASELINE_BARS bars. quote-volume approximated as volume*close. Returns
+    (ratio, last_qv) or None if unscoreable."""
+    end = pd.Timestamp.now(tz="UTC")
+    start = end - pd.Timedelta(hours=DYN_KLINE_WINDOW + 2)
+    df = fetch_klines(symbol, INTERVAL,
+                      int(start.timestamp() * 1000), int(end.timestamp() * 1000))
+    if df.empty:
+        return None
+    df = trim_open_bar(df)
+    if len(df) < DYN_BASELINE_BARS + 1:
+        return None
+    qv = df["volume"] * df["close"]
+    last_qv = float(qv.iloc[-1])
+    baseline = float(qv.iloc[-(DYN_BASELINE_BARS + 1):-1].median())
+    if baseline < DYN_MIN_BASELINE_QV or baseline <= 0:
+        return None
+    return (last_qv / baseline, last_qv)
+
+
+def pick_volume_anomaly_symbols(exclude: set, k: int = DYN_MAX_PICKS) -> list:
+    """Up to k symbols (outside `exclude`) whose last-closed 1h bar quote-volume
+    spiked >= DYN_SPIKE_RATIO vs their own baseline, ranked by spike desc.
+    Scores the WHOLE shortlist (ordered by liquidity) then takes global top-k.
+    Fails closed: returns [] on any infra error; quiet hours may return < k."""
+    if not DYN_ENABLED or k <= 0:
+        return []
+    tickers = _fetch_24h_tickers()
+    if not tickers:
+        return []
+    active = _active_usdt_perps()
+    candidates = _shortlist_candidates(tickers, exclude, active)
+    scored = []
+    seen = set(exclude)
+    for sym in candidates:
+        if sym in seen:
+            continue
+        try:
+            res = _volume_anomaly_score(sym)
+        except Exception as e:
+            print(f"  [dyn] score error {sym}: {e}")
+            continue
+        if res and res[0] >= DYN_SPIKE_RATIO:
+            scored.append((res[0], sym))
+            seen.add(sym)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    picks = [s for _, s in scored[:k]]
+    if picks:
+        print("  [dyn] volume-anomaly picks: "
+              + ", ".join(f"{s}({r:.1f}x)" for r, s in scored[:k]))
+    return picks
 
 
 # ============================================================================
@@ -1219,7 +1353,7 @@ def signal_already_exists(conn, symbol: str, signal_time, direction: str) -> boo
     }).fetchone() is not None
 
 
-def save_signal_to_db(sig: Signal) -> bool:
+def save_signal_to_db(sig: Signal, is_dynamic: bool = False) -> bool:
     """Returns True only when a new row is inserted.
 
     Uses ``engine.begin()`` so the transaction is committed on context-exit;
@@ -1248,7 +1382,7 @@ def save_signal_to_db(sig: Signal) -> bool:
                 "symbol": sig.symbol, "direction": direction,
                 "entry": float(sig.entry), "sl": float(sig.stop_loss),
                 "tp": float(sig.take_profit_1) if sig.take_profit_1 is not None else None,
-                "signal_time": sig_time, "mode": "live",
+                "signal_time": sig_time, "mode": "dynamic" if is_dynamic else "live",
                 "ltf": INTERVAL, "htf": HTF_RULE,
                 "strategy": sig.strategy,
                 "quality": sig.quality,
@@ -1261,14 +1395,16 @@ def save_signal_to_db(sig: Signal) -> bool:
         return False
 
 
-def format_telegram_message(sig: Signal) -> str:
+def format_telegram_message(sig: Signal, is_dynamic: bool = False) -> str:
     arrow = "🟢 LONG" if sig.direction == "long" else "🔴 SHORT"
     rr = sig.risk_reward_1 if sig.risk_reward_1 else 0
     risk_pct = abs(sig.entry - sig.stop_loss) / sig.entry * 100
     target_pct = (abs(sig.take_profit_1 - sig.entry) / sig.entry * 100
                   if sig.take_profit_1 is not None else 0)
     quality_emoji = "⭐" if sig.quality == "high" else "✓"
+    dyn_banner = "🔥 <b>DİNAMİK HACİM PICK</b> (vetlenmemiş sembol)\n\n" if is_dynamic else ""
     return (
+        dyn_banner +
         f"<b>{arrow} {sig.symbol}</b>\n"
         f"📋 {sig.strategy}\n"
         f"⏰ {sig.timestamp.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
@@ -1290,7 +1426,7 @@ def trim_open_bar(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def process_symbol(symbol: str) -> int:
+def process_symbol(symbol: str, is_dynamic: bool = False) -> int:
     end = pd.Timestamp.now(tz="UTC")
     start = end - pd.Timedelta(hours=WARMUP_HOURS)
     df = fetch_klines(symbol, INTERVAL,
@@ -1309,8 +1445,8 @@ def process_symbol(symbol: str) -> int:
 
     n_emitted = 0
     for sig in signals:
-        if save_signal_to_db(sig):
-            send_telegram_message(format_telegram_message(sig))
+        if save_signal_to_db(sig, is_dynamic=is_dynamic):
+            send_telegram_message(format_telegram_message(sig, is_dynamic=is_dynamic))
             n_emitted += 1
     if not signals:
         print(f"  {symbol}: no signal at last closed bar ({df.index[-1]})")
@@ -1327,15 +1463,17 @@ def process_symbol(symbol: str) -> int:
 HEARTBEAT_ENABLED = os.getenv("HEARTBEAT", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
-def send_heartbeat(new_signals: int, n_symbols: int, errors: int = 0) -> None:
+def send_heartbeat(new_signals: int, n_symbols: int, errors: int = 0,
+                   n_dynamic: int = 0) -> None:
     if not HEARTBEAT_ENABLED:
         return
     now = pd.Timestamp.now(tz="UTC")
     warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
+    dyn = f"\n🔥 {n_dynamic} dinamik sembol (hacim anomalisi)" if n_dynamic else ""
     msg = (
         f"🤖 <b>ICT Saatlik Tarama</b>\n"
         f"⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
-        f"📊 {n_symbols} sembol tarandı\n"
+        f"📊 {n_symbols} sembol tarandı{dyn}\n"
         f"✅ {new_signals} yeni sinyal{warn}"
     )
     send_telegram_message(msg)
@@ -1343,18 +1481,29 @@ def send_heartbeat(new_signals: int, n_symbols: int, errors: int = 0) -> None:
 
 def run_scan() -> int:
     """Walk every symbol once at its last closed bar. Used by both Airflow and CLI."""
-    print(f"Toplam Taranacak Sembol Sayısı: {len(SYMBOLS)}")
     total = 0
     errors = 0
-    for sym in SYMBOLS:
-        print(f"=== {sym} ===")
+
+    # Dynamic volume-anomaly picks (best-effort; can never break the core scan).
+    try:
+        dynamic = pick_volume_anomaly_symbols(set(SYMBOLS), DYN_MAX_PICKS)
+    except Exception as e:
+        print(f"  [dyn] selection failed, scanning static set only: {e}")
+        dynamic = []
+    dyn_set = set(dynamic)
+    scan_list = list(SYMBOLS) + dynamic
+    print(f"Toplam Taranacak Sembol Sayısı: {len(scan_list)} "
+          f"({len(SYMBOLS)} sabit + {len(dynamic)} dinamik)")
+
+    for sym in scan_list:
+        print(f"=== {sym}{' 🔥' if sym in dyn_set else ''} ===")
         try:
-            total += process_symbol(sym)
+            total += process_symbol(sym, is_dynamic=(sym in dyn_set))
         except Exception as e:
             errors += 1
             print(f"  ERROR analyzing {sym}: {e}")
     print(f"\nDone. {total} new signal(s) emitted.")
-    send_heartbeat(total, len(SYMBOLS), errors)
+    send_heartbeat(total, len(scan_list), errors, n_dynamic=len(dynamic))
     return total
 
 

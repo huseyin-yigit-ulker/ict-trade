@@ -89,7 +89,11 @@ const LiveTicker = () => {
   return (
     <div className="live-ticker" title="Binance Futures canlı fiyatlar (24s değişim)">
       <div className="live-ticker__label">
-        <span className="live-ticker__dot live" /> {t('CANLI · FUTURES')}
+        <span className="live-ticker__dot live" />
+        <span className="live-ticker__label-text">
+          <span>{t('CANLI')}</span>
+          <span>{t('FUTURES')}</span>
+        </span>
       </div>
       <div className="live-ticker__viewport">
         <div className="live-ticker__track">

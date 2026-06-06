@@ -15,6 +15,10 @@ const BACKTEST_ALLOWED_SYMBOLS = [
   'XAUUSDT', 'XAGUSDT'
 ];
 
+// Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
+// a signal's limit must be touched within 3h of the signal, else it's cancelled.
+const ENTRY_EXPIRY_MINUTES = 180;
+
 const parseLocalDate = (value) => {
   if (!value || typeof value !== 'string') return null;
   const [y, m, d] = value.split('-').map(Number);
@@ -39,6 +43,7 @@ export const useTradeContext = () => useContext(TradeContext);
 export const TradeProvider = ({ children }) => {
   const [allSignals, setAllSignals] = useState([]);
   const [filteredSignals, setFilteredSignals] = useState([]);
+  const [dynamicSignals, setDynamicSignals] = useState([]);   // mode='dynamic' volume-anomaly picks (Volume Radar)
   const [selectedSymbols, setSelectedSymbols] = useState(new Set());
   const [pendingSymbols, setPendingSymbols] = useState(new Set());
   const [isLoaded, setIsLoaded] = useState(false);
@@ -66,11 +71,21 @@ export const TradeProvider = ({ children }) => {
     setMode(appMode === 'backtest' ? 'backtest' : 'live');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Sidebar visibility — persisted so a hidden sidebar stays hidden across reloads.
+  const [sidebarHidden, setSidebarHiddenState] = useState(() => {
+    try { return localStorage.getItem('pusu.sidebar') === 'hidden'; } catch { return false; }
+  });
+  const toggleSidebar = useCallback(() => {
+    setSidebarHiddenState((h) => {
+      const next = !h;
+      try { localStorage.setItem('pusu.sidebar', next ? 'hidden' : 'shown'); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
   const [liveError, setLiveError] = useState('');
   const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
   const [dbMessage, setDbMessage] = useState('');
   const [liveStatuses, setLiveStatuses] = useState({});
-  const [backtestAccessGranted, setBacktestAccessGranted] = useState(false);
   const [backtestInsights, setBacktestInsights] = useState({
     summary: null,
     symbols: [],
@@ -79,6 +94,10 @@ export const TradeProvider = ({ children }) => {
   });
 
   const liveStatusesRef = useRef({});
+  // Session cache for backtest data — historical rows + analytics are immutable
+  // for a given query, so we fetch once and reuse on every mode toggle back to
+  // BACKTEST instead of re-hitting Supabase. { key, rows, insights }.
+  const backtestCacheRef = useRef(null);
 
   const toNumber = useCallback((value) => {
     const parsed = parseFloat(value);
@@ -94,6 +113,7 @@ export const TradeProvider = ({ children }) => {
 
   const normalizeStatus = useCallback((item) => {
     const raw = (item.status || '').toString().toLowerCase();
+    if (raw.includes('cancel')) return 'NOFILL';   // entry never filled -> 0R, no trade taken
     if (raw.includes('tp') || raw.includes('take profit')) return 'TP';
     if (raw.includes('sl') || raw.includes('stop loss')) return 'SL';
     return 'WAITING';
@@ -254,7 +274,43 @@ export const TradeProvider = ({ children }) => {
     }
   }, [processData, isAllowedBacktestHour]);
 
-  const loadBacktest = useCallback(async () => {
+  // Volume Radar: dynamic (mode='dynamic') volume-anomaly picks — symbols OUTSIDE
+  // the static 17, so NO allow-list filter. Kept in its own state, separate from
+  // the main live/backtest set.
+  const loadDynamic = useCallback(async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    if (!supabaseUrl || !supabaseKey) return;
+    try {
+      const now = new Date();
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7, 0, 0, 0));
+      const params = new URLSearchParams({
+        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score',
+        order: 'signal_time.desc'
+      });
+      params.append('mode', 'eq.dynamic');
+      params.append('signal_time', `gte.${start.toISOString()}`);
+      const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Accept-Profile': 'ict_trade' }
+      });
+      if (!res.ok) throw new Error('Dinamik veri alınamadı');
+      const rows = await res.json();
+      const mapped = rows.map((r) => ({
+        id: r.id, symbol: r.symbol,
+        trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
+        entry_price: r.entry, tp_price: r.tp, sl_price: r.sl,
+        signal_time: r.signal_time, status: 'WAITING',
+        strategy: r.strategy, quality: r.quality, confluence_score: r.confluence_score,
+      }));
+      setDynamicSignals(buildProcessedSignals(mapped));
+    } catch (err) {
+      console.error(err);
+      setDynamicSignals([]);
+    }
+  }, [buildProcessedSignals]);
+
+  const loadBacktest = useCallback(async ({ force = false } = {}) => {
     const supabaseUrl = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     const backtestTableRaw = import.meta.env.BACKTESTING_DB_TABLE;
@@ -263,6 +319,17 @@ export const TradeProvider = ({ children }) => {
     if (!supabaseUrl || !supabaseKey) {
       setLiveError('Backtest Supabase ayarları eksik.');
       setIsLoaded(true);
+      return;
+    }
+
+    // Cache key = everything that defines the result set. If unchanged and not
+    // forced, restore from the in-memory session cache (no network round-trip).
+    const cacheKey = `${backtestSchema}.${backtestTable}|v1|2025-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
+    const cached = backtestCacheRef.current;
+    if (!force && cached && cached.key === cacheKey) {
+      setLiveError('');
+      processData(cached.rows);
+      setBacktestInsights(cached.insights);
       return;
     }
 
@@ -335,12 +402,8 @@ export const TradeProvider = ({ children }) => {
 
       const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;
       const rows = await fetchAllBacktestRows(url);
-      const filteredRows = rows.filter((row) => {
-        const rawStatus = (row?.status || '').toString().toLowerCase();
-        return rawStatus !== 'cancelled'
-          && rawStatus !== 'canceled'
-          && isAllowedBacktestHour(row.signal_time);
-      });
+      // Keep cancelled (no-fill) rows — shown as 0R 'no-fill' cards in the day drill.
+      const filteredRows = rows.filter((row) => isAllowedBacktestHour(row.signal_time));
 
       processData(filteredRows);
 
@@ -360,6 +423,10 @@ export const TradeProvider = ({ children }) => {
       };
 
       setBacktestInsights(nextInsights);
+
+      // Cache the raw rows + analytics so subsequent BACKTEST visits this
+      // session reuse them instead of re-querying Supabase.
+      backtestCacheRef.current = { key: cacheKey, rows: filteredRows, insights: nextInsights };
 
       [summaryRes, symbolRes, weekdayRes, sessionRes]
         .filter((result) => result.status === 'rejected')
@@ -413,24 +480,18 @@ export const TradeProvider = ({ children }) => {
       setDateEnd('');
       setPendingDateStart('');
       setPendingDateEnd('');
-      setBacktestAccessGranted(false);
     }
 
     setLiveStatuses({});
     liveStatusesRef.current = {};
-    setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
 
     if (mode === 'backtest') {
-      if (backtestAccessGranted) {
-        loadBacktest();
-      } else {
-        setAllSignals([]);
-        setFilteredSignals([]);
-        setSelectedSymbols(new Set());
-        setPendingSymbols(new Set());
-        setIsLoaded(true);
-      }
+      // Insights are restored from cache (or re-fetched) inside loadBacktest;
+      // don't blank them here or a cache hit would still flash empty.
+      loadBacktest();
     } else {
+      setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
+      loadLive();
       loadLive();
       intervalId = setInterval(() => {
         const now = new Date();
@@ -445,7 +506,10 @@ export const TradeProvider = ({ children }) => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [mode, loadBacktest, loadLive, backtestAccessGranted]);
+  }, [mode, loadBacktest, loadLive]);
+
+  // Force a fresh backtest pull (bypasses the session cache) — e.g. a manual refresh.
+  const reloadBacktest = useCallback(() => loadBacktest({ force: true }), [loadBacktest]);
 
   const normalizeForBinance = useCallback((sym) => (sym ? sym.replace(/[^A-Za-z0-9]/g, '') : ''), []);
 
@@ -455,11 +519,17 @@ export const TradeProvider = ({ children }) => {
     }
 
     const entryTs = Math.floor(sig.dateObj.getTime() / 1000);
+    // Limit must be touched within ENTRY_EXPIRY_MINUTES of the signal (backtest parity).
+    const fillDeadlineSec = entryTs + ENTRY_EXPIRY_MINUTES * 60;
     const lastPrice = candles[candles.length - 1]?.close ?? null;
     let entryHitTime = null;
 
     for (const c of candles) {
       if (c.time < entryTs) continue;
+      // Fill window elapsed without the limit ever being touched → cancel.
+      if (c.time > fillDeadlineSec) {
+        return { status: 'İptal (Süre Doldu)', lastPrice };
+      }
       const entryTouched = sig.dir === 'LONG' ? c.low <= sig.entry : c.high >= sig.entry;
       const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
       const slHit = sig.dir === 'LONG' ? c.low <= sig.sl : c.high >= sig.sl;
@@ -607,6 +677,8 @@ export const TradeProvider = ({ children }) => {
   const contextValue = useMemo(() => ({
     allSignals,
     filteredSignals,
+    dynamicSignals,
+    loadDynamic,
     selectedSymbols,
     pendingSymbols,
     isLoaded,
@@ -636,17 +708,20 @@ export const TradeProvider = ({ children }) => {
     setMode,
     appMode,
     setAppMode,
+    sidebarHidden,
+    toggleSidebar,
     liveError,
     liveStatuses,
-    backtestAccessGranted,
-    setBacktestAccessGranted,
     backtestInsights,
+    reloadBacktest,
     dbStatus,
     dbMessage,
     testDbConnection
   }), [
     allSignals,
     filteredSignals,
+    dynamicSignals,
+    loadDynamic,
     selectedSymbols,
     pendingSymbols,
     isLoaded,
@@ -667,10 +742,12 @@ export const TradeProvider = ({ children }) => {
     mode,
     appMode,
     setAppMode,
+    sidebarHidden,
+    toggleSidebar,
     liveError,
     liveStatuses,
-    backtestAccessGranted,
     backtestInsights,
+    reloadBacktest,
     dbStatus,
     dbMessage,
     testDbConnection

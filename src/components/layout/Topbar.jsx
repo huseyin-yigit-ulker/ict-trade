@@ -4,14 +4,13 @@ import { useTradeContext } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const TITLES = { '/command': 'Komuta Merkezi', '/intelligence': 'İstihbarat', '/settings': 'Ayarlar' };
-const MODES = ['live', 'observe', 'backtest'];
+const TITLES = { '/command': 'Komuta Merkezi', '/intelligence': 'İstihbarat', '/radar': 'Hacim Radarı', '/settings': 'Ayarlar' };
 
 const Topbar = () => {
   const {
     selectedSymbols, pendingSymbols, allSignals,
     toggleSymbol, applySymbols, clearPendingSymbols, selectAllPendingSymbols,
-    appMode, setAppMode, dbStatus, dbMessage,
+    sidebarHidden, toggleSidebar, dbStatus, dbMessage,
   } = useTradeContext();
   const { t, lang, setLang } = useLang();
   const { theme, toggle } = useTheme();
@@ -30,27 +29,24 @@ const Topbar = () => {
   useEffect(() => { if (!dropdownOpen) setSymbolQuery(''); }, [dropdownOpen]);
 
   const onSettings = loc.pathname === '/settings';
-  const hideSymbols = onSettings || loc.pathname === '/intelligence';
+  const hideSymbols = onSettings || loc.pathname === '/intelligence' || loc.pathname === '/radar';
 
   return (
     <header className="topbar">
       <div className="topbar__left">
+        <button
+          className="icon-btn topbar__toggle"
+          onClick={toggleSidebar}
+          title={sidebarHidden ? t('Menüyü Göster') : t('Menüyü Gizle')}
+          aria-label={sidebarHidden ? t('Menüyü Göster') : t('Menüyü Gizle')}
+        >
+          {sidebarHidden ? '☰' : '‹‹'}
+        </button>
         <div className="topbar__title">{t(TITLES[loc.pathname] || 'Komuta Merkezi')}</div>
-        <div className="mode-switch" role="group" aria-label="system mode">
-          {MODES.map((m) => (
-            <button
-              key={m}
-              className={`mode-switch__btn mode-switch__btn--${m} ${appMode === m ? 'active' : ''}`}
-              onClick={() => setAppMode(m)}
-              title={m.toUpperCase()}
-            >
-              <span className="mode-switch__dot" />{m.toUpperCase()}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="topbar__controls">
+        <div className="topbar__cluster">
         <button className="icon-btn" onClick={toggle} title={t('Tema')} aria-label={t('Tema')}>
           {theme === 'dark' ? '☾' : '☀'}
         </button>
@@ -88,7 +84,8 @@ const Topbar = () => {
           </div>
         )}
 
-        {dbMessage && <span className={`db-pill ${dbStatus}`}>{dbMessage}</span>}
+          {dbMessage && <span className={`db-pill ${dbStatus}`}>{dbMessage}</span>}
+        </div>
       </div>
 
       {dropdownOpen && <div className="header-overlay" onClick={() => setDropdownOpen(false)} />}

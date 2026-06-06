@@ -48,19 +48,6 @@ const formatPrice = (value) => {
   return value.toPrecision(4);
 };
 
-// Short label + full title for each strategy id the engine emits, so the
-// trade card stays compact while the tooltip carries the full name.
-const STRATEGY_META = {
-  A_liquidity_sweep_reversal: { short: 'A • Sweep',     full: 'Liquidity Sweep Reversal' },
-  B_power_of_three:           { short: 'B • AMD',       full: 'Power of Three (AMD)' },
-  C_fvg_ob_confluence:        { short: 'C • FVG+OB',    full: 'FVG + OB Confluence' },
-  D_silver_bullet:            { short: 'D • Silver',    full: 'Silver Bullet' },
-  E_eqh_eql_run:              { short: 'E • EQ Run',    full: 'EQH/EQL Liquidity Run' },
-  composite:                  { short: 'Composite',     full: 'Multi-strategy composite' },
-};
-const strategyLabel = (id) => STRATEGY_META[id]?.short || (id ? id.slice(0, 14) : null);
-const strategyFull  = (id) => STRATEGY_META[id]?.full  || id || '';
-
 // Risk-reward ratio from entry/SL/TP (pre-trade, what the engine targeted).
 const computeRR = (sig) => {
   if (!sig?.entry || !sig?.sl || !sig?.tp) return null;
@@ -76,50 +63,6 @@ const pctDist = (a, b) => {
   return ((b - a) / a) * 100;
 };
 
-// --- Derived intelligence (from available fields only: strategy, confluence,
-// signal time, prices). The engine detects these internally; here we re-read
-// them on the frontend until they're persisted with each signal.
-const LIQ_EVENT = {
-  D_silver_bullet:            { kind: 'SWEEP',      label: 'FVG Sweep + Rejection' },
-  B_power_of_three:           { kind: 'GRAB',       label: 'Asian Range Liquidity Grab' },
-  E_eqh_eql_run:              { kind: 'GRAB',       label: 'EQH / EQL Liquidity Run' },
-  C_fvg_ob_confluence:        { kind: 'INDUCEMENT', label: 'OB + FVG Inducement' },
-  A_liquidity_sweep_reversal: { kind: 'SWEEP',      label: 'Liquidity Sweep Reversal' },
-  composite:                  { kind: 'MULTI',      label: 'Multi-Strategy Confluence' },
-};
-const liquidityEvent = (sig) => LIQ_EVENT[sig?.strategy] || { kind: 'SETUP', label: strategyFull(sig?.strategy) || 'Setup' };
-
-const structureShift = (sig) => ({
-  type: sig?.strategy === 'C_fvg_ob_confluence' ? 'BOS' : 'CHoCH',
-  side: sig?.dir === 'LONG' ? 'Bullish' : 'Bearish',
-});
-
-const confidenceScoreOf = (sig) => {
-  if (Number.isFinite(sig?.confluenceScore)) return Math.max(0, Math.min(100, Math.round((sig.confluenceScore / 12) * 100)));
-  const r = computeRR(sig);
-  return r ? Math.min(95, Math.round(40 + r * 7)) : 50;
-};
-
-const KZ = [
-  { name: 'Silver Bullet AM', lo: 10, hi: 11, sb: true },
-  { name: 'Silver Bullet PM', lo: 14, hi: 15, sb: true },
-  { name: 'London Open',  lo: 2,  hi: 5,  sb: false },
-  { name: 'NY Open',      lo: 7,  hi: 10, sb: false },
-  { name: 'London Close', lo: 10, hi: 12, sb: false },
-  { name: 'Asia Range',   lo: 19, hi: 24, sb: false },
-];
-const killzoneOf = (sig) => {
-  if (!sig?.dateObj) return { name: '—', hour: null };
-  let h = 12;
-  try {
-    h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(sig.dateObj)) % 24;
-  } catch { /* fallback */ }
-  const inWin = (k) => (k.lo <= k.hi ? (h >= k.lo && h < k.hi) : (h >= k.lo || h < k.hi));
-  const sb = sig.strategy === 'D_silver_bullet';
-  const match = (sb ? KZ.find((k) => k.sb && inWin(k)) : null) || KZ.find(inWin);
-  return { name: match ? match.name : 'Off-Session', hour: h };
-};
-
 // Compact status display for live trades — short label + colored icon.
 // Each variant has its own dot color so the dashboard reads at-a-glance.
 const LIVE_STATUS_DISPLAY = {
@@ -128,6 +71,7 @@ const LIVE_STATUS_DISPLAY = {
   'TP/SL Aynı Mum':               { label: 'TP+SL',    icon: '●', cls: 'st-mixed' },
   'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    icon: '●', cls: 'st-active' },
   'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
+  'İptal (Süre Doldu)':           { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
   'Sinyal Bekliyor':              { label: 'BEKLİYOR', icon: '●', cls: 'st-wait' },
 };
 const liveStatusDisplay = (s) => LIVE_STATUS_DISPLAY[s] || LIVE_STATUS_DISPLAY['Sinyal Bekliyor'];
@@ -180,20 +124,52 @@ const Dashboard = () => {
     setChartView,
     mode,
     liveStatuses,
-    backtestAccessGranted,
-    setBacktestAccessGranted
   } = useTradeContext();
   const { t, locale } = useLang();
-  const BACKTEST_PASSWORD = '2020';
-  const [backtestPasswordInput, setBacktestPasswordInput] = useState('');
-  const [backtestPasswordError, setBacktestPasswordError] = useState('');
 
+  // Status filter — works in both live and backtest. Maps each trade to one of
+  // tp / sl / cancelled / open so the same control filters either data source.
+  const [statusFilter, setStatusFilter] = useState('all');
+  // 'active' is live-only — reset the filter when leaving live so backtest
+  // doesn't silently show an empty set under a no-longer-visible option.
   useEffect(() => {
-    if (mode !== 'backtest') {
-      setBacktestPasswordInput('');
-      setBacktestPasswordError('');
+    if (mode !== 'live' && statusFilter === 'active') setStatusFilter('all');
+  }, [mode, statusFilter]);
+  const statusOf = (sig) => {
+    if (mode === 'live') {
+      const s = liveStatuses[sig.id]?.status || '';
+      if (s === 'TP Oldu') return 'tp';
+      if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') return 'sl';
+      if (s.startsWith('İptal')) return 'cancelled';
+      if (s.startsWith('İşlem Aktif')) return 'active'; // entry filled, position open
+      return 'open';
     }
-  }, [mode]);
+    if (sig.status === 'TP') return 'tp';
+    if (sig.status === 'SL') return 'sl';
+    return 'cancelled'; // backtest WAITING = entry never filled → cancelled
+  };
+  const matchesStatus = (sig) => statusFilter === 'all' || statusOf(sig) === statusFilter;
+  const STATUS_FILTERS = [
+    { key: 'all', label: t('Tümü') },
+    { key: 'tp', label: 'TP' },
+    { key: 'sl', label: 'SL' },
+    // "Aktif" only applies to live trades (entry filled, still open).
+    ...(mode === 'live' ? [{ key: 'active', label: t('Aktif') }] : []),
+    { key: 'cancelled', label: t('İptal') },
+  ];
+  const renderStatusFilter = () => (
+    <div className="status-filter" role="group" aria-label="status filter">
+      {STATUS_FILTERS.map((f) => (
+        <button
+          key={f.key}
+          className={`status-filter__btn status-filter__btn--${f.key} ${statusFilter === f.key ? 'active' : ''}`}
+          onClick={() => setStatusFilter(f.key)}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
+  );
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -561,15 +537,18 @@ const Dashboard = () => {
 
   const renderTradeCards = (trades) => (
     <div className="trade-grid">
-      {trades.map((sig) => {
+      {trades.filter(matchesStatus).map((sig) => {
         const pnl = calculatePnL(sig);
+        const isNoFill = sig.status === 'NOFILL';   // entry never filled → 0R, no trade taken
         const liveStatus = mode === 'live' ? liveStatuses[sig.id]?.status : '';
         const liveLastPrice = mode === 'live' ? liveStatuses[sig.id]?.lastPrice : null;
         const liveMeta = resolveLiveMeta(liveStatus);
 
-        const pnlClass = mode === 'live'
-          ? liveMeta.cls
-          : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting'));
+        const pnlClass = isNoFill
+          ? 'nofill'
+          : (mode === 'live'
+            ? liveMeta.cls
+            : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting')));
 
         const effDate = effectiveSignalTime(sig) || sig.dateObj;
         const timeLabel = effDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
@@ -580,7 +559,7 @@ const Dashboard = () => {
         return (
           <div
             key={sig.id}
-            className="trade-card"
+            className={`trade-card${isNoFill ? ' trade-card--nofill' : ''}`}
             onClick={() => {
               setChartView('journal');
               setActiveSignal(sig);
@@ -598,59 +577,12 @@ const Dashboard = () => {
                   <span className="time-ago"> · {timeAgo(effDate, t)}</span>
                 )}
               </span>
-              {(() => {
-                const conf = confidenceScoreOf(sig);
-                const tier = conf >= 75 ? 'hi' : conf >= 55 ? 'mid' : 'lo';
-                return (
-                  <span className={`intel-conf intel-conf--${tier}`} title={`${t('Güven Skoru')} · ${conf}/100`}>
-                    <b>{conf}</b><i>{t('GÜVEN')}</i>
-                  </span>
-                );
-              })()}
+              {rr != null && (
+                <span className="rr-pill" title={`Risk-Reward · 1:${rr.toFixed(2)}`}>1:{rr.toFixed(2)}</span>
+              )}
             </div>
 
-            {(() => {
-              const ev = liquidityEvent(sig);
-              const ss = structureShift(sig);
-              const kz = killzoneOf(sig);
-              return (
-                <>
-                  <div className={`intel-event intel-event--${ev.kind.toLowerCase()}`}>
-                    <span className="intel-tag">{t('LİKİDİTE OLAYI')}</span>
-                    <span className="intel-event__row">
-                      <span className="intel-event__kind">{ev.kind}</span>
-                      <span className="intel-event__desc">{ev.label}</span>
-                    </span>
-                  </div>
-                  <div className="intel-rows">
-                    <div className="intel-row">
-                      <span className="intel-row__k">◷ {t('Killzone')}</span>
-                      <span className="intel-row__v">{kz.name}{kz.hour != null ? ` · ${String(kz.hour).padStart(2, '0')}:00 NY` : ''}</span>
-                    </div>
-                    <div className="intel-row">
-                      <span className="intel-row__k">⟲ {t('Yapı Kırılımı')}</span>
-                      <span className={`intel-row__v ${sig.dir === 'LONG' ? 'win' : 'loss'}`}>{ss.type} · {t(ss.side)}</span>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-
             <div className="intel-exec">
-              <div className="intel-exec__head">
-                <span className="intel-tag">{t('Uygulama Planı')}</span>
-                {sig.strategy && (
-                  <span
-                    className={`strategy-badge ${sig.quality === 'high' ? 'high' : 'medium'}`}
-                    title={`${strategyFull(sig.strategy)}${sig.confluenceScore != null ? ` · score ${sig.confluenceScore}` : ''}`}
-                  >
-                    {sig.quality === 'high' ? '⭐ ' : ''}{strategyLabel(sig.strategy)}
-                  </span>
-                )}
-                {rr != null && (
-                  <span className="rr-pill" title={`Risk-Reward · 1:${rr.toFixed(2)}`}>1:{rr.toFixed(2)}</span>
-                )}
-              </div>
               <div className="trade-body intel-exec__grid">
               <div className="trade-metric">
                 <span className="metric-label">{t('Durum')}</span>
@@ -665,7 +597,7 @@ const Dashboard = () => {
                     );
                   })()
                 ) : (
-                  <span className={`status-text ${pnlClass}`}>{sig.status}</span>
+                  <span className={`status-text ${pnlClass}`}>{isNoFill ? t('İptal') : sig.status}</span>
                 )}
               </div>
               <div className="trade-metric">
@@ -685,7 +617,7 @@ const Dashboard = () => {
                   )
                 ) : (
                   <span className={`pnl-text ${pnlClass}`}>
-                    {pnl !== 0 ? formatBacktestPnl(sig, pnl) : '--'}
+                    {isNoFill ? '0R' : (pnl !== 0 ? formatBacktestPnl(sig, pnl) : '--')}
                   </span>
                 )}
               </div>
@@ -749,7 +681,7 @@ const Dashboard = () => {
                 })()
               ) : (
                 <div className={`chip ${pnlClass}`}>
-                  {pnlClass === 'waiting' ? t('BEKLEMEDE') : (pnl > 0 ? 'TP' : 'SL')}
+                  {isNoFill ? t('İptal') : (pnlClass === 'waiting' ? t('BEKLEMEDE') : (pnl > 0 ? 'TP' : 'SL'))}
                 </div>
               )}
             </div>
@@ -775,47 +707,11 @@ const Dashboard = () => {
   const daysMaxR = Math.max(1, ...dayBuckets.map((b) => Math.abs(b.totalR)));
 
   if (mode === 'backtest') {
-    if (!backtestAccessGranted) {
-      return (
-        <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
-          <div className="day-notebook" style={{ maxWidth: 480, margin: '40px auto' }}>
-            <div className="day-header">
-              <div className="day-title">{t('Backtest Kilidi')}</div>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (backtestPasswordInput === BACKTEST_PASSWORD) {
-                  setBacktestAccessGranted(true);
-                  setBacktestPasswordError('');
-                  return;
-                }
-                setBacktestPasswordError(t('Şifre hatalı.'));
-              }}
-              style={{ display: 'grid', gap: 10 }}
-            >
-              <input
-                type="password"
-                className="symbol-search"
-                placeholder={t('Şifre')}
-                value={backtestPasswordInput}
-                onChange={(e) => {
-                  setBacktestPasswordInput(e.target.value);
-                  if (backtestPasswordError) setBacktestPasswordError('');
-                }}
-              />
-              {backtestPasswordError && <div className="status-error">{backtestPasswordError}</div>}
-              <button className="apply-btn" type="submit">{t('Backtest Aç')}</button>
-            </form>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
         <div className="backtest-flow">
           {renderKpiHero()}
+          {renderStatusFilter()}
           <div className="drill-header">
             <div className="drill-path">
               {!selectedYear && t('Yıllar')}
@@ -882,7 +778,7 @@ const Dashboard = () => {
                 ))}
               </div>
 
-              {selectedDayTrades.length > 0 && (
+              {selectedDayTrades.some(matchesStatus) && (
                 <div className="day-notebook">
                   <div className="day-header">
                     <div className="day-title">{selectedDayLabel}</div>
@@ -909,8 +805,10 @@ const Dashboard = () => {
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {renderKpiHero()}
+      {renderStatusFilter()}
       {Object.keys(groupedLive).map((dateKey) => {
         const trades = groupedLive[dateKey];
+        if (!trades.some(matchesStatus)) return null;
         const counts = summarizeLiveCounts(trades);
 
         return (

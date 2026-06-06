@@ -3,18 +3,6 @@ import { createChart, CandlestickSeries, BaselineSeries, createSeriesMarkers } f
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 
-// Killzone (NY session) the signal fired in — derived from the bar's NY hour.
-const killzoneName = (h) => {
-  if (h == null) return null;
-  if (h >= 2 && h < 5) return 'London Open';
-  if (h >= 7 && h < 10) return 'NY Open';
-  if (h >= 10 && h < 11) return 'Silver Bullet AM';
-  if (h >= 14 && h < 15) return 'Silver Bullet PM';
-  if (h >= 10 && h < 12) return 'London Close';
-  if (h >= 19 || h < 1) return 'Asia Range';
-  return 'Off-Session';
-};
-
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses } = useTradeContext();
   const { t, locale } = useLang();
@@ -26,7 +14,6 @@ const ChartModal = () => {
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
   const [hoverInfo, setHoverInfo] = useState(null);
-  const [chartIntel, setChartIntel] = useState(null);   // liquidity badges: order flow / killzone / sweep
 
   // Single source of truth for live status: TradeContext.liveStatuses
   // (the dashboard's polled value). Compact label + colored dot — same
@@ -37,6 +24,7 @@ const ChartModal = () => {
     'TP/SL Aynı Mum':               { label: 'TP+SL',    cls: 'st-mixed' },
     'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    cls: 'st-active' },
     'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    cls: 'st-cancel' },
+    'İptal (Süre Doldu)':           { label: 'İPTAL',    cls: 'st-cancel' },
     'Sinyal Bekliyor':              { label: 'BEKLİYOR', cls: 'st-wait' },
   };
   const ctxLiveStatus = (mode === 'live' && activeSignal) ? liveStatuses[activeSignal.id]?.status : null;
@@ -280,25 +268,9 @@ const ChartModal = () => {
           candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + padBarsDisplay));
         }
 
-        // --- Liquidity intelligence: pools resting before the signal + the sweep bar ---
         const signalSec = snapBar(signalOpenMs);
-        const preCandles = candles.filter((c) => c.time < signalSec);
-        let bslPool = null, sslPool = null, sweepSec = null;
-        if (preCandles.length >= 4) {
-          const formN = Math.max(3, Math.floor(preCandles.length * 0.6));
-          const form = preCandles.slice(0, formN);                  // pool-formation window
-          bslPool = Math.max(...form.map((c) => c.high));           // buy-side liquidity (resting highs)
-          sslPool = Math.min(...form.map((c) => c.low));            // sell-side liquidity (resting lows)
-          // Sweep = a later pre-bar (or the signal bar) that pierces the pool then closes back inside.
-          const zone = candles.filter((c) => c.time >= form[form.length - 1].time && c.time <= signalSec);
-          for (let i = 0; i < zone.length; i++) {
-            const c = zone[i];
-            if (isLong && c.low < sslPool && c.close > sslPool) { sweepSec = c.time; break; }
-            if (!isLong && c.high > bslPool && c.close < bslPool) { sweepSec = c.time; break; }
-          }
-        }
 
-        // --- Per-bar dimming: manipulation phase (pre-signal) tinted violet, post-trade ghosted gray ---
+        // --- Per-bar dimming: pre-signal context tinted violet, post-trade ghosted gray ---
         candles = candles.map((c) => {
           if (c.time < signalSec) return { ...c, color: '#322B45', wickColor: '#7C6BB0', borderColor: '#473A66' };
           if (closeBarSec != null && c.time > closeBarSec) return { ...c, color: '#2B3139', wickColor: '#5E6673', borderColor: '#2B3139' };
@@ -360,9 +332,6 @@ const ChartModal = () => {
           if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')} ${formatPrice(entry)}`, axisLabelVisible: true });
           if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
-          // Liquidity pools the setup targets; the swept side is tagged as the TRAP.
-          if (bslPool != null) mainSeries.createPriceLine({ price: bslPool, color: 'rgba(167, 139, 250, 0.75)', lineWidth: 1, lineStyle: 1, title: `BSL${!isLong && sweepSec != null ? ' ⚡ TRAP' : ''}`, axisLabelVisible: false });
-          if (sslPool != null) mainSeries.createPriceLine({ price: sslPool, color: 'rgba(167, 139, 250, 0.75)', lineWidth: 1, lineStyle: 1, title: `SSL${isLong && sweepSec != null ? ' ⚡ TRAP' : ''}`, axisLabelVisible: false });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
             mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
           }
@@ -378,7 +347,6 @@ const ChartModal = () => {
 
         const markers = [];
         if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
-        if (sweepSec != null) markers.push({ time: sweepSec, position: isLong ? 'belowBar' : 'aboveBar', shape: 'circle', color: '#A78BFA', text: '⚡', size: 2 });
         if (entryFilled && entryFillSec != null && entryFillSec !== signalSec) {
           markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: t('Giriş'), size: 1 });
         }
@@ -408,16 +376,6 @@ const ChartModal = () => {
           chartRef.current._framed = true;
         }
 
-        // Liquidity badges: order flow = trade bias; killzone from the signal's NY hour.
-        let nyHour = null;
-        try { nyHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(activeSignal.dateObj)) % 24; } catch { /* fallback */ }
-        setChartIntel({
-          orderFlow: isLong ? 'LONG' : 'SHORT',
-          killzone: killzoneName(nyHour),
-          nyHour,
-          swept: isLong ? 'SSL' : 'BSL',
-          hasSweep: sweepSec != null,
-        });
         setChartLoading(false);
 
       } catch (err) {
@@ -507,14 +465,6 @@ const ChartModal = () => {
     const days = Math.floor(hrs / 24);
     return `${days} gün ${hrs % 24} sa`;
   };
-  const STRATEGY_LABEL = {
-    A_liquidity_sweep_reversal: 'Liquidity Sweep Reversal',
-    B_power_of_three: 'Power of Three',
-    C_fvg_ob_confluence: 'FVG + OB Confluence',
-    D_silver_bullet: 'Silver Bullet',
-    E_eqh_eql_run: 'EQH/EQL Run',
-    composite: 'Composite (multi)',
-  };
 
   useEffect(() => {
     if (!showTv && chartContainerRef.current) {}
@@ -535,18 +485,6 @@ const ChartModal = () => {
           <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
             {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
           </h2>
-          {!showTv && chartIntel && (
-            <div className="chart-intel-bar">
-              <span className={`ci-flow ${chartIntel.orderFlow === 'LONG' ? 'up' : 'down'}`}>
-                {chartIntel.orderFlow === 'LONG' ? '▲' : '▼'} {chartIntel.orderFlow === 'LONG' ? 'BULLISH' : 'BEARISH'} {t('Order Flow')}
-              </span>
-              {chartIntel.killzone && (
-                <span className="ci-kz">◷ {chartIntel.killzone}{chartIntel.nyHour != null ? ` · ${String(chartIntel.nyHour).padStart(2, '0')}:00 NY` : ''}</span>
-              )}
-              {chartIntel.hasSweep && <span className="ci-sweep">⚡ {chartIntel.swept} {t('Sweep')}</span>}
-              <span className="ci-manip">◍ {t('Manipülasyon Fazı')}</span>
-            </div>
-          )}
         </div>
         {!showTv && hoverInfo && (
           <div className="chart-hover-info">
@@ -580,22 +518,6 @@ const ChartModal = () => {
             <span>{mode === 'live' ? t('Süre (canlı)') : t('Süre')}</span>
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
           </div>
-          {activeSignal.strategy && (
-            <div className="position-row">
-              <span>{t('Strateji')}</span>
-              <b style={{ color: activeSignal.quality === 'high' ? '#F5B942' : '#EAECEF' }}>
-                {activeSignal.quality === 'high' ? '⭐ ' : ''}
-                {STRATEGY_LABEL[activeSignal.strategy] || activeSignal.strategy}
-                {activeSignal.confluenceScore != null && ` · ${activeSignal.confluenceScore}`}
-              </b>
-            </div>
-          )}
-          {(activeSignal.ltfTimeframe || activeSignal.htfTimeframe) && (
-            <div className="position-row">
-              <span>{t('Timeframe')}</span>
-              <b>{activeSignal.ltfTimeframe || '?'}{activeSignal.htfTimeframe ? ` · HTF ${activeSignal.htfTimeframe}` : ''}</b>
-            </div>
-          )}
           <div className="position-row"><span>{t('Giriş')}</span><b>{formatPrice(activeSignal.entry)}</b></div>
           <div className="position-row">
              <span>{t('Hedef')}</span>

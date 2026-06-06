@@ -39,7 +39,7 @@ const SummaryModal = ({ asPage = false }) => {
     return 'BEKLEMEDE';
   };
 
-  const filtered = allSignals.filter(s => localSymbols.has(s.symbol)).filter(s => {
+  const filtered = allSignals.filter(s => s.status !== 'NOFILL' && localSymbols.has(s.symbol)).filter(s => {
     if (mode !== 'live') return true;
     const status = liveStatuses[s.id]?.status;
     const type = resolveLiveType(status);

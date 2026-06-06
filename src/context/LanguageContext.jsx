@@ -25,6 +25,10 @@ const EN = {
   'Tema': 'Theme',
   'Komuta Merkezi': 'Command Center',
   'İstihbarat': 'Intelligence',
+  'Hacim Radarı': 'Volume Radar',
+  'Hacim anomalisi': 'Volume anomaly',
+  'Önceki periyotta anormal hacim artışı gösteren, sabit liste dışı semboller — aynı ICT motoruyla tarandı. Deneysel; backtest ile doğrulanmamış.': 'Symbols outside the fixed list with an abnormal volume spike in the prior period — scanned by the same ICT engine. Experimental; not backtest-validated.',
+  'Henüz dinamik sinyal yok.': 'No dynamic signals yet.',
 
   // --- Intelligence Report card ---
   'Güven Skoru': 'Confidence Score',
@@ -172,6 +176,15 @@ const EN = {
   'PORTFÖY KARNESİ': 'PORTFOLIO SCORECARD',
   'Canlı fiyatlar bağlanıyor…': 'Connecting to live prices…',
   'CANLI · FUTURES': 'LIVE · FUTURES',
+  'CANLI': 'LIVE',
+  'FUTURES': 'FUTURES',
+
+  // --- sidebar mode + sidebar toggle ---
+  'Menüyü Göster': 'Show menu',
+  'Menüyü Gizle': 'Hide menu',
+  'Operatör': 'Operator',
+  'İptal': 'Cancelled',
+  'Aktif': 'Active',
 
   // --- Equity panel ---
   'Sermaye Eğrisi (R)': 'Equity Curve (R)',
