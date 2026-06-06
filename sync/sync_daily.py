@@ -111,19 +111,15 @@ def main():
     rows, status_counts, skipped = [], {}, 0
     for sym, items in by_sym.items():
         earliest = min(w["_st"] for w in items)
-        df = tsc.fetch_1h(sym, earliest - pd.Timedelta(hours=2), now)
-        if df.empty:
+        df1m = tsc.fetch_1m(sym, earliest - pd.Timedelta(minutes=2), now)
+        if df1m.empty:
             print(f"  {sym}: no klines, skipping {len(items)}")
             skipped += len(items)
             continue
         for w in items:
             st = w["_st"]
-            if st not in df.index:
-                skipped += 1
-                continue
-            bar_index = df.index.get_loc(st)
-            outcome = tsc.simulate(df, bar_index, w["direction"],
-                                   float(w["entry"]), float(w["sl"]), float(w["tp"]))
+            outcome = tsc.simulate(sym, st, w["direction"],
+                                   float(w["entry"]), float(w["sl"]), float(w["tp"]), df1m=df1m)
             status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
             rows.append(tsc.build_row(
                 sym, st, w["direction"], w["entry"], w["sl"], w["tp"], outcome,

@@ -33,8 +33,10 @@ from ict.data import fetch_klines          # noqa: E402  (futures+spot fallback)
 from backtester import simulate_signal     # noqa: E402
 
 ENV_PATH = REPO / ".env"
-INTERVAL = "1h"
-EXPIRY_MINUTES = 180        # engine EXPIRY_MINUTES -> 3 bars on 1h
+INTERVAL = "1h"             # signal-generation / engine timeframe (fetch_1h feeds run_engine)
+EXPIRY_MINUTES = 180        # entry-fill window in minutes (= 180 bars on the 1m resolver)
+RESOLUTION_INTERVAL = "1m"  # outcome resolution timeframe — intrabar entry vs TP/SL order
+RESOLUTION_HORIZON = pd.Timedelta(days=10)  # per-signal 1m fetch span when df1m not passed
 VERSION = "v1"
 TABLE = "ict_trade.trading_signals"
 
@@ -99,6 +101,13 @@ def fetch_1h(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFram
                         int(end.timestamp() * 1000))
 
 
+def fetch_1m(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """1-minute klines for intrabar-accurate outcome resolution (paginated by fetch_klines)."""
+    return fetch_klines(symbol, RESOLUTION_INTERVAL,
+                        int(start.timestamp() * 1000),
+                        int(end.timestamp() * 1000))
+
+
 # ---------------------------------------------------------------- outcome
 class _StubSignal:
     """Minimal object exposing the attributes backtester.simulate_signal reads."""
@@ -115,29 +124,61 @@ class _StubSignal:
         self.strategy = strategy
 
 
-def simulate(df1h: pd.DataFrame, bar_index: int, direction: str,
+def _pending() -> dict:
+    return {"status": STATUS_MAP["pending"], "real_entry_time": None, "exit_time": None,
+            "exit_price": None, "pnl_r": None, "raw_status": "pending"}
+
+
+def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
              entry: float, sl: float, tp: float) -> dict:
-    """Walk forward on 1h klines; return outcome fields for trading_signals.
+    """Resolve one trade on 1m bars from the signal close; return trading_signals fields.
 
-    Reuses backtester.simulate_signal (PENDING->ACTIVE->TP/SL|EXPIRED|INVALIDATED,
-    same-bar tie -> SL). entry-fill window = EXPIRY_MINUTES (3 bars on 1h)."""
-    expiry_bars = max(2, int(EXPIRY_MINUTES / 60))
+    Reuses backtester.simulate_signal: entry must FILL before TP/SL or the trade is
+    INVALIDATED (no trade taken); same-bar tie -> SL. Entry-fill window = EXPIRY_MINUTES
+    (= 180 bars on 1m). On 1m the intrabar order of entry vs TP/SL is essentially
+    unambiguous — unlike 1h, where one bar's high+low can falsely register entry-then-TP."""
+    idx = df1m.index
+    if idx.tz is None:
+        df1m = df1m.copy()
+        df1m.index = idx = idx.tz_localize("UTC")
+    pos = int(idx.searchsorted(close_ts))       # first 1m bar at/after the signal close
+    if pos >= len(df1m):
+        return _pending()                        # not enough data yet -> re-checked later
+    bar_index = pos - 1                           # simulate_signal scans from bar_index+1
     sig = _StubSignal(direction.lower(), float(entry), float(sl), float(tp),
-                      bar_index, bar_index + expiry_bars)
-    res = simulate_signal(sig, df1h)
-    bar_dur = df1h.index[1] - df1h.index[0] if len(df1h) > 1 else pd.Timedelta(hours=1)
+                      bar_index, bar_index + EXPIRY_MINUTES)
+    res = simulate_signal(sig, df1m)
+    bar_dur = pd.Timedelta(minutes=1)
 
-    def close_ts(i):
-        return (df1h.index[i] + bar_dur).to_pydatetime() if i is not None else None
+    def close_at(i):
+        return (df1m.index[i] + bar_dur).to_pydatetime() if i is not None else None
 
     return {
         "status": STATUS_MAP.get(res.status.value, res.status.value),
-        "real_entry_time": close_ts(res.entry_index),
-        "exit_time": close_ts(res.exit_index),
+        "real_entry_time": close_at(res.entry_index),
+        "exit_time": close_at(res.exit_index),
         "exit_price": float(res.exit_price) if res.exit_price is not None else None,
         "pnl_r": float(res.pnl_r) if res.pnl_r is not None else None,
         "raw_status": res.status.value,
     }
+
+
+def simulate(symbol: str, signal_ts, direction: str, entry: float, sl: float, tp: float,
+             *, df1m: pd.DataFrame | None = None, ltf_minutes: int = 60) -> dict:
+    """Resolve a signal's TP/SL outcome on 1m klines (intrabar-accurate).
+
+    Signal generation stays on 1h; only the OUTCOME is resolved on 1m. The signal fires
+    at its bar close (signal_ts + ltf), where the 1m scan begins. Pass df1m to reuse a
+    per-symbol 1m frame (backfill); omit it to fetch a per-signal window (daily sync)."""
+    ts = pd.Timestamp(signal_ts)
+    if ts.tz is None:
+        ts = ts.tz_localize("UTC")
+    close_ts = ts + pd.Timedelta(minutes=ltf_minutes)
+    if df1m is None:
+        df1m = fetch_1m(symbol, close_ts, close_ts + RESOLUTION_HORIZON)
+    if df1m is None or df1m.empty:
+        return _pending()
+    return _resolve(df1m, close_ts, direction, entry, sl, tp)
 
 
 # ---------------------------------------------------------------- row mapping

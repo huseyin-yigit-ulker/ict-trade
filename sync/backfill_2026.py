@@ -56,12 +56,14 @@ def build_symbol_rows(symbol: str, year: int) -> tuple[list[dict], dict]:
         return [], {"symbol": symbol, "bars": 0, "signals": 0, "skipped": True}
 
     signals = run_engine(symbol, df, strategies=DAG_STRATS)
+    # 1m klines (target year onward) for intrabar-accurate TP/SL/entry-fill resolution.
+    df1m = tsc.fetch_1m(symbol, year_start - pd.Timedelta(hours=2), end)
     rows, status_counts = [], {}
     for s in signals:
         if not (year_start <= s.timestamp < year_end):
             continue
-        outcome = tsc.simulate(df, s.bar_index, s.direction, s.entry,
-                               s.stop_loss, s.take_profit_1)
+        outcome = tsc.simulate(symbol, s.timestamp, s.direction, s.entry,
+                               s.stop_loss, s.take_profit_1, df1m=df1m)
         status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
         rows.append(tsc.build_row(
             symbol, s.timestamp, s.direction, s.entry, s.stop_loss, s.take_profit_1,
