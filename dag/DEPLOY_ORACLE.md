@@ -93,8 +93,9 @@ Saatlik DAG'ın altına ekle (00:30 UTC, "dün" tamamen kapanmışken):
 İlgili komutlar:
 ```
 ./.venv/bin/python sync/sync_daily.py --dry-run        # DB'ye yazmadan önizle
-./.venv/bin/python sync/backfill_2026.py --dry-run     # 2026 backfill önizleme
-./.venv/bin/python sync/backfill_2026.py --wipe-scope all   # tek seferlik: sil + 2026'yı doldur
+./.venv/bin/python sync/backfill_year.py --year 2026 --dry-run         # 2026 backfill önizleme
+./.venv/bin/python sync/backfill_year.py --year 2026 --wipe-scope all  # tek seferlik: sil + 2026'yı doldur
+./.venv/bin/python sync/backfill_year.py --year 2025 --wipe-scope year # 2025'i ekle (2026'ya dokunmaz)
 ```
 > Şema/RPC: `supabase/trading_signals_schema.sql` + `supabase/backtest_analytics.sql` bir kez uygulanır.
 

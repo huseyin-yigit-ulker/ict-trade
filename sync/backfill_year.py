@@ -1,21 +1,26 @@
-"""One-time backfill: regenerate the year-2026 backtest into ict_trade.trading_signals.
+"""Backfill a full calendar year of backtest signals into ict_trade.trading_signals.
 
 Runs the SAME engine the live DAG uses (production strategy set B/C/D/E) over each
-symbol's 1h history, simulates every 2026 signal's TP/SL outcome, and upserts the
-rows the dashboard reads.
+symbol's 1h history, simulates every target-year signal's TP/SL outcome on 1m bars,
+and upserts the rows the dashboard reads (version='v1').
+
+Year-agnostic: pass --year (default current behaviour is 2026). Use it to add 2025,
+2024, etc. The dashboard shows signal_time >= 2025-01-01, version='v1', so any backfilled
+year from 2025 onward appears automatically.
 
 Safety:
   - Never deletes in --dry-run.
   - A real (writing) run REQUIRES an explicit --wipe-scope:
-      2026 : DELETE rows with signal_time in the target year, then refill it
+      year : DELETE rows whose signal_time falls in --year, then refill that year
       all  : DELETE every row, then load only the target year
       none : no delete (upsert only; old rows for the year remain — not recommended)
   - --dry-run writes a per-symbol preview CSV under sync/out/ and touches no DB.
+  - wipe-scope 'year' only touches the target year, so adding 2025 leaves 2026 intact.
 
 Usage:
-  python sync/backfill_2026.py --dry-run                 # validate, no DB
-  python sync/backfill_2026.py --symbols BTCUSDT --dry-run
-  python sync/backfill_2026.py --wipe-scope 2026         # real run, refill 2026
+  python sync/backfill_year.py --year 2025 --dry-run               # validate, no DB
+  python sync/backfill_year.py --year 2025 --symbols BTCUSDT --dry-run
+  python sync/backfill_year.py --year 2025 --wipe-scope year       # real run, refill 2025
 """
 from __future__ import annotations
 
@@ -57,7 +62,9 @@ def build_symbol_rows(symbol: str, year: int) -> tuple[list[dict], dict]:
 
     signals = run_engine(symbol, df, strategies=DAG_STRATS)
     # 1m klines (target year onward) for intrabar-accurate TP/SL/entry-fill resolution.
-    df1m = tsc.fetch_1m(symbol, year_start - pd.Timedelta(hours=2), end)
+    # Cap the 1m fetch at "now" so a future year doesn't request non-existent bars.
+    m1_end = min(year_end, end)
+    df1m = tsc.fetch_1m(symbol, year_start - pd.Timedelta(hours=2), m1_end)
     rows, status_counts = [], {}
     for s in signals:
         if not (year_start <= s.timestamp < year_end):
@@ -77,7 +84,7 @@ def wipe(conn, scope: str, year: int) -> int:
     cur = conn.cursor()
     if scope == "all":
         cur.execute(f"DELETE FROM {tsc.TABLE}")
-    elif scope == "2026":
+    elif scope == "year":
         cur.execute(
             f"DELETE FROM {tsc.TABLE} WHERE signal_time >= %s AND signal_time < %s",
             (f"{year}-01-01", f"{year + 1}-01-01"))
@@ -92,14 +99,14 @@ def main():
     ap.add_argument("--symbols", nargs="*", default=SYMBOLS)
     ap.add_argument("--year", type=int, default=2026)
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--wipe-scope", choices=["none", "2026", "all"], default=None)
+    ap.add_argument("--wipe-scope", choices=["none", "year", "all"], default=None)
     args = ap.parse_args()
 
     if not args.dry_run and args.wipe_scope is None:
-        raise SystemExit("Real run requires --wipe-scope {none|2026|all} "
+        raise SystemExit("Real run requires --wipe-scope {none|year|all} "
                          "(use --dry-run to preview without DB writes).")
 
-    print(f"=== 2026 backfill | symbols={len(args.symbols)} | "
+    print(f"=== {args.year} backfill | symbols={len(args.symbols)} | "
           f"dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
 
     all_rows, infos = [], []
@@ -110,7 +117,7 @@ def main():
         tag = "SKIP (no data)" if info["skipped"] else f"{info['signals']} signals {info.get('status', {})}"
         print(f"  {sym:<12} bars={info['bars']:<6} -> {tag}")
         if args.dry_run and rows:
-            fp = OUT / f"backfill_preview_{sym}.csv"
+            fp = OUT / f"backfill_preview_{args.year}_{sym}.csv"
             with open(fp, "w", newline="") as f:
                 w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
                 w.writeheader(); w.writerows(rows)
@@ -129,9 +136,9 @@ def main():
         return
 
     conn = tsc.backtest_conn()
-    if args.wipe_scope in ("2026", "all"):
+    if args.wipe_scope in ("year", "all"):
         deleted = wipe(conn, args.wipe_scope, args.year)
-        print(f"wiped {deleted} existing rows (scope={args.wipe_scope})")
+        print(f"wiped {deleted} existing rows (scope={args.wipe_scope}, year={args.year})")
     n = tsc.upsert_rows(conn, all_rows)
     conn.close()
     print(f"upserted {n} rows into {tsc.TABLE}")
