@@ -29,6 +29,9 @@ SYMBOLS = [
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
+    # Stock-backed perps (underlying equities)
+    "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",
+    "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
 ]
 
 
