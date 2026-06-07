@@ -5,6 +5,13 @@ import { createContext, useContext, useState, useCallback, useMemo } from 'react
 // Interpolate with {x}: t('{n} dk önce', { n: 5 }).
 
 const EN = {
+  // --- Chart modal controls ---
+  'Mum': 'Candles',
+  'Çizgi': 'Line',
+  'Genişlet': 'Expand',
+  'Daralt': 'Collapse',
+  'Konfluens': 'Confluence',
+  'Kalite': 'Quality',
   // --- Header / nav ---
   "Backtest'e Geç": 'To Backtest',
   "Live'a Geç": 'To Live',

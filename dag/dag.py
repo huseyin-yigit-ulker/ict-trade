@@ -38,6 +38,7 @@ except ImportError:
 # ============================================================================
 # STDLIB / THIRD-PARTY
 # ============================================================================
+import json
 import os
 import time
 import uuid
@@ -81,6 +82,9 @@ SYMBOLS = [
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
+    # Stock-backed perps (underlying equities)
+    "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",
+    "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
 ]
 
 # --- dynamic volume-anomaly picks ---
@@ -805,6 +809,87 @@ def _rr(entry, stop, target, direction):
     return reward / risk if valid else 0.0
 
 
+def build_geometry(df, bar_index, direction, entry,
+                   structure_events, liquidity_levels, obs, fvgs, lookback=80):
+    """Reconstruct the ICT decision geometry active at the signal bar so the UI
+    can draw the FVG / Order-Block / swept-liquidity / BOS that framed the entry.
+
+    READ-ONLY: never affects signal generation (called after a Signal is built).
+    Returns a JSON-serializable dict; bar indices are resolved to unix seconds.
+    Identical to backtest/engine.build_geometry (same detector dataclasses)."""
+    idx = bar_index
+    want_bull = direction == "long"
+
+    def _ts(i):
+        if i is None or i < 0 or i >= len(df.index):
+            return None
+        try:
+            return int(df.index[i].timestamp())
+        except Exception:
+            return None
+
+    geo = {}
+
+    # entry zone: OB/FVG alive at idx, matching bias, that brackets (or is nearest to) entry
+    cand = []
+    for o in obs:
+        if o.created_at_index > idx:
+            continue
+        if o.mitigated and o.mitigation_index is not None and o.mitigation_index <= idx:
+            continue
+        if (o.type == "bullish_ob") != want_bull:
+            continue
+        cand.append(("OB", float(o.top), float(o.bottom), o.created_at_index))
+    for f in fvgs:
+        if f.created_at_index > idx:
+            continue
+        if f.filled_at_index is not None and f.filled_at_index <= idx:
+            continue
+        if (f.type == "bullish_fvg") != want_bull:
+            continue
+        cand.append(("FVG", float(f.top), float(f.bottom), f.created_at_index))
+    if cand:
+        def _score(z):
+            _, top, bot, _i = z
+            contains = 0 if (bot <= entry <= top) else 1
+            return (contains, abs((top + bot) / 2 - entry))
+        kind, top, bot, cidx = min(cand, key=_score)
+        geo["entry_zone"] = {"kind": kind, "top": top, "bottom": bot, "from": _ts(cidx)}
+
+    # swept liquidity: most recent sweep within lookback before idx
+    swept = [l for l in liquidity_levels
+             if l.swept and l.swept_at_index is not None
+             and idx - lookback <= l.swept_at_index <= idx]
+    if swept:
+        s = max(swept, key=lambda l: l.swept_at_index)
+        geo["swept"] = {"type": s.type, "price": float(s.level),
+                        "created": _ts(s.created_at_index), "swept": _ts(s.swept_at_index)}
+
+    # structure break (CHoCH/BOS) most recent at/before idx
+    sev = [e for e in structure_events
+           if e.broken_at_index <= idx and idx - e.broken_at_index <= lookback]
+    if sev:
+        e = max(sev, key=lambda ev: ev.broken_at_index)
+        geo["structure"] = {"type": e.type, "direction": e.direction,
+                            "level": float(e.broken_level), "at": _ts(e.broken_at_index)}
+
+    # nearest unswept opposite liquidity (the draw / TP target)
+    tgt = None
+    for l in liquidity_levels:
+        if l.created_at_index > idx:
+            continue
+        if l.swept and l.swept_at_index is not None and l.swept_at_index <= idx:
+            continue
+        if direction == "long" and l.level > entry:
+            tgt = l.level if tgt is None else min(tgt, l.level)
+        elif direction == "short" and l.level < entry:
+            tgt = l.level if tgt is None else max(tgt, l.level)
+    if tgt is not None:
+        geo["target_liquidity"] = float(tgt)
+
+    return geo
+
+
 def _overlap_pct(a_top, a_bot, b_top, b_bot):
     inter = max(0.0, min(a_top, b_top) - max(a_bot, b_bot))
     union = max(a_top, b_top) - min(a_bot, b_bot)
@@ -1316,6 +1401,12 @@ def run_engine(symbol: str, df: pd.DataFrame, *,
             except Exception:
                 continue
             if sig is not None:
+                try:
+                    sig.context["geometry"] = build_geometry(
+                        df, sig.bar_index, sig.direction, sig.entry,
+                        bundle.structure, bundle.liquidity, bundle.order_blocks, bundle.fvgs)
+                except Exception:
+                    pass
                 raw.append(sig)
     return merge_same_bar(raw)
 
@@ -1388,6 +1479,17 @@ def save_signal_to_db(sig: Signal, is_dynamic: bool = False) -> bool:
                 "quality": sig.quality,
                 "confluence_score": int(sig.confluence_score),
             })
+        # best-effort: attach decision geometry in a SEPARATE tx so a missing
+        # `context` column (pre-migration) can never block the signal insert.
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    UPDATE ict_trade.signals SET context = CAST(:c AS JSONB)
+                    WHERE symbol = :s AND signal_time = :t AND direction = :d
+                """), {"c": json.dumps(getattr(sig, "context", {}) or {}),
+                       "s": sig.symbol, "t": sig_time, "d": direction})
+        except Exception as ce:
+            print(f"  (context skipped: {ce})")
         print(f"  ✅ saved {sig.symbol} {direction} @ {sig_time}")
         return True
     except Exception as e:

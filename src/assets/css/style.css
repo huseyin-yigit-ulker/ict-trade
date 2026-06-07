@@ -985,6 +985,33 @@ button.chip   { cursor: pointer; }
 .pos-tp { color: var(--win); }
 .pos-sl { color: var(--loss); }
 
+/* candle ↔ line segmented toggle in the chart header */
+.chart-style-seg { display: inline-flex; border: 1px solid #2B3139; border-radius: 6px; overflow: hidden; }
+.chart-style-seg button {
+  background: transparent; border: none; color: #848E9C; padding: 4px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; transition: background 0.12s ease, color 0.12s ease;
+}
+.chart-style-seg button:hover { color: #EAECEF; }
+.chart-style-seg button.active { background: rgba(245, 185, 66, 0.16); color: #F5B942; }
+
+/* draggable + collapsible info panel */
+.position-panel__bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  cursor: grab; user-select: none; margin: -2px 0 2px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--border); touch-action: none;
+}
+.position-panel__bar:active { cursor: grabbing; }
+.position-panel__title { font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--text); letter-spacing: 0.03em; }
+.position-panel__btn {
+  background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px;
+  width: 22px; height: 20px; cursor: pointer; font-size: 9px; line-height: 1; display: grid; place-items: center;
+  transition: color 0.12s ease, border-color 0.12s ease; flex: 0 0 auto;
+}
+.position-panel__btn:hover { color: var(--accent); border-color: var(--accent); }
+.position-panel.collapsed { min-width: 0; gap: 0; }
+.position-panel.collapsed .position-panel__bar { border-bottom: none; margin-bottom: -2px; padding-bottom: 0; }
+.position-panel__intel { margin-top: 6px; padding-top: 7px; border-top: 1px dashed var(--border); display: grid; gap: 6px; }
+
 .stats-box {
   width: min(760px, 92vw);
   background: var(--panel);

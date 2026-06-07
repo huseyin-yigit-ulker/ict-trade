@@ -12,7 +12,10 @@ const BACKTEST_ALLOWED_SYMBOLS = [
   '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
   'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'SUSDT',
   'ARBUSDT', 'ORDIUSDT', 'ONDOUSDT',
-  'XAUUSDT', 'XAGUSDT'
+  'XAUUSDT', 'XAGUSDT',
+  // Stock-backed perps (underlying equities)
+  'TSLAUSDT', 'NVDAUSDT', 'METAUSDT', 'GOOGLUSDT',
+  'AMZNUSDT', 'COINUSDT', 'PLTRUSDT', 'MSTRUSDT'
 ];
 
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
@@ -197,6 +200,7 @@ export const TradeProvider = ({ children }) => {
           confluenceScore: Number.isFinite(Number(item.confluence_score)) ? Number(item.confluence_score) : null,
           ltfTimeframe: item.ltf_timeframe ?? null,
           htfTimeframe: item.htf_timeframe ?? null,
+          geometry: (item.context && item.context.geometry) || item.geometry || null,
         };
       })
       .filter(Boolean)
@@ -239,7 +243,7 @@ export const TradeProvider = ({ children }) => {
       const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
 
       const params = new URLSearchParams({
-        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score',
+        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score,context',
         order: 'signal_time.desc'
       });
       params.append('signal_time', `gte.${start.toISOString()}`);
@@ -271,6 +275,7 @@ export const TradeProvider = ({ children }) => {
         strategy: r.strategy,
         quality: r.quality,
         confluence_score: r.confluence_score,
+        context: r.context,
       }));
 
       processData(mapped);
@@ -295,7 +300,7 @@ export const TradeProvider = ({ children }) => {
       const now = new Date();
       const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7, 0, 0, 0));
       const params = new URLSearchParams({
-        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score',
+        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score,context',
         order: 'signal_time.desc'
       });
       params.append('mode', 'eq.dynamic');
@@ -312,6 +317,7 @@ export const TradeProvider = ({ children }) => {
         entry_price: r.entry, tp_price: r.tp, sl_price: r.sl,
         signal_time: r.signal_time, status: 'WAITING',
         strategy: r.strategy, quality: r.quality, confluence_score: r.confluence_score,
+        context: r.context,
       }));
       processData(mapped);
     } catch (err) {
@@ -406,7 +412,7 @@ export const TradeProvider = ({ children }) => {
       setLiveError('');
 
       const params = new URLSearchParams({
-        select: 'id,symbol,trade_type,signal_time,real_entry_time,exit_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,version,created_at,strategy,quality,confluence_score',
+        select: 'id,symbol,trade_type,signal_time,real_entry_time,exit_time,entry_price,tp_price,sl_price,status,exit_price,pnl_r,version,created_at,strategy,quality,confluence_score,context',
         order: 'signal_time.desc'
       });
       params.append('version', `eq.${btVersion}`);

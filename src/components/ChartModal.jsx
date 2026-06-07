@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, BaselineSeries, createSeriesMarkers } from 'lightweight-charts';
+import { createChart, CandlestickSeries, LineSeries, BaselineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
+
+const IconCandles = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
+    <line x1="4" y1="1.3" x2="4" y2="12.7" /><rect x="2.4" y="4" width="3.2" height="5.2" fill="currentColor" stroke="none" />
+    <line x1="10" y1="2.4" x2="10" y2="11.6" /><rect x="8.4" y="5.4" width="3.2" height="4.2" fill="currentColor" stroke="none" />
+  </svg>
+);
+const IconLine = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="1,10 5,6 8.5,8.5 13,2" />
+  </svg>
+);
 
 // Entry-fill timeout (mirror of TradeContext ENTRY_EXPIRY_MINUTES / backtest EXPIRY_MINUTES):
 // a signal that never fills is cancelled this many minutes after the signal fires.
@@ -18,6 +30,27 @@ const ChartModal = () => {
   const [chartError, setChartError] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
   const [hoverInfo, setHoverInfo] = useState(null);
+
+  // Candle ↔ line series toggle (persisted). Debug ergonomics: line reads
+  // structure faster at low zoom, candles for bar-by-bar detail.
+  const [chartStyle, setChartStyle] = useState(() => {
+    try { return localStorage.getItem('pusu.chartStyle') === 'line' ? 'line' : 'candles'; } catch { return 'candles'; }
+  });
+  const setChartStyleP = (s) => { setChartStyle(s); try { localStorage.setItem('pusu.chartStyle', s); } catch { /* ignore */ } };
+
+  // Draggable + collapsible info panel so it never hides price action.
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelPos, setPanelPos] = useState(null);   // {x,y} in viewport coords once dragged
+  const panelRef = useRef(null);
+  const startPanelDrag = (e) => {
+    if (!panelRef.current || e.button === 2) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+    const move = (ev) => setPanelPos({ x: Math.max(0, ev.clientX - offX), y: Math.max(0, ev.clientY - offY) });
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   // Single source of truth for live status: TradeContext.liveStatuses
   // (the dashboard's polled value). Compact label + colored dot — same
@@ -135,12 +168,18 @@ const ChartModal = () => {
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
-    // --- KATMAN 2: MUM GRAFİĞİ ---
-    const mainSeries = chart.addSeries(CandlestickSeries, {
-      upColor: themeConfig.upColor, downColor: themeConfig.downColor,
-      borderVisible: true, wickUpColor: themeConfig.wickUp, wickDownColor: themeConfig.wickDown,
-      priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
-    });
+    // --- KATMAN 2: ANA SERİ (mum ↔ çizgi) ---
+    const isLineChart = chartStyle === 'line';
+    const mainSeries = isLineChart
+      ? chart.addSeries(LineSeries, {
+          color: '#EAECEF', lineWidth: 2, lastValueVisible: false, crosshairMarkerVisible: true,
+          priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+        })
+      : chart.addSeries(CandlestickSeries, {
+          upColor: themeConfig.upColor, downColor: themeConfig.downColor,
+          borderVisible: true, wickUpColor: themeConfig.wickUp, wickDownColor: themeConfig.wickDown,
+          priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+        });
 
     // ---------------------------------------------------------
     // VERİ ÇEKME VE MANTIK ALANI
@@ -299,7 +338,8 @@ const ChartModal = () => {
           return { ...c, borderColor: c.close >= c.open ? themeConfig.upColor : themeConfig.downColor };
         });
 
-        mainSeries.setData(candles);
+        if (isLineChart) mainSeries.setData(candles.map((c) => ({ time: c.time, value: c.close })));
+        else mainSeries.setData(candles);
 
         // 2. Zone right edge — ends at the real close (backtest / terminal live), else last bar.
         let endTimeForGraph = candles.length ? candles[candles.length - 1].time : entryTs;
@@ -314,20 +354,20 @@ const ChartModal = () => {
         // 3. Pozisyon bölgesi (entry baz; TP yeşil / SL kırmızı yarı-saydam, kapanışta biter)
         if (isLong) {
             tpAreaSeries.applyOptions({
-                topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.16)', topFillColor2: 'rgba(14, 203, 129, 0.03)',
+                topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.1)', topFillColor2: 'rgba(14, 203, 129, 0.02)',
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
             slAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#F6465D', bottomFillColor1: 'rgba(246, 70, 93, 0.16)', bottomFillColor2: 'rgba(246, 70, 93, 0.03)'
+                bottomLineColor: '#F6465D', bottomFillColor1: 'rgba(246, 70, 93, 0.1)', bottomFillColor2: 'rgba(246, 70, 93, 0.02)'
             });
         } else {
             tpAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.16)', bottomFillColor2: 'rgba(14, 203, 129, 0.03)'
+                bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.1)', bottomFillColor2: 'rgba(14, 203, 129, 0.02)'
             });
             slAreaSeries.applyOptions({
-                topLineColor: '#F6465D', topFillColor1: 'rgba(246, 70, 93, 0.16)', topFillColor2: 'rgba(246, 70, 93, 0.03)',
+                topLineColor: '#F6465D', topFillColor1: 'rgba(246, 70, 93, 0.1)', topFillColor2: 'rgba(246, 70, 93, 0.02)',
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
         }
@@ -350,6 +390,40 @@ const ChartModal = () => {
             mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
           }
           chartRef.current._priceLinesAdded = true;
+        }
+
+        // 4b. ICT KARAR GEOMETRİSİ — motorun işlemi tetikleyen FVG/OB/sweep/BOS'u.
+        // entry_zone zaman-sınırlı kutu (üst+alt çizgi, oluşumdan kapanışa); swept
+        // likidite + yapı kırılımı referans çizgisi. activeSignal.geometry yoksa atlanır.
+        if (!chartRef.current._geoAdded) {
+          const geo = activeSignal.geometry;
+          if (geo) {
+            const firstT = candles.length ? candles[0].time : entryTs;
+            const zoneEnd = endTimeForGraph;
+            const ez = geo.entry_zone;
+            if (ez && Number.isFinite(ez.top) && Number.isFinite(ez.bottom)) {
+              let zStart = Number.isFinite(ez.from) ? ez.from : entryTs;
+              zStart = Math.max(firstT, Math.min(zStart, entryTs));
+              if (zStart < zoneEnd) {
+                const zColor = ez.kind === 'OB' ? '#7AA2F7' : '#9D7CD8';
+                for (const edge of [ez.top, ez.bottom]) {
+                  const s = chart.addSeries(LineSeries, {
+                    color: zColor, lineWidth: 1, lineStyle: 2,
+                    lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+                  });
+                  s.setData([{ time: zStart, value: edge }, { time: zoneEnd, value: edge }]);
+                }
+                mainSeries.createPriceLine({ price: ez.top, color: zColor, lineWidth: 1, lineStyle: 2, title: ez.kind, axisLabelVisible: false });
+              }
+            }
+            if (geo.swept && Number.isFinite(geo.swept.price)) {
+              mainSeries.createPriceLine({ price: geo.swept.price, color: '#C792EA', lineWidth: 1, lineStyle: 3, title: `SWEEP ${geo.swept.type || ''}`.trim(), axisLabelVisible: false });
+            }
+            if (geo.structure && Number.isFinite(geo.structure.level)) {
+              mainSeries.createPriceLine({ price: geo.structure.level, color: '#56C2E6', lineWidth: 1, lineStyle: 3, title: geo.structure.type || 'BOS', axisLabelVisible: false });
+            }
+          }
+          chartRef.current._geoAdded = true;
         }
 
         // 5. Zaman-bağlı işaretler: Sinyal / Giriş / Çıkış (çıkış rengi sonuca göre)
@@ -407,9 +481,10 @@ const ChartModal = () => {
     // --- Crosshair ve Resize ---
     const handleCrosshairMove = (param) => {
       if (!param || !param.time || !param.seriesData) { setHoverInfo(null); return; }
-      const candle = param.seriesData.get(mainSeries);
-      if (!candle) { setHoverInfo(null); return; }
-      setHoverInfo({ time: param.time, open: candle.open, high: candle.high, low: candle.low, close: candle.close });
+      const d = param.seriesData.get(mainSeries);
+      if (!d) { setHoverInfo(null); return; }
+      if (d.open !== undefined) setHoverInfo({ time: param.time, open: d.open, high: d.high, low: d.low, close: d.close });
+      else setHoverInfo({ time: param.time, close: d.value });
     };
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
@@ -431,7 +506,7 @@ const ChartModal = () => {
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeSignal, showTv, mode]);
+  }, [activeSignal, showTv, mode, chartStyle]);
 
   // UI Formatters
   const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
@@ -499,10 +574,18 @@ const ChartModal = () => {
           <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
             {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
           </h2>
+          {!showTv && (
+            <div className="chart-style-seg" role="group" aria-label="chart style">
+              <button className={chartStyle === 'candles' ? 'active' : ''} onClick={() => setChartStyleP('candles')} title={t('Mum')} aria-label={t('Mum')}><IconCandles /></button>
+              <button className={chartStyle === 'line' ? 'active' : ''} onClick={() => setChartStyleP('line')} title={t('Çizgi')} aria-label={t('Çizgi')}><IconLine /></button>
+            </div>
+          )}
         </div>
         {!showTv && hoverInfo && (
           <div className="chart-hover-info">
-            {formatHoverTime(hoverInfo.time)} • O {formatPrice(hoverInfo.open)} H {formatPrice(hoverInfo.high)} L {formatPrice(hoverInfo.low)} C {formatPrice(hoverInfo.close)}
+            {formatHoverTime(hoverInfo.time)} • {hoverInfo.open !== undefined
+              ? `O ${formatPrice(hoverInfo.open)} H ${formatPrice(hoverInfo.high)} L ${formatPrice(hoverInfo.low)} C ${formatPrice(hoverInfo.close)}`
+              : `C ${formatPrice(hoverInfo.close)}`}
           </div>
         )}
       </div>
@@ -526,7 +609,24 @@ const ChartModal = () => {
         const exitPrice = mode === 'backtest' ? activeSignal.exitPrice : null;
 
         return (
-        <div className="position-panel" style={{ backgroundColor: '#181A20', borderRight: '1px solid #2B3139' }}>
+        <div
+          ref={panelRef}
+          className={`position-panel${panelCollapsed ? ' collapsed' : ''}`}
+          style={{ backgroundColor: '#181A20', borderRight: '1px solid #2B3139', ...(panelPos ? { position: 'fixed', left: panelPos.x, top: panelPos.y, right: 'auto' } : {}) }}
+        >
+          <div className="position-panel__bar" onPointerDown={startPanelDrag}>
+            <span className="position-panel__title">
+              {activeSignal.symbol} · <span style={{ color: activeSignal.dir === 'LONG' ? '#0ECB81' : '#F6465D' }}>{activeSignal.dir}</span>
+            </span>
+            <button
+              className="position-panel__btn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setPanelCollapsed((c) => !c)}
+              title={panelCollapsed ? t('Genişlet') : t('Daralt')}
+              aria-label={panelCollapsed ? t('Genişlet') : t('Daralt')}
+            >{panelCollapsed ? '▸' : '▾'}</button>
+          </div>
+          {!panelCollapsed && (<>
           <div className="position-row"><span>{t('Tarih')}</span><b>{formatSignalTime(effDate)}</b></div>
           <div className="position-row">
             <span>{mode === 'live' ? t('Süre (canlı)') : t('Süre')}</span>
@@ -588,6 +688,24 @@ const ChartModal = () => {
               </b>
             </div>
           )}
+
+          {(activeSignal.strategy || activeSignal.quality || Number.isFinite(activeSignal.confluenceScore) || activeSignal.htfTimeframe) && (
+            <div className="position-panel__intel">
+              {Number.isFinite(activeSignal.confluenceScore) && (
+                <div className="position-row"><span>{t('Konfluens')}</span><b style={{ color: '#F5B942' }}>{activeSignal.confluenceScore}</b></div>
+              )}
+              {activeSignal.quality && (
+                <div className="position-row"><span>{t('Kalite')}</span><b>{activeSignal.quality}</b></div>
+              )}
+              {activeSignal.strategy && (
+                <div className="position-row"><span>{t('Strateji')}</span><b>{activeSignal.strategy}</b></div>
+              )}
+              {(activeSignal.htfTimeframe || activeSignal.ltfTimeframe) && (
+                <div className="position-row"><span>HTF / LTF</span><b>{activeSignal.htfTimeframe || '—'} / {activeSignal.ltfTimeframe || '—'}</b></div>
+              )}
+            </div>
+          )}
+          </>)}
         </div>
         );
       })()}
