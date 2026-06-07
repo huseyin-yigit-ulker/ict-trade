@@ -124,17 +124,12 @@ const Dashboard = () => {
     setChartView,
     mode,
     liveStatuses,
+    statusFilter,
   } = useTradeContext();
   const { t, locale } = useLang();
 
-  // Status filter — works in both live and backtest. Maps each trade to one of
-  // tp / sl / cancelled / open so the same control filters either data source.
-  const [statusFilter, setStatusFilter] = useState('all');
-  // 'active' is live-only — reset the filter when leaving live so backtest
-  // doesn't silently show an empty set under a no-longer-visible option.
-  useEffect(() => {
-    if (mode !== 'live' && statusFilter === 'active') setStatusFilter('all');
-  }, [mode, statusFilter]);
+  // Status filter (statusFilter from context; chips live in the Topbar). Maps each
+  // trade to tp/sl/cancelled/open/active so the same control filters either source.
   const statusOf = (sig) => {
     if (mode === 'live') {
       const s = liveStatuses[sig.id]?.status || '';
@@ -149,27 +144,6 @@ const Dashboard = () => {
     return 'cancelled'; // backtest WAITING = entry never filled → cancelled
   };
   const matchesStatus = (sig) => statusFilter === 'all' || statusOf(sig) === statusFilter;
-  const STATUS_FILTERS = [
-    { key: 'all', label: t('Tümü') },
-    { key: 'tp', label: 'TP' },
-    { key: 'sl', label: 'SL' },
-    // "Aktif" only applies to live trades (entry filled, still open).
-    ...(mode === 'live' ? [{ key: 'active', label: t('Aktif') }] : []),
-    { key: 'cancelled', label: t('İptal') },
-  ];
-  const renderStatusFilter = () => (
-    <div className="status-filter" role="group" aria-label="status filter">
-      {STATUS_FILTERS.map((f) => (
-        <button
-          key={f.key}
-          className={`status-filter__btn status-filter__btn--${f.key} ${statusFilter === f.key ? 'active' : ''}`}
-          onClick={() => setStatusFilter(f.key)}
-        >
-          {f.label}
-        </button>
-      ))}
-    </div>
-  );
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -711,7 +685,6 @@ const Dashboard = () => {
       <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
         <div className="backtest-flow">
           {renderKpiHero()}
-          {renderStatusFilter()}
           <div className="drill-header">
             <div className="drill-path">
               {!selectedYear && t('Yıllar')}
@@ -805,7 +778,9 @@ const Dashboard = () => {
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {renderKpiHero()}
-      {renderStatusFilter()}
+      {filteredSignals.length === 0 && (
+        <div className="dash-empty">{t('Sinyal yok.')}</div>
+      )}
       {Object.keys(groupedLive).map((dateKey) => {
         const trades = groupedLive[dateKey];
         if (!trades.some(matchesStatus)) return null;

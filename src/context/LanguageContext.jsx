@@ -20,6 +20,8 @@ const EN = {
   'Mod': 'Mode',
   'Live': 'Live',
   'Backtest': 'Backtest',
+  'Default': 'Default',
+  'Sinyal yok.': 'No signals.',
   'Seçilmedi': 'None',
   'Ayarlar': 'Settings',
   'Tema': 'Theme',

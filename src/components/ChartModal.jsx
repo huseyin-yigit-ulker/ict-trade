@@ -3,6 +3,10 @@ import { createChart, CandlestickSeries, BaselineSeries, createSeriesMarkers } f
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 
+// Entry-fill timeout (mirror of TradeContext ENTRY_EXPIRY_MINUTES / backtest EXPIRY_MINUTES):
+// a signal that never fills is cancelled this many minutes after the signal fires.
+const ENTRY_EXPIRY_MINUTES = 180;
+
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses } = useTradeContext();
   const { t, locale } = useLang();
@@ -263,8 +267,26 @@ const ChartModal = () => {
           closeBarIdx = candles.findIndex(c => c.time === closeBarSec);
         }
 
-        // Backtest: keep ~PAD_BARS of SONRA context past the close (was: cut AT close).
-        if (mode === 'backtest' && closeBarIdx >= 0) {
+        // Live terminal state — computed early so the close anchor + trim can use it.
+        const ctxStatus = liveStatuses[activeSignal.id]?.status;
+        const liveTerminalSet = new Set(['TP Oldu', 'SL Oldu', 'TP/SL Aynı Mum']);
+        const liveTerminal = !!ctxStatus && (liveTerminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'));
+        const isTerminalState = mode === 'backtest'
+          ? (activeSignal.status === 'TP' || activeSignal.status === 'SL')
+          : liveTerminal;
+
+        // Live entry-fill timeout ('İptal (Süre Doldu)'): never filled, no TP/SL touch.
+        // The trade ends at the fill deadline — anchor the close there so the zone,
+        // dimming and exit marker all stop at the timeout, not at the latest candle.
+        if (closeBarSec == null && mode === 'live' && ctxStatus === 'İptal (Süre Doldu)') {
+          closeBarSec = snapBar(signalOpenMs + ENTRY_EXPIRY_MINUTES * 60 * 1000);
+          closeBarIdx = candles.findIndex(c => c.time === closeBarSec);
+        }
+
+        // Keep ~PAD_BARS of SONRA context past the close, then stop — for backtest AND
+        // any terminal live trade, so a timed-out/closed live trade shows a little more
+        // price action after the exit and then ends, instead of trailing "now".
+        if (closeBarIdx >= 0 && (mode === 'backtest' || liveTerminal)) {
           candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + padBarsDisplay));
         }
 
@@ -279,15 +301,7 @@ const ChartModal = () => {
 
         mainSeries.setData(candles);
 
-        // 2. Terminal state + zone right edge
-        const ctxStatus = liveStatuses[activeSignal.id]?.status;
-        const liveTerminalSet = new Set(['TP Oldu', 'SL Oldu', 'TP/SL Aynı Mum']);
-        const liveTerminal = !!ctxStatus && (liveTerminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'));
-        const isTerminalState = mode === 'backtest'
-          ? (activeSignal.status === 'TP' || activeSignal.status === 'SL')
-          : liveTerminal;
-
-        // Zone box ends at the real close (backtest / terminal live); runs to last bar while live-open.
+        // 2. Zone right edge — ends at the real close (backtest / terminal live), else last bar.
         let endTimeForGraph = candles.length ? candles[candles.length - 1].time : entryTs;
         if (closeBarSec != null && (mode === 'backtest' || liveTerminal)) endTimeForGraph = closeBarSec;
 

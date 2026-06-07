@@ -12,12 +12,12 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
 
-  if (isAuthed) return <Navigate to="/live" replace />;
+  if (isAuthed) return <Navigate to="/main/live" replace />;
 
   const submit = (e) => {
     e.preventDefault();
     if (login(username.trim(), password)) {
-      navigate('/command', { replace: true });
+      navigate('/main/live', { replace: true });
     } else {
       setErr(t('Kullanıcı adı veya şifre hatalı.'));
     }
