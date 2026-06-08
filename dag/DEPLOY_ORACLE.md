@@ -112,11 +112,13 @@ cd ~/ict-trade && git pull
 ```
 25 sembolü son kapanan 15m bar'ında tarar; yeni C sinyali varsa yazıp Telegram atar.
 
-15-dakikalık cron (`crontab -e`, saatlik MAIN cron'unun altına):
+15-dakikalık cron (`crontab -e`, saatlik MAIN cron'unun altına). 15m bar kapanışından
+**~15 saniye sonra** çalışır (`sleep 15`); MAIN/RADAR ise saatlik HH:01'de (+1 dk) kalır:
 ```
-*/15 * * * * cd /home/ubuntu/ict-trade && SCAN_MODE=pulse /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-pulse.log 2>&1
+0,15,30,45 * * * * cd /home/ubuntu/ict-bot && sleep 15 && SCAN_MODE=pulse /home/ubuntu/ict-bot/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-pulse.log 2>&1
 ```
 > `dag/dag.py pulse` ya da `SCAN_MODE=pulse` — ikisi de pulse taramasını seçer.
+> Günlük `sync_daily.py` (00:30 UTC) artık **üç akışı da** (v1 / v1-dyn / v1-15m) backtest'e aktarır.
 
 Opsiyonel — PULSE'u **ayrı bir Telegram kanalına** göndermek için `.env`'e ekle:
 ```
