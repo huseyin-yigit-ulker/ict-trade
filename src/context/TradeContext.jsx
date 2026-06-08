@@ -257,6 +257,9 @@ export const TradeProvider = ({ children }) => {
       params.append('signal_time', `gte.${start.toISOString()}`);
       params.append('signal_time', `lt.${end.toISOString()}`);
       params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
+      // MAIN = only the current hourly engine (mode='live'). Excludes pulse (15m),
+      // dynamic (radar) and legacy rows (Weekday/Weekend/null) on the same symbols.
+      params.append('mode', 'eq.live');
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
       const res = await fetch(url, {
@@ -330,6 +333,49 @@ export const TradeProvider = ({ children }) => {
       processData(mapped);
     } catch (err) {
       setLiveError('Dinamik veri alınamadı.');
+      setIsLoaded(true);
+      console.error(err);
+    }
+  }, [processData]);
+
+  // PULSE LIVE (strategy='pulse', mode='live'): the 15m C-only stream the DAG writes
+  // with mode='pulse' on the static-17. Same symbols as MAIN, so we DO apply the
+  // allow-list; the mode filter is what keeps it separate from the 1h MAIN feed.
+  const loadPulseLive = useCallback(async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    if (!supabaseUrl || !supabaseKey) { setLiveError('Supabase ayarları eksik.'); setIsLoaded(true); return; }
+    try {
+      setLiveError('');
+      const now = new Date();
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+      const params = new URLSearchParams({
+        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score,context',
+        order: 'signal_time.desc'
+      });
+      params.append('mode', 'eq.pulse');
+      params.append('signal_time', `gte.${start.toISOString()}`);
+      params.append('signal_time', `lt.${end.toISOString()}`);
+      params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
+      const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Accept-Profile': 'ict_trade' }
+      });
+      if (!res.ok) throw new Error('Pulse veri alınamadı');
+      const rows = await res.json();
+      const mapped = rows.map((r) => ({
+        id: r.id, symbol: r.symbol,
+        trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
+        entry_price: r.entry, tp_price: r.tp, sl_price: r.sl,
+        signal_time: r.signal_time, status: 'WAITING',
+        strategy: r.strategy, quality: r.quality, confluence_score: r.confluence_score,
+        ltf_timeframe: r.ltf_timeframe, htf_timeframe: r.htf_timeframe,
+        context: r.context,
+      }));
+      processData(mapped);
+    } catch (err) {
+      setLiveError('Pulse veri alınamadı.');
       setIsLoaded(true);
       console.error(err);
     }
@@ -520,15 +566,11 @@ export const TradeProvider = ({ children }) => {
     if (mode === 'backtest') {
       // Insights restored-or-fetched inside loadBacktest (cache-aware); don't blank here.
       loadBacktest();
-    } else if (strategy === 'pulse') {
-      // Pulse (15m) live generation isn't wired into the DAG yet (Phase 2). Show an
-      // empty set with an info message instead of loading the wrong 1h live data.
-      setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
-      processData([]);
-      setLiveError('15m canlı yakında — şimdilik yalnızca Backtest.');
     } else {
       setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
-      const loadLiveForStrategy = strategy === 'radar' ? loadRadarLive : loadLive;
+      const loadLiveForStrategy = strategy === 'radar' ? loadRadarLive
+        : strategy === 'pulse' ? loadPulseLive
+        : loadLive;
       loadLiveForStrategy();
       loadLiveForStrategy();
       intervalId = setInterval(() => {
@@ -544,7 +586,7 @@ export const TradeProvider = ({ children }) => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [strategy, mode, loadBacktest, loadLive, loadRadarLive]);
+  }, [strategy, mode, loadBacktest, loadLive, loadRadarLive, loadPulseLive]);
 
   // 'active' filter is live-only — reset it when leaving live.
   useEffect(() => {

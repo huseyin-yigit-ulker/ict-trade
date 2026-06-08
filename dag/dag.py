@@ -40,6 +40,7 @@ except ImportError:
 # ============================================================================
 import json
 import os
+import sys
 import time
 import uuid
 import datetime as dt
@@ -109,6 +110,21 @@ DYN_BASE_BLOCKLIST = {
     "ARS", "PLN", "ZAR", "MXN", "RUB", "UAH",
     "WBTC", "WETH", "WBETH", "BETH", "STETH", "WSTETH",
 }
+
+# --- PULSE: high-frequency 15m live pass ---
+# A 3rd live stream, run on a 15-minute cadence over the SAME static SYMBOLS but
+# kept FULLY SEPARATE from the hourly main/dynamic scan:
+#   - DB: mode='pulse' (dedup is mode-aware, so a 15m and a 1h signal on the same
+#     symbol/bar-open never collide), ltf='15m', htf='1h'
+#   - Telegram: a dedicated chat (TELEGRAM_PULSE_CHAT_ID); if unset, falls back to
+#     the main chat but with a distinct ⚡ PULSE banner so it never blends in
+# Mirrors the v1-15m backtest exactly: 15m primary, 1h HTF, Strategy C only.
+PULSE_INTERVAL     = "15m"
+PULSE_HTF          = "1h"
+PULSE_WARMUP_HOURS = 3000      # ~125 days of 15m for detector / HTF / liquidity warmup
+PULSE_MODE         = "pulse"
+TELEGRAM_PULSE_CHAT_ID = os.getenv("TELEGRAM_PULSE_CHAT_ID", "")  # "" -> main chat + banner
+PULSE_HEARTBEAT_ENABLED = os.getenv("PULSE_HEARTBEAT", "0").strip().lower() not in ("0", "false", "no", "off")
 
 # --- engine knobs ---
 ATR_PERIOD = 14
@@ -1279,6 +1295,10 @@ def strategy_e(symbol, df, at_index, atr_series, structure_events,
 # adding `strategy_a` back to this list.
 STRATEGIES = [strategy_b, strategy_c, strategy_d, strategy_e]
 
+# PULSE (15m) runs Strategy C only — the lone strategy with a real edge on 15m
+# (2026 v1-15m backtest: +754R, +0.64R/trade; B/D were net-flat-to-negative).
+PULSE_STRATEGIES = [strategy_c]
+
 
 # ============================================================================
 # CONFLUENCE
@@ -1363,7 +1383,7 @@ def _compute_htf_bias_series(df: pd.DataFrame, htf_rule: str = HTF_RULE) -> pd.S
     return htf_bias_at_htf.reindex(df.index, method="ffill").fillna("range")
 
 
-def build_detectors(df: pd.DataFrame) -> DetectorBundle:
+def build_detectors(df: pd.DataFrame, htf_rule: str = HTF_RULE) -> DetectorBundle:
     a = atr(df, ATR_PERIOD)
     sw = detect_swings(df, n=SWING_N_ITF)
     st = detect_structure(df, sw)
@@ -1373,7 +1393,7 @@ def build_detectors(df: pd.DataFrame) -> DetectorBundle:
     mark_sweeps(df, levels)
     obs = detect_order_blocks(df, a)
     fv = detect_fvgs(df)
-    htf_series = _compute_htf_bias_series(df)
+    htf_series = _compute_htf_bias_series(df, htf_rule)
     bm = _bar_minutes(df)
     expiry = max(2, int(EXPIRY_MINUTES / bm)) if bm > 0 else ENTRY_EXPIRY_BARS
     return DetectorBundle(df=df, atr=a, swings=sw, structure=st,
@@ -1383,8 +1403,11 @@ def build_detectors(df: pd.DataFrame) -> DetectorBundle:
 
 def run_engine(symbol: str, df: pd.DataFrame, *,
                start_index: Optional[int] = None,
-               end_index: Optional[int] = None) -> list[Signal]:
-    bundle = build_detectors(df)
+               end_index: Optional[int] = None,
+               strategies: Optional[list] = None,
+               htf_rule: str = HTF_RULE) -> list[Signal]:
+    bundle = build_detectors(df, htf_rule=htf_rule)
+    strats = strategies if strategies is not None else STRATEGIES
     n = len(df)
     if start_index is None:
         start_index = max(ATR_PERIOD + 5, SWING_N_ITF + 5)
@@ -1392,7 +1415,7 @@ def run_engine(symbol: str, df: pd.DataFrame, *,
         end_index = n - 1
     raw: list[Signal] = []
     for i in range(start_index, end_index + 1):
-        for strat_fn in STRATEGIES:
+        for strat_fn in strats:
             try:
                 sig = strat_fn(symbol, df, i, bundle.atr, bundle.structure,
                                bundle.liquidity, bundle.order_blocks, bundle.fvgs,
@@ -1424,12 +1447,13 @@ def run_engine(symbol: str, df: pd.DataFrame, *,
 # AIRFLOW INFRASTRUCTURE — DB + Telegram + per-symbol runner
 # ============================================================================
 
-def send_telegram_message(text_msg: str):
-    if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
+def send_telegram_message(text_msg: str, chat_id: Optional[str] = None):
+    cid = chat_id or TELEGRAM_CHAT_ID
+    if not (TELEGRAM_BOT_TOKEN and cid):
         print("  telegram skipped (TELEGRAM_BOT_TOKEN/CHAT_ID not set)")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text_msg, "parse_mode": "HTML"}
+    payload = {"chat_id": cid, "text": text_msg, "parse_mode": "HTML"}
     try:
         response = requests.post(url, json=payload, timeout=15)
         if not response.ok:
@@ -1442,31 +1466,43 @@ def get_db_engine():
     return create_engine(DB_CONNECTION_STRING)
 
 
-def signal_already_exists(conn, symbol: str, signal_time, direction: str) -> bool:
+def signal_already_exists(conn, symbol: str, signal_time, direction: str, mode: str) -> bool:
+    # mode-aware: a 15m 'pulse' signal and a 1h 'live' signal on the same symbol +
+    # bar-open + direction are DISTINCT signals and must not dedup against each other.
     q = text("""
         SELECT 1 FROM ict_trade.signals
-        WHERE symbol = :symbol AND signal_time = :signal_time AND direction = :direction
+        WHERE symbol = :symbol AND signal_time = :signal_time
+          AND direction = :direction AND mode = :mode
         LIMIT 1
     """)
     return conn.execute(q, {
-        "symbol": symbol, "signal_time": signal_time, "direction": direction,
+        "symbol": symbol, "signal_time": signal_time, "direction": direction, "mode": mode,
     }).fetchone() is not None
 
 
-def save_signal_to_db(sig: Signal, is_dynamic: bool = False) -> bool:
+def save_signal_to_db(sig: Signal, is_dynamic: bool = False, *,
+                      mode: Optional[str] = None, ltf: Optional[str] = None,
+                      htf: Optional[str] = None) -> bool:
     """Returns True only when a new row is inserted.
 
     Uses ``engine.begin()`` so the transaction is committed on context-exit;
     this works on SQLAlchemy 1.4 (Airflow's typical version) where
     ``Connection.commit`` is not exposed, as well as on 2.x.
+
+    ``mode``/``ltf``/``htf`` override the stream tag; defaults preserve the legacy
+    behaviour (dynamic vs live on the 1h INTERVAL). PULSE passes mode='pulse',
+    ltf='15m', htf='1h'.
     """
+    mode_val = mode or ("dynamic" if is_dynamic else "live")
+    ltf_val = ltf or INTERVAL
+    htf_val = htf or HTF_RULE
     direction = sig.direction.upper()
     sig_time = sig.timestamp.to_pydatetime()
     try:
         engine = get_db_engine()
         with engine.begin() as conn:
-            if signal_already_exists(conn, sig.symbol, sig_time, direction):
-                print(f"  dup {sig.symbol} {direction} @ {sig_time} (skipped)")
+            if signal_already_exists(conn, sig.symbol, sig_time, direction, mode_val):
+                print(f"  dup {sig.symbol} {direction} @ {sig_time} [{mode_val}] (skipped)")
                 return False
             q = text("""
                 INSERT INTO ict_trade.signals
@@ -1482,8 +1518,8 @@ def save_signal_to_db(sig: Signal, is_dynamic: bool = False) -> bool:
                 "symbol": sig.symbol, "direction": direction,
                 "entry": float(sig.entry), "sl": float(sig.stop_loss),
                 "tp": float(sig.take_profit_1) if sig.take_profit_1 is not None else None,
-                "signal_time": sig_time, "mode": "dynamic" if is_dynamic else "live",
-                "ltf": INTERVAL, "htf": HTF_RULE,
+                "signal_time": sig_time, "mode": mode_val,
+                "ltf": ltf_val, "htf": htf_val,
                 "strategy": sig.strategy,
                 "quality": sig.quality,
                 "confluence_score": int(sig.confluence_score),
@@ -1506,16 +1542,21 @@ def save_signal_to_db(sig: Signal, is_dynamic: bool = False) -> bool:
         return False
 
 
-def format_telegram_message(sig: Signal, is_dynamic: bool = False) -> str:
+def format_telegram_message(sig: Signal, is_dynamic: bool = False, pulse: bool = False) -> str:
     arrow = "🟢 LONG" if sig.direction == "long" else "🔴 SHORT"
     rr = sig.risk_reward_1 if sig.risk_reward_1 else 0
     risk_pct = abs(sig.entry - sig.stop_loss) / sig.entry * 100
     target_pct = (abs(sig.take_profit_1 - sig.entry) / sig.entry * 100
                   if sig.take_profit_1 is not None else 0)
     quality_emoji = "⭐" if sig.quality == "high" else "✓"
-    dyn_banner = "🔥 <b>DİNAMİK HACİM PICK</b> (vetlenmemiş sembol)\n\n" if is_dynamic else ""
+    if pulse:
+        banner = "⚡ <b>PULSE 15m</b> (FVG+OB confluence)\n\n"
+    elif is_dynamic:
+        banner = "🔥 <b>DİNAMİK HACİM PICK</b> (vetlenmemiş sembol)\n\n"
+    else:
+        banner = ""
     return (
-        dyn_banner +
+        banner +
         f"<b>{arrow} {sig.symbol}</b>\n"
         f"📋 {sig.strategy}\n"
         f"⏰ {sig.timestamp.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
@@ -1537,10 +1578,19 @@ def trim_open_bar(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def process_symbol(symbol: str, is_dynamic: bool = False) -> int:
+def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False) -> int:
+    interval = PULSE_INTERVAL if pulse else INTERVAL
+    warmup = PULSE_WARMUP_HOURS if pulse else WARMUP_HOURS
+    strategies = PULSE_STRATEGIES if pulse else None
+    htf_rule = PULSE_HTF if pulse else HTF_RULE
+    mode = PULSE_MODE if pulse else ("dynamic" if is_dynamic else "live")
+    # PULSE goes to its own Telegram chat when configured; else the main chat (the
+    # ⚡ banner keeps it distinguishable). live/dynamic always use the main chat.
+    chat = TELEGRAM_PULSE_CHAT_ID if (pulse and TELEGRAM_PULSE_CHAT_ID) else None
+
     end = pd.Timestamp.now(tz="UTC")
-    start = end - pd.Timedelta(hours=WARMUP_HOURS)
-    df = fetch_klines(symbol, INTERVAL,
+    start = end - pd.Timedelta(hours=warmup)
+    df = fetch_klines(symbol, interval,
                       int(start.timestamp() * 1000),
                       int(end.timestamp() * 1000))
     if df.empty:
@@ -1552,12 +1602,15 @@ def process_symbol(symbol: str, is_dynamic: bool = False) -> int:
         return 0
 
     last_idx = len(df) - 1
-    signals = run_engine(symbol, df, start_index=last_idx, end_index=last_idx)
+    signals = run_engine(symbol, df, start_index=last_idx, end_index=last_idx,
+                         strategies=strategies, htf_rule=htf_rule)
 
     n_emitted = 0
     for sig in signals:
-        if save_signal_to_db(sig, is_dynamic=is_dynamic):
-            send_telegram_message(format_telegram_message(sig, is_dynamic=is_dynamic))
+        if save_signal_to_db(sig, mode=mode, ltf=interval, htf=htf_rule):
+            send_telegram_message(
+                format_telegram_message(sig, is_dynamic=is_dynamic, pulse=pulse),
+                chat_id=chat)
             n_emitted += 1
     if not signals:
         print(f"  {symbol}: no signal at last closed bar ({df.index[-1]})")
@@ -1618,6 +1671,31 @@ def run_scan() -> int:
     return total
 
 
+def run_pulse_scan() -> int:
+    """PULSE 15m C-only pass over the static SYMBOLS. Separate cadence (every 15m),
+    separate DB tag (mode='pulse') and separate Telegram chat — never mixes with the
+    hourly main/dynamic scan. No dynamic picks here (curated set only)."""
+    total = 0
+    errors = 0
+    print(f"⚡ PULSE 15m taraması: {len(SYMBOLS)} sembol (C-only)")
+    for sym in SYMBOLS:
+        print(f"=== ⚡ {sym} ===")
+        try:
+            total += process_symbol(sym, pulse=True)
+        except Exception as e:
+            errors += 1
+            print(f"  ERROR analyzing {sym}: {e}")
+    print(f"\nPULSE done. {total} yeni 15m sinyal.")
+    if PULSE_HEARTBEAT_ENABLED:
+        now = pd.Timestamp.now(tz="UTC")
+        warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
+        send_telegram_message(
+            f"⚡ <b>PULSE 15m Tarama</b>\n⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
+            f"📊 {len(SYMBOLS)} sembol\n✅ {total} yeni sinyal{warn}",
+            chat_id=(TELEGRAM_PULSE_CHAT_ID or None))
+    return total
+
+
 # ============================================================================
 # AIRFLOW DAG (only built when Airflow is installed)
 # ============================================================================
@@ -1651,6 +1729,24 @@ if _AIRFLOW_AVAILABLE:
 
     dag = ict_dag()
 
+    @dag(
+        dag_id="huseyin_llm_hybrid_ict_pulse",
+        default_args=default_args,
+        schedule=CronTriggerTimetable("*/15 * * * *", timezone="UTC"),
+        catchup=False,
+        tags=['trading', 'ict', 'crypto', 'pulse', '15m'],
+    )
+    def ict_pulse_dag():
+
+        @task()
+        def scan_pulse():
+            time.sleep(2)
+            run_pulse_scan()
+
+        scan_pulse()
+
+    pulse_dag = ict_pulse_dag()
+
 
 # ============================================================================
 # STANDALONE ENTRY POINT (GitHub Actions / cron / local)
@@ -1663,7 +1759,13 @@ def main() -> None:
         raise SystemExit("DB_CONNECTION_STRING ortam değişkeni eksik.")
     if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
         print("UYARI: Telegram env (TOKEN/CHAT_ID) yok — sinyaller DB'ye yazılır ama mesaj atılmaz.")
-    run_scan()
+    # Dispatch: `python dag/dag.py pulse` (or SCAN_MODE=pulse) runs the 15m C-only
+    # PULSE pass; anything else runs the hourly main/dynamic scan.
+    scan_mode = (sys.argv[1] if len(sys.argv) > 1 else os.getenv("SCAN_MODE", "")).strip().lower()
+    if scan_mode == "pulse":
+        run_pulse_scan()
+    else:
+        run_scan()
 
 
 if __name__ == "__main__":
