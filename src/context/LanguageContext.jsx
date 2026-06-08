@@ -51,6 +51,16 @@ const EN = {
   'Kullanıcı adı': 'Username',
   'Giriş Yap': 'Sign In',
   'Kullanıcı adı veya şifre hatalı.': 'Invalid username or password.',
+  'Piyasaya Gir': 'Enter the Market',
+  'Şifreli Oturum': 'Secure Session',
+  'Beni Hatırla': 'Remember Me',
+  'Şifremi Unuttum': 'Forgot Password',
+  'Şifreyi göster': 'Show password',
+  'Şifreyi gizle': 'Hide password',
+  'Doğrulanıyor…': 'Verifying…',
+  'Erişim için sistem yöneticinize başvurun.': 'Contact your system administrator for access.',
+  'bağlantı yok': 'no connection',
+  'ÇEVRİMDIŞI': 'OFFLINE',
 
   // --- Settings ---
   'Görünüm': 'Appearance',

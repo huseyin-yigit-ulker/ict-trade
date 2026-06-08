@@ -12,13 +12,19 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS) || 'null'); } catch { return null; }
+    // "Remember me" → localStorage (survives close); otherwise sessionStorage (this tab only).
+    try { return JSON.parse(localStorage.getItem(LS) || sessionStorage.getItem(LS) || 'null'); } catch { return null; }
   });
 
-  const login = useCallback((username, password) => {
+  const login = useCallback((username, password, remember = true) => {
     if (username === USER && password === PASS) {
       const u = { name: username, at: Date.now() };
-      try { localStorage.setItem(LS, JSON.stringify(u)); } catch { /* ignore */ }
+      try {
+        const store = remember ? localStorage : sessionStorage;
+        const other = remember ? sessionStorage : localStorage;
+        store.setItem(LS, JSON.stringify(u));
+        other.removeItem(LS);
+      } catch { /* ignore */ }
       setUser(u);
       return true;
     }
@@ -26,7 +32,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
-    try { localStorage.removeItem(LS); } catch { /* ignore */ }
+    try { localStorage.removeItem(LS); sessionStorage.removeItem(LS); } catch { /* ignore */ }
     setUser(null);
   }, []);
 
