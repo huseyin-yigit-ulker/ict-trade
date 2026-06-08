@@ -99,6 +99,32 @@ Saatlik DAG'ın altına ekle (00:30 UTC, "dün" tamamen kapanmışken):
 ```
 > Şema/RPC: `supabase/trading_signals_schema.sql` + `supabase/backtest_analytics.sql` bir kez uygulanır.
 
+## 7c. PULSE 15m canlı (ayrı 15-dakikalık cron)
+
+PULSE = yüksek-frekans **15m, yalnız Strateji C** akışı. Saatlik MAIN taramasından
+**tamamen ayrı**: DB'de `mode='pulse'`, Telegram'da `⚡ PULSE 15m` banner (veya ayrı kanal).
+Aynı `dag/dag.py`, `pulse` argümanıyla çalışır.
+
+Tek seferlik elle test (DB'ye `mode='pulse'` yazar, Telegram'a ⚡ banner'la atar):
+```bash
+cd ~/ict-trade && git pull
+./.venv/bin/python dag/dag.py pulse
+```
+25 sembolü son kapanan 15m bar'ında tarar; yeni C sinyali varsa yazıp Telegram atar.
+
+15-dakikalık cron (`crontab -e`, saatlik MAIN cron'unun altına):
+```
+*/15 * * * * cd /home/ubuntu/ict-trade && SCAN_MODE=pulse /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-pulse.log 2>&1
+```
+> `dag/dag.py pulse` ya da `SCAN_MODE=pulse` — ikisi de pulse taramasını seçer.
+
+Opsiyonel — PULSE'u **ayrı bir Telegram kanalına** göndermek için `.env`'e ekle:
+```
+TELEGRAM_PULSE_CHAT_ID=<pulse_kanal_id>     # boşsa ana kanala ⚡ banner'la düşer
+# PULSE_HEARTBEAT=1                          # her taramada "tarama yapıldı" özeti (varsayılan kapalı)
+```
+> Dedup mode-duyarlı: 15m pulse ile 1h live sinyali aynı sembol/bar-açılışında **çakışmaz**.
+
 ## 8. İzleme
 
 ```bash
