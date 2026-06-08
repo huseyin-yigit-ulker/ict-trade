@@ -6,12 +6,18 @@ the last N=3 full days and upserts — so a signal still 'active' yesterday gets
 and updated to its terminal status on a later run. A safety-net pass also re-resolves any
 row still 'active' in trading_signals regardless of age.
 
+Handles ALL THREE live streams, each -> its own backtest version tag:
+  - main  : mode='live'    -> version='v1'     (1h, static-17,  ltf 60m, dedup floor 1h)
+  - radar : mode='dynamic' -> version='v1-dyn' (1h, dynamic syms, ltf 60m, dedup floor 1h)
+  - pulse : mode='pulse'   -> version='v1-15m' (15m, static-17, ltf 15m, dedup floor 15m)
+
 Idempotent: upsert key (symbol, signal_time, trade_type, version) — re-running never
 duplicates; it only updates status/exit/pnl when they change.
 
 Usage:
-  python sync/sync_daily.py                 # real run (cron)
-  python sync/sync_daily.py --dry-run       # preview, no DB writes
+  python sync/sync_daily.py                       # all 3 streams (cron)
+  python sync/sync_daily.py --stream pulse        # one stream only
+  python sync/sync_daily.py --dry-run             # preview, no DB writes
   python sync/sync_daily.py --days 3 --no-active-rescan
 """
 from __future__ import annotations
@@ -23,7 +29,8 @@ import pandas as pd
 
 import trade_sync_common as tsc
 
-SYMBOLS = [
+# Curated static set (MAIN + PULSE). RADAR picks are dynamic -> no allow-list.
+STATIC_SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
@@ -34,81 +41,78 @@ SYMBOLS = [
     "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
 ]
 
+# Each live stream resolves the SAME way (emitted live signals + still-active rows
+# -> outcomes on 1m), differing only in source mode, bar timeframe (-> ltf_minutes
+# + dedup floor) and symbol scope.
+STREAMS = {
+    "main":  {"mode": "live",    "version": "v1",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
+    "radar": {"mode": "dynamic", "version": "v1-dyn", "ltf_min": 60, "floor": "h",     "symbols": None},
+    "pulse": {"mode": "pulse",   "version": "v1-15m", "ltf_min": 15, "floor": "15min", "symbols": STATIC_SYMBOLS},
+}
 
-def fetch_live_window(conn, w_start, w_end) -> list[dict]:
-    """mode='live' signals with signal_time in [w_start, w_end)."""
+
+def fetch_live_window(conn, mode, symbols, w_start, w_end) -> list[dict]:
+    """live signals for `mode` with signal_time in [w_start, w_end). symbols=None => all."""
     cur = conn.cursor()
-    cur.execute("""
+    base = """
         SELECT symbol, signal_time, direction, entry, sl, tp, strategy, quality, confluence_score
         FROM ict_trade.signals
-        WHERE mode = 'live' AND symbol = ANY(%s)
-          AND signal_time >= %s AND signal_time < %s
-        ORDER BY symbol, signal_time
-    """, (SYMBOLS, w_start.to_pydatetime(), w_end.to_pydatetime()))
+        WHERE mode = %s AND signal_time >= %s AND signal_time < %s
+    """
+    params = [mode, w_start.to_pydatetime(), w_end.to_pydatetime()]
+    if symbols:
+        base += " AND symbol = ANY(%s)"
+        params.append(symbols)
+    base += " ORDER BY symbol, signal_time"
+    cur.execute(base, tuple(params))
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     cur.close()
     return rows
 
 
-def fetch_active_rows(conn) -> list[dict]:
-    """trading_signals rows still 'active' (entered, unresolved) — re-check them."""
+def fetch_active_rows(conn, version) -> list[dict]:
+    """trading_signals rows still 'active' (entered, unresolved) for `version` — re-check."""
     cur = conn.cursor()
     cur.execute(f"""
         SELECT symbol, signal_time, direction, entry_price AS entry, sl_price AS sl,
                tp_price AS tp, strategy, quality, confluence_score
         FROM {tsc.TABLE}
         WHERE version = %s AND lower(coalesce(status,'')) = 'active'
-    """, (tsc.VERSION,))
+    """, (version,))
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     cur.close()
     return rows
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
-    ap.add_argument("--no-active-rescan", action="store_true")
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--symbols", nargs="*", default=None)
-    args = ap.parse_args()
-    symbols = set(args.symbols) if args.symbols else set(SYMBOLS)
-
-    now = pd.Timestamp.now(tz="UTC")
-    today0 = now.normalize()                       # today 00:00 UTC
-    w_end = today0                                 # exclude today => "1 day behind"
-    w_start = today0 - pd.Timedelta(days=args.days)
-    print(f"=== daily sync | window [{w_start.date()} .. {w_end.date()}) "
-          f"| dry_run={args.dry_run} ===")
-
-    live = tsc.live_conn()
-    work = fetch_live_window(live, w_start, w_end)
-    live.close()
-    print(f"  live mode='live' signals in window: {len(work)}")
-
-    bt = tsc.backtest_conn()
-    if not args.no_active_rescan:
-        active = fetch_active_rows(bt)
-        print(f"  active rows to re-check: {len(active)}")
+def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
+                   rescan: bool, symbols_override=None) -> tuple[list, dict]:
+    """Pull a stream's live signals + active rows, resolve on 1m, return tagged rows."""
+    symbols = symbols_override if symbols_override is not None else stream["symbols"]
+    work = fetch_live_window(live, stream["mode"], symbols, w_start, w_end)
+    print(f"  [{name}] live mode='{stream['mode']}' in window: {len(work)}")
+    if rescan:
+        active = fetch_active_rows(bt, stream["version"])
+        print(f"  [{name}] active rows to re-check: {len(active)}")
         work += active
 
-    # dedup by (symbol, signal_time-hour, direction); keep first (live window before active)
+    # dedup by (symbol, floored time, direction); keep first (live window before active)
     seen, deduped = set(), []
+    sym_filter = set(symbols) if symbols else None
     for w in work:
-        if w["symbol"] not in symbols:
+        if sym_filter and w["symbol"] not in sym_filter:
             continue
-        st = pd.Timestamp(w["signal_time"]).tz_convert("UTC").floor("h")
+        st = pd.Timestamp(w["signal_time"]).tz_convert("UTC").floor(stream["floor"])
         key = (w["symbol"], st, (w["direction"] or "").upper())
         if key in seen:
             continue
         seen.add(key)
         w["_st"] = st
         deduped.append(w)
-    work = deduped
 
     by_sym = defaultdict(list)
-    for w in work:
+    for w in deduped:
         by_sym[w["symbol"]].append(w)
 
     rows, status_counts, skipped = [], {}, 0
@@ -116,30 +120,61 @@ def main():
         earliest = min(w["_st"] for w in items)
         df1m = tsc.fetch_1m(sym, earliest - pd.Timedelta(minutes=2), now)
         if df1m.empty:
-            print(f"  {sym}: no klines, skipping {len(items)}")
+            print(f"    [{name}] {sym}: no klines, skipping {len(items)}")
             skipped += len(items)
             continue
         for w in items:
             st = w["_st"]
-            outcome = tsc.simulate(sym, st, w["direction"],
-                                   float(w["entry"]), float(w["sl"]), float(w["tp"]), df1m=df1m)
+            outcome = tsc.simulate(sym, st, w["direction"], float(w["entry"]),
+                                   float(w["sl"]), float(w["tp"]), df1m=df1m,
+                                   ltf_minutes=stream["ltf_min"])
             status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
-            rows.append(tsc.build_row(
-                sym, st, w["direction"], w["entry"], w["sl"], w["tp"], outcome,
-                strategy=w.get("strategy"), quality=w.get("quality"),
-                confluence_score=w.get("confluence_score")))
+            row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
+                                outcome, strategy=w.get("strategy"), quality=w.get("quality"),
+                                confluence_score=w.get("confluence_score"))
+            row["version"] = stream["version"]
+            rows.append(row)
+    print(f"  [{name}] resolved {len(rows)} rows, status={status_counts}, skipped={skipped}")
+    return rows, status_counts
 
-    print(f"  resolved {len(rows)} rows, status={status_counts}, skipped={skipped}")
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
+    ap.add_argument("--stream", choices=list(STREAMS) + ["all"], default="all")
+    ap.add_argument("--no-active-rescan", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--symbols", nargs="*", default=None, help="override symbol scope (all streams)")
+    args = ap.parse_args()
+
+    now = pd.Timestamp.now(tz="UTC")
+    today0 = now.normalize()                       # today 00:00 UTC
+    w_end = today0                                 # exclude today => "1 day behind"
+    w_start = today0 - pd.Timedelta(days=args.days)
+    names = list(STREAMS) if args.stream == "all" else [args.stream]
+    print(f"=== daily sync | window [{w_start.date()} .. {w_end.date()}) "
+          f"| streams={names} | dry_run={args.dry_run} ===")
+
+    live = tsc.live_conn()
+    bt = tsc.backtest_conn()
+
+    all_rows = []
+    for name in names:
+        rows, _ = resolve_stream(name, STREAMS[name], live, bt, w_start, w_end, now,
+                                 rescan=not args.no_active_rescan,
+                                 symbols_override=args.symbols)
+        all_rows += rows
+    live.close()
 
     if args.dry_run:
-        for r in rows[:12]:
-            print(f"    {r['symbol']} {r['signal_time']} {r['trade_type']} "
+        for r in all_rows[:12]:
+            print(f"    {r['version']:<7} {r['symbol']} {r['signal_time']} {r['trade_type']} "
                   f"{r['status']} pnl_r={r['pnl_r']}")
-        print(f"  [dry-run] no DB writes ({len(rows)} rows would upsert).")
+        print(f"  [dry-run] no DB writes ({len(all_rows)} rows would upsert).")
         bt.close()
         return
 
-    n = tsc.upsert_rows(bt, rows)
+    n = tsc.upsert_rows(bt, all_rows)
     bt.close()
     print(f"  upserted {n} rows into {tsc.TABLE}")
 
