@@ -22,6 +22,14 @@ const BACKTEST_ALLOWED_SYMBOLS = [
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
 
+// LTF bar duration in ms ('1h' -> 3600000). The signal fires at its bar CLOSE,
+// so live entry-fill scanning starts at signal_time + this (backtest parity).
+const ltfIntervalMs = (tf) => {
+  const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
+  const u = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return m ? Number(m[1]) * (u[m[2].toLowerCase()] || 3600000) : 3600000;
+};
+
 const parseLocalDate = (value) => {
   if (!value || typeof value !== 'string') return null;
   const [y, m, d] = value.split('-').map(Number);
@@ -62,7 +70,7 @@ export const TradeProvider = ({ children }) => {
   // source of truth (CommandCenterPage syncs route params -> setView). strategyRef
   // mirrors state so the data-load effect + loadBacktest read it synchronously.
   const [strategy, setStrategyState] = useState(() => {
-    try { const s = localStorage.getItem('pusu.strategy'); return (s === 'radar' || s === 'main') ? s : 'main'; } catch { return 'main'; }
+    try { const s = localStorage.getItem('pusu.strategy'); return (s === 'radar' || s === 'main' || s === 'pulse') ? s : 'main'; } catch { return 'main'; }
   });
   const strategyRef = useRef(strategy);
   const [mode, setModeState] = useState(() => {
@@ -341,8 +349,8 @@ export const TradeProvider = ({ children }) => {
 
     // Cache key = everything that defines the result set. If unchanged and not
     // forced, restore from the in-memory session cache (no network round-trip).
-    const source = strategyRef.current;                       // 'default' (17, v1) | 'radar' (v1-dyn)
-    const btVersion = source === 'radar' ? 'v1-dyn' : 'v1';
+    const source = strategyRef.current;                       // 'main' (17, v1) | 'radar' (v1-dyn) | 'pulse' (15m, v1-15m)
+    const btVersion = source === 'radar' ? 'v1-dyn' : source === 'pulse' ? 'v1-15m' : 'v1';
     const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2025-01-01|${source === 'radar' ? 'ALL' : BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
     const cached = backtestCacheRef.current;
     if (!force && cached && cached.key === cacheKey) {
@@ -421,14 +429,21 @@ export const TradeProvider = ({ children }) => {
 
       const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;
       const rows = await fetchAllBacktestRows(url);
+      // Backtest rows don't store the signal timeframe; tag it from the pipeline so
+      // the UI can shift signal_time (bar OPEN) to the real fire moment (bar CLOSE)
+      // by the correct LTF: pulse = 15m, main/radar = 1h.
+      const ltfTf = source === 'pulse' ? '15m' : '1h';
       // Keep cancelled (no-fill) rows — shown as 0R 'no-fill' cards in the day drill.
-      const filteredRows = rows.filter((row) => isAllowedBacktestHour(row.signal_time));
+      const filteredRows = rows
+        .filter((row) => isAllowedBacktestHour(row.signal_time))
+        .map((row) => ({ ...row, ltf_timeframe: row.ltf_timeframe ?? ltfTf }));
 
       processData(filteredRows);
 
-      // Server-side RPC analytics aggregate the static-17 (v1) set only; skip for radar.
+      // Server-side RPC analytics aggregate the static-17 (v1) set only; skip for
+      // radar (v1-dyn) and pulse (v1-15m) — they'd return the wrong version's data.
       let nextInsights = { summary: null, symbols: [], weekdays: [], sessions: [] };
-      if (source !== 'radar') {
+      if (source === 'main') {
         const metricCalls = [
           callRpc('backtest_summary_metrics'),
           callRpc('backtest_symbol_metrics'),
@@ -505,6 +520,12 @@ export const TradeProvider = ({ children }) => {
     if (mode === 'backtest') {
       // Insights restored-or-fetched inside loadBacktest (cache-aware); don't blank here.
       loadBacktest();
+    } else if (strategy === 'pulse') {
+      // Pulse (15m) live generation isn't wired into the DAG yet (Phase 2). Show an
+      // empty set with an info message instead of loading the wrong 1h live data.
+      setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
+      processData([]);
+      setLiveError('15m canlı yakında — şimdilik yalnızca Backtest.');
     } else {
       setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
       const loadLiveForStrategy = strategy === 'radar' ? loadRadarLive : loadLive;
@@ -540,8 +561,13 @@ export const TradeProvider = ({ children }) => {
       return { status: 'Sinyal Bekliyor', lastPrice: null };
     }
 
-    const entryTs = Math.floor(sig.dateObj.getTime() / 1000);
-    // Limit must be touched within ENTRY_EXPIRY_MINUTES of the signal (backtest parity).
+    // The signal FIRES at its bar CLOSE (signal_time is the bar OPEN). Start the
+    // entry-fill scan there — exactly like the backtest resolver (close_ts =
+    // signal_ts + ltf). Otherwise an intrabar touch DURING the signal bar itself
+    // (before the signal even exists) is wrongly read as a fill → SL/TP instead
+    // of cancelled. This was the live-vs-backtest mismatch (live SL, backtest Cancelled).
+    const entryTs = Math.floor((sig.dateObj.getTime() + ltfIntervalMs(sig.ltfTimeframe)) / 1000);
+    // Limit must be touched within ENTRY_EXPIRY_MINUTES of the fire (backtest parity).
     const fillDeadlineSec = entryTs + ENTRY_EXPIRY_MINUTES * 60;
     const lastPrice = candles[candles.length - 1]?.close ?? null;
     let entryHitTime = null;

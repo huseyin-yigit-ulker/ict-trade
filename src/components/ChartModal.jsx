@@ -267,7 +267,9 @@ const ChartModal = () => {
 
         const { entry, tp, sl, dir } = activeSignal;
         const isLong = dir === 'LONG';
-        const entryTs = Math.floor(signalOpenMs / 1000);
+        // Signal fires at bar CLOSE — scan entry-fill from there (backtest parity),
+        // so an intrabar touch during the signal bar isn't mistaken for a fill.
+        const entryTs = Math.floor((signalOpenMs + ltfMs) / 1000);
 
         // Snap a target ms to the first real candle at/after it (markers must land on a bar).
         const snapBar = (targetMs) => {
@@ -329,7 +331,10 @@ const ChartModal = () => {
           candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + padBarsDisplay));
         }
 
-        const signalSec = snapBar(signalOpenMs);
+        // The signal fires at the bar CLOSE (signal_time = bar OPEN). Anchor the
+        // "Sinyal" marker + pre-signal dimming at the close so the chart shows the
+        // real moment the signal formed — matching the panel's "Tarih".
+        const signalSec = snapBar(signalOpenMs + ltfMs);
 
         // --- Per-bar dimming: pre-signal context tinted violet, post-trade ghosted gray ---
         candles = candles.map((c) => {

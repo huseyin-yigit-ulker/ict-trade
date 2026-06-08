@@ -1401,6 +1401,15 @@ def run_engine(symbol: str, df: pd.DataFrame, *,
             except Exception:
                 continue
             if sig is not None:
+                # Pending-limit validity: at fire (bar CLOSE) price must be on the
+                # retrace side of the entry limit (LONG: close>entry, SHORT: close<entry).
+                # Drop "already-passed" setups where price is already through the entry.
+                try:
+                    _c = float(df["close"].iloc[sig.bar_index])
+                    if (_c <= sig.entry) if sig.direction == "long" else (_c >= sig.entry):
+                        continue
+                except Exception:
+                    pass
                 try:
                     sig.context["geometry"] = build_geometry(
                         df, sig.bar_index, sig.direction, sig.entry,

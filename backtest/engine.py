@@ -56,7 +56,8 @@ def _compute_htf_bias_series(df: pd.DataFrame, htf_rule: str = C.HTF_RULE) -> pd
     return htf_bias_at_htf.reindex(df.index, method="ffill").fillna("range")
 
 
-def build_detectors(df: pd.DataFrame, swing_n: int = C.SWING_N_ITF) -> DetectorBundle:
+def build_detectors(df: pd.DataFrame, swing_n: int = C.SWING_N_ITF,
+                    htf_rule: str = C.HTF_RULE) -> DetectorBundle:
     a = atr(df, C.ATR_PERIOD)
     sw = detect_swings(df, n=swing_n)
     st = detect_structure(df, sw)
@@ -67,7 +68,7 @@ def build_detectors(df: pd.DataFrame, swing_n: int = C.SWING_N_ITF) -> DetectorB
     obs = detect_order_blocks(df, a)
     fv = detect_fvgs(df)
 
-    htf_series = _compute_htf_bias_series(df)
+    htf_series = _compute_htf_bias_series(df, htf_rule)
     bm = _bar_minutes(df)
     expiry = max(2, int(C.EXPIRY_MINUTES / bm)) if bm > 0 else C.ENTRY_EXPIRY_BARS
 
@@ -155,13 +156,18 @@ def build_geometry(df, bar_index, direction, entry,
 
 def run_engine(symbol: str, df: pd.DataFrame, *, start_index: Optional[int] = None,
                end_index: Optional[int] = None,
-               strategies: Optional[list] = None) -> list[Signal]:
+               strategies: Optional[list] = None,
+               htf_rule: Optional[str] = None) -> list[Signal]:
     """Walk bars [start..end] and run the given strategies (default: all 5).
 
     Pass `strategies=[strategy_b, strategy_c, ...]` to filter — the live runner
     uses this to exclude underperformers (e.g. strategy_a) without touching
-    backtest behaviour."""
-    bundle = build_detectors(df)
+    backtest behaviour.
+
+    Pass `htf_rule` to override the HTF-bias aggregation timeframe (default
+    C.HTF_RULE = "4h"). The 15m Pulse pipeline passes "1h" so the HTF stays a
+    proportionate 4:1 step above the primary TF."""
+    bundle = build_detectors(df, htf_rule=htf_rule or C.HTF_RULE)
     n = len(df)
     if start_index is None:
         start_index = max(C.ATR_PERIOD + 5, C.SWING_N_ITF + 5)
@@ -181,6 +187,15 @@ def run_engine(symbol: str, df: pd.DataFrame, *, start_index: Optional[int] = No
             except Exception:
                 continue
             if sig is not None:
+                # Pending-limit validity: at fire (bar CLOSE) price must be on the
+                # retrace side of the entry limit (LONG: close>entry, SHORT: close<entry).
+                # Drop "already-passed" setups where price is already through the entry.
+                try:
+                    _c = float(df["close"].iloc[sig.bar_index])
+                    if (_c <= sig.entry) if sig.direction == "long" else (_c >= sig.entry):
+                        continue
+                except Exception:
+                    pass
                 try:
                     sig.context["geometry"] = build_geometry(
                         df, sig.bar_index, sig.direction, sig.entry,

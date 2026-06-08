@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useTradeContext } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 
-const STRAT_LABEL = { main: 'Main', radar: 'Radar' };
+const STRAT_LABEL = { main: 'Main', radar: 'Radar', pulse: 'Pulse' };
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
 const Topbar = () => {

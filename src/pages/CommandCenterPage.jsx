@@ -9,7 +9,7 @@ import Dashboard from '../components/Dashboard';
 const CommandCenterPage = () => {
   const { strategy: pStrat, mode: pMode } = useParams();
   const { strategy, mode, setView } = useTradeContext();
-  const validS = (pStrat === 'radar' || pStrat === 'main') ? pStrat : null;
+  const validS = (pStrat === 'radar' || pStrat === 'main' || pStrat === 'pulse') ? pStrat : null;
   const validM = (pMode === 'backtest' || pMode === 'live') ? pMode : null;
 
   useEffect(() => {

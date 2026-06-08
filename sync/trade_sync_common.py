@@ -101,6 +101,13 @@ def fetch_1h(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFram
                         int(end.timestamp() * 1000))
 
 
+def fetch_15m(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """15-minute klines for the high-frequency Pulse pipeline (v1-15m)."""
+    return fetch_klines(symbol, "15m",
+                        int(start.timestamp() * 1000),
+                        int(end.timestamp() * 1000))
+
+
 def fetch_1m(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     """1-minute klines for intrabar-accurate outcome resolution (paginated by fetch_klines)."""
     return fetch_klines(symbol, RESOLUTION_INTERVAL,
