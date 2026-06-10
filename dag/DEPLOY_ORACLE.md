@@ -96,6 +96,9 @@ Saatlik DAG'ın altına ekle (00:30 UTC, "dün" tamamen kapanmışken):
 ./.venv/bin/python sync/backfill_year.py --year 2026 --dry-run         # 2026 backfill önizleme
 ./.venv/bin/python sync/backfill_year.py --year 2026 --wipe-scope all  # tek seferlik: sil + 2026'yı doldur
 ./.venv/bin/python sync/backfill_year.py --year 2025 --wipe-scope year # 2025'i ekle (2026'ya dokunmaz)
+# Son 2-3 günü 3 stratejinin HEPSİ için tek komutta backtest (hızlı doğrulama / gap-fill):
+./.venv/bin/python sync/backtest_recent.py --dry-run                    # 3 akış (v1/v1-dyn/v1-15m), son 3 gün, önizleme
+./.venv/bin/python sync/backtest_recent.py --days 2 --wipe-scope window # gerçek yazım: sadece bu pencereyi tazele
 ```
 > Şema/RPC: `supabase/trading_signals_schema.sql` + `supabase/backtest_analytics.sql` bir kez uygulanır.
 
