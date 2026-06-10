@@ -27,8 +27,31 @@ EXPIRY_MINUTES = 180            # bar-agnostic: 3 hours of opportunity to fill t
 SL_ATR_BUFFER = 0.2
 SL_ATR_BUFFER_C = 0.3
 
+# One zone = one trade. A live OB/FVG zone re-fires a near-identical signal on
+# every bar it survives (2026 audit: 5x the same XAG trade 15m apart; same-day
+# 14:00/18:00 silver-bullet copies), inflating trade counts and stacking risk on
+# a single setup. A signal is suppressed when another signal with the same
+# direction and ~the same entry fired within the previous cooldown window.
+DEDUP_COOLDOWN_MINUTES = 1440   # 24h rolling; 0 disables
+DEDUP_ENTRY_TOL_PCT = 0.0005    # entries within 0.05% of each other = same zone
+
+# Floor on SL distance: max(pct-of-entry, ATR multiple). Razor-thin zones put
+# the stop inside the spread (pulse audit: median stop 0.12% of price, wins
+# pinned at the 13.33R cap) — fantasy R that live fills can't deliver.
+MIN_SL_DIST_PCT = 0.0015        # 0.15% of entry
+MIN_SL_DIST_ATR = 0.5           # half an ATR
+
+# Round-trip friction applied by the backtester when computing pnl_r.
+# Binance futures taker is 0.045-0.05%/side; spread/slippage rides on top.
+FEE_PCT_PER_SIDE = 0.0005
+
 MIN_RR_DEFAULT = 2.0
 MIN_RR_SILVER_BULLET = 3.0
+
+# Strategy D (silver bullet) is symbol-sensitive: 2026 Jan-Jun v1 audit showed it
+# net-negative on these even though the symbols stay positive overall via C.
+# D returns None for them; other strategies still run.
+D_EXCLUDE_SYMBOLS = {"NVDAUSDT", "NEARUSDT", "AMZNUSDT", "ORDIUSDT"}
 
 # Cap TP1 distance to avoid 16R unrealistic targets caused by sparse liquidity.
 # 0 disables capping.

@@ -77,22 +77,28 @@ WARMUP_HOURS = 6000   # ~250 days; verified ~99% backtest-DAG parity
 # Production set — TON, XRP, 1000SHIB, LINK, OP excluded after their negative
 # 2025+2026 backtest performance. Strategy A is also disabled in STRATEGIES
 # below; both years showed it net negative.
+# 2026-06-10: DOGE (-27R), GOOGL (-18R, 0 TP in 18), PLTR (-22R), TSLA (-11R)
+# removed after the 2026 Jan-Jun v1 audit — same criterion as the TON/XRP cut.
 SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
     # Stock-backed perps (underlying equities)
-    "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",
-    "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
+    "NVDAUSDT", "METAUSDT",
+    "AMZNUSDT", "COINUSDT", "MSTRUSDT",
 ]
 
 # --- dynamic volume-anomaly picks ---
 # Each run, IN ADDITION to SYMBOLS, scan up to DYN_MAX_PICKS extra symbols whose
 # last-closed 1h bar quote-volume spiked vs their own recent baseline. Written with
 # mode='dynamic' (kept out of the main live view + backtest sync).
-DYN_ENABLED         = os.getenv("DYN_SYMBOLS", "1").strip().lower() not in ("0", "false", "no", "off")
+# RADAR DISABLED (2026-06-10): 2026 backtest net -17R and worsening
+# (Apr -12R, May -19R, Jun -5R; 2 TP in last 46 trades). Volume-spike coins
+# keep trending, so sweep-reversal logic fights momentum. Re-enable with
+# DYN_SYMBOLS=1 only after a positive paper-mode period.
+DYN_ENABLED         = os.getenv("DYN_SYMBOLS", "0").strip().lower() not in ("0", "false", "no", "off")
 DYN_MAX_PICKS       = 5
 DYN_CANDIDATE_CAP   = 50        # top-N by 24h quoteVolume probed with kline fetches
 DYN_KLINE_WINDOW    = 50        # bars fetched per candidate
@@ -119,6 +125,12 @@ DYN_BASE_BLOCKLIST = {
 #   - Telegram: a dedicated chat (TELEGRAM_PULSE_CHAT_ID); if unset, falls back to
 #     the main chat but with a distinct ⚡ PULSE banner so it never blends in
 # Mirrors the v1-15m backtest exactly: 15m primary, 1h HTF, Strategy C only.
+# PULSE DISABLED (2026-06-10): backtest +733R shrank to +245R after zone-dedup,
+# and 62% of its wins sat at exactly 13.33R (= TP cap 4.0 ATR / SL buffer 0.3 ATR)
+# with median stop distance 0.12% of price — sub-spread stops that live slippage
+# would destroy. Cron entry removed; re-enable with PULSE_ENABLED=1 only after a
+# friction-adjusted backtest stays positive.
+PULSE_ENABLED      = os.getenv("PULSE_ENABLED", "0").strip().lower() not in ("0", "false", "no", "off")
 PULSE_INTERVAL     = "15m"
 PULSE_HTF          = "1h"
 PULSE_WARMUP_HOURS = 3000      # ~125 days of 15m for detector / HTF / liquidity warmup
@@ -144,8 +156,16 @@ ENTRY_EXPIRY_BARS = 12
 EXPIRY_MINUTES = 180
 SL_ATR_BUFFER = 0.2
 SL_ATR_BUFFER_C = 0.3
+# One zone = one trade — mirrors backtest/ict/config.py (see notes there).
+DEDUP_COOLDOWN_MINUTES = 1440
+DEDUP_ENTRY_TOL_PCT = 0.0005
+# Floor on SL distance: max(pct-of-entry, ATR multiple) — kills sub-spread stops.
+MIN_SL_DIST_PCT = 0.0015
+MIN_SL_DIST_ATR = 0.5
 MIN_RR_DEFAULT = 2.0
 MIN_RR_SILVER_BULLET = 3.0
+# Strategy D net-negative on these (2026 Jan-Jun audit) — D skips them, C/B/E still run.
+D_EXCLUDE_SYMBOLS = {"NVDAUSDT", "NEARUSDT", "AMZNUSDT", "ORDIUSDT"}
 TP_MAX_ATR_MULT = 4.0
 ASIA_RANGE_MAX_ATR = 3.0
 OTE_LOW = 0.62
@@ -792,6 +812,15 @@ def _cap_tp(entry, tp, direction, atr_value):
     return max(tp, entry - max_dist)
 
 
+def _floor_stop(entry, stop, direction, atr_value):
+    """Minimum SL distance = max(MIN_SL_DIST_PCT * entry, MIN_SL_DIST_ATR * ATR).
+    Identical to backtest/ict/strategies._floor_stop."""
+    min_dist = max(MIN_SL_DIST_PCT * abs(entry), MIN_SL_DIST_ATR * atr_value)
+    if direction == "long":
+        return min(stop, entry - min_dist)
+    return max(stop, entry + min_dist)
+
+
 def _resolve_bias(structure_events, at_index, htf_bias_series):
     if htf_bias_series is not None and at_index < len(htf_bias_series):
         v = htf_bias_series.iloc[at_index]
@@ -964,6 +993,7 @@ def strategy_a(symbol, df, at_index, atr_series, structure_events,
     entry = (zone_top + zone_bot) / 2
     a = _atr_at(atr_series, at_index)
     stop = (swept.sweep_extreme - SL_ATR_BUFFER * a) if direction == "long" else (swept.sweep_extreme + SL_ATR_BUFFER * a)
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -1069,6 +1099,7 @@ def strategy_b(symbol, df, at_index, atr_series, structure_events,
     entry = (zone_top + zone_bot) / 2
     sweep_extreme = float(df["high"].iloc[sweep_idx]) if sweep_dir == "above" else float(df["low"].iloc[sweep_idx])
     stop = (sweep_extreme + SL_ATR_BUFFER * a) if direction == "short" else (sweep_extreme - SL_ATR_BUFFER * a)
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = a_lo if direction == "short" else a_hi
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -1136,6 +1167,7 @@ def strategy_c(symbol, df, at_index, atr_series, structure_events,
 
     entry = bot if direction == "long" else top
     stop = (bot - SL_ATR_BUFFER_C * a) if direction == "long" else (top + SL_ATR_BUFFER_C * a)
+    stop = _floor_stop(entry, stop, direction, a)
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)
     tp2 = _next_persistent_liquidity(entry, direction, liquidity_levels, at_index)
@@ -1165,6 +1197,8 @@ def strategy_c(symbol, df, at_index, atr_series, structure_events,
 def strategy_d(symbol, df, at_index, atr_series, structure_events,
                liquidity_levels, obs, fvgs,
                htf_bias_series=None, expiry_bars=None):
+    if symbol in D_EXCLUDE_SYMBOLS:
+        return None
     ts = df.index[at_index]
     if not in_killzones(ts, ["silver_bullet_am", "silver_bullet_pm"]):
         return None
@@ -1200,6 +1234,7 @@ def strategy_d(symbol, df, at_index, atr_series, structure_events,
 
     entry = (fvg.top + fvg.bottom) / 2
     stop = (fvg.bottom - SL_ATR_BUFFER * a) if direction == "long" else (fvg.top + SL_ATR_BUFFER * a)
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -1265,6 +1300,7 @@ def strategy_e(symbol, df, at_index, atr_series, structure_events,
     if a <= 0:
         return None
     stop = (swept.sweep_extreme - SL_ATR_BUFFER * a) if direction == "long" else (swept.sweep_extreme + SL_ATR_BUFFER * a)
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -1353,6 +1389,31 @@ def merge_same_bar(signals: list[Signal]) -> list[Signal]:
 # ENGINE
 # ============================================================================
 
+def dedup_zone_signals(signals: list, bar_minutes: float) -> list:
+    """One zone = one trade: drop a signal when another signal with the same
+    direction and ~the same entry fired within the previous cooldown window.
+
+    Window-stable: the verdict at bar i depends only on RAW emissions in
+    [i - cooldown, i) — dropped ones included — so the live scan (which covers
+    the cooldown window before the last bar) reproduces the full-history
+    backtest result exactly. Identical to backtest/engine.dedup_zone_signals."""
+    if not signals or DEDUP_COOLDOWN_MINUTES <= 0 or bar_minutes <= 0:
+        return signals
+    cooldown = max(1, int(DEDUP_COOLDOWN_MINUTES / bar_minutes))
+    out = []
+    seen = []
+    for s in sorted(signals, key=lambda x: x.bar_index):
+        dup = any(
+            d == s.direction and 0 < s.bar_index - b <= cooldown
+            and abs(s.entry - e) <= DEDUP_ENTRY_TOL_PCT * abs(e)
+            for (b, d, e) in seen
+        )
+        seen.append((s.bar_index, s.direction, s.entry))
+        if not dup:
+            out.append(s)
+    return out
+
+
 @dataclass
 class DetectorBundle:
     df: pd.DataFrame
@@ -1440,7 +1501,7 @@ def run_engine(symbol: str, df: pd.DataFrame, *,
                 except Exception:
                     pass
                 raw.append(sig)
-    return merge_same_bar(raw)
+    return dedup_zone_signals(merge_same_bar(raw), _bar_minutes(df))
 
 
 # ============================================================================
@@ -1578,7 +1639,8 @@ def trim_open_bar(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False) -> int:
+def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False,
+                   defer_alerts: bool = False) -> list:
     interval = PULSE_INTERVAL if pulse else INTERVAL
     warmup = PULSE_WARMUP_HOURS if pulse else WARMUP_HOURS
     strategies = PULSE_STRATEGIES if pulse else None
@@ -1595,26 +1657,35 @@ def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False
                       int(end.timestamp() * 1000))
     if df.empty:
         print(f"  {symbol}: no data")
-        return 0
+        return []
     df = trim_open_bar(df)
     if len(df) < 60:
         print(f"  {symbol}: only {len(df)} bars after trim, skipping")
-        return 0
+        return []
 
     last_idx = len(df) - 1
-    signals = run_engine(symbol, df, start_index=last_idx, end_index=last_idx,
+    # Scan back over the dedup cooldown window (not just the last bar) so
+    # dedup_zone_signals can see whether the same zone already fired on an
+    # earlier bar; only last-bar signals are emitted. DB idempotency on
+    # (symbol, signal_time, direction, mode) keeps earlier bars out anyway.
+    bm = _bar_minutes(df)
+    cooldown_bars = max(1, int(DEDUP_COOLDOWN_MINUTES / bm)) if (DEDUP_COOLDOWN_MINUTES > 0 and bm > 0) else 0
+    scan_start = max(ATR_PERIOD + 5, last_idx - cooldown_bars)
+    signals = run_engine(symbol, df, start_index=scan_start, end_index=last_idx,
                          strategies=strategies, htf_rule=htf_rule)
+    signals = [s for s in signals if s.bar_index == last_idx]
 
-    n_emitted = 0
+    saved = []
     for sig in signals:
         if save_signal_to_db(sig, mode=mode, ltf=interval, htf=htf_rule):
-            send_telegram_message(
-                format_telegram_message(sig, is_dynamic=is_dynamic, pulse=pulse),
-                chat_id=chat)
-            n_emitted += 1
+            saved.append(sig)
+            if not defer_alerts:
+                send_telegram_message(
+                    format_telegram_message(sig, is_dynamic=is_dynamic, pulse=pulse),
+                    chat_id=chat)
     if not signals:
         print(f"  {symbol}: no signal at last closed bar ({df.index[-1]})")
-    return n_emitted
+    return saved
 
 
 # ============================================================================
@@ -1628,24 +1699,32 @@ HEARTBEAT_ENABLED = os.getenv("HEARTBEAT", "1").strip().lower() not in ("0", "fa
 
 
 def send_heartbeat(new_signals: int, n_symbols: int, errors: int = 0,
-                   n_dynamic: int = 0) -> None:
+                   n_dynamic: int = 0, suppressed: int = 0) -> None:
     if not HEARTBEAT_ENABLED:
         return
     now = pd.Timestamp.now(tz="UTC")
     warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
     dyn = f"\n🔥 {n_dynamic} dinamik sembol (hacim anomalisi)" if n_dynamic else ""
+    sup = (f"\n🧯 {suppressed} sinyal DB'ye yazıldı ama alarm bastırıldı "
+           f"(yön başına max {MAX_ALERTS_PER_DIRECTION})" if suppressed else "")
     msg = (
         f"🤖 <b>ICT Saatlik Tarama</b>\n"
         f"⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
         f"📊 {n_symbols} sembol tarandı{dyn}\n"
-        f"✅ {new_signals} yeni sinyal{warn}"
+        f"✅ {new_signals} yeni sinyal{warn}{sup}"
     )
     send_telegram_message(msg)
 
 
+# Portfolio risk gate: N same-direction signals on the same hourly bar are ONE
+# macro position, not N independent trades (2026-06-10 run: 8 of 9 signals LONG).
+# Every signal is still saved to DB (keeps backtest/live parity auditable); only
+# the strongest per direction get a Telegram alert.
+MAX_ALERTS_PER_DIRECTION = 3
+
+
 def run_scan() -> int:
     """Walk every symbol once at its last closed bar. Used by both Airflow and CLI."""
-    total = 0
     errors = 0
 
     # Dynamic volume-anomaly picks (best-effort; can never break the core scan).
@@ -1659,15 +1738,34 @@ def run_scan() -> int:
     print(f"Toplam Taranacak Sembol Sayısı: {len(scan_list)} "
           f"({len(SYMBOLS)} sabit + {len(dynamic)} dinamik)")
 
+    saved_all: list = []
     for sym in scan_list:
         print(f"=== {sym}{' 🔥' if sym in dyn_set else ''} ===")
         try:
-            total += process_symbol(sym, is_dynamic=(sym in dyn_set))
+            saved_all += process_symbol(sym, is_dynamic=(sym in dyn_set), defer_alerts=True)
         except Exception as e:
             errors += 1
             print(f"  ERROR analyzing {sym}: {e}")
-    print(f"\nDone. {total} new signal(s) emitted.")
-    send_heartbeat(total, len(scan_list), errors, n_dynamic=len(dynamic))
+    total = len(saved_all)
+
+    # Alerts: rank per direction by confluence then RR; suppress the tail.
+    suppressed = 0
+    by_dir = defaultdict(list)
+    for s in saved_all:
+        by_dir[s.direction].append(s)
+    for direction, group in by_dir.items():
+        group.sort(key=lambda s: (s.confluence_score, s.risk_reward_1 or 0), reverse=True)
+        for rank, s in enumerate(group):
+            if rank < MAX_ALERTS_PER_DIRECTION:
+                send_telegram_message(
+                    format_telegram_message(s, is_dynamic=(s.symbol in dyn_set)))
+            else:
+                suppressed += 1
+                print(f"  🧯 alarm bastırıldı (portföy kapısı): {s.symbol} {direction} "
+                      f"score={s.confluence_score} rr={s.risk_reward_1:.2f}")
+
+    print(f"\nDone. {total} new signal(s) emitted, {suppressed} alert(s) suppressed.")
+    send_heartbeat(total, len(scan_list), errors, n_dynamic=len(dynamic), suppressed=suppressed)
     return total
 
 
@@ -1681,7 +1779,7 @@ def run_pulse_scan() -> int:
     for sym in SYMBOLS:
         print(f"=== ⚡ {sym} ===")
         try:
-            total += process_symbol(sym, pulse=True)
+            total += len(process_symbol(sym, pulse=True))
         except Exception as e:
             errors += 1
             print(f"  ERROR analyzing {sym}: {e}")
@@ -1745,7 +1843,8 @@ if _AIRFLOW_AVAILABLE:
 
         scan_pulse()
 
-    pulse_dag = ict_pulse_dag()
+    if PULSE_ENABLED:  # pulse stream disabled 2026-06-10 — see PULSE_ENABLED note above
+        pulse_dag = ict_pulse_dag()
 
 
 # ============================================================================
@@ -1763,6 +1862,9 @@ def main() -> None:
     # PULSE pass; anything else runs the hourly main/dynamic scan.
     scan_mode = (sys.argv[1] if len(sys.argv) > 1 else os.getenv("SCAN_MODE", "")).strip().lower()
     if scan_mode == "pulse":
+        if not PULSE_ENABLED:
+            print("PULSE devre dışı (2026-06-10) — açmak için PULSE_ENABLED=1 ver.")
+            return
         run_pulse_scan()
     else:
         run_scan()

@@ -13,7 +13,19 @@ from pathlib import Path
 
 import pandas as pd
 
+from ict import config as C
 from ict.strategies import Signal
+
+
+def _net_r(entry: float, exit_price: float, risk: float, direction: str) -> float:
+    """R after round-trip friction: C.FEE_PCT_PER_SIDE of notional on each leg.
+    A losing trade therefore costs slightly more than -1R and a TP slightly
+    less than its gross RR — matching what a live taker fill actually pays."""
+    if risk <= 0:
+        return 0.0
+    gross = (exit_price - entry) if direction == "long" else (entry - exit_price)
+    fees = C.FEE_PCT_PER_SIDE * (entry + exit_price)
+    return (gross - fees) / risk
 
 
 class TradeStatus(str, Enum):
@@ -78,18 +90,20 @@ def simulate_signal(sig: Signal, df: pd.DataFrame, *,
             if sl_touched and tp_touched:
                 # ambiguous in same bar — worst case: assume SL hits first
                 return TradeResult(sig, TradeStatus.SL_HIT, entry_index=i, exit_index=i,
-                                   exit_price=sig.stop_loss, pnl_r=-1.0,
+                                   exit_price=sig.stop_loss,
+                                   pnl_r=_net_r(sig.entry, sig.stop_loss, risk, sig.direction),
                                    pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
                                    bars_to_exit=i - sig.bar_index)
             if tp_touched:
                 return TradeResult(sig, TradeStatus.TP_HIT, entry_index=i, exit_index=i,
                                    exit_price=sig.take_profit_1,
-                                   pnl_r=abs(sig.take_profit_1 - sig.entry) / risk if risk > 0 else 0.0,
+                                   pnl_r=_net_r(sig.entry, sig.take_profit_1, risk, sig.direction),
                                    pnl_pct=(sig.take_profit_1 - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
                                    bars_to_exit=i - sig.bar_index)
             if sl_touched:
                 return TradeResult(sig, TradeStatus.SL_HIT, entry_index=i, exit_index=i,
-                                   exit_price=sig.stop_loss, pnl_r=-1.0,
+                                   exit_price=sig.stop_loss,
+                                   pnl_r=_net_r(sig.entry, sig.stop_loss, risk, sig.direction),
                                    pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
                                    bars_to_exit=i - sig.bar_index)
             break
@@ -110,7 +124,8 @@ def simulate_signal(sig: Signal, df: pd.DataFrame, *,
 
         if tp_touched and sl_touched:
             return TradeResult(sig, TradeStatus.SL_HIT, entry_index=entry_idx, exit_index=j,
-                               exit_price=sig.stop_loss, pnl_r=-1.0,
+                               exit_price=sig.stop_loss,
+                                   pnl_r=_net_r(sig.entry, sig.stop_loss, risk, sig.direction),
                                pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
                                bars_to_exit=j - sig.bar_index)
         if tp_touched:
@@ -121,7 +136,8 @@ def simulate_signal(sig: Signal, df: pd.DataFrame, *,
                                bars_to_exit=j - sig.bar_index)
         if sl_touched:
             return TradeResult(sig, TradeStatus.SL_HIT, entry_index=entry_idx, exit_index=j,
-                               exit_price=sig.stop_loss, pnl_r=-1.0,
+                               exit_price=sig.stop_loss,
+                                   pnl_r=_net_r(sig.entry, sig.stop_loss, risk, sig.direction),
                                pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
                                bars_to_exit=j - sig.bar_index)
 

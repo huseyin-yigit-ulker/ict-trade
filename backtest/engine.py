@@ -154,6 +154,31 @@ def build_geometry(df, bar_index, direction, entry,
     return geo
 
 
+def dedup_zone_signals(signals: list[Signal], bar_minutes: float) -> list[Signal]:
+    """One zone = one trade: drop a signal when another signal with the same
+    direction and ~the same entry fired within the previous cooldown window.
+
+    Window-stable by construction: the verdict at bar i depends only on RAW
+    emissions in [i - cooldown, i) — dropped ones included — never on which of
+    them survived. So a live scan that covers the cooldown window reproduces
+    the full-history result bit-for-bit (test_dag_parity.py)."""
+    if not signals or C.DEDUP_COOLDOWN_MINUTES <= 0 or bar_minutes <= 0:
+        return signals
+    cooldown = max(1, int(C.DEDUP_COOLDOWN_MINUTES / bar_minutes))
+    out: list[Signal] = []
+    seen: list[tuple[int, str, float]] = []
+    for s in sorted(signals, key=lambda x: x.bar_index):
+        dup = any(
+            d == s.direction and 0 < s.bar_index - b <= cooldown
+            and abs(s.entry - e) <= C.DEDUP_ENTRY_TOL_PCT * abs(e)
+            for (b, d, e) in seen
+        )
+        seen.append((s.bar_index, s.direction, s.entry))
+        if not dup:
+            out.append(s)
+    return out
+
+
 def run_engine(symbol: str, df: pd.DataFrame, *, start_index: Optional[int] = None,
                end_index: Optional[int] = None,
                strategies: Optional[list] = None,
@@ -204,4 +229,4 @@ def run_engine(symbol: str, df: pd.DataFrame, *, start_index: Optional[int] = No
                     pass
                 raw.append(sig)
 
-    return merge_same_bar(raw)
+    return dedup_zone_signals(merge_same_bar(raw), bundle.bar_minutes)

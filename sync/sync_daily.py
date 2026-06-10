@@ -30,15 +30,17 @@ import pandas as pd
 import trade_sync_common as tsc
 
 # Curated static set (MAIN + PULSE). RADAR picks are dynamic -> no allow-list.
+# 2026-06-10: DOGE/GOOGL/PLTR/TSLA removed after the 2026 Jan-Jun v1 audit
+# (mirrors dag/dag.py SYMBOLS).
 STATIC_SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
     # Stock-backed perps (underlying equities)
-    "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",
-    "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
+    "NVDAUSDT", "METAUSDT",
+    "AMZNUSDT", "COINUSDT", "MSTRUSDT",
 ]
 
 # Each live stream resolves the SAME way (emitted live signals + still-active rows
@@ -141,7 +143,10 @@ def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
-    ap.add_argument("--stream", choices=list(STREAMS) + ["all"], default="all")
+    # Default is MAIN ONLY — radar & pulse live streams were disabled 2026-06-10
+    # (radar net-negative, pulse numbers inflated by duplicate signals + sub-spread
+    # stops). Pass --stream radar/pulse/all explicitly to resolve legacy rows.
+    ap.add_argument("--stream", choices=list(STREAMS) + ["all"], default="main")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=None, help="override symbol scope (all streams)")

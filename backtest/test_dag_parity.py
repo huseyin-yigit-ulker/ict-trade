@@ -19,6 +19,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 
 from ict.data import fetch_klines
+from ict import config as C
 from engine import run_engine
 
 
@@ -81,9 +82,16 @@ def main(symbol, days, interval, samples, seed):
         # so the slice is [bar_idx - 720 + 1 : bar_idx + 1] = 720 bars total.
         slice_start = bar_idx - WARMUP_HOURS + 1
         df_window = df.iloc[slice_start:bar_idx + 1].copy()
+        # Mirror the live runner: scan back over the dedup cooldown window so
+        # dedup_zone_signals has the same context as the full-history run, then
+        # keep only last-bar signals.
+        bm = float((df_window.index[1] - df_window.index[0]).total_seconds()) / 60.0
+        cooldown_bars = max(1, int(C.DEDUP_COOLDOWN_MINUTES / bm)) if C.DEDUP_COOLDOWN_MINUTES > 0 else 0
+        last = len(df_window) - 1
         window_signals = run_engine(symbol, df_window,
-                                    start_index=len(df_window) - 1,
-                                    end_index=len(df_window) - 1)
+                                    start_index=max(C.ATR_PERIOD + 5, last - cooldown_bars),
+                                    end_index=last)
+        window_signals = [s for s in window_signals if s.bar_index == last]
 
         # `bar_index` inside window_signals is local to df_window, so re-key
         # by our absolute bar_idx for comparison.

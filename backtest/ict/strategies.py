@@ -84,6 +84,16 @@ def _cap_tp(entry: float, tp: Optional[float], direction: str, atr_value: float)
     return max(tp, entry - max_dist)
 
 
+def _floor_stop(entry: float, stop: float, direction: str, atr_value: float) -> float:
+    """Enforce a minimum SL distance of max(MIN_SL_DIST_PCT * entry,
+    MIN_SL_DIST_ATR * ATR). Razor-thin zones otherwise put the stop inside the
+    spread and mint fantasy 13R wins that live fills can't deliver."""
+    min_dist = max(C.MIN_SL_DIST_PCT * abs(entry), C.MIN_SL_DIST_ATR * atr_value)
+    if direction == "long":
+        return min(stop, entry - min_dist)
+    return max(stop, entry + min_dist)
+
+
 def _resolve_bias(structure_events: list, at_index: int,
                   htf_bias_series: Optional[pd.Series]) -> str:
     if htf_bias_series is not None and at_index < len(htf_bias_series):
@@ -206,6 +216,7 @@ def strategy_a(symbol: str,
         stop = swept.sweep_extreme - C.SL_ATR_BUFFER * a
     else:
         stop = swept.sweep_extreme + C.SL_ATR_BUFFER * a
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -359,6 +370,7 @@ def strategy_b(symbol: str,
     entry = (zone_top + zone_bottom) / 2
     sweep_extreme = float(df["high"].iloc[sweep_idx]) if sweep_dir == "above" else float(df["low"].iloc[sweep_idx])
     stop = sweep_extreme + C.SL_ATR_BUFFER * a if direction == "short" else sweep_extreme - C.SL_ATR_BUFFER * a
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = a_lo if direction == "short" else a_hi
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -463,6 +475,7 @@ def strategy_c(symbol: str,
 
     entry = bot if direction == "long" else top
     stop = (bot - C.SL_ATR_BUFFER_C * a) if direction == "long" else (top + C.SL_ATR_BUFFER_C * a)
+    stop = _floor_stop(entry, stop, direction, a)
 
     # TP1: last opposite swing-ish — use most recent opposite-side liquidity
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
@@ -509,6 +522,8 @@ def strategy_d(symbol: str,
                fvgs: list[FVG],
                htf_bias_series: Optional[pd.Series] = None,
                expiry_bars: Optional[int] = None) -> Optional[Signal]:
+    if symbol in C.D_EXCLUDE_SYMBOLS:
+        return None
     ts = df.index[at_index]
     if not in_killzones(ts, ["silver_bullet_am", "silver_bullet_pm"]):
         return None
@@ -550,6 +565,7 @@ def strategy_d(symbol: str,
         stop = fvg.bottom - C.SL_ATR_BUFFER * a
     else:
         stop = fvg.top + C.SL_ATR_BUFFER * a
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)
@@ -643,6 +659,7 @@ def strategy_e(symbol: str,
         stop = swept.sweep_extreme - C.SL_ATR_BUFFER * a
     else:
         stop = swept.sweep_extreme + C.SL_ATR_BUFFER * a
+    stop = _floor_stop(entry, stop, direction, a)
 
     tp1 = _next_opposite_liquidity(entry, direction, liquidity_levels, at_index)
     tp1 = _cap_tp(entry, tp1, direction, a)

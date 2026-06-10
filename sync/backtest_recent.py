@@ -110,7 +110,9 @@ def dump_preview(name: str, rows: list[dict], win_start, win_end) -> None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=3, help="trailing days to backtest (2-3)")
-    ap.add_argument("--streams", nargs="+", choices=list(STREAMS) + ["all"], default=["all"])
+    # Default is MAIN ONLY — radar & pulse streams disabled 2026-06-10 (see dag.py).
+    # Pass --streams radar/pulse/all explicitly for a legacy-stream backtest.
+    ap.add_argument("--streams", nargs="+", choices=list(STREAMS) + ["all"], default=["main"])
     ap.add_argument("--symbols", nargs="*", default=None,
                     help="override static-17 scope for main/pulse (radar is always dynamic)")
     ap.add_argument("--pool-size", type=int, default=60, help="radar candidate pool size")

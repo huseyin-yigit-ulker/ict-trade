@@ -43,15 +43,16 @@ from ict.strategies import strategy_b, strategy_c, strategy_d, strategy_e  # noq
 DAG_STRATS = [strategy_b, strategy_c, strategy_d, strategy_e]
 
 # Production set — mirrors dag/dag.py SYMBOLS and the dashboard allow-list.
+# 2026-06-10: DOGE/GOOGL/PLTR/TSLA removed after the 2026 Jan-Jun v1 audit.
 SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
     # Stock-backed perps (underlying equities)
-    "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",
-    "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
+    "NVDAUSDT", "METAUSDT",
+    "AMZNUSDT", "COINUSDT", "MSTRUSDT",
 ]
 
 OUT = Path(__file__).resolve().parent / "out"
