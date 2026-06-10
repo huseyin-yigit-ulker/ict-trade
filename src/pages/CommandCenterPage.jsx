@@ -5,11 +5,12 @@ import Dashboard from '../components/Dashboard';
 
 // Strategy × Mode view. The URL (/:strategy/:mode) is the source of truth: it syncs
 // the route params into context (setView) so the single data-load effect fetches the
-// right set (default/radar × live/backtest). Invalid params bounce to /default/live.
+// right set (main × live/backtest). Invalid params bounce to /main/live.
+// radar/pulse routes were retired 2026-06-10 and now bounce to /main/live too.
 const CommandCenterPage = () => {
   const { strategy: pStrat, mode: pMode } = useParams();
   const { strategy, mode, setView } = useTradeContext();
-  const validS = (pStrat === 'radar' || pStrat === 'main' || pStrat === 'pulse') ? pStrat : null;
+  const validS = pStrat === 'main' ? pStrat : null;
   const validM = (pMode === 'backtest' || pMode === 'live') ? pMode : null;
 
   useEffect(() => {

@@ -5,17 +5,18 @@ const TradeContext = createContext();
 //const BACKTEST_ALLOWED_HOURS = new Set([5, 7, 8, 9, 12, 13, 14,15, 16, 20, 21]);
 const BACKTEST_ALLOWED_HOURS = new Set([1,2,3,4,5, 6,7, 8, 9, 10,11,12, 13, 14, 15, 16, 17,18,19, 20, 21,22,23,24]);
 // Production set — XRP, TON, 1000SHIB, LINK, OP excluded after negative
-// 2025+2026 backtest performance. Old rows for these symbols stay in the
-// database but the dashboard hides them.
+// 2025+2026 backtest performance; DOGE/GOOGL/PLTR/TSLA cut 2026-06-10 after
+// the Jan-Jun audit. Old rows for these symbols stay in the database but the
+// dashboard hides them. Mirrors dag/dag.py SYMBOLS.
 const BACKTEST_ALLOWED_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'DOGEUSDT',
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT',
   '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
   'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'SUSDT',
   'ARBUSDT', 'ORDIUSDT', 'ONDOUSDT',
   'XAUUSDT', 'XAGUSDT',
   // Stock-backed perps (underlying equities)
-  'TSLAUSDT', 'NVDAUSDT', 'METAUSDT', 'GOOGLUSDT',
-  'AMZNUSDT', 'COINUSDT', 'PLTRUSDT', 'MSTRUSDT'
+  'NVDAUSDT', 'METAUSDT',
+  'AMZNUSDT', 'COINUSDT', 'MSTRUSDT'
 ];
 
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
@@ -66,11 +67,12 @@ export const TradeProvider = ({ children }) => {
   const [pendingDateStart, setPendingDateStart] = useState('');
   const [pendingDateEnd, setPendingDateEnd] = useState('');
 
-  // --- View axes: strategy {default|radar} × mode {live|backtest}. The URL is the
+  // --- View axes: strategy {main} × mode {live|backtest}. The URL is the
   // source of truth (CommandCenterPage syncs route params -> setView). strategyRef
   // mirrors state so the data-load effect + loadBacktest read it synchronously.
+  // radar/pulse strategies were retired 2026-06-10; stale localStorage values fall back to main.
   const [strategy, setStrategyState] = useState(() => {
-    try { const s = localStorage.getItem('pusu.strategy'); return (s === 'radar' || s === 'main' || s === 'pulse') ? s : 'main'; } catch { return 'main'; }
+    try { const s = localStorage.getItem('pusu.strategy'); return s === 'main' ? s : 'main'; } catch { return 'main'; }
   });
   const strategyRef = useRef(strategy);
   const [mode, setModeState] = useState(() => {
@@ -297,90 +299,6 @@ export const TradeProvider = ({ children }) => {
     }
   }, [processData, isAllowedBacktestHour]);
 
-  // Volume Radar: dynamic (mode='dynamic') volume-anomaly picks — symbols OUTSIDE
-  // the static 17, so NO allow-list filter. Kept in its own state, separate from
-  // the main live/backtest set.
-  // Volume Radar LIVE (strategy='radar', mode='live'): mode='dynamic' picks, symbols
-  // OUTSIDE the 17, no allow-list. Funnels into the SAME filteredSignals via processData.
-  const loadRadarLive = useCallback(async () => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-    if (!supabaseUrl || !supabaseKey) { setLiveError('Supabase ayarları eksik.'); setIsLoaded(true); return; }
-    try {
-      setLiveError('');
-      const now = new Date();
-      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7, 0, 0, 0));
-      const params = new URLSearchParams({
-        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score,context',
-        order: 'signal_time.desc'
-      });
-      params.append('mode', 'eq.dynamic');
-      params.append('signal_time', `gte.${start.toISOString()}`);
-      const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
-      const res = await fetch(url, {
-        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Accept-Profile': 'ict_trade' }
-      });
-      if (!res.ok) throw new Error('Dinamik veri alınamadı');
-      const rows = await res.json();
-      const mapped = rows.map((r) => ({
-        id: r.id, symbol: r.symbol,
-        trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
-        entry_price: r.entry, tp_price: r.tp, sl_price: r.sl,
-        signal_time: r.signal_time, status: 'WAITING',
-        strategy: r.strategy, quality: r.quality, confluence_score: r.confluence_score,
-        context: r.context,
-      }));
-      processData(mapped);
-    } catch (err) {
-      setLiveError('Dinamik veri alınamadı.');
-      setIsLoaded(true);
-      console.error(err);
-    }
-  }, [processData]);
-
-  // PULSE LIVE (strategy='pulse', mode='live'): the 15m C-only stream the DAG writes
-  // with mode='pulse' on the static-17. Same symbols as MAIN, so we DO apply the
-  // allow-list; the mode filter is what keeps it separate from the 1h MAIN feed.
-  const loadPulseLive = useCallback(async () => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-    if (!supabaseUrl || !supabaseKey) { setLiveError('Supabase ayarları eksik.'); setIsLoaded(true); return; }
-    try {
-      setLiveError('');
-      const now = new Date();
-      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));
-      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
-      const params = new URLSearchParams({
-        select: 'id,symbol,direction,entry,sl,tp,signal_time,created_at,mode,ltf_timeframe,htf_timeframe,strategy,quality,confluence_score,context',
-        order: 'signal_time.desc'
-      });
-      params.append('mode', 'eq.pulse');
-      params.append('signal_time', `gte.${start.toISOString()}`);
-      params.append('signal_time', `lt.${end.toISOString()}`);
-      params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
-      const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
-      const res = await fetch(url, {
-        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Accept-Profile': 'ict_trade' }
-      });
-      if (!res.ok) throw new Error('Pulse veri alınamadı');
-      const rows = await res.json();
-      const mapped = rows.map((r) => ({
-        id: r.id, symbol: r.symbol,
-        trade_type: r.direction === 'LONG' ? 'BUY' : 'SELL',
-        entry_price: r.entry, tp_price: r.tp, sl_price: r.sl,
-        signal_time: r.signal_time, status: 'WAITING',
-        strategy: r.strategy, quality: r.quality, confluence_score: r.confluence_score,
-        ltf_timeframe: r.ltf_timeframe, htf_timeframe: r.htf_timeframe,
-        context: r.context,
-      }));
-      processData(mapped);
-    } catch (err) {
-      setLiveError('Pulse veri alınamadı.');
-      setIsLoaded(true);
-      console.error(err);
-    }
-  }, [processData]);
-
   const loadBacktest = useCallback(async ({ force = false } = {}) => {
     const supabaseUrl = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -395,9 +313,9 @@ export const TradeProvider = ({ children }) => {
 
     // Cache key = everything that defines the result set. If unchanged and not
     // forced, restore from the in-memory session cache (no network round-trip).
-    const source = strategyRef.current;                       // 'main' (17, v1) | 'radar' (v1-dyn) | 'pulse' (15m, v1-15m)
-    const btVersion = source === 'radar' ? 'v1-dyn' : source === 'pulse' ? 'v1-15m' : 'v1';
-    const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2025-01-01|${source === 'radar' ? 'ALL' : BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
+    // Only the MAIN stream remains (radar/pulse retired 2026-06-10) -> always v1.
+    const btVersion = 'v1';
+    const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2025-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
     const cached = backtestCacheRef.current;
     if (!force && cached && cached.key === cacheKey) {
       setLiveError('');
@@ -471,14 +389,14 @@ export const TradeProvider = ({ children }) => {
       });
       params.append('version', `eq.${btVersion}`);
       params.append('signal_time', 'gte.2025-01-01T00:00:00Z');
-      if (source !== 'radar') params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
+      params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
 
       const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;
       const rows = await fetchAllBacktestRows(url);
       // Backtest rows don't store the signal timeframe; tag it from the pipeline so
       // the UI can shift signal_time (bar OPEN) to the real fire moment (bar CLOSE)
-      // by the correct LTF: pulse = 15m, main/radar = 1h.
-      const ltfTf = source === 'pulse' ? '15m' : '1h';
+      // by the correct LTF (main = 1h).
+      const ltfTf = '1h';
       // Keep cancelled (no-fill) rows — shown as 0R 'no-fill' cards in the day drill.
       const filteredRows = rows
         .filter((row) => isAllowedBacktestHour(row.signal_time))
@@ -486,27 +404,23 @@ export const TradeProvider = ({ children }) => {
 
       processData(filteredRows);
 
-      // Server-side RPC analytics aggregate the static-17 (v1) set only; skip for
-      // radar (v1-dyn) and pulse (v1-15m) — they'd return the wrong version's data.
-      let nextInsights = { summary: null, symbols: [], weekdays: [], sessions: [] };
-      if (source === 'main') {
-        const metricCalls = [
-          callRpc('backtest_summary_metrics'),
-          callRpc('backtest_symbol_metrics'),
-          callRpc('backtest_weekday_metrics'),
-          callRpc('backtest_session_metrics')
-        ];
-        const [summaryRes, symbolRes, weekdayRes, sessionRes] = await Promise.allSettled(metricCalls);
-        nextInsights = {
-          summary: summaryRes.status === 'fulfilled' ? (Array.isArray(summaryRes.value) ? summaryRes.value[0] || null : null) : null,
-          symbols: symbolRes.status === 'fulfilled' ? (Array.isArray(symbolRes.value) ? symbolRes.value : []) : [],
-          weekdays: weekdayRes.status === 'fulfilled' ? (Array.isArray(weekdayRes.value) ? weekdayRes.value : []) : [],
-          sessions: sessionRes.status === 'fulfilled' ? (Array.isArray(sessionRes.value) ? sessionRes.value : []) : []
-        };
-        [summaryRes, symbolRes, weekdayRes, sessionRes]
-          .filter((result) => result.status === 'rejected')
-          .forEach((result) => console.error('Backtest analytics RPC error:', result.reason));
-      }
+      // Server-side RPC analytics aggregate the static (v1) set.
+      const metricCalls = [
+        callRpc('backtest_summary_metrics'),
+        callRpc('backtest_symbol_metrics'),
+        callRpc('backtest_weekday_metrics'),
+        callRpc('backtest_session_metrics')
+      ];
+      const [summaryRes, symbolRes, weekdayRes, sessionRes] = await Promise.allSettled(metricCalls);
+      const nextInsights = {
+        summary: summaryRes.status === 'fulfilled' ? (Array.isArray(summaryRes.value) ? summaryRes.value[0] || null : null) : null,
+        symbols: symbolRes.status === 'fulfilled' ? (Array.isArray(symbolRes.value) ? symbolRes.value : []) : [],
+        weekdays: weekdayRes.status === 'fulfilled' ? (Array.isArray(weekdayRes.value) ? weekdayRes.value : []) : [],
+        sessions: sessionRes.status === 'fulfilled' ? (Array.isArray(sessionRes.value) ? sessionRes.value : []) : []
+      };
+      [summaryRes, symbolRes, weekdayRes, sessionRes]
+        .filter((result) => result.status === 'rejected')
+        .forEach((result) => console.error('Backtest analytics RPC error:', result.reason));
 
       setBacktestInsights(nextInsights);
       // Cache the raw rows + analytics so subsequent BACKTEST visits this
@@ -552,8 +466,8 @@ export const TradeProvider = ({ children }) => {
     }
   }, []);
 
-  // Single data-load effect keyed on (strategy, mode) -> one of the 4 loaders,
-  // all funneling into filteredSignals. strategyRef (read by loadBacktest) is already
+  // Single data-load effect keyed on (strategy, mode) -> live or backtest loader,
+  // both funneling into filteredSignals. strategyRef (read by loadBacktest) is already
   // updated synchronously by setStrategy before this re-runs.
   useEffect(() => {
     let intervalId;
@@ -568,25 +482,22 @@ export const TradeProvider = ({ children }) => {
       loadBacktest();
     } else {
       setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
-      const loadLiveForStrategy = strategy === 'radar' ? loadRadarLive
-        : strategy === 'pulse' ? loadPulseLive
-        : loadLive;
-      loadLiveForStrategy();
-      loadLiveForStrategy();
+      loadLive();
+      loadLive();
       intervalId = setInterval(() => {
         const now = new Date();
         const minute = now.getMinutes();
         const second = now.getSeconds();
         const inWindow = (minute % 15 === 0) || (minute % 15 === 1);
         const aligned = second % 10 === 0;
-        if (inWindow && aligned) loadLiveForStrategy();
+        if (inWindow && aligned) loadLive();
       }, 1000);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [strategy, mode, loadBacktest, loadLive, loadRadarLive, loadPulseLive]);
+  }, [strategy, mode, loadBacktest, loadLive]);
 
   // 'active' filter is live-only — reset it when leaving live.
   useEffect(() => {
@@ -658,8 +569,7 @@ export const TradeProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    // Poll live status for the static set AND the Volume Radar (dynamic) picks,
-    // so Radar cards show the same TP/SL/Aktif/İptal status as default cards.
+    // Poll live status for the loaded signal set so cards show TP/SL/Aktif/İptal.
     const pollSet = allSignals;
     if (mode !== 'live' || pollSet.length === 0) return () => {};
 

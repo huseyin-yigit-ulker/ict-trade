@@ -11,18 +11,6 @@ const IconCommand = () => (
     <line x1="1.4" y1="10" x2="4" y2="10" /><line x1="16" y1="10" x2="18.6" y2="10" />
   </svg>
 );
-const IconRadar = () => (
-  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-    <circle cx="10" cy="10" r="7.5" /><circle cx="10" cy="10" r="4" />
-    <circle cx="10" cy="10" r="1" fill="currentColor" stroke="none" />
-    <line x1="10" y1="10" x2="16.5" y2="5.5" />
-  </svg>
-);
-const IconPulse = () => (
-  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1.6 10h3.2l2-5 3 11 2.4-6 1.4 3h3.2" />
-  </svg>
-);
 const IconIntel = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2.4 10s3-5.2 7.6-5.2S17.6 10 17.6 10s-3 5.2-7.6 5.2S2.4 10 2.4 10Z" />
@@ -37,10 +25,9 @@ const IconSettings = () => (
 );
 
 // Strategy × Mode nested nav: each strategy group exposes Live + Backtest leaves.
+// RADAR and PULSE streams were retired 2026-06-10 (see dag/dag.py).
 const GROUPS = [
   { key: 'main',  label: 'MAIN',  icon: <IconCommand /> },
-  { key: 'radar', label: 'RADAR', icon: <IconRadar /> },
-  { key: 'pulse', label: 'PULSE', icon: <IconPulse /> },
 ];
 
 const Sidebar = () => {
