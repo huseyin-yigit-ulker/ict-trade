@@ -6,14 +6,63 @@ import { useLang } from '../../context/LanguageContext';
 const STRAT_LABEL = { main: 'Main' };
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
+// ICT killzones (UTC) — the windows the engine actually hunts in. The pill
+// shows the active zone + time left, or the countdown to the next one.
+const KILLZONES = [
+  { label: 'ASIA KZ',   start: 0 * 60,  end: 4 * 60 },
+  { label: 'LONDON KZ', start: 7 * 60,  end: 10 * 60 },
+  { label: 'NY AM KZ',  start: 12 * 60, end: 15 * 60 },
+  { label: 'LDN CLOSE', start: 15 * 60, end: 17 * 60 },
+];
+
+// Compact "time left" via the existing duration i18n keys ('{h} sa {m} dk').
+const fmtLeft = (mins, t) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? t('{h} sa {m} dk', { h, m }) : t('{m} dk', { m });
+};
+
+const KillzoneClock = () => {
+  const { t } = useLang();
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const active = KILLZONES.find((k) => utcMin >= k.start && utcMin < k.end);
+  let body;
+  if (active) {
+    body = <><span className="kz-dot kz-dot--on" />{active.label} · {fmtLeft(active.end - utcMin, t)}</>;
+  } else {
+    const next = KILLZONES.find((k) => k.start > utcMin) || KILLZONES[0];
+    const wait = next.start > utcMin ? next.start - utcMin : 24 * 60 - utcMin + next.start;
+    body = <><span className="kz-dot" />{t('Sonraki')}: {next.label} · {fmtLeft(wait, t)}</>;
+  }
+
+  const clock = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`;
+  return (
+    <span
+      className={`kz-pill${active ? ' kz-pill--active' : ''}`}
+      title={t('ICT killzone saati (UTC)')}
+    >
+      <span className="kz-clock">{clock} UTC</span>
+      {body}
+    </span>
+  );
+};
+
 const Topbar = () => {
   const {
     sidebarHidden, toggleSidebar, dbStatus, dbMessage, strategy, mode,
     statusFilter, setStatusFilter,
     selectedSymbols, pendingSymbols, allSignals,
     toggleSymbol, applySymbols, clearPendingSymbols, selectAllPendingSymbols,
+    refresh, refreshing, lastUpdated,
   } = useTradeContext();
-  const { t } = useLang();
+  const { t, locale } = useLang();
   const loc = useLocation();
 
   const [symOpen, setSymOpen] = useState(false);
@@ -53,6 +102,7 @@ const Topbar = () => {
             : loc.pathname === '/intelligence' ? t('İstihbarat')
             : `${t(STRAT_LABEL[strategy] || 'Main')} · ${t(MODE_LABEL[mode] || 'Live')}`}
         </div>
+        <KillzoneClock />
       </div>
 
       <div className="topbar__controls">
@@ -96,6 +146,19 @@ const Topbar = () => {
           </>
         )}
 
+        {isView && (
+          <button
+            className={`icon-btn topbar__refresh${refreshing ? ' is-spinning' : ''}`}
+            onClick={refresh}
+            disabled={refreshing}
+            title={lastUpdated
+              ? `${t('Son güncelleme')}: ${lastUpdated.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`
+              : t('Yenile')}
+            aria-label={t('Yenile')}
+          >
+            ⟳
+          </button>
+        )}
         {dbMessage && <span className={`db-pill ${dbStatus}`}>{dbMessage}</span>}
       </div>
 

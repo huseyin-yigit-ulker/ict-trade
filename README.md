@@ -1,16 +1,37 @@
-# React + Vite
+# PUSU — Liquidity Ambush Intelligence
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite tabanlı ICT (Inner Circle Trader) sinyal paneli: canlı sinyaller,
+backtest drill-down (Yıl → Ay → Gün), TradingView grafik entegrasyonu ve
+Supabase veri katmanı.
 
-Currently, two official plugins are available:
+```bash
+npm install
+npm run dev       # geliştirme
+npm run build     # üretim (dist/)
+npm run lint
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Güvenlik
 
-## React Compiler
+Bu uygulama **statik bir frontend**tir — login ekranı yalnızca yumuşak bir
+istemci tarafı kapıdır, gerçek güvenlik **Supabase RLS** politikalarındadır.
+Bilinmesi gerekenler:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Giriş bilgileri** `.env` ile override edilir; bundle'a asla düz metin girmez:
+  ```bash
+  node scripts/gen-login-hash.mjs   # VITE_LOGIN_USER_SHA256 + VITE_LOGIN_PBKDF2 üretir
+  ```
+  Override yoksa repo'daki **varsayılan bilgiler** geçerlidir ve login ekranı
+  bunun için görünür bir uyarı gösterir. Dağıtımda mutlaka değiştirin.
+- **`.env` asla commit edilmez** (gitignore'da). İçinde Telegram bot token'ı ve
+  Postgres bağlantı dizesi gibi gerçek sırlar vardır — bunlar yalnızca
+  pipeline/backtest scriptleri içindir, frontend'e **yalnızca** `VITE_*` ve
+  `BACKTESTING_VITE_*` önekli değerler sızar (bkz. `vite.config.js > envPrefix`).
+- **CSP**: üretim build'ine `vite.config.js` içindeki `cspInject` eklentisi bir
+  Content-Security-Policy meta'sı enjekte eder (Supabase + Binance + TradingView
+  + Google Fonts beyaz listesi). Yeni bir dış kaynak eklerseniz CSP'yi güncelleyin.
+- **Başarısız girişler** kalıcı üstel backoff ile kilitlenir (5 deneme → 30sn,
+  her tekrarda iki katı, en çok 15 dk).
+- Supabase publishable anahtarı bundle içinde **görünür olması normaldir**;
+  veri erişimini sınırlayan şey RLS'dir. Tablolara anonim yazma/silme izni
+  verilmediğini periyodik olarak doğrulayın.

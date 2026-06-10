@@ -3,7 +3,9 @@ import { createContext, useState, useEffect, useContext, useRef, useCallback, us
 const TradeContext = createContext();
 
 //const BACKTEST_ALLOWED_HOURS = new Set([5, 7, 8, 9, 12, 13, 14,15, 16, 20, 21]);
-const BACKTEST_ALLOWED_HOURS = new Set([1,2,3,4,5, 6,7, 8, 9, 10,11,12, 13, 14, 15, 16, 17,18,19, 20, 21,22,23,24]);
+// All 24 UTC hours. getUTCHours() returns 0-23 — the old set listed 1..24,
+// which silently dropped every 00:xx UTC signal (and '24' never matched).
+const BACKTEST_ALLOWED_HOURS = new Set(Array.from({ length: 24 }, (_, h) => h));
 // Production set — XRP, TON, 1000SHIB, LINK, OP excluded after negative
 // 2025+2026 backtest performance; DOGE/GOOGL/PLTR/TSLA cut 2026-06-10 after
 // the Jan-Jun audit. Old rows for these symbols stay in the database but the
@@ -103,6 +105,10 @@ export const TradeProvider = ({ children }) => {
     });
   }, []);
   const [liveError, setLiveError] = useState('');
+  // Wall-clock of the last successful data load — surfaced in the Topbar so the
+  // operator can tell at a glance how fresh the board is.
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [dbStatus, setDbStatus] = useState('idle'); // idle | testing | ok | fail
   const [dbMessage, setDbMessage] = useState('');
   const [liveStatuses, setLiveStatuses] = useState({});
@@ -292,6 +298,7 @@ export const TradeProvider = ({ children }) => {
       }));
 
       processData(mapped);
+      setLastUpdated(new Date());
     } catch (err) {
       setLiveError('Live veri alınamadı.');
       setIsLoaded(true);
@@ -321,6 +328,7 @@ export const TradeProvider = ({ children }) => {
       setLiveError('');
       processData(cached.rows);
       setBacktestInsights(cached.insights);
+      setLastUpdated(new Date());
       return;
     }
 
@@ -426,6 +434,7 @@ export const TradeProvider = ({ children }) => {
       // Cache the raw rows + analytics so subsequent BACKTEST visits this
       // session reuse them instead of re-querying Supabase.
       backtestCacheRef.current = { key: cacheKey, rows: filteredRows, insights: nextInsights };
+      setLastUpdated(new Date());
     } catch (err) {
       setLiveError(`Backtest verisi alınamadı: ${err.message}`);
       setIsLoaded(true);
@@ -483,7 +492,6 @@ export const TradeProvider = ({ children }) => {
     } else {
       setBacktestInsights({ summary: null, symbols: [], weekdays: [], sessions: [] });
       loadLive();
-      loadLive();
       intervalId = setInterval(() => {
         const now = new Date();
         const minute = now.getMinutes();
@@ -506,6 +514,18 @@ export const TradeProvider = ({ children }) => {
 
   // Force a fresh backtest pull (bypasses the session cache) — e.g. a manual refresh.
   const reloadBacktest = useCallback(() => loadBacktest({ force: true }), [loadBacktest]);
+
+  // Manual refresh for the current view (Topbar button) — live refetch or
+  // forced backtest pull, with a spinner flag while in flight.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (mode === 'backtest') await loadBacktest({ force: true });
+      else await loadLive();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [mode, loadBacktest, loadLive]);
 
   const normalizeForBinance = useCallback((sym) => (sym ? sym.replace(/[^A-Za-z0-9]/g, '') : ''), []);
 
@@ -718,6 +738,9 @@ export const TradeProvider = ({ children }) => {
     liveStatuses,
     backtestInsights,
     reloadBacktest,
+    refresh,
+    refreshing,
+    lastUpdated,
     dbStatus,
     dbMessage,
     testDbConnection
@@ -754,6 +777,9 @@ export const TradeProvider = ({ children }) => {
     liveStatuses,
     backtestInsights,
     reloadBacktest,
+    refresh,
+    refreshing,
+    lastUpdated,
     dbStatus,
     dbMessage,
     testDbConnection

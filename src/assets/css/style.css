@@ -2022,3 +2022,142 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
 @media (prefers-reduced-motion: reduce) {
   .login-screen--premium .boot-rings span, .login-screen--premium .boot-radar { animation: none; }
 }
+
+/*==========================================================================
+  2026-06 upgrade — login v2, killzone clock, copyable prices, group winrate
+==========================================================================*/
+
+/* --- Login: ambient liquidity-sweep curve behind the card --- */
+.boot-curve {
+  position: absolute; left: 0; right: 0; top: 50%; height: 340px; width: 100%;
+  transform: translateY(-46%); pointer-events: none; opacity: 0.5;
+}
+.boot-curve__level {
+  stroke: rgba(246, 70, 93, 0.4); stroke-width: 1; stroke-dasharray: 6 6;
+  animation: lx-level 9s ease-in-out infinite;
+}
+.boot-curve__path {
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: lx-draw 9s ease-in-out infinite;
+}
+@keyframes lx-draw {
+  0%   { stroke-dashoffset: 1; opacity: 0; }
+  10%  { opacity: 0.85; }
+  58%  { stroke-dashoffset: 0; opacity: 0.85; }
+  82%  { stroke-dashoffset: 0; opacity: 0.85; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes lx-level {
+  0%, 40% { opacity: 0.5; }
+  60%, 88% { opacity: 0.12; }   /* level "consumed" after the sweep */
+  100% { opacity: 0.5; }
+}
+
+/* --- Login: missing interaction states (shake on fail, caps-lock note) --- */
+.login-card--shake { animation: lx-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+@keyframes lx-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-7px); }
+  40%, 60% { transform: translateX(7px); }
+}
+.login-caps {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 5px;
+  color: var(--warn); font-size: 11px; font-family: 'Inter', sans-serif;
+}
+
+/* --- Login: session-expired note + default-credentials warning --- */
+.login-note {
+  width: 100%; padding: 9px 12px; border-radius: 8px; font-size: 12px; text-align: left;
+  color: #9DBCFF; background: rgba(61, 127, 255, 0.08); border: 1px solid rgba(61, 127, 255, 0.28);
+}
+.login-warn {
+  width: 100%; padding: 8px 11px; border-radius: 8px; font-size: 11px; line-height: 1.45; text-align: left;
+  color: #E8C66B; background: rgba(240, 185, 11, 0.07); border: 1px solid rgba(240, 185, 11, 0.26);
+}
+
+/* --- Login: live market pulse strip (BTC/ETH/SOL) --- */
+.login-pulse {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 16px;
+  width: 100%; padding-top: 13px; border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--mono); font-size: 11px; color: #8A93A0;
+}
+.login-pulse__dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); flex: 0 0 auto;
+}
+.login-pulse__dot.live {
+  background: var(--win); box-shadow: 0 0 0 0 rgba(14, 203, 129, 0.55);
+  animation: brand-pulse 1.6s ease-out infinite;
+}
+.login-pulse__item { display: inline-flex; align-items: baseline; gap: 6px; }
+.login-pulse__item b { color: #C7CBD1; font-weight: 700; letter-spacing: 0.04em; }
+.login-pulse__item i { font-style: normal; font-size: 10px; font-weight: 700; }
+.login-pulse__item i.up   { color: var(--win); }
+.login-pulse__item i.down { color: var(--loss); }
+.login-pulse--off { color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+
+/* --- Topbar: ICT killzone clock pill --- */
+.kz-pill {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--panel-2);
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em;
+  color: var(--muted); white-space: nowrap;
+}
+.kz-pill--active { border-color: rgba(245, 185, 66, 0.45); color: var(--accent); background: rgba(245, 185, 66, 0.07); }
+.kz-clock { color: var(--text); font-weight: 700; padding-right: 8px; border-right: 1px solid var(--border); }
+.kz-pill--active .kz-clock { border-right-color: rgba(245, 185, 66, 0.3); }
+.kz-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); flex: 0 0 auto; }
+.kz-dot--on { background: var(--accent); animation: status-pulse 1.4s ease-in-out infinite; }
+
+/* --- Topbar: manual refresh (spins while a fetch is in flight) --- */
+.topbar__refresh { font-size: 16px; }
+.topbar__refresh:disabled { cursor: progress; opacity: 0.7; }
+.topbar__refresh.is-spinning { animation: btn-spin 0.9s linear infinite; }
+
+/* --- Trade cards: direction accent edge (long = green, short = red) --- */
+.trade-card--long  { border-left: 2px solid rgba(14, 203, 129, 0.55); }
+.trade-card--short { border-left: 2px solid rgba(246, 70, 93, 0.55); }
+.trade-card--long:hover  { border-left-color: var(--win); }
+.trade-card--short:hover { border-left-color: var(--loss); }
+
+/* --- Copyable price values (entry / TP / SL) --- */
+.copy-val {
+  background: transparent; border: none; padding: 0; margin: 0; cursor: copy;
+  color: inherit; font: inherit; font-family: var(--mono);
+  border-bottom: 1px dashed transparent; transition: border-color 0.12s ease;
+  position: relative; display: inline-flex; align-items: baseline;
+}
+.copy-val:hover { border-bottom-color: currentColor; }
+.copy-val__tick {
+  max-width: 0; overflow: hidden; opacity: 0; color: var(--win); font-weight: 800;
+  transition: max-width 0.15s ease, opacity 0.15s ease, margin-left 0.15s ease;
+}
+.copy-val.copied .copy-val__tick { max-width: 14px; opacity: 1; margin-left: 4px; }
+
+/* --- Day/group header: TP-vs-SL ratio micro bar --- */
+.wl-bar {
+  display: inline-block; width: 64px; height: 5px; border-radius: 3px;
+  background: var(--loss-soft); overflow: hidden; align-self: center;
+}
+.wl-bar__tp { display: block; height: 100%; background: var(--win); border-radius: 3px 0 0 3px; }
+
+/* --- Rich empty state --- */
+.dash-empty {
+  display: grid; justify-items: center; gap: 10px;
+  border: 1px dashed var(--border); border-radius: 10px;
+}
+.dash-empty__logo { opacity: 0.55; }
+.dash-empty__title { font-size: 14px; font-weight: 700; color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
+.dash-empty__sub { font-size: 12px; color: var(--muted-2); font-family: 'Inter', system-ui, sans-serif; max-width: 420px; }
+
+@media (max-width: 900px) {
+  .kz-pill { display: none; }
+  .topbar__controls .status-filter { max-width: 100%; overflow-x: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-curve__path { animation: none; stroke-dashoffset: 0; opacity: 0.5; }
+  .boot-curve__level { animation: none; }
+  .login-card--shake { animation: none; }
+  .login-pulse__dot.live, .kz-dot--on, .topbar__refresh.is-spinning { animation: none; }
+}

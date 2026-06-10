@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useEffect, useRef, useState } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth, usingDefaultCreds, consumeAuthNote } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import PusuLogo from './PusuLogo';
 
@@ -17,10 +17,83 @@ const LockIcon = () => (
   </svg>
 );
 
+// Ambient "liquidity sweep" curve behind the card — a price path that runs
+// under a liquidity level, sweeps it (the ambush), then expands away.
+const LiquidityCurve = () => (
+  <svg className="boot-curve" viewBox="0 0 1440 320" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="lx-curve-grad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stopColor="#F0B93A" stopOpacity="0" />
+        <stop offset="0.45" stopColor="#F0B93A" stopOpacity="0.55" />
+        <stop offset="1" stopColor="#0ECB81" stopOpacity="0.7" />
+      </linearGradient>
+    </defs>
+    {/* the resting liquidity level (equal lows) */}
+    <line className="boot-curve__level" x1="120" y1="208" x2="900" y2="208" />
+    {/* price path: ranging → sweep below the level → displacement up */}
+    <path
+      className="boot-curve__path"
+      d="M-20 190 L90 196 L150 178 L230 200 L300 184 L380 205 L460 188 L540 206 L620 192 L700 207 L760 196 L830 246 L880 252 L920 200 L980 158 L1040 170 L1110 118 L1180 132 L1260 84 L1340 96 L1460 40"
+      pathLength="1"
+      fill="none" stroke="url(#lx-curve-grad)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Live market pulse on the login screen — three flagship perps, 10s poll.
+// Public Binance endpoint, no auth; doubles as an "exchange API online" signal.
+const PULSE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+const MarketPulse = () => {
+  const { t } = useLang();
+  const [rows, setRows] = useState(null); // null = loading, [] = unreachable
+
+  useEffect(() => {
+    let stopped = false;
+    // FAPI's 24hr ticker has no multi-symbol filter (the spot-style `symbols`
+    // param is ignored and the FULL market dumps back) — fetch each one.
+    const fetchOne = async (sym) => {
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${sym}`);
+        if (!res.ok) return null;
+        const d = await res.json();
+        const price = parseFloat(d?.lastPrice);
+        const pct = parseFloat(d?.priceChangePercent);
+        return Number.isFinite(price) ? { sym: sym.replace(/USDT$/, ''), price, pct } : null;
+      } catch { return null; }
+    };
+    const poll = async () => {
+      const rows = (await Promise.all(PULSE_SYMBOLS.map(fetchOne))).filter(Boolean);
+      if (stopped) return;
+      setRows((prev) => (rows.length ? rows : prev ?? []));
+    };
+    poll();
+    const id = setInterval(poll, 10_000);
+    return () => { stopped = true; clearInterval(id); };
+  }, []);
+
+  if (rows === null) return null;
+  if (rows.length === 0) {
+    return <div className="login-pulse login-pulse--off"><span className="login-pulse__dot" /> {t('bağlantı yok')}</div>;
+  }
+  return (
+    <div className="login-pulse" aria-hidden="true">
+      <span className="login-pulse__dot live" />
+      {rows.map((r) => (
+        <span key={r.sym} className="login-pulse__item">
+          <b>{r.sym}</b>
+          <span>{r.price >= 1000 ? r.price.toLocaleString('en-US', { maximumFractionDigits: 0 }) : r.price.toFixed(2)}</span>
+          <i className={r.pct >= 0 ? 'up' : 'down'}>{r.pct >= 0 ? '▲' : '▼'}{Math.abs(r.pct).toFixed(2)}%</i>
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const LoginScreen = () => {
-  const { isAuthed, login } = useAuth();
+  const { isAuthed, login, lockRemainingMs } = useAuth();
   const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -28,24 +101,68 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [err, setErr] = useState('');
+  const [note] = useState(() => consumeAuthNote()); // 'expired' | null
+  const [shake, setShake] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
+  const [lockLeft, setLockLeft] = useState(0); // seconds remaining of the fail lockout
+  const passRef = useRef(null);
 
-  if (isAuthed) return <Navigate to="/main/live" replace />;
+  // Tick the lockout countdown once a second while it's active.
+  useEffect(() => {
+    const ms = lockRemainingMs();
+    if (ms <= 0) return undefined;
+    setLockLeft(Math.ceil(ms / 1000));
+    const id = setInterval(() => {
+      const left = Math.ceil(lockRemainingMs() / 1000);
+      setLockLeft(left);
+      if (left <= 0) { setErr(''); clearInterval(id); }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lockRemainingMs, err]);
+
+  if (isAuthed) {
+    // Deep link respected: a guarded page bounced here with its origin in state.
+    const from = location.state?.from;
+    return <Navigate to={from && from !== '/login' ? from : '/main/live'} replace />;
+  }
+
+  const failFeedback = (msg) => {
+    setErr(msg);
+    setShake(true);
+    setPassword('');
+    passRef.current?.focus();
+    setTimeout(() => setShake(false), 500);
+  };
 
   const submit = (e) => {
     e.preventDefault();
-    if (loading) return;
+    if (loading || !username.trim() || !password) return;
     setLoading(true);
     setErr('');
     // Brief verification beat so the spinner reads as a real check (client-side gate).
-    setTimeout(() => {
-      if (login(username.trim(), password, remember)) {
-        navigate('/main/live', { replace: true });
+    setTimeout(async () => {
+      const res = await login(username.trim(), password, remember);
+      if (res.ok) {
+        const from = location.state?.from;
+        navigate(from && from !== '/login' ? from : '/main/live', { replace: true });
+        return;
+      }
+      setLoading(false);
+      if (res.lockedMs > 0) {
+        setLockLeft(Math.ceil(res.lockedMs / 1000));
+        failFeedback(t('Çok fazla hatalı deneme. {s} sn bekleyin.', { s: Math.ceil(res.lockedMs / 1000) }));
       } else {
-        setErr(t('Kullanıcı adı veya şifre hatalı.'));
-        setLoading(false);
+        failFeedback(t('Kullanıcı adı veya şifre hatalı.'));
       }
     }, 550);
   };
+
+  const trackCaps = (e) => {
+    if (typeof e.getModifierState === 'function') setCapsOn(e.getModifierState('CapsLock'));
+  };
+
+  const locked = lockLeft > 0;
+  const canSubmit = !loading && !locked && username.trim().length > 0 && password.length > 0;
 
   return (
     <div className="login-screen login-screen--premium">
@@ -53,6 +170,7 @@ const LoginScreen = () => {
       <div className="boot-grid" aria-hidden="true" />
       <div className="boot-rings" aria-hidden="true"><span /><span /><span /></div>
       <div className="boot-radar" aria-hidden="true" />
+      <LiquidityCurve />
 
       <div className="boot-lang">
         <button className={lang === 'tr' ? 'active' : ''} onClick={() => setLang('tr')}>TR</button>
@@ -60,20 +178,25 @@ const LoginScreen = () => {
         <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
       </div>
 
-      <div className="login-card">
+      <div className={`login-card${shake ? ' login-card--shake' : ''}`}>
         <div className="boot-reticle"><PusuLogo size={84} animated /></div>
         <div className="boot-text">
           <div className="boot-title">PUSU</div>
           <div className="boot-sub">Liquidity Ambush Intelligence</div>
         </div>
 
+        {note === 'expired' && (
+          <div className="login-note" role="status">{t('Oturum süresi doldu. Lütfen tekrar giriş yapın.')}</div>
+        )}
+
         <form className="login-form" onSubmit={submit}>
           <label className="login-field">
             <span>{t('Kullanıcı adı')}</span>
             <input
-              type="text" autoFocus autoComplete="username"
+              type="text" name="username" autoFocus autoComplete="username"
+              autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={64}
               value={username}
-              onChange={(e) => { setUsername(e.target.value); if (err) setErr(''); }}
+              onChange={(e) => { setUsername(e.target.value); if (err && !locked) setErr(''); }}
               placeholder={t('Kullanıcı adı')}
             />
           </label>
@@ -81,9 +204,12 @@ const LoginScreen = () => {
             <span>{t('Şifre')}</span>
             <div className="login-pass-wrap">
               <input
-                type={showPass ? 'text' : 'password'} autoComplete="current-password"
+                ref={passRef}
+                type={showPass ? 'text' : 'password'} name="password" autoComplete="current-password"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={128}
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); if (err) setErr(''); }}
+                onChange={(e) => { setPassword(e.target.value); if (err && !locked) setErr(''); }}
+                onKeyDown={trackCaps} onKeyUp={trackCaps} onBlur={() => setCapsOn(false)}
                 placeholder={t('Şifre')}
               />
               <button
@@ -96,6 +222,7 @@ const LoginScreen = () => {
                 <EyeIcon off={showPass} />
               </button>
             </div>
+            {capsOn && <span className="login-caps" role="status">⇪ {t('Caps Lock açık')}</span>}
           </label>
 
           <div className="login-aux">
@@ -109,18 +236,28 @@ const LoginScreen = () => {
           </div>
           {showForgot && <div className="login-forgot-note">{t('Erişim için sistem yöneticinize başvurun.')}</div>}
 
-          {err && <div className="login-err">{err}</div>}
-          <button className="primary-btn login-submit" type="submit" disabled={loading}>
+          {locked && !loading
+            ? <div className="login-err" role="alert">{t('Çok fazla hatalı deneme. {s} sn bekleyin.', { s: lockLeft })}</div>
+            : err && <div className="login-err" role="alert">{err}</div>}
+          <button className="primary-btn login-submit" type="submit" disabled={!canSubmit}>
             {loading
               ? <><span className="btn-spinner" aria-hidden="true" />{t('Doğrulanıyor…')}</>
-              : t('Piyasaya Gir')}
+              : locked ? `${t('Şifreli Oturum')} · ${lockLeft}s` : t('Piyasaya Gir')}
           </button>
         </form>
 
+        {usingDefaultCreds && (
+          <div className="login-warn" role="note">
+            ⚠ {t('Varsayılan giriş bilgileri aktif — .env ile özelleştirin.')}
+          </div>
+        )}
+
         <div className="login-meta">
           <span className="login-badge"><LockIcon /> {t('Şifreli Oturum')}</span>
-          <span className="login-ver">PUSU · v1.0</span>
+          <span className="login-ver">PUSU · v1.1</span>
         </div>
+
+        <MarketPulse />
       </div>
 
       <div className="boot-footer">© 2026 PUSU · {t('Likidite Avı')}</div>

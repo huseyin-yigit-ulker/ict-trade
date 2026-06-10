@@ -61,6 +61,20 @@ const EN = {
   'Erişim için sistem yöneticinize başvurun.': 'Contact your system administrator for access.',
   'bağlantı yok': 'no connection',
   'ÇEVRİMDIŞI': 'OFFLINE',
+  'Çok fazla hatalı deneme. {s} sn bekleyin.': 'Too many failed attempts. Wait {s}s.',
+  'Caps Lock açık': 'Caps Lock is on',
+  'Oturum süresi doldu. Lütfen tekrar giriş yapın.': 'Your session has expired. Please sign in again.',
+  'Varsayılan giriş bilgileri aktif — .env ile özelleştirin.': 'Default credentials are active — override them via .env.',
+
+  // --- Topbar: killzone clock + refresh ---
+  'Sonraki': 'Next',
+  'ICT killzone saati (UTC)': 'ICT killzone clock (UTC)',
+  'Son güncelleme': 'Last update',
+  'Yenile': 'Refresh',
+
+  // --- Dashboard: copy + empty state ---
+  'Kopyala': 'Copy',
+  'Motor bir likidite tuzağı yakaladığında sinyal burada belirecek.': 'Signals will appear here the moment the engine catches a liquidity trap.',
 
   // --- Settings ---
   'Görünüm': 'Appearance',

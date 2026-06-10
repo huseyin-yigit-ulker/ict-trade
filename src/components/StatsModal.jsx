@@ -1,9 +1,16 @@
+import { useEffect } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 
 const StatsModal = () => {
   const { allSignals, setShowStats } = useTradeContext();
   const { t } = useLang();
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setShowStats(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setShowStats]);
 
   const calculatePnL = (sig) => {
     if (Number.isFinite(sig?.pnlR)) return sig.pnlR;
@@ -24,8 +31,8 @@ const StatsModal = () => {
   });
 
   return (
-    <div id="stats-modal" className="modal-overlay" style={{ display: 'block' }}>
-      <div className="stats-box">
+    <div id="stats-modal" className="modal-overlay" style={{ display: 'block' }} onClick={() => setShowStats(false)}>
+      <div className="stats-box" onClick={(e) => e.stopPropagation()}>
         <div className="stats-header">
           <h2>{t('PORTFÖY KARNESİ')}</h2>
           <button id="close-stats" onClick={() => setShowStats(false)}>{t('KAPAT')}</button>

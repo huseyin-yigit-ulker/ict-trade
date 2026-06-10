@@ -744,7 +744,12 @@ const ChartModal = () => {
       ></div>
 
       {showTv && (
-        <iframe className="tv-iframe" title="TradingView" src={getTvEmbedUrl()} frameBorder="0" allowTransparency="true" allow="fullscreen; clipboard-write" loading="lazy" />
+        <iframe
+          className="tv-iframe" title="TradingView" src={getTvEmbedUrl()}
+          frameBorder="0" allowTransparency="true" allow="fullscreen; clipboard-write" loading="lazy"
+          referrerPolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        />
       )}
     </div>
   );

@@ -22,9 +22,44 @@ function spaFallback404() {
   }
 }
 
+// Content-Security-Policy, injected at BUILD ONLY (dev needs Vite/React-refresh
+// inline scripts which a strict policy would block). A static host can't set
+// response headers, so a <meta> tag is the strongest available delivery.
+// 'unsafe-inline' in style-src is required by React inline style attributes.
+// frame-ancestors can't be expressed via <meta>; set it at the host if possible.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self' https://*.supabase.co https://fapi.binance.com https://api.binance.com",
+  "frame-src https://s.tradingview.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ')
+
+function cspInject() {
+  return {
+    name: 'csp-inject',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html.replace(
+        '<meta charset="UTF-8" />',
+        `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`,
+      )
+    },
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), spaFallback404()],
-  envPrefix: ['VITE_', 'BACKTESTING_'],
+  plugins: [react(), cspInject(), spaFallback404()],
+  // SECURITY: never use the broad 'BACKTESTING_' prefix here — .env also holds
+  // BACKTESTING_DB_CONNECTION_STRING (Postgres password) and a wide prefix
+  // would expose it to the browser. Only the public Supabase REST vars and the
+  // table name are allowed through.
+  envPrefix: ['VITE_', 'BACKTESTING_VITE_', 'BACKTESTING_DB_TABLE'],
   base: '/',
 })

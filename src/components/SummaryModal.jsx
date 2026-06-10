@@ -29,6 +29,21 @@ const SummaryModal = ({ asPage = false }) => {
     }
   }, [mode]);
 
+  // Mirror the global symbol selection. Without this, mounting before the data
+  // load finishes (e.g. deep-linking straight to /intelligence) froze an empty
+  // initial set and the whole panel stayed blank.
+  useEffect(() => {
+    setLocalSymbols(new Set(selectedSymbols));
+  }, [selectedSymbols]);
+
+  // Modal variant advertises an ESC pill on its close button — honour it.
+  useEffect(() => {
+    if (asPage) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowSummary(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [asPage, setShowSummary]);
+
   const resolveLiveType = (status) => {
     if (!status) return 'BEKLEMEDE';
     if (status === 'TP Oldu') return 'TP';

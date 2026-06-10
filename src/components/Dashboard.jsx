@@ -2,6 +2,39 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import Sparkline from './viz/Sparkline';
+import PusuLogo from './PusuLogo';
+
+// Click-to-copy price value — copies the RAW value (full precision, ready to
+// paste into an order ticket) and flashes a ✓. Stops propagation so the card's
+// own click (open chart) doesn't fire.
+const CopyVal = ({ value, className = '', title, children }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = (e) => {
+    e.stopPropagation();
+    if (value == null || !navigator.clipboard) return;
+    navigator.clipboard.writeText(String(value)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1100);
+    }).catch(() => { /* clipboard denied — ignore */ });
+  };
+  return (
+    <button type="button" className={`copy-val ${className}${copied ? ' copied' : ''}`} onClick={copy} title={title}>
+      {children}
+      <span className="copy-val__tick" aria-hidden="true">✓</span>
+    </button>
+  );
+};
+
+// Tiny TP-vs-SL ratio bar for day/group headers — instant win/loss read.
+const WinLossBar = ({ tp, sl }) => {
+  const total = tp + sl;
+  if (!total) return null;
+  return (
+    <span className="wl-bar" title={`TP ${tp} · SL ${sl}`}>
+      <span className="wl-bar__tp" style={{ width: `${(tp / total) * 100}%` }} />
+    </span>
+  );
+};
 
 // Stride-sample a long series down to ~max points so a several-thousand-trade
 // bucket doesn't collapse into an unreadable smear in a tiny sparkline.
@@ -125,8 +158,31 @@ const Dashboard = () => {
     mode,
     liveStatuses,
     statusFilter,
+    isLoaded,
+    liveError,
   } = useTradeContext();
   const { t, locale } = useLang();
+
+  // Shimmer placeholders while the first fetch is in flight — prevents the
+  // misleading "Sinyal yok." flash before data arrives.
+  const renderSkeleton = () => (
+    <div className="skeleton-grid" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="skeleton-card">
+          <div className="skeleton-line w40" />
+          <div className="skeleton-line w70" />
+          <div className="skeleton-line w55" />
+          <div className="skeleton-line w85" />
+        </div>
+      ))}
+    </div>
+  );
+
+  // Data-source failures (Supabase config / fetch errors) were previously
+  // swallowed — the shell never showed them. Surface them inline.
+  const renderError = () => liveError ? (
+    <div className="dash-error" role="alert">⚠ {t(liveError)}</div>
+  ) : null;
 
   // Status filter (statusFilter from context; chips live in the Topbar). Maps each
   // trade to tp/sl/cancelled/open/active so the same control filters either source.
@@ -232,11 +288,14 @@ const Dashboard = () => {
     return new Date(year, month - 1, day);
   };
 
-  // Live görünümü için mevcut günlük grup
+  // Live görünümü için mevcut günlük grup. Gruplama, kartta gösterilen gerçek
+  // sinyal anına (bar KAPANIŞI) göre yapılır — bar AÇILIŞI ile gruplanırsa
+  // 23:00 açılışlı bir bar 00:00'da yayınlanan sinyalini önceki güne koyar.
   const groupedLive = useMemo(() => {
     if (mode !== 'live') return {};
     return filteredSignals.reduce((acc, sig) => {
-      const dateKey = sig.dateObj.toLocaleDateString(locale, {
+      const effDate = effectiveSignalTime(sig) || sig.dateObj;
+      const dateKey = effDate.toLocaleDateString(locale, {
         year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
       });
       if (!acc[dateKey]) acc[dateKey] = [];
@@ -533,7 +592,7 @@ const Dashboard = () => {
         return (
           <div
             key={sig.id}
-            className={`trade-card${isNoFill ? ' trade-card--nofill' : ''}`}
+            className={`trade-card trade-card--${sig.dir === 'LONG' ? 'long' : 'short'}${isNoFill ? ' trade-card--nofill' : ''}`}
             onClick={() => {
               setChartView('journal');
               setActiveSignal(sig);
@@ -597,15 +656,17 @@ const Dashboard = () => {
               </div>
               <div className="trade-metric">
                 <span className="metric-label">{t('Entry')}</span>
-                <span className="metric-value">{formatPrice(sig.entry)}</span>
+                <span className="metric-value">
+                  <CopyVal value={sig.entry} title={t('Kopyala')}>{formatPrice(sig.entry)}</CopyVal>
+                </span>
               </div>
               <div className="trade-metric intel-exec__tpsl">
                 <span className="metric-label">{t('Hedef')} / {t('Risk')}</span>
                 <span className="metric-value">
-                  <span className="win">{formatPrice(sig.tp)}</span>
+                  <CopyVal value={sig.tp} className="win" title={t('Kopyala')}>{formatPrice(sig.tp)}</CopyVal>
                   {targetPct != null && <span className="intel-pct win"> {targetPct >= 0 ? '+' : ''}{targetPct.toFixed(2)}%</span>}
                   <span className="intel-sep"> · </span>
-                  <span className="loss">{formatPrice(sig.sl)}</span>
+                  <CopyVal value={sig.sl} className="loss" title={t('Kopyala')}>{formatPrice(sig.sl)}</CopyVal>
                   {riskPct != null && <span className="intel-pct loss"> {riskPct.toFixed(2)}%</span>}
                 </span>
               </div>
@@ -681,9 +742,18 @@ const Dashboard = () => {
   const daysMaxR = Math.max(1, ...dayBuckets.map((b) => Math.abs(b.totalR)));
 
   if (mode === 'backtest') {
+    if (!isLoaded) {
+      return (
+        <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+          {renderError()}
+          {renderSkeleton()}
+        </div>
+      );
+    }
     return (
       <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
         <div className="backtest-flow">
+          {renderError()}
           {renderKpiHero()}
           <div className="drill-header">
             <div className="drill-path">
@@ -751,23 +821,27 @@ const Dashboard = () => {
                 ))}
               </div>
 
-              {selectedDayTrades.some(matchesStatus) && (
-                <div className="day-notebook">
-                  <div className="day-header">
-                    <div className="day-title">{selectedDayLabel}</div>
-                    <div className="day-summary">
-                      <span>{selectedDayTrades.length} {t('işlem')}</span>
-                      <span className="tp-sl-ratio">
-                        {t('Toplam R')}:{' '}
-                        <span className={getTotalR(selectedDayTrades) >= 0 ? 'win' : 'loss'}>
-                          {getTotalR(selectedDayTrades) >= 0 ? '+' : ''}{getTotalR(selectedDayTrades).toFixed(2)}
+              {selectedDayTrades.some(matchesStatus) && (() => {
+                const dayCounts = summarizeBacktestCounts(selectedDayTrades);
+                return (
+                  <div className="day-notebook">
+                    <div className="day-header">
+                      <div className="day-title">{selectedDayLabel}</div>
+                      <div className="day-summary">
+                        <span>{selectedDayTrades.length} {t('işlem')}</span>
+                        <WinLossBar tp={dayCounts.tp} sl={dayCounts.sl} />
+                        <span className="tp-sl-ratio">
+                          {t('Toplam R')}:{' '}
+                          <span className={getTotalR(selectedDayTrades) >= 0 ? 'win' : 'loss'}>
+                            {getTotalR(selectedDayTrades) >= 0 ? '+' : ''}{getTotalR(selectedDayTrades).toFixed(2)}
+                          </span>
                         </span>
-                      </span>
+                      </div>
                     </div>
+                    {renderTradeCards(selectedDayTrades)}
                   </div>
-                  {renderTradeCards(selectedDayTrades)}
-                </div>
-              )}
+                );
+              })()}
             </>
           )}
         </div>
@@ -775,11 +849,25 @@ const Dashboard = () => {
     );
   }
 
+  if (!isLoaded) {
+    return (
+      <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+        {renderError()}
+        {renderSkeleton()}
+      </div>
+    );
+  }
+
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
+      {renderError()}
       {renderKpiHero()}
       {filteredSignals.length === 0 && (
-        <div className="dash-empty">{t('Sinyal yok.')}</div>
+        <div className="dash-empty">
+          <PusuLogo size={46} className="dash-empty__logo" animated />
+          <div className="dash-empty__title">{t('Sinyal yok.')}</div>
+          <div className="dash-empty__sub">{t('Motor bir likidite tuzağı yakaladığında sinyal burada belirecek.')}</div>
+        </div>
       )}
       {Object.keys(groupedLive).map((dateKey) => {
         const trades = groupedLive[dateKey];
@@ -792,6 +880,7 @@ const Dashboard = () => {
               <div className="day-title">{dateKey}</div>
               <div className="day-summary">
                 <span>{trades.length} {t('işlem')}</span>
+                <WinLossBar tp={counts.tp} sl={counts.sl} />
                 <span className="tp-sl-ratio">
                   TP/SL: {counts.tp}/{counts.sl} • R:{' '}
                   <span className={counts.rScore >= 0 ? 'win' : 'loss'}>
