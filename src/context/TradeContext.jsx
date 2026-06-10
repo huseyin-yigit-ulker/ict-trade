@@ -23,7 +23,23 @@ const BACKTEST_ALLOWED_SYMBOLS = [
 
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
+// RADAR's retest-limit design uses a 24h window (RADAR_ENTRY_EXPIRY_BARS = 24 on 1h);
+// SQUEEZE's crowding signal is time-sensitive, so 12h (SQUEEZE_ENTRY_EXPIRY_BARS = 12).
 const ENTRY_EXPIRY_MINUTES = 180;
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, radar: 1440, squeeze: 720 };
+
+// Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
+// 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
+// sync/backfill_v2_year.py); 'radar' = NEW v3 vol-compression Donchian breakout
+// (strategy F only — see sync/backfill_v3_year.py; NOT the retired v1-dyn radar);
+// 'squeeze' = v4 funding-extreme squeeze fade (strategy G, derivative positioning —
+// see sync/backfill_v4_year.py). Each module aggregates its own version separately.
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', radar: 'v3', squeeze: 'v4' };
+// Live signals table (ict_trade.signals) tag per module: main -> mode='live',
+// impulse -> mode='impulse', radar -> mode='radar', squeeze -> mode='squeeze'
+// (dag.py emits each hourly to its own mode tag).
+const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', radar: 'radar', squeeze: 'squeeze' };
+const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // LTF bar duration in ms ('1h' -> 3600000). The signal fires at its bar CLOSE,
 // so live entry-fill scanning starts at signal_time + this (backtest parity).
@@ -69,12 +85,13 @@ export const TradeProvider = ({ children }) => {
   const [pendingDateStart, setPendingDateStart] = useState('');
   const [pendingDateEnd, setPendingDateEnd] = useState('');
 
-  // --- View axes: strategy {main} × mode {live|backtest}. The URL is the
-  // source of truth (CommandCenterPage syncs route params -> setView). strategyRef
+  // --- View axes: strategy {main|impulse|radar} × mode {live|backtest}. The URL is
+  // the source of truth (CommandCenterPage syncs route params -> setView). strategyRef
   // mirrors state so the data-load effect + loadBacktest read it synchronously.
-  // radar/pulse strategies were retired 2026-06-10; stale localStorage values fall back to main.
+  // pulse was retired 2026-06-10; 'radar' now means the NEW v3 breakout stream
+  // (stale localStorage values outside VALID_STRATEGIES fall back to main).
   const [strategy, setStrategyState] = useState(() => {
-    try { const s = localStorage.getItem('pusu.strategy'); return s === 'main' ? s : 'main'; } catch { return 'main'; }
+    try { const s = localStorage.getItem('pusu.strategy'); return VALID_STRATEGIES.has(s) ? s : 'main'; } catch { return 'main'; }
   });
   const strategyRef = useRef(strategy);
   const [mode, setModeState] = useState(() => {
@@ -265,9 +282,10 @@ export const TradeProvider = ({ children }) => {
       params.append('signal_time', `gte.${start.toISOString()}`);
       params.append('signal_time', `lt.${end.toISOString()}`);
       params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
-      // MAIN = only the current hourly engine (mode='live'). Excludes pulse (15m),
-      // dynamic (radar) and legacy rows (Weekday/Weekend/null) on the same symbols.
-      params.append('mode', 'eq.live');
+      // Module -> its own live mode tag: MAIN='live' (hourly B/C/D/E), IMPULSE='impulse'
+      // (hourly v2 set). Excludes pulse (15m), dynamic (radar) and legacy rows.
+      const liveMode = STRATEGY_LIVE_MODE[strategyRef.current] || 'live';
+      params.append('mode', `eq.${liveMode}`);
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
       const res = await fetch(url, {
@@ -320,8 +338,8 @@ export const TradeProvider = ({ children }) => {
 
     // Cache key = everything that defines the result set. If unchanged and not
     // forced, restore from the in-memory session cache (no network round-trip).
-    // Only the MAIN stream remains (radar/pulse retired 2026-06-10) -> always v1.
-    const btVersion = 'v1';
+    // Version is keyed off the active strategy module: main -> v1, impulse -> v2.
+    const btVersion = STRATEGY_VERSION[strategyRef.current] || 'v1';
     const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2025-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
     const cached = backtestCacheRef.current;
     if (!force && cached && cached.key === cacheKey) {
@@ -345,7 +363,8 @@ export const TradeProvider = ({ children }) => {
           'Content-Profile': backtestSchema,
           'Content-Type': 'application/json'
         },
-        body: '{}'
+        // p_version selects the backtest stream (v1/v2) so analytics match the table.
+        body: JSON.stringify({ p_version: btVersion })
       });
 
       if (!rpcRes.ok) {
@@ -540,8 +559,10 @@ export const TradeProvider = ({ children }) => {
     // (before the signal even exists) is wrongly read as a fill → SL/TP instead
     // of cancelled. This was the live-vs-backtest mismatch (live SL, backtest Cancelled).
     const entryTs = Math.floor((sig.dateObj.getTime() + ltfIntervalMs(sig.ltfTimeframe)) / 1000);
-    // Limit must be touched within ENTRY_EXPIRY_MINUTES of the fire (backtest parity).
-    const fillDeadlineSec = entryTs + ENTRY_EXPIRY_MINUTES * 60;
+    // Limit must be touched within the strategy's fill window (backtest parity;
+    // radar = 1440 min, others = 180).
+    const expiryMin = STRATEGY_EXPIRY_MINUTES[strategyRef.current] ?? ENTRY_EXPIRY_MINUTES;
+    const fillDeadlineSec = entryTs + expiryMin * 60;
     const lastPrice = candles[candles.length - 1]?.close ?? null;
     let entryHitTime = null;
 

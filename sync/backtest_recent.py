@@ -6,9 +6,11 @@ trailing N-day window (default 3) instead of a whole calendar year, so a full sw
 finishes in minutes for fast validation or a same-day gap-fill.
 
 Covers each live stream -> its own backtest version tag (kept fully separate):
-  - main  : backfill_year.build_symbol_rows         -> version='v1'     (1h,  static-17, B/C/D/E)
-  - radar : backfill_dynamic_year (pool->picks->run) -> version='v1-dyn' (1h,  dynamic vol picks)
-  - pulse : backfill_15m_year.build_symbol_rows      -> version='v1-15m' (15m, static-17, C-only)
+  - main         : backfill_year.build_symbol_rows    -> version='v1'     (1h, static set, B/C/D/E)
+  - radar        : backfill_v3_year.build_symbol_rows -> version='v3'     (1h, static set, F breakout)
+  - squeeze      : backfill_v4_year.build_symbol_rows -> version='v4'     (1h, static set, G funding fade)
+  - radar_legacy : backfill_dynamic_year (pool->picks) -> version='v1-dyn' (RETIRED dynamic picks)
+  - pulse        : backfill_15m_year.build_symbol_rows -> version='v1-15m' (RETIRED 15m C-only)
 
 Window: [now - days, now]. Unlike sync_daily.py (which resolves LIVE-emitted signals
 and stays "1 day behind"), this REGENERATES signals from the engine over history — so
@@ -36,11 +38,13 @@ from pathlib import Path
 import pandas as pd
 
 import trade_sync_common as tsc          # adds backtest/ to sys.path
-import backfill_year as bmain            # main  -> v1
-import backfill_dynamic_year as bdyn     # radar -> v1-dyn
-import backfill_15m_year as bpulse       # pulse -> v1-15m
+import backfill_year as bmain            # main         -> v1
+import backfill_v3_year as bradar        # radar        -> v3 (NEW breakout stream)
+import backfill_v4_year as bsqueeze      # squeeze      -> v4 (funding-fade stream)
+import backfill_dynamic_year as bdyn     # radar_legacy -> v1-dyn (retired)
+import backfill_15m_year as bpulse       # pulse        -> v1-15m (retired)
 
-STREAMS = ("main", "radar", "pulse")
+STREAMS = ("main", "radar", "squeeze", "pulse", "radar_legacy")
 OUT = Path(__file__).resolve().parent / "out"
 OUT.mkdir(exist_ok=True)
 
@@ -71,12 +75,43 @@ def run_pulse(symbols, win_start, win_end) -> tuple[list[dict], dict]:
     return rows, agg
 
 
-def run_radar(win_start, win_end, pool_size) -> tuple[list[dict], dict]:
-    """Dynamic volume-radar 1h backtest -> version='v1-dyn'. Reuses backfill_dynamic_year."""
+def run_radar_v3(symbols, win_start, win_end) -> tuple[list[dict], dict]:
+    """Static-set 1h breakout backtest (strategy F) -> version='v3'. Reuses backfill_v3_year."""
+    rows, agg = [], {}
+    for sym in symbols:
+        srows, info = bradar.build_symbol_rows(sym, win_start, win_end)
+        rows.extend(srows)
+        tag = "SKIP" if info["skipped"] else f"{info['signals']} {info.get('status', {})}"
+        print(f"    {sym:<12} bars={info['bars']:<5} -> {tag}")
+        for r in srows:
+            agg[r["status"]] = agg.get(r["status"], 0) + 1
+    return rows, agg
+
+
+def run_squeeze_v4(symbols, win_start, win_end) -> tuple[list[dict], dict]:
+    """Static-set 1h funding-fade backtest (strategy G) -> version='v4'. Reuses backfill_v4_year."""
+    rows, agg = [], {}
+    for sym in symbols:
+        srows, info = bsqueeze.build_symbol_rows(sym, win_start, win_end)
+        rows.extend(srows)
+        if info["skipped"]:
+            tag = "SKIP"
+        elif info.get("no_funding"):
+            tag = "SKIP (no funding)"
+        else:
+            tag = f"{info['signals']} {info.get('status', {})}"
+        print(f"    {sym:<12} bars={info['bars']:<5} -> {tag}")
+        for r in srows:
+            agg[r["status"]] = agg.get(r["status"], 0) + 1
+    return rows, agg
+
+
+def run_radar_legacy(win_start, win_end, pool_size) -> tuple[list[dict], dict]:
+    """RETIRED dynamic volume-radar 1h backtest -> version='v1-dyn'. Reuses backfill_dynamic_year."""
     pool = bdyn.fetch_pool(pool_size)
     print(f"    pool: {len(pool)} symbols (top {pool_size} liquid USDT-perps outside the 17)")
     if not pool:
-        print("    empty pool — Binance unreachable? skipping radar.")
+        print("    empty pool — Binance unreachable? skipping radar_legacy.")
         return [], {}
     pick_map, log = bdyn.build_pick_map(win_start, win_end, pool)
     print(f"    pick-map: {len(pick_map)} symbols ever picked, {len(log)} pick-events")
@@ -110,12 +145,12 @@ def dump_preview(name: str, rows: list[dict], win_start, win_end) -> None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=3, help="trailing days to backtest (2-3)")
-    # Default is MAIN ONLY — radar & pulse streams disabled 2026-06-10 (see dag.py).
-    # Pass --streams radar/pulse/all explicitly for a legacy-stream backtest.
+    # Default is MAIN ONLY. "radar" = the NEW v3 breakout stream; radar_legacy &
+    # pulse were retired 2026-06-10 — pass their key explicitly for a legacy run.
     ap.add_argument("--streams", nargs="+", choices=list(STREAMS) + ["all"], default=["main"])
     ap.add_argument("--symbols", nargs="*", default=None,
-                    help="override static-17 scope for main/pulse (radar is always dynamic)")
-    ap.add_argument("--pool-size", type=int, default=60, help="radar candidate pool size")
+                    help="override static scope for main/radar/pulse (radar_legacy is always dynamic)")
+    ap.add_argument("--pool-size", type=int, default=60, help="radar_legacy candidate pool size")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--wipe-scope", choices=["none", "window"], default=None,
                     help="real run only: 'window' refills this (version, window); 'none' upserts")
@@ -131,6 +166,8 @@ def main():
     names = list(STREAMS) if "all" in args.streams else args.streams
     sym_main = args.symbols if args.symbols is not None else bmain.SYMBOLS
     sym_pulse = args.symbols if args.symbols is not None else bpulse.SYMBOLS
+    sym_radar = args.symbols if args.symbols is not None else bradar.SYMBOLS
+    sym_squeeze = args.symbols if args.symbols is not None else bsqueeze.SYMBOLS
 
     print(f"=== recent backtest | {win_start:%Y-%m-%d %H:%M}..{win_end:%Y-%m-%d %H:%M} UTC "
           f"({args.days}d) | streams={names} | dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
@@ -141,11 +178,17 @@ def main():
         if name == "main":
             rows, agg = run_main(sym_main, win_start, win_end)
             ver = tsc.VERSION
+        elif name == "radar":
+            rows, agg = run_radar_v3(sym_radar, win_start, win_end)
+            ver = bradar.V3_VERSION
+        elif name == "squeeze":
+            rows, agg = run_squeeze_v4(sym_squeeze, win_start, win_end)
+            ver = bsqueeze.V4_VERSION
         elif name == "pulse":
             rows, agg = run_pulse(sym_pulse, win_start, win_end)
             ver = bpulse.PULSE_VERSION
-        else:  # radar
-            rows, agg = run_radar(win_start, win_end, args.pool_size)
+        else:  # radar_legacy
+            rows, agg = run_radar_legacy(win_start, win_end, args.pool_size)
             ver = bdyn.DYN_VERSION
         print(f"  [{name}] TOTAL {len(rows)} rows version={ver} status={agg}")
         by_version.setdefault(ver, []).extend(rows)

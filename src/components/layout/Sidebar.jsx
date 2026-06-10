@@ -11,6 +11,24 @@ const IconCommand = () => (
     <line x1="1.4" y1="10" x2="4" y2="10" /><line x1="16" y1="10" x2="18.6" y2="10" />
   </svg>
 );
+const IconImpulse = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 1.6 3.4 11.2h4.2l-1.6 7.2 8-9.8h-4.4l1.4-7Z" />
+  </svg>
+);
+const IconRadar = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="10" cy="10" r="7.5" /><circle cx="10" cy="10" r="4" />
+    <circle cx="10" cy="10" r="1" fill="currentColor" stroke="none" />
+    <line x1="10" y1="10" x2="16.5" y2="5.5" />
+  </svg>
+);
+const IconSqueeze = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 3.2v6.3a6 6 0 0 0 12 0V3.2" />
+    <path d="M4 3.2h3.4v6.3a2.6 2.6 0 0 0 5.2 0V3.2H16" />
+  </svg>
+);
 const IconIntel = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2.4 10s3-5.2 7.6-5.2S17.6 10 17.6 10s-3 5.2-7.6 5.2S2.4 10 2.4 10Z" />
@@ -24,10 +42,17 @@ const IconSettings = () => (
   </svg>
 );
 
-// Strategy × Mode nested nav: each strategy group exposes Live + Backtest leaves.
-// RADAR and PULSE streams were retired 2026-06-10 (see dag/dag.py).
+// Strategy × Mode nested nav. Each group exposes Live + Backtest leaves: MAIN runs
+// the v1 set (mode='live'), IMPULSE the refined v2 set (mode='impulse'), RADAR the
+// NEW v3 compression-breakout set (mode='radar', strategy F — not the retired
+// dynamic radar), SQUEEZE the v4 funding-extreme fade (mode='squeeze', strategy G —
+// derivative positioning, not price geometry); dag.py emits each hourly.
+// PULSE was retired 2026-06-10.
 const GROUPS = [
-  { key: 'main',  label: 'MAIN',  icon: <IconCommand /> },
+  { key: 'main',    label: 'MAIN',    icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse', label: 'IMPULSE', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'radar',   label: 'RADAR',   icon: <IconRadar />,   modes: ['live', 'backtest'] },
+  { key: 'squeeze', label: 'SQUEEZE', icon: <IconSqueeze />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {
@@ -35,10 +60,7 @@ const Sidebar = () => {
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
 
-  const leaves = [
-    { mode: 'live', label: t('Live') },
-    { mode: 'backtest', label: t('Backtest') },
-  ];
+  const leafLabel = { live: t('Live'), backtest: t('Backtest') };
 
   return (
     <aside className="sidebar">
@@ -55,10 +77,10 @@ const Sidebar = () => {
             <div className="sidebar__group-label">
               <span className="sidebar__icon">{g.icon}</span>{g.label}
             </div>
-            {leaves.map((l) => (
-              <NavLink key={l.mode} to={`/${g.key}/${l.mode}`} end className="sidebar__link sidebar__leaf">
-                <span className={`sidebar__leaf-dot sidebar__leaf-dot--${l.mode}`} />
-                <span>{l.label}</span>
+            {g.modes.map((m) => (
+              <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">
+                <span className={`sidebar__leaf-dot sidebar__leaf-dot--${m}`} />
+                <span>{leafLabel[m]}</span>
               </NavLink>
             ))}
           </div>

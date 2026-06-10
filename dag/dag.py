@@ -138,6 +138,58 @@ PULSE_MODE         = "pulse"
 TELEGRAM_PULSE_CHAT_ID = os.getenv("TELEGRAM_PULSE_CHAT_ID", "")  # "" -> main chat + banner
 PULSE_HEARTBEAT_ENABLED = os.getenv("PULSE_HEARTBEAT", "0").strip().lower() not in ("0", "false", "no", "off")
 
+# --- IMPULSE: live MAIN-v2 stream (refined set from the 2026 audit) ---
+# Hourly 1h scan over the SAME static universe as main, but the v2 strategy set:
+# drop strategy E (0 signals/yr) and disable D on ADA/XAU/ETH (D net-negative there,
+# -48R in 2026 — see sync/backfill_v2_year.py). Kept FULLY SEPARATE from main:
+#   - DB: mode='impulse' (dedup is mode-aware, so an 'impulse' and a 'live' signal on
+#     the same symbol+bar+direction are DISTINCT rows and never collide).
+#   - daily sync (sync/sync_daily.py) resolves mode='impulse' -> backtest version='v2'.
+#   - Telegram: DB-only by default (most impulse signals overlap main, so alerting both
+#     would double-notify). Set TELEGRAM_IMPULSE_CHAT_ID to alert a dedicated chat.
+IMPULSE_ENABLED = os.getenv("IMPULSE_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off")
+IMPULSE_MODE = "impulse"
+IMPULSE_EXTRA_D_EXCLUDE = {"ADAUSDT", "XAUUSDT", "ETHUSDT"}   # v2: D off here too
+TELEGRAM_IMPULSE_CHAT_ID = os.getenv("TELEGRAM_IMPULSE_CHAT_ID", "")  # "" -> DB-only (no alert)
+
+# --- RADAR: live v3 stream (vol-compression Donchian breakout, strategy F) ---
+# Hourly 1h scan over the SAME static universe as main, running ONLY strategy_f —
+# a brand-new trend-continuation algorithm reusing the retired "radar" name (the old
+# radar was mode='dynamic'/version='v1-dyn'; fully distinct tags, no collision).
+#   - DB: mode='radar' (mode-aware dedup keeps it separate from 'live'/'impulse').
+#   - daily sync (sync/sync_daily.py) resolves mode='radar' -> backtest version='v3'.
+#   - Telegram: DB-only by default; set TELEGRAM_RADAR_CHAT_ID for a dedicated chat.
+# DEFAULT OFF — the 2026 Jan-Jun v3 backtest FAILED its acceptance gates
+# (2026-06-10: 133 closed, 15% win, -60R, every month negative after January;
+# the entry-mechanics ablation in sync/experiment_v3.py showed market-at-close
+# entries do WORSE (-65R), so the edge itself is absent in this regime, not an
+# artifact of the retest-limit adaptation). Do NOT enable without a redesign
+# that passes the gates; the wiring below stays inert until then.
+RADAR_ENABLED = os.getenv("RADAR_ENABLED", "0").strip().lower() not in ("0", "false", "no", "off")
+RADAR_MODE = "radar"
+TELEGRAM_RADAR_CHAT_ID = os.getenv("TELEGRAM_RADAR_CHAT_ID", "")  # "" -> DB-only (no alert)
+
+# --- SQUEEZE: live v4 stream (funding-extreme squeeze fade, strategy G) ---
+# Hourly 1h scan over the SAME static universe as main, running ONLY strategy_g —
+# the judge panel's runner-up candidate (2026-06-10), built after v3 failed its
+# gates. The signal is DERIVATIVE POSITIONING, not price geometry: extreme perp
+# funding marks a crowded side; G fades the crowd on a squeeze-ignition bar.
+#   - DB: mode='squeeze' (mode-aware dedup keeps it separate from other streams).
+#   - daily sync (sync/sync_daily.py) resolves mode='squeeze' -> backtest version='v4'.
+#   - Telegram: DB-only by default; set TELEGRAM_SQUEEZE_CHAT_ID for a dedicated chat.
+#   - Needs one extra fetch per symbol (45d of /fapi/v1/fundingRate); symbols without
+#     funding history (spot-only fallback names) silently emit nothing.
+# DEFAULT OFF — the 2026 Jan-Jun v4 backtest FAILED its acceptance gates
+# (2026-06-10: 116 closed, 24.1% win, -52.3R; both directions negative; the
+# sync/experiment_squeeze.py ablation found no one-knob variant with a positive
+# sign — extreme funding marked positioning that was RIGHT about the trend in
+# this regime, so fading it got run over). Do NOT enable without a redesign that
+# passes the gates; the wiring below stays inert until then.
+SQUEEZE_ENABLED = os.getenv("SQUEEZE_ENABLED", "0").strip().lower() not in ("0", "false", "no", "off")
+SQUEEZE_MODE = "squeeze"
+TELEGRAM_SQUEEZE_CHAT_ID = os.getenv("TELEGRAM_SQUEEZE_CHAT_ID", "")  # "" -> DB-only (no alert)
+SQUEEZE_FUND_FETCH_DAYS = 45   # > 30d percentile window + slack for the shift(1)
+
 # --- engine knobs ---
 ATR_PERIOD = 14
 SWING_N_ITF = 3
@@ -170,6 +222,37 @@ TP_MAX_ATR_MULT = 4.0
 ASIA_RANGE_MAX_ATR = 3.0
 OTE_LOW = 0.62
 OTE_HIGH = 0.79
+# RADAR / strategy F knobs — mirrors backtest/ict/config.py RADAR_* (see notes there).
+# Named RADAR_* (not IMPULSE_*-style) to avoid clashing with the displacement-detector
+# IMPULSE_ATR_MULT family above.
+RADAR_DONCHIAN_LOOKBACK = 120
+RADAR_ATR_PERIOD        = 24
+RADAR_COMPRESSION_SMA   = 240
+RADAR_COMPRESSION_MAX   = 0.85
+RADAR_DEEP_COMPRESSION  = 0.70
+RADAR_VOL_MEDIAN_BARS   = 20
+RADAR_VOL_SURGE_MIN     = 1.5
+RADAR_STRONG_VOLUME     = 2.5
+RADAR_EMA_PERIOD        = 200
+RADAR_SL_ATR_MULT       = 2.5
+RADAR_TP_R_MULT         = 3.0
+RADAR_CHASE_MAX_ATR     = 1.2
+RADAR_ENTRY_EXPIRY_BARS = 24
+RADAR_REFIRE_BARS       = 24
+# SQUEEZE / strategy G knobs — mirrors backtest/ict/config.py SQUEEZE_* (see notes there).
+SQUEEZE_ATR_PERIOD        = 24
+SQUEEZE_ABS_MIN_8H        = 0.0005
+SQUEEZE_SEVERE_8H         = 0.0010
+SQUEEZE_PCTL_WINDOW       = "30D"
+SQUEEZE_PCTL              = 0.95
+SQUEEZE_MIN_EVENTS        = 40
+SQUEEZE_STALE_HOURS       = 12.0
+SQUEEZE_IGNITION_ATR      = 0.25
+SQUEEZE_RETRACE_ATR       = 0.35
+SQUEEZE_SL_ATR_MULT       = 2.0
+SQUEEZE_TP_R_MULT         = 2.0
+SQUEEZE_ENTRY_EXPIRY_BARS = 12
+SQUEEZE_REFIRE_BARS       = 48
 
 NY_TZ = "America/New_York"
 
@@ -188,6 +271,13 @@ CONFLUENCE_WEIGHTS = {
     "discount_premium": 1, "ote_zone":         1, "in_killzone":      1,
     "ob_fvg_overlap":   2, "eqh_eql_swept":    1, "silver_bullet":    2,
     "power_of_three":   2, "multi_strategy":   3,
+    # radar / strategy F factors (required trio scores 7 >= publish; both graded
+    # extras reach 9 = CONFLUENCE_HIGH -> quality 'high')
+    "regime_aligned":   3, "vol_compression":  2, "volume_surge":     2,
+    "deep_compression": 1, "strong_volume":    1,
+    # squeeze / strategy G factors (same 7-publish / 9-high grading scheme)
+    "funding_extreme":     3, "crowding_percentile": 2, "squeeze_ignition": 2,
+    "funding_severe":      1, "funding_unwind":      1,
 }
 CONFLUENCE_MIN_PUBLISH = 6
 CONFLUENCE_HIGH = 9
@@ -244,6 +334,46 @@ def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int,
     df["timestamp"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
     df = df.set_index("timestamp")[OHLCV_COLS].astype(float)
     return df[~df.index.duplicated(keep="last")].sort_index()
+
+
+BINANCE_FUNDING = "https://fapi.binance.com/fapi/v1/fundingRate"
+
+
+def fetch_funding(symbol: str, start_ms: int, end_ms: int,
+                  limit: int = 1000) -> pd.DataFrame:
+    """Settled perp funding events (mirrors backtest/ict/data.py fetch_funding).
+
+    DataFrame indexed by fundingTime (UTC) with a single `rate` column. Each rate
+    is FINAL and public at its fundingTime — consuming it at any bar close >=
+    fundingTime is causally safe. No spot fallback: spot-only symbols return an
+    empty frame and strategy_g stays silent for them."""
+    rows: list = []
+    cursor = start_ms
+    while cursor < end_ms:
+        params = {"symbol": symbol, "startTime": cursor,
+                  "endTime": end_ms, "limit": limit}
+        try:
+            r = requests.get(BINANCE_FUNDING, params=params, timeout=20, proxies=_PROXIES)
+            r.raise_for_status()
+            chunk = r.json()
+        except Exception as e:
+            print(f"  funding fetch error ({symbol}): {e}")
+            break
+        if not isinstance(chunk, list) or not chunk:
+            break
+        rows.extend(chunk)
+        if len(chunk) < limit:
+            break
+        cursor = chunk[-1]["fundingTime"] + 1
+        time.sleep(0.1)
+
+    if not rows:
+        return pd.DataFrame(columns=["rate"])
+    fdf = pd.DataFrame(rows)
+    fdf["timestamp"] = pd.to_datetime(fdf["fundingTime"], unit="ms", utc=True)
+    fdf["rate"] = fdf["fundingRate"].astype(float)
+    fdf = fdf.set_index("timestamp")[["rate"]]
+    return fdf[~fdf.index.duplicated(keep="last")].sort_index()
 
 
 _AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
@@ -1325,6 +1455,324 @@ def strategy_e(symbol, df, at_index, atr_series, structure_events,
     )
 
 
+# ------------- Strategy F: Vol-Compression Donchian Breakout (RADAR / v3) -------------
+# Mirrors backtest/ict/strategies.py strategy_f 1:1 (keep the two bodies textually
+# aligned like A-E). Trend-continuation: LONG when a 1h close breaks the prior-120-bar
+# Donchian high out of below-average volatility (SHORT mirrored), entered as a RETEST
+# LIMIT at the broken channel level — run_engine only accepts retrace-limit entries.
+# Ignores the ICT detectors entirely; the signature is kept for run_engine compatibility.
+
+_RADAR_CACHE: dict = {}
+_RADAR_CACHE_MAX = 8   # bounded: live scan churns ~21 dfs per pass
+
+
+def _radar_features(df: pd.DataFrame) -> dict:
+    """All rolling series strategy_f needs, computed once per DataFrame.
+
+    Every window is CAUSAL (shift(1) before rolling for the channel / volume median;
+    ATR at i uses only the closed bar i) so test_no_lookahead passes by construction,
+    and the raw breakout series depend only on df — never on which signals survived
+    dedup — so the re-fire cooldown is window-stable (test_dag_parity)."""
+    key = (id(df), len(df), int(df.index[0].value), int(df.index[-1].value))
+    feats = _RADAR_CACHE.get(key)
+    if feats is not None:
+        return feats
+    high, low, close, vol = df["high"], df["low"], df["close"], df["volume"]
+    L = RADAR_DONCHIAN_LOOKBACK
+    # Channel of the PRIOR L bars [i-L, i-1] — shift(1) excludes the fire bar.
+    dc_hi = high.shift(1).rolling(L, min_periods=L).max()
+    dc_lo = low.shift(1).rolling(L, min_periods=L).min()
+    prev_close = close.shift(1)
+    tr = pd.concat([high - low, (high - prev_close).abs(),
+                    (low - prev_close).abs()], axis=1).max(axis=1)  # same TR as atr()
+    atr24 = tr.rolling(RADAR_ATR_PERIOD, min_periods=RADAR_ATR_PERIOD).mean()
+    atr24_sma = atr24.rolling(RADAR_COMPRESSION_SMA, min_periods=RADAR_COMPRESSION_SMA).mean()
+    ema200 = close.ewm(span=RADAR_EMA_PERIOD, adjust=False).mean()
+    vol_med = vol.shift(1).rolling(RADAR_VOL_MEDIAN_BARS, min_periods=RADAR_VOL_MEDIAN_BARS).median()
+    # Raw trigger series for the re-fire cooldown (NaN channel compares False).
+    brk_up = close > dc_hi
+    brk_dn = close < dc_lo
+    feats = {"dc_hi": dc_hi, "dc_lo": dc_lo, "atr24": atr24, "atr24_sma": atr24_sma,
+             "ema200": ema200, "vol_med": vol_med, "brk_up": brk_up, "brk_dn": brk_dn}
+    if len(_RADAR_CACHE) >= _RADAR_CACHE_MAX:
+        _RADAR_CACHE.pop(next(iter(_RADAR_CACHE)))
+    _RADAR_CACHE[key] = feats
+    return feats
+
+
+def strategy_f(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    """F: 120-bar Donchian breakout from volatility compression, retest-limit entry.
+
+    `expiry_bars` (engine default = 3) is deliberately IGNORED: a retest limit
+    needs RADAR_ENTRY_EXPIRY_BARS (24h) to fill."""
+    i = at_index
+    if i < 1 or i >= len(df):
+        return None
+    f = _radar_features(df)
+    dc_hi, dc_lo = f["dc_hi"].iloc[i], f["dc_lo"].iloc[i]
+    a24 = f["atr24"].iloc[i]
+    a24_prev, sma_prev = f["atr24"].iloc[i - 1], f["atr24_sma"].iloc[i - 1]
+    vmed = f["vol_med"].iloc[i]
+    ema = f["ema200"].iloc[i]
+    if any(pd.isna(x) for x in (dc_hi, dc_lo, a24, a24_prev, sma_prev, vmed)):
+        return None   # warmup: first valid fire bar needs ~264 bars of history
+    if a24 <= 0 or sma_prev <= 0 or vmed <= 0:
+        return None
+
+    close = float(df["close"].iloc[i])
+    volume = float(df["volume"].iloc[i])
+
+    # --- trigger: close breaks the prior-120-bar channel ---
+    if close > float(dc_hi):
+        direction, level = "long", float(dc_hi)
+    elif close < float(dc_lo):
+        direction, level = "short", float(dc_lo)
+    else:
+        return None
+
+    # --- filter 1: compression — breakout must emerge from below-average vol ---
+    comp_ratio = float(a24_prev) / float(sma_prev)
+    if not (comp_ratio < RADAR_COMPRESSION_MAX):
+        return None
+    # --- filter 2: volume surge on the breakout bar ---
+    vol_ratio = volume / float(vmed)
+    if not (vol_ratio > RADAR_VOL_SURGE_MIN):
+        return None
+    # --- filter 3: regime — trade only with the EMA200 side ---
+    if direction == "long" and not (close > float(ema)):
+        return None
+    if direction == "short" and not (close < float(ema)):
+        return None
+    # --- anti-chase: runaway bars won't retest the broken level ---
+    if abs(close - level) > RADAR_CHASE_MAX_ATR * float(a24):
+        return None
+    # --- re-fire cooldown on the RAW trigger series: after a breakout the channel
+    # ratchets with price, so dedup's 0.05% entry tolerance alone would not
+    # suppress consecutive-bar breakouts at new levels. ---
+    lo = max(0, i - RADAR_REFIRE_BARS)
+    trig = f["brk_up"] if direction == "long" else f["brk_dn"]
+    if bool(trig.iloc[lo:i].any()):
+        return None
+
+    entry = level
+    stop = entry - RADAR_SL_ATR_MULT * float(a24) if direction == "long" \
+        else entry + RADAR_SL_ATR_MULT * float(a24)
+    stop = _floor_stop(entry, stop, direction, float(a24))   # floor never binds at 2.5 ATR
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return None
+    tp1 = entry + RADAR_TP_R_MULT * risk if direction == "long" \
+        else entry - RADAR_TP_R_MULT * risk
+    # Deliberately NOT _cap_tp(): 3R = 7.5xATR24 exceeds TP_MAX_ATR_MULT(4)xATR and
+    # would be clipped to ~1.6R. The target is ATR-scaled by construction.
+
+    factors = ["regime_aligned", "vol_compression", "volume_surge"]   # 3+2+2 = 7 >= publish(6)
+    if comp_ratio < RADAR_DEEP_COMPRESSION:
+        factors.append("deep_compression")    # +1
+    if vol_ratio >= RADAR_STRONG_VOLUME:
+        factors.append("strong_volume")       # +1 -> 9 = CONFLUENCE_HIGH
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=df.index[i], strategy="F_compression_breakout",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=None,
+        risk_reward_1=float(_rr(entry, stop, tp1, direction)), risk_reward_2=None,
+        quality="medium",                      # merge_same_bar re-derives from the score
+        confluence_factors=factors,
+        context={
+            "donchian_high": float(dc_hi), "donchian_low": float(dc_lo),
+            "atr24": float(a24),
+            "compression_ratio": round(comp_ratio, 4),
+            "volume_ratio": round(vol_ratio, 2),
+            "ema200": float(ema),
+            "regime_dist_atr": round(abs(close - float(ema)) / float(a24), 2),
+            "breakout_ext_atr": round(abs(close - level) / float(a24), 2),
+        },
+        expires_at_index=i + RADAR_ENTRY_EXPIRY_BARS,   # 24h retest window
+        bar_index=i,
+    )
+
+
+# ------------- Strategy G: Funding-Extreme Squeeze Fade (SQUEEZE / v4) -------------
+# Mirrors backtest/ict/strategies.py strategy_g 1:1 (keep the two bodies textually
+# aligned like A-F). Derivative-positioning stream: extreme perp funding marks a
+# CROWDED side; G fades the crowd once price ignites against it (very negative
+# funding = crowded shorts -> LONG on an up-ignition bar; positive extreme mirrored
+# SHORT). Entry is a retrace limit RETRACE_ATR inside the ignition close — engine-
+# compatible by construction. Ignores the ICT detectors entirely.
+# Funding plumbing: run_squeeze_scan registers each symbol's settled funding via
+# set_funding() BEFORE run_engine; without a registration G stays silent.
+
+_FUNDING: dict = {}          # symbol -> df(index=fundingTime, col 'rate')
+_SQUEEZE_CACHE: dict = {}
+_SQUEEZE_CACHE_MAX = 8   # bounded: live scan churns ~21 dfs per pass
+
+
+def set_funding(symbol: str, fdf: pd.DataFrame) -> None:
+    """Register settled funding events for `symbol` (index=UTC fundingTime, col 'rate').
+    Replaces any prior registration and invalidates cached squeeze features."""
+    if fdf is None or fdf.empty:
+        _FUNDING.pop(symbol, None)
+    else:
+        f = fdf.copy()
+        if f.index.tz is None:
+            f.index = f.index.tz_localize("UTC")
+        _FUNDING[symbol] = f.sort_index()
+    for k in [k for k in _SQUEEZE_CACHE if k[0] == symbol]:
+        _SQUEEZE_CACHE.pop(k, None)
+
+
+def _squeeze_features(symbol: str, df: pd.DataFrame) -> Optional[dict]:
+    """Funding + ATR series strategy_g needs, aligned to df bars, computed once per
+    (symbol, df). All funding-derived values at bar i use only events SETTLED by
+    bar i's close, and each event's percentile rank uses only PRIOR events
+    (shift(1) before the time-window rolling), so test_no_lookahead passes by
+    construction. The raw ignition/extreme trigger series depend only on df +
+    the registered funding — never on which signals survived dedup — so the
+    re-fire cooldown is window-stable (test_dag_parity)."""
+    fdf = _FUNDING.get(symbol)
+    if fdf is None or len(fdf) < 3:
+        return None
+    key = (symbol, id(df), len(df), int(df.index[0].value), int(df.index[-1].value))
+    feats = _SQUEEZE_CACHE.get(key)
+    if feats is not None:
+        return feats
+
+    rate = fdf["rate"]
+    # Normalize each event to an 8h-equivalent using its ACTUAL spacing (4h-settled
+    # symbols would otherwise look half as crowded). First event has no spacing ->
+    # NaN -> excluded from triggers and the percentile distribution alike.
+    gap_h = rate.index.to_series().diff().dt.total_seconds() / 3600.0
+    gap_h = gap_h.where((gap_h > 0) & (gap_h <= 24.0))
+    r8 = rate * (8.0 / gap_h)
+    # Crowding percentile of PRIOR events in the trailing window. shift(1) moves
+    # event k-1's value onto event k's timestamp, so the time-window rolling at
+    # event k sees exactly the events in (t_k - window, t_k) — current excluded.
+    prior = r8.shift(1)
+    q_lo = prior.rolling(SQUEEZE_PCTL_WINDOW, min_periods=SQUEEZE_MIN_EVENTS) \
+                .quantile(1.0 - SQUEEZE_PCTL)
+    q_hi = prior.rolling(SQUEEZE_PCTL_WINDOW, min_periods=SQUEEZE_MIN_EVENTS) \
+                .quantile(SQUEEZE_PCTL)
+    n_prior = prior.rolling(SQUEEZE_PCTL_WINDOW, min_periods=1).count()
+    r8_prev = r8.shift(1)
+
+    # As-of alignment onto BAR CLOSES (bar i fires at its close = open + bar dur).
+    bar_dur = df.index[1] - df.index[0] if len(df) > 1 else pd.Timedelta(hours=1)
+    closes = df.index + bar_dur
+    ev = pd.DataFrame({
+        "t": rate.index, "r8": r8.values, "q_lo": q_lo.values, "q_hi": q_hi.values,
+        "n_prior": n_prior.values, "r8_prev": r8_prev.values,
+        "event_time": rate.index,
+    })
+    al = pd.merge_asof(pd.DataFrame({"t": closes}), ev, on="t", direction="backward")
+    al.index = df.index
+    age_h = (closes - al["event_time"]).dt.total_seconds() / 3600.0
+    age_h.index = df.index
+
+    high, low, close = df["high"], df["low"], df["close"]
+    prev_close = close.shift(1)
+    tr = pd.concat([high - low, (high - prev_close).abs(),
+                    (low - prev_close).abs()], axis=1).max(axis=1)
+    atr24 = tr.rolling(SQUEEZE_ATR_PERIOD, min_periods=SQUEEZE_ATR_PERIOD).mean()
+
+    # Raw per-bar trigger series for the re-fire cooldown (NaNs compare False).
+    valid = (al["n_prior"] >= SQUEEZE_MIN_EVENTS) & (age_h <= SQUEEZE_STALE_HOURS)
+    body = close - df["open"]
+    ign_up = body >= SQUEEZE_IGNITION_ATR * atr24
+    ign_dn = -body >= SQUEEZE_IGNITION_ATR * atr24
+    ext_lo = (al["r8"] <= -SQUEEZE_ABS_MIN_8H) & (al["r8"] <= al["q_lo"])
+    ext_hi = (al["r8"] >= SQUEEZE_ABS_MIN_8H) & (al["r8"] >= al["q_hi"])
+    trig_long = (valid & ext_lo & ign_up).fillna(False)
+    trig_short = (valid & ext_hi & ign_dn).fillna(False)
+
+    feats = {"r8": al["r8"], "q_lo": al["q_lo"], "q_hi": al["q_hi"],
+             "n_prior": al["n_prior"], "r8_prev": al["r8_prev"], "age_h": age_h,
+             "atr24": atr24, "trig_long": trig_long, "trig_short": trig_short}
+    if len(_SQUEEZE_CACHE) >= _SQUEEZE_CACHE_MAX:
+        _SQUEEZE_CACHE.pop(next(iter(_SQUEEZE_CACHE)))
+    _SQUEEZE_CACHE[key] = feats
+    return feats
+
+
+def strategy_g(symbol, df, at_index, atr_series, structure_events,
+               liquidity_levels, obs, fvgs,
+               htf_bias_series=None, expiry_bars=None):
+    """G: fade extreme funding (crowded positioning) on a squeeze-ignition bar.
+
+    `expiry_bars` (engine default = 3) is deliberately IGNORED: the retrace limit
+    gets SQUEEZE_ENTRY_EXPIRY_BARS (12h) to fill."""
+    i = at_index
+    if i < 1 or i >= len(df):
+        return None
+    f = _squeeze_features(symbol, df)
+    if f is None:
+        return None
+    a24 = f["atr24"].iloc[i]
+    r8 = f["r8"].iloc[i]
+    if pd.isna(a24) or a24 <= 0 or pd.isna(r8):
+        return None
+    if f["trig_long"].iloc[i]:
+        direction = "long"
+    elif f["trig_short"].iloc[i]:
+        direction = "short"
+    else:
+        return None
+    # --- re-fire cooldown on the RAW trigger series: funding stays extreme for
+    # many consecutive bars, so dedup's entry tolerance alone can't suppress the
+    # same crowding episode re-firing at drifting prices. ---
+    lo = max(0, i - SQUEEZE_REFIRE_BARS)
+    trig = f["trig_long"] if direction == "long" else f["trig_short"]
+    if bool(trig.iloc[lo:i].any()):
+        return None
+
+    close = float(df["close"].iloc[i])
+    a24 = float(a24)
+    entry = close - SQUEEZE_RETRACE_ATR * a24 if direction == "long" \
+        else close + SQUEEZE_RETRACE_ATR * a24
+    stop = entry - SQUEEZE_SL_ATR_MULT * a24 if direction == "long" \
+        else entry + SQUEEZE_SL_ATR_MULT * a24
+    stop = _floor_stop(entry, stop, direction, a24)   # floor never binds at 2.0 ATR
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return None
+    tp1 = entry + SQUEEZE_TP_R_MULT * risk if direction == "long" \
+        else entry - SQUEEZE_TP_R_MULT * risk
+    # Deliberately NOT _cap_tp(): 2R = 4.7xATR24 in entry terms; the target is
+    # ATR-scaled by construction, the generic 4xATR14 clip would distort it.
+
+    r8f = float(r8)
+    factors = ["funding_extreme", "crowding_percentile", "squeeze_ignition"]  # 3+2+2=7
+    if abs(r8f) >= SQUEEZE_SEVERE_8H:
+        factors.append("funding_severe")     # +1
+    r8_prev = f["r8_prev"].iloc[i]
+    if not pd.isna(r8_prev) and abs(r8f) < abs(float(r8_prev)):
+        factors.append("funding_unwind")     # +1 -> 9 = CONFLUENCE_HIGH
+
+    return Signal(
+        signal_id=str(uuid.uuid4()), timestamp=df.index[i], strategy="G_funding_squeeze_fade",
+        symbol=symbol, direction=direction,
+        entry=float(entry), stop_loss=float(stop),
+        take_profit_1=float(tp1), take_profit_2=None,
+        risk_reward_1=float(_rr(entry, stop, tp1, direction)), risk_reward_2=None,
+        quality="medium",                      # merge_same_bar re-derives from the score
+        confluence_factors=factors,
+        context={
+            "funding_8h": round(r8f, 6),
+            "funding_prev_8h": None if pd.isna(r8_prev) else round(float(r8_prev), 6),
+            "crowding_q_lo": None if pd.isna(f["q_lo"].iloc[i]) else round(float(f["q_lo"].iloc[i]), 6),
+            "crowding_q_hi": None if pd.isna(f["q_hi"].iloc[i]) else round(float(f["q_hi"].iloc[i]), 6),
+            "funding_age_h": round(float(f["age_h"].iloc[i]), 2),
+            "atr24": a24,
+            "ignition_atr": round(float(df["close"].iloc[i] - df["open"].iloc[i]) / a24, 2),
+        },
+        expires_at_index=i + SQUEEZE_ENTRY_EXPIRY_BARS,   # 12h fill window
+        bar_index=i,
+    )
+
+
 # Production: strategy_a (liquidity sweep reversal) excluded — backtest
 # showed it consistently net-negative on both 2025 (-37R) and 2026 (-11R).
 # All function definitions stay above so they can be re-enabled by simply
@@ -1334,6 +1782,17 @@ STRATEGIES = [strategy_b, strategy_c, strategy_d, strategy_e]
 # PULSE (15m) runs Strategy C only — the lone strategy with a real edge on 15m
 # (2026 v1-15m backtest: +754R, +0.64R/trade; B/D were net-flat-to-negative).
 PULSE_STRATEGIES = [strategy_c]
+
+# IMPULSE (v2) runs B/C/D — strategy E dropped (0 signals in all of 2026, verified
+# inert by ablation). The extra D symbol-exclusion is applied process-locally in
+# run_impulse_scan (impulse runs as its own process, so main is unaffected).
+IMPULSE_STRATEGIES = [strategy_b, strategy_c, strategy_d]
+
+# RADAR (v3) runs ONLY strategy F (vol-compression Donchian breakout).
+RADAR_STRATEGIES = [strategy_f]
+
+# SQUEEZE (v4) runs ONLY strategy G (funding-extreme squeeze fade).
+SQUEEZE_STRATEGIES = [strategy_g]
 
 
 # ============================================================================
@@ -1589,11 +2048,14 @@ def save_signal_to_db(sig: Signal, is_dynamic: bool = False, *,
         # `context` column (pre-migration) can never block the signal insert.
         try:
             with engine.begin() as conn:
+                # mode-aware: without `AND mode` a radar row's geometry would clobber
+                # main's on a same-symbol/bar/direction collision (different algorithms
+                # -> different entry/SL/TP -> different charts).
                 conn.execute(text("""
                     UPDATE ict_trade.signals SET context = CAST(:c AS JSONB)
-                    WHERE symbol = :s AND signal_time = :t AND direction = :d
+                    WHERE symbol = :s AND signal_time = :t AND direction = :d AND mode = :m
                 """), {"c": json.dumps(getattr(sig, "context", {}) or {}),
-                       "s": sig.symbol, "t": sig_time, "d": direction})
+                       "s": sig.symbol, "t": sig_time, "d": direction, "m": mode_val})
         except Exception as ce:
             print(f"  (context skipped: {ce})")
         print(f"  ✅ saved {sig.symbol} {direction} @ {sig_time}")
@@ -1603,7 +2065,9 @@ def save_signal_to_db(sig: Signal, is_dynamic: bool = False, *,
         return False
 
 
-def format_telegram_message(sig: Signal, is_dynamic: bool = False, pulse: bool = False) -> str:
+def format_telegram_message(sig: Signal, is_dynamic: bool = False, pulse: bool = False,
+                            impulse: bool = False, radar: bool = False,
+                            squeeze: bool = False) -> str:
     arrow = "🟢 LONG" if sig.direction == "long" else "🔴 SHORT"
     rr = sig.risk_reward_1 if sig.risk_reward_1 else 0
     risk_pct = abs(sig.entry - sig.stop_loss) / sig.entry * 100
@@ -1612,6 +2076,12 @@ def format_telegram_message(sig: Signal, is_dynamic: bool = False, pulse: bool =
     quality_emoji = "⭐" if sig.quality == "high" else "✓"
     if pulse:
         banner = "⚡ <b>PULSE 15m</b> (FVG+OB confluence)\n\n"
+    elif impulse:
+        banner = "✨ <b>IMPULSE (v2)</b>\n\n"
+    elif radar:
+        banner = "📡 <b>RADAR (v3)</b> (compression breakout)\n\n"
+    elif squeeze:
+        banner = "🧲 <b>SQUEEZE (v4)</b> (funding-extreme fade)\n\n"
     elif is_dynamic:
         banner = "🔥 <b>DİNAMİK HACİM PICK</b> (vetlenmemiş sembol)\n\n"
     else:
@@ -1640,15 +2110,37 @@ def trim_open_bar(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False,
+                   impulse: bool = False, radar: bool = False, squeeze: bool = False,
                    defer_alerts: bool = False) -> list:
-    interval = PULSE_INTERVAL if pulse else INTERVAL
-    warmup = PULSE_WARMUP_HOURS if pulse else WARMUP_HOURS
-    strategies = PULSE_STRATEGIES if pulse else None
-    htf_rule = PULSE_HTF if pulse else HTF_RULE
-    mode = PULSE_MODE if pulse else ("dynamic" if is_dynamic else "live")
-    # PULSE goes to its own Telegram chat when configured; else the main chat (the
-    # ⚡ banner keeps it distinguishable). live/dynamic always use the main chat.
-    chat = TELEGRAM_PULSE_CHAT_ID if (pulse and TELEGRAM_PULSE_CHAT_ID) else None
+    if pulse:
+        interval, warmup, strategies, htf_rule, mode = (
+            PULSE_INTERVAL, PULSE_WARMUP_HOURS, PULSE_STRATEGIES, PULSE_HTF, PULSE_MODE)
+        # PULSE -> its own chat when configured; else the main chat (⚡ banner).
+        chat = TELEGRAM_PULSE_CHAT_ID or None
+    elif impulse:
+        interval, warmup, strategies, htf_rule, mode = (
+            INTERVAL, WARMUP_HOURS, IMPULSE_STRATEGIES, HTF_RULE, IMPULSE_MODE)
+        # IMPULSE -> dedicated chat only (DB-only when unset; never the main chat).
+        chat = TELEGRAM_IMPULSE_CHAT_ID or None
+    elif radar:
+        interval, warmup, strategies, htf_rule, mode = (
+            INTERVAL, WARMUP_HOURS, RADAR_STRATEGIES, HTF_RULE, RADAR_MODE)
+        # RADAR -> dedicated chat only (DB-only when unset; never the main chat).
+        chat = TELEGRAM_RADAR_CHAT_ID or None
+    elif squeeze:
+        interval, warmup, strategies, htf_rule, mode = (
+            INTERVAL, WARMUP_HOURS, SQUEEZE_STRATEGIES, HTF_RULE, SQUEEZE_MODE)
+        # SQUEEZE -> dedicated chat only (DB-only when unset; never the main chat).
+        chat = TELEGRAM_SQUEEZE_CHAT_ID or None
+    else:
+        interval, warmup, strategies, htf_rule = INTERVAL, WARMUP_HOURS, None, HTF_RULE
+        mode = "dynamic" if is_dynamic else "live"
+        chat = None
+    # Suppress alerts entirely for impulse/radar/squeeze without a dedicated chat
+    # (impulse overlaps main; radar/squeeze must never blend into the main chat).
+    silent = (impulse and not TELEGRAM_IMPULSE_CHAT_ID) or \
+             (radar and not TELEGRAM_RADAR_CHAT_ID) or \
+             (squeeze and not TELEGRAM_SQUEEZE_CHAT_ID)
 
     end = pd.Timestamp.now(tz="UTC")
     start = end - pd.Timedelta(hours=warmup)
@@ -1662,6 +2154,17 @@ def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False
     if len(df) < 60:
         print(f"  {symbol}: only {len(df)} bars after trim, skipping")
         return []
+
+    if squeeze:
+        # strategy_g reads settled funding from the registry; 45d covers the 30d
+        # percentile window + the shift(1) predecessor of every event it can use.
+        fund_start = end - pd.Timedelta(days=SQUEEZE_FUND_FETCH_DAYS)
+        fdf = fetch_funding(symbol, int(fund_start.timestamp() * 1000),
+                            int(end.timestamp() * 1000))
+        set_funding(symbol, fdf)
+        if fdf.empty:
+            print(f"  {symbol}: no funding history — squeeze inactive")
+            return []
 
     last_idx = len(df) - 1
     # Scan back over the dedup cooldown window (not just the last bar) so
@@ -1679,9 +2182,10 @@ def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False
     for sig in signals:
         if save_signal_to_db(sig, mode=mode, ltf=interval, htf=htf_rule):
             saved.append(sig)
-            if not defer_alerts:
+            if not defer_alerts and not silent:
                 send_telegram_message(
-                    format_telegram_message(sig, is_dynamic=is_dynamic, pulse=pulse),
+                    format_telegram_message(sig, is_dynamic=is_dynamic, pulse=pulse,
+                                            impulse=impulse, radar=radar, squeeze=squeeze),
                     chat_id=chat)
     if not signals:
         print(f"  {symbol}: no signal at last closed bar ({df.index[-1]})")
@@ -1794,6 +2298,89 @@ def run_pulse_scan() -> int:
     return total
 
 
+def run_impulse_scan() -> int:
+    """IMPULSE (v2) hourly pass: B/C/D over the static SYMBOLS, with strategy E
+    dropped and D additionally disabled on ADA/XAU/ETH. Same 1h cadence as main but
+    a separate DB tag (mode='impulse') and no dynamic picks — daily sync resolves it
+    to backtest version='v2'. The extra D-exclusion is applied here (process-local):
+    impulse runs as its own process, so main's D scope is untouched."""
+    D_EXCLUDE_SYMBOLS.update(IMPULSE_EXTRA_D_EXCLUDE)
+    total = 0
+    errors = 0
+    print(f"✨ IMPULSE v2 taraması: {len(SYMBOLS)} sembol (B/C/D, D-excl={sorted(D_EXCLUDE_SYMBOLS)})")
+    for sym in SYMBOLS:
+        print(f"=== ✨ {sym} ===")
+        try:
+            total += len(process_symbol(sym, impulse=True))
+        except Exception as e:
+            errors += 1
+            print(f"  ERROR analyzing {sym}: {e}")
+    print(f"\nIMPULSE done. {total} yeni v2 sinyal.")
+    # Heartbeat only to a dedicated chat (never the main chat — impulse overlaps main).
+    if TELEGRAM_IMPULSE_CHAT_ID:
+        now = pd.Timestamp.now(tz="UTC")
+        warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
+        send_telegram_message(
+            f"✨ <b>IMPULSE v2 Tarama</b>\n⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
+            f"📊 {len(SYMBOLS)} sembol\n✅ {total} yeni sinyal{warn}",
+            chat_id=TELEGRAM_IMPULSE_CHAT_ID)
+    return total
+
+
+def run_radar_scan() -> int:
+    """RADAR (v3) hourly pass: strategy F only (vol-compression Donchian breakout)
+    over the static SYMBOLS. Same 1h cadence as main but a separate DB tag
+    (mode='radar') and no dynamic picks — daily sync resolves it to backtest
+    version='v3'. DB-only unless TELEGRAM_RADAR_CHAT_ID is set."""
+    total = 0
+    errors = 0
+    print(f"📡 RADAR v3 taraması: {len(SYMBOLS)} sembol (F-only)")
+    for sym in SYMBOLS:
+        print(f"=== 📡 {sym} ===")
+        try:
+            total += len(process_symbol(sym, radar=True))
+        except Exception as e:
+            errors += 1
+            print(f"  ERROR analyzing {sym}: {e}")
+    print(f"\nRADAR done. {total} yeni v3 sinyal.")
+    # Heartbeat only to a dedicated chat (never the main chat).
+    if TELEGRAM_RADAR_CHAT_ID:
+        now = pd.Timestamp.now(tz="UTC")
+        warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
+        send_telegram_message(
+            f"📡 <b>RADAR v3 Tarama</b>\n⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
+            f"📊 {len(SYMBOLS)} sembol\n✅ {total} yeni sinyal{warn}",
+            chat_id=TELEGRAM_RADAR_CHAT_ID)
+    return total
+
+
+def run_squeeze_scan() -> int:
+    """SQUEEZE (v4) hourly pass: strategy G only (funding-extreme squeeze fade)
+    over the static SYMBOLS. Same 1h cadence as main but a separate DB tag
+    (mode='squeeze') and no dynamic picks — daily sync resolves it to backtest
+    version='v4'. DB-only unless TELEGRAM_SQUEEZE_CHAT_ID is set."""
+    total = 0
+    errors = 0
+    print(f"🧲 SQUEEZE v4 taraması: {len(SYMBOLS)} sembol (G-only)")
+    for sym in SYMBOLS:
+        print(f"=== 🧲 {sym} ===")
+        try:
+            total += len(process_symbol(sym, squeeze=True))
+        except Exception as e:
+            errors += 1
+            print(f"  ERROR analyzing {sym}: {e}")
+    print(f"\nSQUEEZE done. {total} yeni v4 sinyal.")
+    # Heartbeat only to a dedicated chat (never the main chat).
+    if TELEGRAM_SQUEEZE_CHAT_ID:
+        now = pd.Timestamp.now(tz="UTC")
+        warn = f"\n⚠️ {errors} sembolde hata" if errors else ""
+        send_telegram_message(
+            f"🧲 <b>SQUEEZE v4 Tarama</b>\n⏰ {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
+            f"📊 {len(SYMBOLS)} sembol\n✅ {total} yeni sinyal{warn}",
+            chat_id=TELEGRAM_SQUEEZE_CHAT_ID)
+    return total
+
+
 # ============================================================================
 # AIRFLOW DAG (only built when Airflow is installed)
 # ============================================================================
@@ -1846,6 +2433,63 @@ if _AIRFLOW_AVAILABLE:
     if PULSE_ENABLED:  # pulse stream disabled 2026-06-10 — see PULSE_ENABLED note above
         pulse_dag = ict_pulse_dag()
 
+    @dag(
+        dag_id="huseyin_llm_hybrid_ict_impulse",
+        default_args=default_args,
+        schedule=CronTriggerTimetable("2 * * * *", timezone="UTC"),
+        catchup=False,
+        tags=['trading', 'ict', 'crypto', 'impulse', 'v2'],
+    )
+    def ict_impulse_dag():
+
+        @task()
+        def scan_impulse():
+            time.sleep(2)
+            run_impulse_scan()
+
+        scan_impulse()
+
+    if IMPULSE_ENABLED:
+        impulse_dag = ict_impulse_dag()
+
+    @dag(
+        dag_id="huseyin_llm_hybrid_ict_radar",
+        default_args=default_args,
+        schedule=CronTriggerTimetable("4 * * * *", timezone="UTC"),
+        catchup=False,
+        tags=['trading', 'ict', 'crypto', 'radar', 'v3'],
+    )
+    def ict_radar_dag():
+
+        @task()
+        def scan_radar():
+            time.sleep(2)
+            run_radar_scan()
+
+        scan_radar()
+
+    if RADAR_ENABLED:  # default OFF until the v3 backtest passes its gates
+        radar_dag = ict_radar_dag()
+
+    @dag(
+        dag_id="huseyin_llm_hybrid_ict_squeeze",
+        default_args=default_args,
+        schedule=CronTriggerTimetable("6 * * * *", timezone="UTC"),
+        catchup=False,
+        tags=['trading', 'ict', 'crypto', 'squeeze', 'v4', 'funding'],
+    )
+    def ict_squeeze_dag():
+
+        @task()
+        def scan_squeeze():
+            time.sleep(2)
+            run_squeeze_scan()
+
+        scan_squeeze()
+
+    if SQUEEZE_ENABLED:  # default tracks the v4 gate verdict (see config note)
+        squeeze_dag = ict_squeeze_dag()
+
 
 # ============================================================================
 # STANDALONE ENTRY POINT (GitHub Actions / cron / local)
@@ -1858,14 +2502,29 @@ def main() -> None:
         raise SystemExit("DB_CONNECTION_STRING ortam değişkeni eksik.")
     if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
         print("UYARI: Telegram env (TOKEN/CHAT_ID) yok — sinyaller DB'ye yazılır ama mesaj atılmaz.")
-    # Dispatch: `python dag/dag.py pulse` (or SCAN_MODE=pulse) runs the 15m C-only
-    # PULSE pass; anything else runs the hourly main/dynamic scan.
+    # Dispatch: `python dag/dag.py pulse|impulse|radar` (or SCAN_MODE=...) runs that
+    # stream's pass; anything else runs the hourly main/dynamic scan.
     scan_mode = (sys.argv[1] if len(sys.argv) > 1 else os.getenv("SCAN_MODE", "")).strip().lower()
     if scan_mode == "pulse":
         if not PULSE_ENABLED:
             print("PULSE devre dışı (2026-06-10) — açmak için PULSE_ENABLED=1 ver.")
             return
         run_pulse_scan()
+    elif scan_mode == "impulse":
+        if not IMPULSE_ENABLED:
+            print("IMPULSE devre dışı — açmak için IMPULSE_ENABLED=1 ver.")
+            return
+        run_impulse_scan()
+    elif scan_mode == "radar":
+        if not RADAR_ENABLED:
+            print("RADAR devre dışı (default) — açmak için RADAR_ENABLED=1 ver.")
+            return
+        run_radar_scan()
+    elif scan_mode == "squeeze":
+        if not SQUEEZE_ENABLED:
+            print("SQUEEZE devre dışı — açmak için SQUEEZE_ENABLED=1 ver.")
+            return
+        run_squeeze_scan()
     else:
         run_scan()
 

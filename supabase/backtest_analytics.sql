@@ -1,6 +1,15 @@
 create schema if not exists ict_trade;
 
-create or replace function ict_trade.backtest_summary_metrics()
+-- All four analytics functions take p_version (default 'v1') so each backtest
+-- stream is aggregated SEPARATELY. The old no-arg versions are dropped first
+-- because adding a parameter creates a NEW signature — leaving the no-arg ones
+-- in place would make PostgREST's rpc/* resolution ambiguous on an empty body.
+drop function if exists ict_trade.backtest_summary_metrics();
+drop function if exists ict_trade.backtest_symbol_metrics();
+drop function if exists ict_trade.backtest_weekday_metrics();
+drop function if exists ict_trade.backtest_session_metrics();
+
+create or replace function ict_trade.backtest_summary_metrics(p_version text default 'v1')
 returns table (
   total_trades bigint,
   closed_trades bigint,
@@ -23,6 +32,7 @@ with base as (
     coalesce(pnl_r, 0)::numeric as r,
     extract(epoch from (coalesce(exit_time, signal_time) - coalesce(real_entry_time, signal_time))) / 60.0 as dur_min
   from ict_trade.trading_signals
+  where version = p_version
 ),
 closed as (
   select * from base where s in ('closed_tp', 'closed_sl')
@@ -46,7 +56,7 @@ select
 from closed;
 $$;
 
-create or replace function ict_trade.backtest_symbol_metrics()
+create or replace function ict_trade.backtest_symbol_metrics(p_version text default 'v1')
 returns table (
   symbol text,
   total_trades bigint,
@@ -67,7 +77,8 @@ with closed as (
     lower(coalesce(status, '')) as s,
     coalesce(pnl_r, 0)::numeric as r
   from ict_trade.trading_signals
-  where lower(coalesce(status, '')) in ('closed_tp', 'closed_sl')
+  where version = p_version
+    and lower(coalesce(status, '')) in ('closed_tp', 'closed_sl')
 )
 select
   symbol,
@@ -88,7 +99,7 @@ group by symbol
 order by total_r desc, win_rate desc;
 $$;
 
-create or replace function ict_trade.backtest_weekday_metrics()
+create or replace function ict_trade.backtest_weekday_metrics(p_version text default 'v1')
 returns table (
   weekday_no int,
   weekday_name text,
@@ -106,7 +117,8 @@ with closed as (
     lower(coalesce(status, '')) as s,
     coalesce(pnl_r, 0)::numeric as r
   from ict_trade.trading_signals
-  where lower(coalesce(status, '')) in ('closed_tp', 'closed_sl')
+  where version = p_version
+    and lower(coalesce(status, '')) in ('closed_tp', 'closed_sl')
 )
 select
   wd as weekday_no,
@@ -128,7 +140,7 @@ group by wd
 order by wd;
 $$;
 
-create or replace function ict_trade.backtest_session_metrics()
+create or replace function ict_trade.backtest_session_metrics(p_version text default 'v1')
 returns table (
   session_name text,
   total_trades bigint,
@@ -149,7 +161,8 @@ with closed as (
     lower(coalesce(status, '')) as s,
     coalesce(pnl_r, 0)::numeric as r
   from ict_trade.trading_signals
-  where lower(coalesce(status, '')) in ('closed_tp', 'closed_sl')
+  where version = p_version
+    and lower(coalesce(status, '')) in ('closed_tp', 'closed_sl')
 )
 select
   session_name,
@@ -163,20 +176,7 @@ order by total_r desc;
 $$;
 
 grant usage on schema ict_trade to anon, authenticated;
-grant execute on function ict_trade.backtest_summary_metrics() to anon, authenticated;
-grant execute on function ict_trade.backtest_symbol_metrics() to anon, authenticated;
-grant execute on function ict_trade.backtest_weekday_metrics() to anon, authenticated;
-grant execute on function ict_trade.backtest_session_metrics() to anon, authenticated;
-
--- read access for the React dashboard (anon role via PostgREST)
-grant select on ict_trade.trading_signals to anon, authenticated;
-alter table ict_trade.trading_signals enable row level security;
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname='ict_trade' and tablename='trading_signals' and policyname='read_all'
-  ) then
-    create policy read_all on ict_trade.trading_signals for select using (true);
-  end if;
-end$$;
+grant execute on function ict_trade.backtest_summary_metrics(text) to anon, authenticated;
+grant execute on function ict_trade.backtest_symbol_metrics(text) to anon, authenticated;
+grant execute on function ict_trade.backtest_weekday_metrics(text) to anon, authenticated;
+grant execute on function ict_trade.backtest_session_metrics(text) to anon, authenticated;

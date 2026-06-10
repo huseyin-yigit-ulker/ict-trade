@@ -137,13 +137,15 @@ def _pending() -> dict:
 
 
 def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
-             entry: float, sl: float, tp: float) -> dict:
+             entry: float, sl: float, tp: float,
+             expiry_minutes: int = EXPIRY_MINUTES) -> dict:
     """Resolve one trade on 1m bars from the signal close; return trading_signals fields.
 
     Reuses backtester.simulate_signal: entry must FILL before TP/SL or the trade is
-    INVALIDATED (no trade taken); same-bar tie -> SL. Entry-fill window = EXPIRY_MINUTES
-    (= 180 bars on 1m). On 1m the intrabar order of entry vs TP/SL is essentially
-    unambiguous — unlike 1h, where one bar's high+low can falsely register entry-then-TP."""
+    INVALIDATED (no trade taken); same-bar tie -> SL. Entry-fill window = expiry_minutes
+    (default 180 = 180 bars on 1m; RADAR/v3 passes 1440 for its 24h retest window).
+    On 1m the intrabar order of entry vs TP/SL is essentially unambiguous — unlike 1h,
+    where one bar's high+low can falsely register entry-then-TP."""
     idx = df1m.index
     if idx.tz is None:
         df1m = df1m.copy()
@@ -153,7 +155,7 @@ def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
         return _pending()                        # not enough data yet -> re-checked later
     bar_index = pos - 1                           # simulate_signal scans from bar_index+1
     sig = _StubSignal(direction.lower(), float(entry), float(sl), float(tp),
-                      bar_index, bar_index + EXPIRY_MINUTES)
+                      bar_index, bar_index + expiry_minutes)
     res = simulate_signal(sig, df1m)
     bar_dur = pd.Timedelta(minutes=1)
 
@@ -171,12 +173,14 @@ def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
 
 
 def simulate(symbol: str, signal_ts, direction: str, entry: float, sl: float, tp: float,
-             *, df1m: pd.DataFrame | None = None, ltf_minutes: int = 60) -> dict:
+             *, df1m: pd.DataFrame | None = None, ltf_minutes: int = 60,
+             expiry_minutes: int = EXPIRY_MINUTES) -> dict:
     """Resolve a signal's TP/SL outcome on 1m klines (intrabar-accurate).
 
     Signal generation stays on 1h; only the OUTCOME is resolved on 1m. The signal fires
     at its bar close (signal_ts + ltf), where the 1m scan begins. Pass df1m to reuse a
-    per-symbol 1m frame (backfill); omit it to fetch a per-signal window (daily sync)."""
+    per-symbol 1m frame (backfill); omit it to fetch a per-signal window (daily sync).
+    `expiry_minutes` is the entry-fill window (default 180; RADAR/v3 passes 1440)."""
     ts = pd.Timestamp(signal_ts)
     if ts.tz is None:
         ts = ts.tz_localize("UTC")
@@ -185,7 +189,7 @@ def simulate(symbol: str, signal_ts, direction: str, entry: float, sl: float, tp
         df1m = fetch_1m(symbol, close_ts, close_ts + RESOLUTION_HORIZON)
     if df1m is None or df1m.empty:
         return _pending()
-    return _resolve(df1m, close_ts, direction, entry, sl, tp)
+    return _resolve(df1m, close_ts, direction, entry, sl, tp, expiry_minutes=expiry_minutes)
 
 
 # ---------------------------------------------------------------- row mapping

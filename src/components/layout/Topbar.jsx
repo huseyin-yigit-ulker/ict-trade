@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useTradeContext } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 
-const STRAT_LABEL = { main: 'Main' };
+const STRAT_LABEL = { main: 'Main', impulse: 'Impulse', radar: 'Radar', squeeze: 'Squeeze' };
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
 // ICT killzones (UTC) — the windows the engine actually hunts in. The pill

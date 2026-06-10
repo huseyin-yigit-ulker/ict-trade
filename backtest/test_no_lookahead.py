@@ -20,8 +20,15 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from ict.data import fetch_klines
+from ict.data import fetch_klines, fetch_funding
+from ict.strategies import strategy_f, strategy_g, set_funding
 from engine import run_engine
+
+# Named strategy sets: None = engine default (A-E per STRATEGIES); radar = F-only (v3);
+# squeeze = G-only (v4, needs funding registration — handled inside main()).
+_SETS = {"default": None, "radar": [strategy_f], "squeeze": [strategy_g]}
+
+FUNDING_WARMUP_DAYS = 45   # > SQUEEZE_PCTL_WINDOW (30d) + slack for the shift(1)
 
 
 def signal_key(s) -> tuple:
@@ -43,7 +50,9 @@ def signal_key(s) -> tuple:
 @click.option("--samples", default=20, type=int,
               help="How many bars (with signals) to re-run truncated.")
 @click.option("--seed", default=42, type=int)
-def main(symbol: str, days: int, interval: str, samples: int, seed: int):
+@click.option("--strats", default="default", type=click.Choice(list(_SETS)),
+              help="Strategy set to test (default = A-E engine set, radar = F-only).")
+def main(symbol: str, days: int, interval: str, samples: int, seed: int, strats: str):
     end = pd.Timestamp.now(tz="UTC")
     start = end - pd.Timedelta(days=days)
     click.echo(f"fetching {symbol} {interval} for {days} days...")
@@ -55,8 +64,20 @@ def main(symbol: str, days: int, interval: str, samples: int, seed: int):
         return
     click.echo(f"  {len(df)} bars")
 
+    bar_dur = df.index[1] - df.index[0]
+    fdf = None
+    if strats == "squeeze":
+        fdf = fetch_funding(symbol,
+                            int((start - pd.Timedelta(days=FUNDING_WARMUP_DAYS)).timestamp() * 1000),
+                            int(end.timestamp() * 1000))
+        if fdf.empty:
+            click.echo("no funding history — squeeze untestable on this symbol")
+            return
+        click.echo(f"  {len(fdf)} funding events")
+        set_funding(symbol, fdf)
+
     click.echo("running engine on FULL dataset...")
-    full_signals = run_engine(symbol, df)
+    full_signals = run_engine(symbol, df, strategies=_SETS[strats])
     click.echo(f"  {len(full_signals)} signals")
 
     if not full_signals:
@@ -82,8 +103,17 @@ def main(symbol: str, days: int, interval: str, samples: int, seed: int):
     for i, bar_idx in enumerate(sample_bars):
         # Truncate so the engine sees only [0..bar_idx]
         df_truncated = df.iloc[: bar_idx + 1].copy()
+        if fdf is not None:
+            # Funding no-lookahead: the truncated run may only know events SETTLED
+            # by bar_idx's close. If the full run (full funding registered) still
+            # matches per-bar, the funding plumbing leaks nothing from the future.
+            trunc_close = df.index[bar_idx] + bar_dur
+            set_funding(symbol, fdf[fdf.index <= trunc_close])
         truncated_signals = run_engine(symbol, df_truncated,
-                                       start_index=bar_idx, end_index=bar_idx)
+                                       start_index=bar_idx, end_index=bar_idx,
+                                       strategies=_SETS[strats])
+        if fdf is not None:
+            set_funding(symbol, fdf)   # restore for the next iteration
 
         full_set = full_by_bar.get(bar_idx, set())
         trunc_set = {signal_key(s) for s in truncated_signals}
