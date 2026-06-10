@@ -8,19 +8,25 @@ Year-agnostic: pass --year (default current behaviour is 2026). Use it to add 20
 2024, etc. The dashboard shows signal_time >= 2025-01-01, version='v1', so any backfilled
 year from 2025 onward appears automatically.
 
+Windowable: pass --start/--end (ISO UTC) to backfill only a sub-range instead of the whole
+year — e.g. to refill a short outage gap. The window bounds both which signals are kept and
+(with --wipe-scope year) exactly which rows get deleted, so a gap-fill never touches the rest
+of the year. Without --start/--end the window defaults to the full --year (original behaviour).
+
 Safety:
   - Never deletes in --dry-run.
   - A real (writing) run REQUIRES an explicit --wipe-scope:
-      year : DELETE rows whose signal_time falls in --year, then refill that year
-      all  : DELETE every row, then load only the target year
-      none : no delete (upsert only; old rows for the year remain — not recommended)
+      year : DELETE rows whose signal_time falls in the window, then refill that window
+      all  : DELETE every row, then load only the window
+      none : no delete (upsert only; old rows remain — best for gap-fills, no destructive delete)
   - --dry-run writes a per-symbol preview CSV under sync/out/ and touches no DB.
-  - wipe-scope 'year' only touches the target year, so adding 2025 leaves 2026 intact.
+  - wipe-scope 'year' only touches the window, so adding 2025 leaves 2026 intact.
 
 Usage:
   python sync/backfill_year.py --year 2025 --dry-run               # validate, no DB
   python sync/backfill_year.py --year 2025 --symbols BTCUSDT --dry-run
   python sync/backfill_year.py --year 2025 --wipe-scope year       # real run, refill 2025
+  python sync/backfill_year.py --start 2026-06-07 --wipe-scope year # refill only an outage gap
 """
 from __future__ import annotations
 
@@ -52,25 +58,24 @@ OUT = Path(__file__).resolve().parent / "out"
 OUT.mkdir(exist_ok=True)
 
 
-def build_symbol_rows(symbol: str, year: int) -> tuple[list[dict], dict]:
+def build_symbol_rows(symbol: str, win_start: pd.Timestamp,
+                      win_end: pd.Timestamp) -> tuple[list[dict], dict]:
     """Returns (rows, info). info carries diagnostics for the run report."""
     end = pd.Timestamp.now(tz="UTC")
-    year_start = pd.Timestamp(f"{year}-01-01", tz="UTC")
-    year_end = pd.Timestamp(f"{year + 1}-01-01", tz="UTC")
-    warmup_start = year_start - pd.Timedelta(hours=6000)   # ~250d detector warmup
+    warmup_start = win_start - pd.Timedelta(hours=6000)   # ~250d detector warmup
 
     df = tsc.fetch_1h(symbol, warmup_start, end)
     if df.empty:
         return [], {"symbol": symbol, "bars": 0, "signals": 0, "skipped": True}
 
     signals = run_engine(symbol, df, strategies=DAG_STRATS)
-    # 1m klines (target year onward) for intrabar-accurate TP/SL/entry-fill resolution.
-    # Cap the 1m fetch at "now" so a future year doesn't request non-existent bars.
-    m1_end = min(year_end, end)
-    df1m = tsc.fetch_1m(symbol, year_start - pd.Timedelta(hours=2), m1_end)
+    # 1m klines (window onward) for intrabar-accurate TP/SL/entry-fill resolution.
+    # Cap the 1m fetch at "now" so a future window doesn't request non-existent bars.
+    m1_end = min(win_end, end)
+    df1m = tsc.fetch_1m(symbol, win_start - pd.Timedelta(hours=2), m1_end)
     rows, status_counts = [], {}
     for s in signals:
-        if not (year_start <= s.timestamp < year_end):
+        if not (win_start <= s.timestamp < win_end):
             continue
         outcome = tsc.simulate(symbol, s.timestamp, s.direction, s.entry,
                                s.stop_loss, s.take_profit_1, df1m=df1m)
@@ -83,14 +88,14 @@ def build_symbol_rows(symbol: str, year: int) -> tuple[list[dict], dict]:
                   "skipped": False, "status": status_counts}
 
 
-def wipe(conn, scope: str, year: int) -> int:
+def wipe(conn, scope: str, win_start: pd.Timestamp, win_end: pd.Timestamp) -> int:
     cur = conn.cursor()
     if scope == "all":
         cur.execute(f"DELETE FROM {tsc.TABLE}")
     elif scope == "year":
         cur.execute(
             f"DELETE FROM {tsc.TABLE} WHERE signal_time >= %s AND signal_time < %s",
-            (f"{year}-01-01", f"{year + 1}-01-01"))
+            (win_start.to_pydatetime(), win_end.to_pydatetime()))
     n = cur.rowcount
     conn.commit()
     cur.close()
@@ -101,6 +106,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--symbols", nargs="*", default=SYMBOLS)
     ap.add_argument("--year", type=int, default=2026)
+    ap.add_argument("--start", type=str, default=None, help="ISO date override (UTC)")
+    ap.add_argument("--end", type=str, default=None, help="ISO date override (UTC)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--wipe-scope", choices=["none", "year", "all"], default=None)
     args = ap.parse_args()
@@ -109,12 +116,16 @@ def main():
         raise SystemExit("Real run requires --wipe-scope {none|year|all} "
                          "(use --dry-run to preview without DB writes).")
 
-    print(f"=== {args.year} backfill | symbols={len(args.symbols)} | "
-          f"dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
+    now = pd.Timestamp.now(tz="UTC")
+    win_start = pd.Timestamp(args.start, tz="UTC") if args.start else pd.Timestamp(f"{args.year}-01-01", tz="UTC")
+    win_end = pd.Timestamp(args.end, tz="UTC") if args.end else min(pd.Timestamp(f"{args.year + 1}-01-01", tz="UTC"), now)
+
+    print(f"=== {args.year} backfill | {win_start.date()}..{win_end.date()} | "
+          f"symbols={len(args.symbols)} | dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
 
     all_rows, infos = [], []
     for sym in args.symbols:
-        rows, info = build_symbol_rows(sym, args.year)
+        rows, info = build_symbol_rows(sym, win_start, win_end)
         infos.append(info)
         all_rows.extend(rows)
         tag = "SKIP (no data)" if info["skipped"] else f"{info['signals']} signals {info.get('status', {})}"
@@ -140,8 +151,9 @@ def main():
 
     conn = tsc.backtest_conn()
     if args.wipe_scope in ("year", "all"):
-        deleted = wipe(conn, args.wipe_scope, args.year)
-        print(f"wiped {deleted} existing rows (scope={args.wipe_scope}, year={args.year})")
+        deleted = wipe(conn, args.wipe_scope, win_start, win_end)
+        print(f"wiped {deleted} existing rows (scope={args.wipe_scope}, "
+              f"window={win_start.date()}..{win_end.date()})")
     n = tsc.upsert_rows(conn, all_rows)
     conn.close()
     print(f"upserted {n} rows into {tsc.TABLE}")
