@@ -116,7 +116,7 @@ cd ~/ict-trade && git pull
 25 sembolü son kapanan 15m bar'ında tarar; yeni C sinyali varsa yazıp Telegram atar.
 
 15-dakikalık cron (`crontab -e`, saatlik MAIN cron'unun altına). 15m bar kapanışından
-**~15 saniye sonra** çalışır (`sleep 15`); MAIN/RADAR ise saatlik HH:01'de (+1 dk) kalır:
+**~15 saniye sonra** çalışır (`sleep 15`); MAIN ise saatlik HH:01'de (+1 dk) kalır:
 ```
 0,15,30,45 * * * * cd /home/ubuntu/ict-bot && sleep 15 && SCAN_MODE=pulse /home/ubuntu/ict-bot/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-pulse.log 2>&1
 ```
@@ -129,74 +129,6 @@ TELEGRAM_PULSE_CHAT_ID=<pulse_kanal_id>     # boşsa ana kanala ⚡ banner'la d�
 # PULSE_HEARTBEAT=1                          # her taramada "tarama yapıldı" özeti (varsayılan kapalı)
 ```
 > Dedup mode-duyarlı: 15m pulse ile 1h live sinyali aynı sembol/bar-açılışında **çakışmaz**.
-
-## 7d. RADAR v3 canlı (saatlik, kompresyon-kırılım — strategy F)
-
-RADAR v3 = **yepyeni** trend-takip akışı (emekli edilen dinamik-sembol radar'la
-alakası yok): 1h barda 120-bar Donchian kanalı kırılımı + volatilite sıkışması +
-hacim + EMA200 rejim filtresi; giriş kırılan seviyenin **retest limitinde** (24h
-doluş penceresi). DB'de `mode='radar'`, backtest'te `version='v3'`, yalnız
-`strategy_f` koşar. **Varsayılan KAPALI** — 2026 backtest kabul kapıları geçmeden
-açma (`sync/backfill_v3_year.py` + plan dosyasındaki kapılar).
-
-Açmak için `.env`'e:
-```
-RADAR_ENABLED=1
-TELEGRAM_RADAR_CHAT_ID=<radar_kanal_id>   # boşsa DB-only (hiç alarm atmaz)
-```
-
-Tek seferlik elle test:
-```bash
-cd ~/ict-trade && git pull
-RADAR_ENABLED=1 ./.venv/bin/python dag/dag.py radar
-```
-
-Saatlik cron (MAIN HH:01, IMPULSE HH:02 — RADAR **HH:04**):
-```
-4 * * * * cd /home/ubuntu/ict-trade && SCAN_MODE=radar /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-radar.log 2>&1
-```
-> Cron `RADAR_ENABLED` yokken zararsız no-op'tur ("devre dışı" yazar çıkar) —
-> kurulumu önceden yapıp anahtarı sonra çevirebilirsin.
-> RADAR açıldıktan sonra `sync/sync_daily.py` `ACTIVE_STREAMS` listesine
-> `"radar"` ekle (mode='radar' -> version='v3' günlük aktarım başlasın).
-
-## 7e. SQUEEZE v4 canlı (saatlik, funding-ekstrem fade — strategy G)
-
-SQUEEZE v4 = hakem panelinin ikinci adayı: fiyat geometrisi DEĞİL, **türev
-pozisyonlanması** sinyali. Aşırı negatif funding = kalabalık short tarafı longlara
-ödüyor -> ateşleme barında (gövde >= 0.25xATR24) LONG fade; pozitif ekstrem aynada
-SHORT. Funding her event kendi gerçek aralığıyla 8h-eşdeğerine normalize edilir
-(4h-settle'lı semboller), eşik = mutlak taban (0.05%/8h) + 30 günlük yüzdelik.
-Giriş ateşleme kapanışının **0.35xATR24 içinde retrace limiti** (12h doluş
-penceresi), SL 2.0xATR24, TP 2R, episode başına tek giriş (48h cooldown).
-DB'de `mode='squeeze'`, backtest'te `version='v4'`, yalnız `strategy_g` koşar.
-Her sembol için ekstra bir `/fapi/v1/fundingRate` çağrısı yapar (45 gün);
-funding'i olmayan sembolde sessizce sinyal üretmez. **Varsayılan KAPALI** —
-2026 Oca-Haz backtesti kapıları GEÇEMEDİ (116 kapalı, %24 kazanç, -52.3R;
-ablation'da 17 varyantın hiçbiri pozitif değil — bu rejimde aşırı funding
-kalabalığın haklı olduğu trendleri işaretledi). Kapıları geçen bir yeniden
-tasarım olmadan açma (`sync/backfill_v4_year.py` RESULT bloğu).
-
-Açmak için `.env`'e:
-```
-SQUEEZE_ENABLED=1
-TELEGRAM_SQUEEZE_CHAT_ID=<squeeze_kanal_id>   # boşsa DB-only (hiç alarm atmaz)
-```
-
-Tek seferlik elle test:
-```bash
-cd ~/ict-trade && git pull
-SQUEEZE_ENABLED=1 ./.venv/bin/python dag/dag.py squeeze
-```
-
-Saatlik cron (MAIN HH:01, IMPULSE HH:02, RADAR HH:04 — SQUEEZE **HH:06**):
-```
-6 * * * * cd /home/ubuntu/ict-trade && SCAN_MODE=squeeze /home/ubuntu/ict-trade/.venv/bin/python dag/dag.py >> /home/ubuntu/ict-squeeze.log 2>&1
-```
-> Cron `SQUEEZE_ENABLED` yokken zararsız no-op'tur — kurulumu önceden yapıp
-> anahtarı sonra çevirebilirsin.
-> SQUEEZE açıldıktan sonra `sync/sync_daily.py` `ACTIVE_STREAMS` listesine
-> `"squeeze"` ekle (mode='squeeze' -> version='v4' günlük aktarım başlasın).
 
 ## 8. İzleme
 

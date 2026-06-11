@@ -9,10 +9,6 @@ row still 'active' in trading_signals regardless of age.
 Live streams, each -> its own backtest version tag:
   - main         : mode='live'    -> version='v1'     (1h, static set, ltf 60m, dedup floor 1h)
   - impulse      : mode='impulse' -> version='v2'     (1h, static set, ltf 60m, dedup floor 1h)
-  - radar        : mode='radar'   -> version='v3'     (1h, static set, strategy F breakout,
-                                                       24h entry-fill window)
-  - squeeze      : mode='squeeze' -> version='v4'     (1h, static set, strategy G funding fade,
-                                                       12h entry-fill window)
   - radar_legacy : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
   - pulse        : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
 
@@ -51,22 +47,16 @@ STATIC_SYMBOLS = [
 # Each live stream resolves the SAME way (emitted live signals + still-active rows
 # -> outcomes on 1m), differing only in source mode, bar timeframe (-> ltf_minutes
 # + dedup floor) and symbol scope.
-# `expiry_min` = entry-fill window passed to tsc.simulate (default 180; radar's
-# retest-limit design needs 24h to fill).
 STREAMS = {
     "main":         {"mode": "live",    "version": "v1",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
     "impulse":      {"mode": "impulse", "version": "v2",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
-    "radar":        {"mode": "radar",   "version": "v3",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS, "expiry_min": 1440},
-    "squeeze":      {"mode": "squeeze", "version": "v4",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS, "expiry_min": 720},
     "radar_legacy": {"mode": "dynamic", "version": "v1-dyn", "ltf_min": 60, "floor": "h",     "symbols": None},
     "pulse":        {"mode": "pulse",   "version": "v1-15m", "ltf_min": 15, "floor": "15min", "symbols": STATIC_SYMBOLS},
 }
 
 # Streams processed by `--stream all`. radar_legacy (the retired dynamic stream,
 # formerly keyed "radar") and pulse stopped emitting 2026-06-10 — pass their key
-# explicitly to re-resolve historical rows. The NEW radar (mode='radar'/v3) and
-# squeeze (mode='squeeze'/v4) join this list only once their *_ENABLED=1 flag is
-# live in production (see dag/dag.py).
+# explicitly to re-resolve historical rows.
 ACTIVE_STREAMS = ["main", "impulse"]
 
 
@@ -163,7 +153,6 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
     # Default is MAIN ONLY. radar_legacy (retired dynamic stream) & pulse were
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
-    # "radar" now means the NEW v3 breakout stream (mode='radar').
     ap.add_argument("--stream", choices=list(STREAMS) + ["all"], default="main")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")

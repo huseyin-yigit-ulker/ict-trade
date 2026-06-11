@@ -1,48 +1,26 @@
-"""Backtest the SQUEEZE v4 stream for a calendar year -> trading_signals with
-version='v4' (kept SEPARATE from v1/v2/v3/v1-dyn/v1-15m).
+"""Backtest IMPULSE under the PARTIAL-TP + BREAKEVEN exit model -> trading_signals with
+version='v4' (the dashboard's "IMPULSE ½TP" stream).
 
-SQUEEZE v4 is the judge panel's runner-up candidate (2026-06-10), built after the
-v3 compression-breakout FAILED its gates:
+SAME signals as the v2 impulse backfill (strategy set B/C/D, drop E, D excluded on
+{ADA,XAU,ETH} on top of the base set) — the ONLY difference is the exit model:
+ict/config.PARTIAL_TP_ENABLED is flipped on process-locally, so each filled trade scales
+out PARTIAL_TP_CLOSE_FRAC at PARTIAL_TP_TRIGGER_FRAC of the distance entry->TP1 and the
+stop moves to breakeven; the remainder rides to TP1. So v2 vs v4 is a clean A/B on the
+exit model alone (entry/SL/TP geometry identical).
 
-  strategy G "Funding-Extreme Squeeze Fade" (backtest/ict/strategies.py):
-    - 1h bars, same static universe as main, but the SIGNAL is derivative
-      positioning, not price geometry: settled Binance perp funding, normalized
-      per-event to an 8h-equivalent (4h-settled symbols would otherwise look
-      half as crowded).
-    - LONG when funding is extremely NEGATIVE (crowded shorts paying longs):
-      |rate_8h| >= 0.05%/8h AND beyond the 5th pctl of the trailing 30d of PRIOR
-      events, on a squeeze-ignition bar (close >= 0.25*ATR24 in the fade
-      direction — no naked knife-catching). SHORT mirrored on positive extremes.
-    - Entry = retrace LIMIT 0.35*ATR24 inside the ignition close (the engine
-      only accepts retrace-limit entries); SL = 2.0*ATR24; TP = 2R fixed;
-      12h fill window (expiry_minutes=720); 48h raw-trigger re-fire cooldown.
-    - Structurally the LOWEST-correlation stream vs A-E (fade into zones) and
-      F (join breakouts): G's input series doesn't exist in either. Funding
-      accrual is NOT credited — the fade direction RECEIVES funding, so the
-      reported R is conservative.
+Both process-local mutations (D_EXCLUDE_SYMBOLS, PARTIAL_TP_ENABLED) are set BEFORE
+importing the engine and never touch the live DAG or the v1/v2/v3 backfills.
 
-Everything else — data fetch, 1m outcome resolution, fees, upsert — is identical
-to backfill_v3_year.py, so v4 is method-matched to the v1/v2/v3 backfills.
+2026-06-11 A/B (sync/experiment_partial.py): the partial model RAISES win rate (~+9pt)
+but LOWERS total R (~-49R on the 2026 Jan-Jun set) — the 3R cap + breakeven stop give
+back the big runners that carry the edge. Surfaced as its own dashboard stream so the
+tradeoff is visible; NOT the production default.
 
 Safety: never deletes in --dry-run; a real run needs --wipe-scope {year|all|none}.
   wipe touches ONLY version='v4' rows.
 
-RESULT 2026-06-10 (Jan-Jun 2026, 21 symbols): 127 signals, 116 closed, 24.1% win,
--52.3R total (LONG -35.3R / SHORT -16.9R) — FAILED the acceptance gates (needed
-totR>0, expectancy>=+0.1R, win>=30%). Losses concentrate in Mar (-17R) / Apr
-(-32R) and in the metals + stock-backed perps (XAG -18R, AMZN -11R, XAU -10R,
-NVDA -9R): in this regime extreme funding marked positioning that was RIGHT
-about the trend, so fading it got run over; crypto fades were ~flat (FET +4.8,
-ONDO +3.0 vs WIF -3.3). sync/experiment_squeeze.py ablation: NONE of 17 one-knob
-variants flips the sign (best: abs floor 0.03% -> -36.4R; TP 2.5R/3R make it
-WORSE at 15%/12% win) => the edge itself is absent, not an entry-mechanics
-artifact. Live stream stays disabled (dag.py SQUEEZE_ENABLED=0).
-
 Usage:
-  # fast validation (few symbols, short window, no DB):
-  python sync/backfill_v4_year.py --symbols FETUSDT WIFUSDT \
-    --start 2026-03-01 --end 2026-06-10 --dry-run
-  # full year, real run:
+  python sync/backfill_v4_year.py --symbols BTCUSDT --start 2026-05-01 --end 2026-06-06 --dry-run
   python sync/backfill_v4_year.py --year 2026 --wipe-scope year
 """
 from __future__ import annotations
@@ -53,29 +31,29 @@ from pathlib import Path
 
 import pandas as pd
 
-import trade_sync_common as tsc            # adds backtest/ to sys.path
-from ict import config as C                # noqa: E402
+import trade_sync_common as tsc           # adds backtest/ to sys.path
+from ict import config as C               # noqa: E402
 
+# --- strategy-set + exit-model changes (process-local; v1/v2/live unaffected) ----------
 V4_VERSION = "v4"
-SQUEEZE_EXPIRY_MIN = C.SQUEEZE_ENTRY_EXPIRY_BARS * 60   # 720 = 12h fill window on 1m
-FUNDING_WARMUP_DAYS = 45    # > SQUEEZE_PCTL_WINDOW (30d) + slack for the shift(1)
+V4_EXTRA_D_EXCLUDE = {"ADAUSDT", "XAUUSDT", "ETHUSDT"}     # same as impulse v2
+C.D_EXCLUDE_SYMBOLS = set(C.D_EXCLUDE_SYMBOLS) | V4_EXTRA_D_EXCLUDE
+C.PARTIAL_TP_ENABLED = True               # scale out half at half-distance + breakeven
 
-from engine import run_engine               # noqa: E402
-from ict.data import fetch_funding          # noqa: E402
-from ict.strategies import strategy_g, set_funding   # noqa: E402
+from engine import run_engine                                      # noqa: E402
+from ict.strategies import strategy_b, strategy_c, strategy_d      # noqa: E402  (E dropped)
 
-DAG_STRATS = [strategy_g]
+DAG_STRATS = [strategy_b, strategy_c, strategy_d]                  # same set as impulse v2
 
-# Production set — mirrors backfill_year.py SYMBOLS / sync_daily.py STATIC_SYMBOLS.
+# Production set — mirrors backfill_v2_year.py SYMBOLS and the dashboard allow-list.
 SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
-    # Stock-backed perps (underlying equities)
-    "NVDAUSDT", "METAUSDT",
-    "AMZNUSDT", "COINUSDT", "MSTRUSDT",
+    "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",
+    "AMZNUSDT", "COINUSDT", "PLTRUSDT", "MSTRUSDT",
 ]
 
 OUT = Path(__file__).resolve().parent / "out"
@@ -84,22 +62,14 @@ OUT.mkdir(exist_ok=True)
 
 def build_symbol_rows(symbol: str, win_start: pd.Timestamp,
                       win_end: pd.Timestamp) -> tuple[list[dict], dict]:
-    """Returns (rows, info). info carries diagnostics for the run report."""
+    """Returns (rows, info). Identical to backfill_v2_year.build_symbol_rows except the
+    rows are tagged version='v4' and resolved under the partial-TP exit model."""
     end = pd.Timestamp.now(tz="UTC")
-    warmup_start = win_start - pd.Timedelta(hours=6000)   # method-matched to v1/v2/v3
+    warmup_start = win_start - pd.Timedelta(hours=6000)   # ~250d detector warmup
 
     df = tsc.fetch_1h(symbol, warmup_start, end)
     if df.empty:
         return [], {"symbol": symbol, "bars": 0, "signals": 0, "skipped": True}
-
-    fdf = fetch_funding(symbol,
-                        int((warmup_start - pd.Timedelta(days=FUNDING_WARMUP_DAYS)).timestamp() * 1000),
-                        int(end.timestamp() * 1000))
-    set_funding(symbol, fdf)
-    if fdf.empty:
-        # spot-only / no perp funding -> G stays silent; report it honestly.
-        return [], {"symbol": symbol, "bars": len(df), "signals": 0,
-                    "skipped": False, "status": {}, "no_funding": True}
 
     signals = run_engine(symbol, df, strategies=DAG_STRATS)
     m1_end = min(win_end, end)
@@ -109,8 +79,7 @@ def build_symbol_rows(symbol: str, win_start: pd.Timestamp,
         if not (win_start <= s.timestamp < win_end):
             continue
         outcome = tsc.simulate(symbol, s.timestamp, s.direction, s.entry,
-                               s.stop_loss, s.take_profit_1, df1m=df1m,
-                               expiry_minutes=SQUEEZE_EXPIRY_MIN)
+                               s.stop_loss, s.take_profit_1, df1m=df1m)
         status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
         row = tsc.build_row(
             symbol, s.timestamp, s.direction, s.entry, s.stop_loss, s.take_profit_1,
@@ -154,21 +123,16 @@ def main():
     win_start = pd.Timestamp(args.start, tz="UTC") if args.start else pd.Timestamp(f"{args.year}-01-01", tz="UTC")
     win_end = pd.Timestamp(args.end, tz="UTC") if args.end else min(pd.Timestamp(f"{args.year + 1}-01-01", tz="UTC"), now)
 
-    print(f"=== {args.year} SQUEEZE v4 backfill | {win_start.date()}..{win_end.date()} | "
+    print(f"=== {args.year} IMPULSE ½TP backfill (v4, partial-TP+BE) | {win_start.date()}..{win_end.date()} | "
           f"symbols={len(args.symbols)} | strats={[f.__name__ for f in DAG_STRATS]} | "
-          f"expiry_min={SQUEEZE_EXPIRY_MIN} | dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
+          f"D_excl={sorted(C.D_EXCLUDE_SYMBOLS)} | dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
 
     all_rows, infos = [], []
     for sym in args.symbols:
         rows, info = build_symbol_rows(sym, win_start, win_end)
         infos.append(info)
         all_rows.extend(rows)
-        if info["skipped"]:
-            tag = "SKIP (no data)"
-        elif info.get("no_funding"):
-            tag = "SKIP (no funding history — spot-only?)"
-        else:
-            tag = f"{info['signals']} signals {info.get('status', {})}"
+        tag = "SKIP (no data)" if info["skipped"] else f"{info['signals']} signals {info.get('status', {})}"
         print(f"  {sym:<12} bars={info['bars']:<6} -> {tag}")
         if args.dry_run and rows:
             fp = OUT / f"v4_preview_{args.year}_{sym}.csv"
@@ -179,10 +143,10 @@ def main():
     agg = {}
     for r in all_rows:
         agg[r["status"]] = agg.get(r["status"], 0) + 1
-    skipped = [i["symbol"] for i in infos if i["skipped"] or i.get("no_funding")]
+    skipped = [i["symbol"] for i in infos if i["skipped"]]
     print(f"\nTOTAL v4 rows={len(all_rows)} status={agg}")
     if skipped:
-        print(f"SKIPPED symbols (no data / no funding): {skipped}")
+        print(f"SKIPPED symbols (no Binance data): {skipped}")
 
     if args.dry_run:
         print(f"\n[dry-run] previews in {OUT}/  — no DB writes.")

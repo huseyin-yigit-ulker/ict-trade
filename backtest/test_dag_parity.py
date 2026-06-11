@@ -18,18 +18,15 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from ict.data import fetch_klines, fetch_funding
+from ict.data import fetch_klines
 from ict import config as C
-from ict.strategies import strategy_f, strategy_g, set_funding
 from engine import run_engine
 
 
 WARMUP_HOURS = 6000   # must match dag/dag.py (~250 days)
-FUNDING_WINDOW_DAYS = 45   # must match dag/dag.py SQUEEZE_FUND_FETCH_DAYS
 
-# Named strategy sets: None = engine default (A-E per STRATEGIES); radar = F-only (v3);
-# squeeze = G-only (v4, needs funding registration — handled inside main()).
-_SETS = {"default": None, "radar": [strategy_f], "squeeze": [strategy_g]}
+# Named strategy sets: None = engine default (A-E per STRATEGIES).
+_SETS = {"default": None}
 
 
 def signal_key(s) -> tuple:
@@ -50,7 +47,7 @@ def signal_key(s) -> tuple:
 @click.option("--samples", default=30, type=int)
 @click.option("--seed", default=42, type=int)
 @click.option("--strats", default="default", type=click.Choice(list(_SETS)),
-              help="Strategy set to test (default = A-E engine set, radar = F-only).")
+              help="Strategy set to test (default = A-E engine set).")
 def main(symbol, days, interval, samples, seed, strats):
     end = pd.Timestamp.now(tz="UTC")
     start = end - pd.Timedelta(days=days)
@@ -61,18 +58,6 @@ def main(symbol, days, interval, samples, seed, strats):
     if df.empty:
         click.echo("no data"); return
     click.echo(f"  {len(df)} bars")
-
-    bar_dur = df.index[1] - df.index[0]
-    fdf = None
-    if strats == "squeeze":
-        fdf = fetch_funding(symbol,
-                            int((start - pd.Timedelta(days=FUNDING_WINDOW_DAYS)).timestamp() * 1000),
-                            int(end.timestamp() * 1000))
-        if fdf.empty:
-            click.echo("no funding history — squeeze untestable on this symbol")
-            return
-        click.echo(f"  {len(fdf)} funding events")
-        set_funding(symbol, fdf)
 
     click.echo("\nrunning FULL-history backtest...")
     full_signals = run_engine(symbol, df, strategies=_SETS[strats])
@@ -108,19 +93,11 @@ def main(symbol, days, interval, samples, seed, strats):
         bm = float((df_window.index[1] - df_window.index[0]).total_seconds()) / 60.0
         cooldown_bars = max(1, int(C.DEDUP_COOLDOWN_MINUTES / bm)) if C.DEDUP_COOLDOWN_MINUTES > 0 else 0
         last = len(df_window) - 1
-        if fdf is not None:
-            # Mimic the live runner's funding fetch: only the trailing
-            # FUNDING_WINDOW_DAYS before the scan bar's close are available.
-            bar_close = df.index[bar_idx] + bar_dur
-            set_funding(symbol, fdf[(fdf.index > bar_close - pd.Timedelta(days=FUNDING_WINDOW_DAYS))
-                                    & (fdf.index <= bar_close)])
         window_signals = run_engine(symbol, df_window,
                                     start_index=max(C.ATR_PERIOD + 5, last - cooldown_bars),
                                     end_index=last,
                                     strategies=_SETS[strats])
         window_signals = [s for s in window_signals if s.bar_index == last]
-        if fdf is not None:
-            set_funding(symbol, fdf)   # restore for the next iteration
 
         # `bar_index` inside window_signals is local to df_window, so re-key
         # by our absolute bar_idx for comparison.

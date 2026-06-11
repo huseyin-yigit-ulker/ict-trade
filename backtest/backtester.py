@@ -62,6 +62,77 @@ class TradeResult:
         return d
 
 
+def _resolve_partial(sig: Signal, df: pd.DataFrame, entry_idx: int) -> TradeResult:
+    """Partial-TP + breakeven lifecycle (ict/config.PARTIAL_TP_*), from the entry bar.
+
+    Scale out C.PARTIAL_TP_CLOSE_FRAC of the position at C.PARTIAL_TP_TRIGGER_FRAC of
+    the distance entry->TP1 and (if PARTIAL_TP_BREAKEVEN) pull the stop to entry; the
+    remainder targets TP1. Reported R is the notional-weighted sum of the two legs
+    (round-trip fees per leg via _net_r — fractions sum to 1, so the entry fee is
+    charged exactly once). Status is sign-based on the blended R (pnl>0 -> tp_hit, else
+    sl_hit) so the 1m resolver and compute_metrics — which key on tp_hit/sl_hit — count
+    a net-positive scale-out as a win and a net-negative one as a loss. The breakeven
+    stop is only armed from the bar AFTER the partial (the entry bar's low/high is the
+    pre-fill wick, not a post-partial reversal)."""
+    n = len(df)
+    long = sig.direction == "long"
+    entry, tp1 = sig.entry, sig.take_profit_1
+    risk = abs(entry - sig.stop_loss)
+    cf = C.PARTIAL_TP_CLOSE_FRAC
+    partial_level = entry + C.PARTIAL_TP_TRIGGER_FRAC * (tp1 - entry)  # long & short
+
+    def pct(px):
+        return (px - entry) / entry * (1 if long else -1)
+
+    def out(status, j, exit_price, pnl_r, pnl_pct):
+        return TradeResult(sig, status, entry_index=entry_idx, exit_index=j,
+                           exit_price=exit_price, pnl_r=pnl_r, pnl_pct=pnl_pct,
+                           bars_to_exit=j - sig.bar_index)
+
+    def classify(pnl_r):
+        return TradeStatus.TP_HIT if pnl_r > 0 else TradeStatus.SL_HIT
+
+    partial_done = False
+    banked_r = 0.0
+    banked_pct = 0.0
+    stop = sig.stop_loss
+    for j in range(entry_idx, n):
+        bar = df.iloc[j]
+        hi, lo = bar["high"], bar["low"]
+        if long:
+            stop_touched, tp_touched, partial_touched = lo <= stop, hi >= tp1, hi >= partial_level
+        else:
+            stop_touched, tp_touched, partial_touched = hi >= stop, lo <= tp1, lo <= partial_level
+
+        if not partial_done:
+            if stop_touched and not tp_touched:                       # full stop, no partial yet
+                return out(TradeStatus.SL_HIT, j, stop,
+                           _net_r(entry, stop, risk, sig.direction), pct(stop))
+            if tp_touched:                                            # gap through partial + TP1
+                if stop_touched:                                      # worst case: stop first
+                    return out(TradeStatus.SL_HIT, j, stop,
+                               _net_r(entry, stop, risk, sig.direction), pct(stop))
+                pnl = cf * _net_r(entry, partial_level, risk, sig.direction) \
+                    + (1 - cf) * _net_r(entry, tp1, risk, sig.direction)
+                return out(classify(pnl), j, tp1, pnl, cf * pct(partial_level) + (1 - cf) * pct(tp1))
+            if partial_touched:                                       # scale out, arm breakeven
+                banked_r = cf * _net_r(entry, partial_level, risk, sig.direction)
+                banked_pct = cf * pct(partial_level)
+                partial_done = True
+                if C.PARTIAL_TP_BREAKEVEN:
+                    stop = entry
+                continue
+        else:                                                         # remainder rides to TP1 / stop
+            if tp_touched and not stop_touched:
+                pnl = banked_r + (1 - cf) * _net_r(entry, tp1, risk, sig.direction)
+                return out(TradeStatus.TP_HIT, j, tp1, pnl, banked_pct + (1 - cf) * pct(tp1))
+            if stop_touched:                                          # both -> worst case stop first
+                pnl = banked_r + (1 - cf) * _net_r(entry, stop, risk, sig.direction)
+                return out(classify(pnl), j, stop, pnl, banked_pct + (1 - cf) * pct(stop))
+
+    return TradeResult(sig, TradeStatus.ACTIVE, entry_index=entry_idx)
+
+
 def simulate_signal(sig: Signal, df: pd.DataFrame, *,
                     use_tp1_only: bool = True) -> TradeResult:
     """Walk forward from sig.bar_index+1 to fill / TP / SL / expiry."""
@@ -85,6 +156,8 @@ def simulate_signal(sig: Signal, df: pd.DataFrame, *,
 
         if entry_touched:
             entry_idx = i
+            if C.PARTIAL_TP_ENABLED:
+                return _resolve_partial(sig, df, i)
             # within same bar, decide TP or SL by which extreme is closer to open (worst-case heuristic)
             risk = abs(sig.entry - sig.stop_loss)
             if sl_touched and tp_touched:

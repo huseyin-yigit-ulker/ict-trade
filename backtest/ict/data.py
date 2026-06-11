@@ -10,7 +10,6 @@ import requests
 
 BINANCE_FAPI = "https://fapi.binance.com/fapi/v1/klines"
 BINANCE_API = "https://api.binance.com/api/v3/klines"
-BINANCE_FUNDING = "https://fapi.binance.com/fapi/v1/fundingRate"
 
 OHLCV_COLS = ["open", "high", "low", "close", "volume"]
 
@@ -58,43 +57,6 @@ def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int,
     df = df.set_index("timestamp")[OHLCV_COLS].astype(float)
     df = df[~df.index.duplicated(keep="last")].sort_index()
     return df
-
-
-def fetch_funding(symbol: str, start_ms: int, end_ms: int,
-                  limit: int = 1000) -> pd.DataFrame:
-    """Settled perp funding events from Binance futures, paginated.
-
-    Returns a DataFrame indexed by fundingTime (UTC) with a single `rate` column.
-    Each rate is FINAL and public at its fundingTime, so consuming it at any
-    bar close >= fundingTime is causally safe (no look-ahead). Spot-only symbols
-    return an empty frame — callers must treat that as 'strategy inactive'."""
-    rows: list = []
-    cursor = start_ms
-    while cursor < end_ms:
-        params = {"symbol": symbol, "startTime": cursor,
-                  "endTime": end_ms, "limit": limit}
-        try:
-            r = requests.get(BINANCE_FUNDING, params=params, timeout=20)
-            r.raise_for_status()
-            chunk = r.json()
-        except requests.exceptions.RequestException as e:
-            print(f"  funding fetch error ({symbol}): {e}")
-            break
-        if not isinstance(chunk, list) or not chunk:
-            break
-        rows.extend(chunk)
-        if len(chunk) < limit:
-            break
-        cursor = chunk[-1]["fundingTime"] + 1
-        time.sleep(0.1)
-
-    if not rows:
-        return pd.DataFrame(columns=["rate"])
-    df = pd.DataFrame(rows)
-    df["timestamp"] = pd.to_datetime(df["fundingTime"], unit="ms", utc=True)
-    df["rate"] = df["fundingRate"].astype(float)
-    df = df.set_index("timestamp")[["rate"]]
-    return df[~df.index.duplicated(keep="last")].sort_index()
 
 
 def load_csv(path: str | Path) -> pd.DataFrame:

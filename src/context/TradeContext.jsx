@@ -23,22 +23,20 @@ const BACKTEST_ALLOWED_SYMBOLS = [
 
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
-// RADAR's retest-limit design uses a 24h window (RADAR_ENTRY_EXPIRY_BARS = 24 on 1h);
-// SQUEEZE's crowding signal is time-sensitive, so 12h (SQUEEZE_ENTRY_EXPIRY_BARS = 12).
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, radar: 1440, squeeze: 720 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
-// sync/backfill_v2_year.py); 'radar' = NEW v3 vol-compression Donchian breakout
-// (strategy F only — see sync/backfill_v3_year.py; NOT the retired v1-dyn radar);
-// 'squeeze' = v4 funding-extreme squeeze fade (strategy G, derivative positioning —
-// see sync/backfill_v4_year.py). Each module aggregates its own version separately.
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', radar: 'v3', squeeze: 'v4' };
+// sync/backfill_v2_year.py). 'main_half'/'impulse_half' = the SAME main(v1)/impulse(v2)
+// signals scored under the partial-TP + breakeven EXIT model (scale out half at half
+// the distance to TP1, pull the stop to entry) — backtest-only streams tagged v3/v4
+// (sync/backfill_v3_year.py / backfill_v4_year.py write them with PARTIAL_TP_ENABLED).
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
-// impulse -> mode='impulse', radar -> mode='radar', squeeze -> mode='squeeze'
-// (dag.py emits each hourly to its own mode tag).
-const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', radar: 'radar', squeeze: 'squeeze' };
+// impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams have no live
+// emitter (the exit model is a backtest overlay) -> backtest-only; loadLive falls back.
+const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse' };
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // LTF bar duration in ms ('1h' -> 3600000). The signal fires at its bar CLOSE,
@@ -85,11 +83,10 @@ export const TradeProvider = ({ children }) => {
   const [pendingDateStart, setPendingDateStart] = useState('');
   const [pendingDateEnd, setPendingDateEnd] = useState('');
 
-  // --- View axes: strategy {main|impulse|radar} × mode {live|backtest}. The URL is
+  // --- View axes: strategy {main|impulse} × mode {live|backtest}. The URL is
   // the source of truth (CommandCenterPage syncs route params -> setView). strategyRef
   // mirrors state so the data-load effect + loadBacktest read it synchronously.
-  // pulse was retired 2026-06-10; 'radar' now means the NEW v3 breakout stream
-  // (stale localStorage values outside VALID_STRATEGIES fall back to main).
+  // (stale localStorage values outside VALID_STRATEGIES fall back to main.)
   const [strategy, setStrategyState] = useState(() => {
     try { const s = localStorage.getItem('pusu.strategy'); return VALID_STRATEGIES.has(s) ? s : 'main'; } catch { return 'main'; }
   });
@@ -560,7 +557,7 @@ export const TradeProvider = ({ children }) => {
     // of cancelled. This was the live-vs-backtest mismatch (live SL, backtest Cancelled).
     const entryTs = Math.floor((sig.dateObj.getTime() + ltfIntervalMs(sig.ltfTimeframe)) / 1000);
     // Limit must be touched within the strategy's fill window (backtest parity;
-    // radar = 1440 min, others = 180).
+    // main/impulse = 180 min).
     const expiryMin = STRATEGY_EXPIRY_MINUTES[strategyRef.current] ?? ENTRY_EXPIRY_MINUTES;
     const fillDeadlineSec = entryTs + expiryMin * 60;
     const lastPrice = candles[candles.length - 1]?.close ?? null;

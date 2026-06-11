@@ -1,41 +1,26 @@
-"""Backtest the RADAR v3 stream for a calendar year -> trading_signals with
-version='v3' (kept SEPARATE from v1/v2/v1-dyn/v1-15m).
+"""Backtest MAIN under the PARTIAL-TP + BREAKEVEN exit model -> trading_signals with
+version='v3' (the dashboard's "MAIN ½TP" stream).
 
-RADAR v3 is a brand-new strategy — NOT the retired dynamic-symbols radar (v1-dyn):
+SAME signals as the v1 main backfill (strategy set B/C/D/E, same static universe, same
+base D-exclusion) — the ONLY difference is the exit model: ict/config.PARTIAL_TP_ENABLED
+is flipped on process-locally, so backtester.simulate_signal scales out
+PARTIAL_TP_CLOSE_FRAC of each filled trade at PARTIAL_TP_TRIGGER_FRAC of the distance
+entry->TP1 and pulls the stop to breakeven; the remainder rides to TP1. So v1 vs v3 is a
+clean A/B on the exit model alone (entry/SL/TP geometry is identical).
 
-  strategy F "Vol-Compression Donchian Breakout" (backtest/ict/strategies.py):
-    - 1h bars, same static universe as main.
-    - LONG when close breaks the prior-120-bar Donchian high (SHORT mirrored),
-      only when the breakout emerges from below-average volatility
-      (ATR24 < 0.85 x SMA240(ATR24)), with a volume surge (>1.5x 20-bar median)
-      and on the EMA200 side (regime filter).
-    - Entry = RETEST LIMIT at the broken channel level (the engine only accepts
-      retrace-limit entries); anti-chase guard skips runaway bars (>1.2 ATR24).
-    - SL = 2.5 x ATR24 (the MIN_SL_DIST floor never binds — no sub-spread stops);
-      TP = 3R fixed; 24h fill window (expiry_minutes=1440, vs 180 elsewhere).
-    - Re-fire cooldown on the raw trigger series + standard 24h zone dedup.
+The flag is set BEFORE importing the engine and only mutates this process's config; the
+live DAG and the v1/v2 backfills run in their own processes off the unmodified config.
 
-  Rationale: the ICT streams (v1/v2) FADE moves into zones; F JOINS breakouts out
-  of compression — structurally opposite entries, low expected PnL correlation.
-
-Everything else — data fetch, 1m outcome resolution, fees, upsert — is identical
-to backfill_v2_year.py, so v3 is method-matched to the v1/v2 backfills.
+2026-06-11 A/B (sync/experiment_partial.py, same signals, resolved trades): the partial
+model RAISES win rate (~+9pt) but LOWERS total R (~-49R on the 2026 Jan-Jun set) — the
+edge lives in the big runners, which the 3R cap + breakeven stop give back. Surfaced as
+its own dashboard stream so the tradeoff is visible; NOT the production default.
 
 Safety: never deletes in --dry-run; a real run needs --wipe-scope {year|all|none}.
-  wipe touches ONLY version='v3' rows.
-
-RESULT 2026-06-10 (Jan-Jun 2026, 21 symbols): 147 signals, 133 closed, 15% win,
--60R total — FAILED the acceptance gates (needed totR>0, expectancy>=+0.1R,
-win>=30%). Only January (+14R, the clean trend month) was positive; Feb-Jun chop
-made compression breakouts systematic traps. sync/experiment_v3.py ablation:
-market-at-close entry -65R, 2R targets -48..-58R => the edge is absent in this
-regime, not an entry-mechanics artifact. Live stream stays disabled.
+  wipe touches ONLY version='v3' rows, so v1/v2/v1-dyn/v1-15m are untouched.
 
 Usage:
-  # fast validation (few symbols, short window, no DB):
-  python sync/backfill_v3_year.py --symbols BTCUSDT SOLUSDT \
-    --start 2026-03-01 --end 2026-06-10 --dry-run
-  # full year, real run:
+  python sync/backfill_v3_year.py --symbols BTCUSDT --start 2026-05-01 --end 2026-06-06 --dry-run
   python sync/backfill_v3_year.py --year 2026 --wipe-scope year
 """
 from __future__ import annotations
@@ -46,26 +31,25 @@ from pathlib import Path
 
 import pandas as pd
 
-import trade_sync_common as tsc            # adds backtest/ to sys.path
-from ict import config as C                # noqa: E402
+import trade_sync_common as tsc           # adds backtest/ to sys.path
+from ict import config as C               # noqa: E402
 
+# --- exit-model change (process-local; v1/live unaffected) ---------------------
 V3_VERSION = "v3"
-RADAR_EXPIRY_MIN = C.RADAR_ENTRY_EXPIRY_BARS * 60   # 1440 = 24h retest window on 1m
+C.PARTIAL_TP_ENABLED = True               # scale out half at half-distance + breakeven
 
-from engine import run_engine              # noqa: E402
-from ict.strategies import strategy_f      # noqa: E402
+from engine import run_engine                                              # noqa: E402
+from ict.strategies import strategy_b, strategy_c, strategy_d, strategy_e  # noqa: E402
 
-DAG_STRATS = [strategy_f]
+DAG_STRATS = [strategy_b, strategy_c, strategy_d, strategy_e]   # same set as v1 main
 
-# Production set — mirrors backfill_year.py SYMBOLS / sync_daily.py STATIC_SYMBOLS
-# (post-audit 21 names; the stale v2 list with DOGE/TSLA/GOOGL/PLTR is NOT used).
+# Production set — mirrors backfill_year.py SYMBOLS and the dashboard allow-list.
 SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
     "XAUUSDT", "XAGUSDT",
-    # Stock-backed perps (underlying equities)
     "NVDAUSDT", "METAUSDT",
     "AMZNUSDT", "COINUSDT", "MSTRUSDT",
 ]
@@ -76,9 +60,10 @@ OUT.mkdir(exist_ok=True)
 
 def build_symbol_rows(symbol: str, win_start: pd.Timestamp,
                       win_end: pd.Timestamp) -> tuple[list[dict], dict]:
-    """Returns (rows, info). info carries diagnostics for the run report."""
+    """Returns (rows, info). Identical to backfill_year.build_symbol_rows except the
+    rows are tagged version='v3' and resolved under the partial-TP exit model."""
     end = pd.Timestamp.now(tz="UTC")
-    warmup_start = win_start - pd.Timedelta(hours=6000)   # ~250d; F needs >=264 bars
+    warmup_start = win_start - pd.Timedelta(hours=6000)   # ~250d detector warmup
 
     df = tsc.fetch_1h(symbol, warmup_start, end)
     if df.empty:
@@ -92,8 +77,7 @@ def build_symbol_rows(symbol: str, win_start: pd.Timestamp,
         if not (win_start <= s.timestamp < win_end):
             continue
         outcome = tsc.simulate(symbol, s.timestamp, s.direction, s.entry,
-                               s.stop_loss, s.take_profit_1, df1m=df1m,
-                               expiry_minutes=RADAR_EXPIRY_MIN)
+                               s.stop_loss, s.take_profit_1, df1m=df1m)
         status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
         row = tsc.build_row(
             symbol, s.timestamp, s.direction, s.entry, s.stop_loss, s.take_profit_1,
@@ -137,9 +121,9 @@ def main():
     win_start = pd.Timestamp(args.start, tz="UTC") if args.start else pd.Timestamp(f"{args.year}-01-01", tz="UTC")
     win_end = pd.Timestamp(args.end, tz="UTC") if args.end else min(pd.Timestamp(f"{args.year + 1}-01-01", tz="UTC"), now)
 
-    print(f"=== {args.year} RADAR v3 backfill | {win_start.date()}..{win_end.date()} | "
+    print(f"=== {args.year} MAIN ½TP backfill (v3, partial-TP+BE) | {win_start.date()}..{win_end.date()} | "
           f"symbols={len(args.symbols)} | strats={[f.__name__ for f in DAG_STRATS]} | "
-          f"expiry_min={RADAR_EXPIRY_MIN} | dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
+          f"dry_run={args.dry_run} | wipe={args.wipe_scope} ===")
 
     all_rows, infos = [], []
     for sym in args.symbols:
