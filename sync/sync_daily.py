@@ -12,6 +12,8 @@ Live streams, each -> its own backtest version tag:
   - main_half    : mode='live'    -> version='v3'     (SAME live signals as main, resolved
   - impulse_half : mode='impulse' -> version='v4'      under the partial-TP + breakeven exit
                                                        model — PARTIAL_TP_ENABLED per stream)
+  - karma        : per-symbol blend -> version='karma' (source mode AND exit model
+                                                       chosen per symbol by sync/karma_map.py)
   - radar_legacy : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
   - pulse        : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
 
@@ -36,7 +38,8 @@ from ict import config as C   # backtest/ict (path added by tsc) — partial-TP 
 
 # Curated static set (MAIN + PULSE). RADAR picks are dynamic -> no allow-list.
 # 2026-06-10: DOGE/GOOGL/PLTR/TSLA removed after the 2026 Jan-Jun v1 audit
-# (mirrors dag/dag.py SYMBOLS).
+# (mirrors dag/dag.py SYMBOLS). 2026-06-12: PLTR/TSLA re-added by user decision
+# with the tokenized-equity expansion.
 STATIC_SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
@@ -46,6 +49,11 @@ STATIC_SYMBOLS = [
     # Stock-backed perps (underlying equities)
     "NVDAUSDT", "METAUSDT",
     "AMZNUSDT", "COINUSDT", "MSTRUSDT",
+    # 2026-06-12 tokenized-equity expansion (PLTR/TSLA re-added by user decision,
+    # reversing the 2026-06-10 cut). Listings span 2026-01-28 .. 2026-06-08.
+    "CRCLUSDT", "PLTRUSDT", "TSLAUSDT", "INTCUSDT", "HOODUSDT",
+    "MSFTUSDT", "AVGOUSDT", "BABAUSDT", "BXUSDT", "HPEUSDT",
+    "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
 ]
 
 # Each live stream resolves the SAME way (emitted live signals + still-active rows
@@ -67,7 +75,10 @@ STREAMS = {
 # explicitly to re-resolve historical rows. The ½TP streams ride the nightly cron
 # so v3/v4 stay current without manual backfills (dag/halftp_monitor.py covers the
 # intraday cards; this is the end-of-day authoritative resolution).
-ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half"]
+# "karma" is the per-symbol best-cell blend (sync/karma_map.py): it consumes the
+# SAME live signals as main/impulse — per symbol it picks the source set and the
+# exit model from the 2026 selection run — and tags rows version='karma'.
+ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half", "karma"]
 
 
 def fetch_live_window(conn, mode, symbols, w_start, w_end) -> list[dict]:
@@ -166,12 +177,37 @@ def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
     return rows, status_counts
 
 
+def resolve_karma(live, bt, w_start, w_end, now, *, rescan, symbols_override=None) -> list:
+    """KARMA stream: per symbol, resolve its live parent signals under the cell the
+    2026 selection chose (set in {main,impulse} x exit in {tam,yarim}). Symbols are
+    grouped into (set, exit) buckets and each bucket rides resolve_stream with the
+    matching mode + partial flag; every row is tagged version='karma'."""
+    try:
+        from karma_map import KARMA_MAP
+    except ImportError:
+        print("  [karma] sync/karma_map.py yok — stream atlandı")
+        return []
+    buckets = defaultdict(list)
+    for sym, cfg in KARMA_MAP.items():
+        if symbols_override is not None and sym not in symbols_override:
+            continue
+        buckets[(cfg["set"], cfg["half"])].append(sym)
+    rows = []
+    for (set_name, half), syms in sorted(buckets.items()):
+        cfg = {"mode": "live" if set_name == "main" else "impulse", "version": "karma",
+               "ltf_min": 60, "floor": "h", "symbols": sorted(syms), "partial": half}
+        r, _ = resolve_stream(f"karma[{set_name}/{'yarim' if half else 'tam'}]",
+                              cfg, live, bt, w_start, w_end, now, rescan=rescan)
+        rows += r
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
     # Default is MAIN ONLY. radar_legacy (retired dynamic stream) & pulse were
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
-    ap.add_argument("--stream", choices=list(STREAMS) + ["all"], default="main")
+    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "all"], default="main")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=None, help="override symbol scope (all streams)")
@@ -190,6 +226,11 @@ def main():
 
     all_rows = []
     for name in names:
+        if name == "karma":
+            all_rows += resolve_karma(live, bt, w_start, w_end, now,
+                                      rescan=not args.no_active_rescan,
+                                      symbols_override=args.symbols)
+            continue
         rows, _ = resolve_stream(name, STREAMS[name], live, bt, w_start, w_end, now,
                                  rescan=not args.no_active_rescan,
                                  symbols_override=args.symbols)

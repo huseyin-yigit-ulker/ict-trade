@@ -35,11 +35,14 @@ const IconSettings = () => (
 // breakeven exit model (50% out at ½ distance to TP, stop → entry) — Live view tracks
 // the lifecycle in real time; Backtest reads the nightly v3/v4 resolution.
 // PULSE retired 2026-06-10; RADAR/SQUEEZE removed 2026-06-11.
+// KARMA = per-symbol best cell of {main,impulse} x {tam,½TP} from the 2026
+// selection run (sync/karma_map.py) — live reads both parents, filtered per symbol.
 const GROUPS = [
   { key: 'main',         label: 'MAIN',        icon: <IconCommand />, modes: ['live', 'backtest'] },
   { key: 'impulse',      label: 'IMPULSE',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'main_half',    label: 'MAIN ½TP',    icon: <IconCommand />, modes: ['live', 'backtest'] },
   { key: 'impulse_half', label: 'IMPULSE ½TP', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma',        label: 'KARMA',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

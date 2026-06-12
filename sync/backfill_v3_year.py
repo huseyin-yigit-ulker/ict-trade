@@ -52,6 +52,11 @@ SYMBOLS = [
     "XAUUSDT", "XAGUSDT",
     "NVDAUSDT", "METAUSDT",
     "AMZNUSDT", "COINUSDT", "MSTRUSDT",
+    # 2026-06-12 tokenized-equity expansion (PLTR/TSLA re-added by user decision,
+    # reversing the 2026-06-10 cut). Listings span 2026-01-28 .. 2026-06-08.
+    "CRCLUSDT", "PLTRUSDT", "TSLAUSDT", "INTCUSDT", "HOODUSDT",
+    "MSFTUSDT", "AVGOUSDT", "BABAUSDT", "BXUSDT", "HPEUSDT",
+    "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
 ]
 
 OUT = Path(__file__).resolve().parent / "out"

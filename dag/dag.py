@@ -79,6 +79,7 @@ WARMUP_HOURS = 6000   # ~250 days; verified ~99% backtest-DAG parity
 # below; both years showed it net negative.
 # 2026-06-10: DOGE (-27R), GOOGL (-18R, 0 TP in 18), PLTR (-22R), TSLA (-11R)
 # removed after the 2026 Jan-Jun v1 audit — same criterion as the TON/XRP cut.
+# 2026-06-12: PLTR/TSLA re-added by user decision (tokenized-equity expansion).
 SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
@@ -88,6 +89,13 @@ SYMBOLS = [
     # Stock-backed perps (underlying equities)
     "NVDAUSDT", "METAUSDT",
     "AMZNUSDT", "COINUSDT", "MSTRUSDT",
+    # 2026-06-12 tokenized-equity expansion — PLTR/TSLA re-added by user decision
+    # (reverses the 2026-06-10 audit cut). Listing dates span 2026-01-28 (TSLA) to
+    # 2026-06-08 (BX/HPE/AMAT/CRWD/CRDO/AAOI/IWM); short-history names emit few or
+    # no signals until enough warmup bars accrue.
+    "CRCLUSDT", "PLTRUSDT", "TSLAUSDT", "INTCUSDT", "HOODUSDT",
+    "MSFTUSDT", "AVGOUSDT", "BABAUSDT", "BXUSDT", "HPEUSDT",
+    "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
 ]
 
 # --- dynamic volume-anomaly picks ---

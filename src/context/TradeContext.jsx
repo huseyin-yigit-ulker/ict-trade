@@ -7,9 +7,10 @@ const TradeContext = createContext();
 // which silently dropped every 00:xx UTC signal (and '24' never matched).
 const BACKTEST_ALLOWED_HOURS = new Set(Array.from({ length: 24 }, (_, h) => h));
 // Production set — XRP, TON, 1000SHIB, LINK, OP excluded after negative
-// 2025+2026 backtest performance; DOGE/GOOGL/PLTR/TSLA cut 2026-06-10 after
-// the Jan-Jun audit. Old rows for these symbols stay in the database but the
-// dashboard hides them. Mirrors dag/dag.py SYMBOLS.
+// 2025+2026 backtest performance; DOGE/GOOGL cut 2026-06-10 after the Jan-Jun
+// audit (PLTR/TSLA were cut too but re-added 2026-06-12 by user decision with
+// the tokenized-equity expansion). Old rows for hidden symbols stay in the
+// database but the dashboard hides them. Mirrors dag/dag.py SYMBOLS.
 const BACKTEST_ALLOWED_SYMBOLS = [
   'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT',
   '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
@@ -18,13 +19,17 @@ const BACKTEST_ALLOWED_SYMBOLS = [
   'XAUUSDT', 'XAGUSDT',
   // Stock-backed perps (underlying equities)
   'NVDAUSDT', 'METAUSDT',
-  'AMZNUSDT', 'COINUSDT', 'MSTRUSDT'
+  'AMZNUSDT', 'COINUSDT', 'MSTRUSDT',
+  // 2026-06-12 tokenized-equity expansion (listings 2026-01-28 .. 2026-06-08)
+  'CRCLUSDT', 'PLTRUSDT', 'TSLAUSDT', 'INTCUSDT', 'HOODUSDT',
+  'MSFTUSDT', 'AVGOUSDT', 'BABAUSDT', 'BXUSDT', 'HPEUSDT',
+  'AMATUSDT', 'CRWDUSDT', 'CRDOUSDT', 'AAOIUSDT', 'IWMUSDT'
 ];
 
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -32,15 +37,63 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impul
 // signals scored under the partial-TP + breakeven EXIT model (scale out half at half
 // the distance to TP1, pull the stop to entry) — backtest-only streams tagged v3/v4
 // (sync/backfill_v3_year.py / backfill_v4_year.py write them with PARTIAL_TP_ENABLED).
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4' };
+// 'karma' = per-symbol best cell of {main,impulse} x {tam,½TP} (sync/karma_map.py).
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
 // AFTER entry) — live status is then tracked under partial-TP + breakeven rules.
+// 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
 const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse' };
 // ½TP modules: scale out 50% at half the distance entry→TP, stop -> entry (BE).
 const HALF_STRATEGIES = new Set(['main_half', 'impulse_half']);
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
+
+// KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
+// selection run karma_selection_2026.csv; regenerate both together).
+//   set: which live parent feeds the symbol; half: ½TP+BE exit (true) or full TP.
+export const KARMA_MAP = {
+  '1000PEPEUSDT': { set: 'main', half: true },
+  AAOIUSDT: { set: 'main', half: false },
+  ADAUSDT: { set: 'impulse', half: true },
+  AMATUSDT: { set: 'main', half: false },
+  AMZNUSDT: { set: 'main', half: false },
+  ARBUSDT: { set: 'main', half: false },
+  AVGOUSDT: { set: 'main', half: false },
+  BABAUSDT: { set: 'main', half: true },
+  BNBUSDT: { set: 'main', half: false },
+  BTCUSDT: { set: 'main', half: false },
+  BXUSDT: { set: 'main', half: false },
+  COINUSDT: { set: 'main', half: false },
+  CRCLUSDT: { set: 'main', half: false },
+  CRDOUSDT: { set: 'main', half: false },
+  CRWDUSDT: { set: 'main', half: false },
+  ETHUSDT: { set: 'impulse', half: false },
+  FETUSDT: { set: 'main', half: true },
+  HOODUSDT: { set: 'main', half: false },
+  HPEUSDT: { set: 'main', half: false },
+  INTCUSDT: { set: 'main', half: false },
+  IWMUSDT: { set: 'main', half: false },
+  METAUSDT: { set: 'main', half: false },
+  MSFTUSDT: { set: 'main', half: false },
+  MSTRUSDT: { set: 'main', half: false },
+  NEARUSDT: { set: 'main', half: false },
+  NVDAUSDT: { set: 'main', half: false },
+  ONDOUSDT: { set: 'main', half: false },
+  ORDIUSDT: { set: 'main', half: false },
+  PLTRUSDT: { set: 'main', half: true },
+  SOLUSDT: { set: 'main', half: true },
+  SUIUSDT: { set: 'main', half: false },
+  SUSDT: { set: 'main', half: false },
+  TSLAUSDT: { set: 'main', half: false },
+  WIFUSDT: { set: 'main', half: false },
+  XAGUSDT: { set: 'main', half: false },
+  XAUUSDT: { set: 'impulse', half: false },
+};
+
+// ½TP lifecycle applies to this signal? *_half modules: always. karma: per symbol.
+export const isHalfFor = (strat, symbol) =>
+  HALF_STRATEGIES.has(strat) || (strat === 'karma' && !!KARMA_MAP[symbol]?.half);
 
 // LTF bar duration in ms ('1h' -> 3600000). The signal fires at its bar CLOSE,
 // so live entry-fill scanning starts at signal_time + this (backtest parity).
@@ -284,8 +337,14 @@ export const TradeProvider = ({ children }) => {
       params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
       // Module -> its own live mode tag: MAIN='live' (hourly B/C/D/E), IMPULSE='impulse'
       // (hourly v2 set). Excludes pulse (15m), dynamic (radar) and legacy rows.
-      const liveMode = STRATEGY_LIVE_MODE[strategyRef.current] || 'live';
-      params.append('mode', `eq.${liveMode}`);
+      // KARMA reads both modes; per symbol only the KARMA_MAP-selected side is kept below.
+      const isKarma = strategyRef.current === 'karma';
+      if (isKarma) {
+        params.append('mode', 'in.(live,impulse)');
+      } else {
+        const liveMode = STRATEGY_LIVE_MODE[strategyRef.current] || 'live';
+        params.append('mode', `eq.${liveMode}`);
+      }
 
       const url = `${supabaseUrl}/rest/v1/signals?${params.toString()}`;
       const res = await fetch(url, {
@@ -299,7 +358,14 @@ export const TradeProvider = ({ children }) => {
       if (!res.ok) throw new Error('Live veri alınamadı');
 
       const rows = await res.json();
-      const filteredRows = rows.filter((r) => isAllowedBacktestHour(r.signal_time));
+      const filteredRows = rows.filter((r) => {
+        if (!isAllowedBacktestHour(r.signal_time)) return false;
+        if (!isKarma) return true;
+        // karma: keep only the per-symbol selected source (unmapped symbols don't trade)
+        const sel = KARMA_MAP[r.symbol];
+        if (!sel) return false;
+        return r.mode === (sel.set === 'impulse' ? 'impulse' : 'live');
+      });
       const mapped = filteredRows.map((r) => ({
         id: r.id,
         symbol: r.symbol,
@@ -592,7 +658,8 @@ export const TradeProvider = ({ children }) => {
     // (mirror of backtest _resolve_partial): at half the distance entry→TP close
     // 50% and pull the stop to entry; the rest rides to TP or stops at BE.
     // Same-bar TP+stop → worst case stop first; BE arms from the NEXT bar.
-    if (HALF_STRATEGIES.has(strategyRef.current)) {
+    // karma: the exit model is per SYMBOL (KARMA_MAP), not per module.
+    if (isHalfFor(strategyRef.current, sig.symbol)) {
       const halfLevel = sig.entry + (sig.tp - sig.entry) / 2;   // long & short
       let partial = false;
       let stop = sig.sl;

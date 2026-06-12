@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, LineSeries, BaselineSeries, createSeriesMarkers } from 'lightweight-charts';
-import { useTradeContext } from '../context/TradeContext';
+import { useTradeContext, isHalfFor } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 
 const IconCandles = () => (
@@ -24,7 +24,8 @@ const ChartModal = () => {
   const { t, locale } = useLang();
   // ½TP modules: the chart annotates the partial-TP + breakeven lifecycle —
   // TP/2 dashed line, "%50 kapandı, SL→Entry" marker, BE stop segment.
-  const isHalf = strategy === 'main_half' || strategy === 'impulse_half';
+  // karma: ½TP'lik sembol bazında (KARMA_MAP) — isHalfFor iki durumu da çözer.
+  const isHalf = isHalfFor(strategy, activeSignal?.symbol);
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref

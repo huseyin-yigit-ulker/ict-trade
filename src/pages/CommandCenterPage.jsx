@@ -12,7 +12,7 @@ const CommandCenterPage = () => {
   const { strategy: pStrat, mode: pMode } = useParams();
   const { strategy, mode, setView } = useTradeContext();
   const isHalf = pStrat === 'main_half' || pStrat === 'impulse_half';
-  const validS = (pStrat === 'main' || pStrat === 'impulse' || isHalf) ? pStrat : null;
+  const validS = (pStrat === 'main' || pStrat === 'impulse' || pStrat === 'karma' || isHalf) ? pStrat : null;
   const validM = (pMode === 'backtest' || pMode === 'live') ? pMode : null;
 
   useEffect(() => {

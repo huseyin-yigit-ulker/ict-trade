@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useTradeContext } from '../context/TradeContext';
+import { useTradeContext, isHalfFor } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import Sparkline from './viz/Sparkline';
 import PusuLogo from './PusuLogo';
@@ -168,8 +168,8 @@ const Dashboard = () => {
     strategy,
   } = useTradeContext();
   const { t, locale } = useLang();
-  // ½TP modules — live outcomes scored under the partial-TP + breakeven model.
-  const isHalf = strategy === 'main_half' || strategy === 'impulse_half';
+  // ½TP per signal — *_half modules always; karma decides per SYMBOL (KARMA_MAP).
+  const halfFor = (sig) => isHalfFor(strategy, sig?.symbol);
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -244,7 +244,7 @@ const Dashboard = () => {
   const getLiveRLabel = (sig, status) => {
     if (!status) return { label: '--', cls: 'waiting' };
     if (status === 'TP Oldu' || status === 'BE Oldu') {
-      const r = liveOutcomeR(sig, status, isHalf);
+      const r = liveOutcomeR(sig, status, halfFor(sig));
       return { label: `+${r.toFixed(2)}R`, cls: 'win' };
     }
     if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') {
@@ -270,7 +270,7 @@ const Dashboard = () => {
       const meta = resolveLiveMeta(status);
       if (meta.label === 'TP' || meta.label === 'BE') {
         tp += 1;
-        rScore += liveOutcomeR(sig, status, isHalf);
+        rScore += liveOutcomeR(sig, status, halfFor(sig));
       } else if (meta.label === 'SL' || meta.label === 'TP/SL') {
         sl += 1;
         rScore -= 1;
@@ -492,7 +492,7 @@ const Dashboard = () => {
       totalTrades = filteredSignals.length;
       closedTrades = denom;
       const asc = [...filteredSignals].sort((a, b) => a.dateObj - b.dateObj);
-      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, isHalf));
+      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, halfFor(sig)));
       let cc = 0;
       cum = downsample(rs.map((r) => (cc += r)), 80);
       hist = rHistogram(rs);
