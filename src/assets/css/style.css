@@ -23,8 +23,13 @@
   --border: #2B3139;
   --border-soft: #1E2329;
   --glass: rgba(255, 255, 255, 0.04);
+  --hover-border: #3a4048;             /* border on hovered cards/buttons */
+  --chip-glass: rgba(255, 255, 255, 0.06); /* subtle chip fill on panels */
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5); /* dropdown / popover */
+  --shadow-card: none;                 /* card elevation — none in dark, lifted in light */
 
   --mono: "JetBrains Mono", "SF Mono", "Roboto Mono", Consolas, "Courier New", monospace;
+  color-scheme: dark;
 }
 
 * {
@@ -55,7 +60,7 @@ a {
 }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--hover); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #3a4048; }
+::-webkit-scrollbar-thumb:hover { background: var(--hover-border); }
 
 /***************************
   Header
@@ -135,7 +140,7 @@ a {
 .header-btn:hover,
 .coin-select:hover {
   background: var(--hover);
-  border-color: #3a4048;
+  border-color: var(--hover-border);
 }
 
 .primary-btn {
@@ -210,7 +215,7 @@ a {
   padding: 12px;
   display: none;
   z-index: 60;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-pop);
 }
 
 .multi-select-content.show {
@@ -464,6 +469,7 @@ a {
   padding: 16px;
   display: grid;
   gap: 14px;
+  box-shadow: var(--shadow-card);
 }
 
 .backtest-flow { display: grid; gap: 14px; }
@@ -514,12 +520,13 @@ a {
   display: grid;
   gap: 4px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: var(--shadow-card);
 }
 
 .drill-card:hover {
   background: var(--hover);
-  border-color: #3a4048;
+  border-color: var(--hover-border);
 }
 
 .drill-card.active {
@@ -583,13 +590,14 @@ a {
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
   position: relative;
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 .trade-card:hover {
   background: var(--hover);
-  border-color: #3a4048;
+  border-color: var(--hover-border);
 }
 
 .trade-head {
@@ -656,7 +664,7 @@ a {
   margin-left: 4px;
   padding: 1px 5px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--chip-glass);
   color: var(--text);
   font-family: var(--mono);
 }
@@ -1091,7 +1099,7 @@ button.chip   { cursor: pointer; }
   z-index: 140;
   display: grid;
   gap: 10px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-pop);
 }
 
 .summary-filter-list {
@@ -1308,6 +1316,7 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 .kpi-cell {
   flex: 1 1 120px;
@@ -1503,13 +1512,41 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
 }
 
 /***************************
-  Light theme (token overrides) — accent + win/loss kept; dark is default.
+  Light theme (token overrides) — dark is default.
   Chart canvas + bottom ticker stay dark by design (trading convention).
+  Tuned DOWN from pure white: gray-tinted canvas + off-white panels (less glare),
+  and accent/win/loss re-inked darker — the dark-mode neons wash out on light.
 ***************************/
 [data-theme="light"] {
-  --bg: #F4F5F7; --panel: #FFFFFF; --panel-2: #F1F3F6; --hover: #E7EAEF;
-  --text: #1A1D24; --muted: #66707F; --muted-2: #98A1AE;
-  --border: #E1E5EA; --border-soft: #EDF0F3; --glass: rgba(0, 0, 0, 0.03);
+  /* 3-step surface hierarchy (kills the "everything is one near-white blob"):
+     --bg is a clearly gray frame, --panel the mid surface (sidebar/header/the
+     big day box), --panel-2 the lifted near-white cards. Each step is a real
+     luminance jump, not the old ~5% nudge. */
+  --bg: #D4D9E1;            /* app frame — gray, dims the glare */
+  --panel: #E9EDF2;         /* sidebar / header / day-notebook box */
+  --panel-2: #FAFBFC;       /* cards / kpi / inputs — brightest, but small + shadowed */
+  --hover: #DFE4EB;
+
+  --text: #1A1E26;
+  --muted: #525C6A;         /* darkened so labels read on light cards */
+  --muted-2: #7A8492;
+
+  --accent: #C8860D;        /* darker amber: readable as text/icon on light */
+  --accent-hover: #B0750A;
+
+  --win: #0A9D69; --win-soft: rgba(10, 157, 105, 0.12);
+  --loss: #DC3F55; --loss-soft: rgba(220, 63, 85, 0.12);
+  --warn: #B8860B;
+
+  --border: #C3C9D4;        /* strong enough to separate adjacent surfaces */
+  --border-soft: #D5DAE2;
+  --glass: rgba(15, 23, 42, 0.04);
+  --hover-border: #ABB4C0;
+  --chip-glass: rgba(15, 23, 42, 0.05);
+  --shadow-pop: 0 12px 30px rgba(23, 32, 46, 0.16);
+  --shadow-card: 0 1px 3px rgba(23, 32, 46, 0.08), 0 1px 2px rgba(23, 32, 46, 0.05);
+
+  color-scheme: light;
 }
 
 /***************************
@@ -1583,7 +1620,7 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
   width: 34px; height: 32px; border-radius: 4px; cursor: pointer; font-size: 15px; line-height: 1;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
-.icon-btn:hover { background: var(--hover); border-color: #3a4048; }
+.icon-btn:hover { background: var(--hover); border-color: var(--hover-border); }
 
 /***************************
   Login screen (always tactical-dark splash)

@@ -230,7 +230,39 @@ const EN = {
   'Persembe': 'Thursday', 'Cuma': 'Friday', 'Cumartesi': 'Saturday', 'Pazar': 'Sunday',
 };
 
-const TRANSLATIONS = { tr: {}, en: EN };
+// TR overrides — the key is already the Turkish string, so this map only fixes
+// what the keys get wrong: English jargon left untranslated (Win Rate, Live...),
+// ASCII-mangled weekday names from the SQL RPC (Sali -> Salı) and a few awkward
+// phrasings. Trade jargon with no settled Turkish (PnL, TP/SL, Backtest) stays.
+const TR = {
+  // --- English leftovers shown in the TR UI ---
+  'Live': 'Canlı',
+  'Default': 'Varsayılan',
+  'Entry': 'Giriş',
+  'Timeframe': 'Zaman Dilimi',
+  'Win Rate': 'Kazanma Oranı',
+  'Kazanç (Win Rate)': 'Kazanma Oranı',
+  'Profit Factor': 'Kâr Faktörü',
+  'Expectancy': 'Beklenti',
+  'Max DD': 'Maks. Düşüş',
+  'TP / SL / Cancel': 'TP / SL / İptal',
+  'Risk-Reward': 'Risk/Ödül',
+  'FUTURES': 'VADELİ',
+  'CANLI · FUTURES': 'CANLI · VADELİ',
+
+  // --- ASCII -> proper Turkish (status labels + SQL weekday names) ---
+  'AKTIF': 'AKTİF',
+  'IPTAL': 'İPTAL',
+  'Sali': 'Salı',
+  'Carsamba': 'Çarşamba',
+  'Persembe': 'Perşembe',
+
+  // --- phrasing polish ---
+  'Durum Filtre': 'Durum Filtresi',
+  'Sembol Filtre': 'Sembol Filtresi',
+};
+
+const TRANSLATIONS = { tr: TR, en: EN };
 
 const LanguageContext = createContext();
 export const useLang = () => useContext(LanguageContext);
