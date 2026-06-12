@@ -101,8 +101,10 @@ const pctDist = (a, b) => {
 const LIVE_STATUS_DISPLAY = {
   'TP Oldu':                      { label: 'TP',       icon: '●', cls: 'st-tp' },
   'SL Oldu':                      { label: 'SL',       icon: '●', cls: 'st-sl' },
+  'BE Oldu':                      { label: 'BE',       icon: '●', cls: 'st-tp' },     // ½TP: breakeven close, partial banked
   'TP/SL Aynı Mum':               { label: 'TP+SL',    icon: '●', cls: 'st-mixed' },
   'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    icon: '●', cls: 'st-active' },
+  'İşlem Aktif (Kısmi ½TP Alındı)': { label: '½TP·BE',  icon: '●', cls: 'st-active' }, // ½TP: 50% out, stop at entry
   'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
   'İptal (Süre Doldu)':           { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
   'Sinyal Bekliyor':              { label: 'BEKLİYOR', icon: '●', cls: 'st-wait' },
@@ -140,12 +142,15 @@ const timeAgo = (date, t) => {
 
 // Compute the realised R-multiple for a live trade outcome from its
 // entry/tp/sl. Replaces the hard-coded "2R for TP" assumption.
-const liveOutcomeR = (sig, status) => {
+// ½TP modules (half=true): 50% banked at half distance (¼ RR) + 50% to TP
+// (½ RR) → TP = 0.75×RR; a breakeven close keeps only the banked ¼ RR.
+const liveOutcomeR = (sig, status, half = false) => {
   if (!sig?.entry || !sig?.tp || !sig?.sl) return 0;
   const risk = Math.abs(sig.entry - sig.sl);
   if (risk === 0) return 0;
-  const reward = Math.abs(sig.tp - sig.entry);
-  if (status === 'TP Oldu') return reward / risk;
+  const rr = Math.abs(sig.tp - sig.entry) / risk;
+  if (status === 'TP Oldu') return half ? 0.75 * rr : rr;
+  if (status === 'BE Oldu') return half ? 0.25 * rr : 0;
   if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return -1;
   return 0;
 };
@@ -160,8 +165,11 @@ const Dashboard = () => {
     statusFilter,
     isLoaded,
     liveError,
+    strategy,
   } = useTradeContext();
   const { t, locale } = useLang();
+  // ½TP modules — live outcomes scored under the partial-TP + breakeven model.
+  const isHalf = strategy === 'main_half' || strategy === 'impulse_half';
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -189,10 +197,10 @@ const Dashboard = () => {
   const statusOf = (sig) => {
     if (mode === 'live') {
       const s = liveStatuses[sig.id]?.status || '';
-      if (s === 'TP Oldu') return 'tp';
+      if (s === 'TP Oldu' || s === 'BE Oldu') return 'tp';   // BE = small ½TP winner (banked partial)
       if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') return 'sl';
       if (s.startsWith('İptal')) return 'cancelled';
-      if (s.startsWith('İşlem Aktif')) return 'active'; // entry filled, position open
+      if (s.startsWith('İşlem Aktif')) return 'active'; // entry filled, position open (incl. ½TP BE mode)
       return 'open';
     }
     if (sig.status === 'TP') return 'tp';
@@ -215,9 +223,11 @@ const Dashboard = () => {
   const resolveLiveMeta = (status) => {
     if (!status) return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
     if (status === 'TP Oldu') return { label: 'TP', cls: 'win', terminal: true };
+    if (status === 'BE Oldu') return { label: 'BE', cls: 'win', terminal: true };   // ½TP breakeven close
     if (status === 'SL Oldu') return { label: 'SL', cls: 'loss', terminal: true };
     if (status === 'TP/SL Aynı Mum') return { label: 'TP/SL', cls: 'loss', terminal: true };
     if (status.startsWith('İptal')) return { label: 'İPTAL', cls: 'waiting', terminal: true };
+    if (status === 'İşlem Aktif (Kısmi ½TP Alındı)') return { label: '½TP·BE', cls: 'win', terminal: false };
     if (status.startsWith('İşlem Aktif')) return { label: 'AKTIF', cls: 'waiting', terminal: false };
     return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
   };
@@ -233,12 +243,17 @@ const Dashboard = () => {
 
   const getLiveRLabel = (sig, status) => {
     if (!status) return { label: '--', cls: 'waiting' };
-    if (status === 'TP Oldu') {
-      const r = liveOutcomeR(sig, status);
+    if (status === 'TP Oldu' || status === 'BE Oldu') {
+      const r = liveOutcomeR(sig, status, isHalf);
       return { label: `+${r.toFixed(2)}R`, cls: 'win' };
     }
     if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') {
       return { label: '-1R', cls: 'loss' };
+    }
+    if (status === 'İşlem Aktif (Kısmi ½TP Alındı)') {
+      // partial banked (¼ RR), remainder risk-free at BE — show the floor.
+      const banked = liveOutcomeR(sig, 'BE Oldu', true);
+      return { label: `≥+${banked.toFixed(2)}R`, cls: 'win' };
     }
     if (status.startsWith('İptal')) return { label: '0', cls: 'waiting' };
     return { label: '--', cls: 'waiting' };
@@ -253,9 +268,9 @@ const Dashboard = () => {
     list.forEach((sig) => {
       const status = liveStatuses[sig.id]?.status;
       const meta = resolveLiveMeta(status);
-      if (meta.label === 'TP') {
+      if (meta.label === 'TP' || meta.label === 'BE') {
         tp += 1;
-        rScore += liveOutcomeR(sig, status);
+        rScore += liveOutcomeR(sig, status, isHalf);
       } else if (meta.label === 'SL' || meta.label === 'TP/SL') {
         sl += 1;
         rScore -= 1;
@@ -477,7 +492,7 @@ const Dashboard = () => {
       totalTrades = filteredSignals.length;
       closedTrades = denom;
       const asc = [...filteredSignals].sort((a, b) => a.dateObj - b.dateObj);
-      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status));
+      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, isHalf));
       let cc = 0;
       cum = downsample(rs.map((r) => (cc += r)), 80);
       hist = rHistogram(rs);

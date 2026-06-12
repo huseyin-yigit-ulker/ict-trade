@@ -145,12 +145,15 @@ PULSE_HEARTBEAT_ENABLED = os.getenv("PULSE_HEARTBEAT", "0").strip().lower() not 
 #   - DB: mode='impulse' (dedup is mode-aware, so an 'impulse' and a 'live' signal on
 #     the same symbol+bar+direction are DISTINCT rows and never collide).
 #   - daily sync (sync/sync_daily.py) resolves mode='impulse' -> backtest version='v2'.
-#   - Telegram: DB-only by default (most impulse signals overlap main, so alerting both
-#     would double-notify). Set TELEGRAM_IMPULSE_CHAT_ID to alert a dedicated chat.
+#   - Telegram: alerts ON by default -> a dedicated chat if TELEGRAM_IMPULSE_CHAT_ID is
+#     set, else the MAIN chat with a distinct "✨ IMPULSE (v2)" banner. Since impulse ⊆
+#     main, expect one tagged duplicate per overlapping signal — intentional, so the v2
+#     stream is visible in the main feed. Set IMPULSE_ALERTS=0 to revert to DB-only.
 IMPULSE_ENABLED = os.getenv("IMPULSE_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off")
+IMPULSE_ALERTS_ENABLED = os.getenv("IMPULSE_ALERTS", "1").strip().lower() not in ("0", "false", "no", "off")
 IMPULSE_MODE = "impulse"
 IMPULSE_EXTRA_D_EXCLUDE = {"ADAUSDT", "XAUUSDT", "ETHUSDT"}   # v2: D off here too
-TELEGRAM_IMPULSE_CHAT_ID = os.getenv("TELEGRAM_IMPULSE_CHAT_ID", "")  # "" -> DB-only (no alert)
+TELEGRAM_IMPULSE_CHAT_ID = os.getenv("TELEGRAM_IMPULSE_CHAT_ID", "")  # "" -> main chat (✨ banner)
 
 # --- engine knobs ---
 ATR_PERIOD = 14
@@ -1672,15 +1675,16 @@ def process_symbol(symbol: str, is_dynamic: bool = False, *, pulse: bool = False
     elif impulse:
         interval, warmup, strategies, htf_rule, mode = (
             INTERVAL, WARMUP_HOURS, IMPULSE_STRATEGIES, HTF_RULE, IMPULSE_MODE)
-        # IMPULSE -> dedicated chat only (DB-only when unset; never the main chat).
+        # IMPULSE -> dedicated chat when configured; else the main chat (✨ banner).
         chat = TELEGRAM_IMPULSE_CHAT_ID or None
     else:
         interval, warmup, strategies, htf_rule = INTERVAL, WARMUP_HOURS, None, HTF_RULE
         mode = "dynamic" if is_dynamic else "live"
         chat = None
-    # Suppress alerts entirely for impulse without a dedicated chat (impulse
-    # overlaps main, so alerting both would double-notify).
-    silent = impulse and not TELEGRAM_IMPULSE_CHAT_ID
+    # Impulse alerts are ON by default (dedicated chat, or main chat + ✨ banner).
+    # Impulse ⊆ main, so this duplicates each overlapping signal by design; set
+    # IMPULSE_ALERTS=0 to silence impulse back to DB-only.
+    silent = impulse and not IMPULSE_ALERTS_ENABLED
 
     end = pd.Timestamp.now(tz="UTC")
     start = end - pd.Timedelta(hours=warmup)

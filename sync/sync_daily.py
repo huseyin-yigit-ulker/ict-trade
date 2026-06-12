@@ -9,6 +9,9 @@ row still 'active' in trading_signals regardless of age.
 Live streams, each -> its own backtest version tag:
   - main         : mode='live'    -> version='v1'     (1h, static set, ltf 60m, dedup floor 1h)
   - impulse      : mode='impulse' -> version='v2'     (1h, static set, ltf 60m, dedup floor 1h)
+  - main_half    : mode='live'    -> version='v3'     (SAME live signals as main, resolved
+  - impulse_half : mode='impulse' -> version='v4'      under the partial-TP + breakeven exit
+                                                       model — PARTIAL_TP_ENABLED per stream)
   - radar_legacy : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
   - pulse        : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
 
@@ -29,6 +32,7 @@ from collections import defaultdict
 import pandas as pd
 
 import trade_sync_common as tsc
+from ict import config as C   # backtest/ict (path added by tsc) — partial-TP exit-model flag
 
 # Curated static set (MAIN + PULSE). RADAR picks are dynamic -> no allow-list.
 # 2026-06-10: DOGE/GOOGL/PLTR/TSLA removed after the 2026 Jan-Jun v1 audit
@@ -46,18 +50,24 @@ STATIC_SYMBOLS = [
 
 # Each live stream resolves the SAME way (emitted live signals + still-active rows
 # -> outcomes on 1m), differing only in source mode, bar timeframe (-> ltf_minutes
-# + dedup floor) and symbol scope.
+# + dedup floor), symbol scope and exit model ("partial": resolve under the
+# partial-TP + breakeven model — ½TP streams v3/v4 read the SAME live signals as
+# main/impulse, only the exit differs).
 STREAMS = {
     "main":         {"mode": "live",    "version": "v1",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
     "impulse":      {"mode": "impulse", "version": "v2",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
+    "main_half":    {"mode": "live",    "version": "v3",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS, "partial": True},
+    "impulse_half": {"mode": "impulse", "version": "v4",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS, "partial": True},
     "radar_legacy": {"mode": "dynamic", "version": "v1-dyn", "ltf_min": 60, "floor": "h",     "symbols": None},
     "pulse":        {"mode": "pulse",   "version": "v1-15m", "ltf_min": 15, "floor": "15min", "symbols": STATIC_SYMBOLS},
 }
 
 # Streams processed by `--stream all`. radar_legacy (the retired dynamic stream,
 # formerly keyed "radar") and pulse stopped emitting 2026-06-10 — pass their key
-# explicitly to re-resolve historical rows.
-ACTIVE_STREAMS = ["main", "impulse"]
+# explicitly to re-resolve historical rows. The ½TP streams ride the nightly cron
+# so v3/v4 stay current without manual backfills (dag/halftp_monitor.py covers the
+# intraday cards; this is the end-of-day authoritative resolution).
+ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half"]
 
 
 def fetch_live_window(conn, mode, symbols, w_start, w_end) -> list[dict]:
@@ -124,26 +134,34 @@ def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
     for w in deduped:
         by_sym[w["symbol"]].append(w)
 
+    # ½TP streams resolve under the partial-TP + breakeven exit model. The flag is
+    # process-global (read by backtester.simulate_signal), so set it for this stream's
+    # resolution only and ALWAYS restore — a v3/v4 pass must never leak into v1/v2.
+    prev_partial = C.PARTIAL_TP_ENABLED
+    C.PARTIAL_TP_ENABLED = bool(stream.get("partial", False))
     rows, status_counts, skipped = [], {}, 0
-    for sym, items in by_sym.items():
-        earliest = min(w["_st"] for w in items)
-        df1m = tsc.fetch_1m(sym, earliest - pd.Timedelta(minutes=2), now)
-        if df1m.empty:
-            print(f"    [{name}] {sym}: no klines, skipping {len(items)}")
-            skipped += len(items)
-            continue
-        for w in items:
-            st = w["_st"]
-            outcome = tsc.simulate(sym, st, w["direction"], float(w["entry"]),
-                                   float(w["sl"]), float(w["tp"]), df1m=df1m,
-                                   ltf_minutes=stream["ltf_min"],
-                                   expiry_minutes=stream.get("expiry_min", tsc.EXPIRY_MINUTES))
-            status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
-            row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
-                                outcome, strategy=w.get("strategy"), quality=w.get("quality"),
-                                confluence_score=w.get("confluence_score"))
-            row["version"] = stream["version"]
-            rows.append(row)
+    try:
+        for sym, items in by_sym.items():
+            earliest = min(w["_st"] for w in items)
+            df1m = tsc.fetch_1m(sym, earliest - pd.Timedelta(minutes=2), now)
+            if df1m.empty:
+                print(f"    [{name}] {sym}: no klines, skipping {len(items)}")
+                skipped += len(items)
+                continue
+            for w in items:
+                st = w["_st"]
+                outcome = tsc.simulate(sym, st, w["direction"], float(w["entry"]),
+                                       float(w["sl"]), float(w["tp"]), df1m=df1m,
+                                       ltf_minutes=stream["ltf_min"],
+                                       expiry_minutes=stream.get("expiry_min", tsc.EXPIRY_MINUTES))
+                status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
+                row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
+                                    outcome, strategy=w.get("strategy"), quality=w.get("quality"),
+                                    confluence_score=w.get("confluence_score"))
+                row["version"] = stream["version"]
+                rows.append(row)
+    finally:
+        C.PARTIAL_TP_ENABLED = prev_partial
     print(f"  [{name}] resolved {len(rows)} rows, status={status_counts}, skipped={skipped}")
     return rows, status_counts
 

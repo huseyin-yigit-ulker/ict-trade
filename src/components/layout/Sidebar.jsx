@@ -30,15 +30,16 @@ const IconSettings = () => (
 );
 
 // Strategy × Mode nested nav. MAIN runs the v1 set (mode='live'), IMPULSE the refined
-// v2 set (mode='impulse') — both Live + Backtest, dag.py emits each hourly. MAIN ½TP
-// (v3) and IMPULSE ½TP (v4) are the SAME main/impulse signals scored under the
-// partial-TP + breakeven exit model — BACKTEST-ONLY (no live emitter; the exit model
-// is a backtest overlay). PULSE retired 2026-06-10; RADAR/SQUEEZE removed 2026-06-11.
+// v2 set (mode='impulse') — dag.py emits each hourly. MAIN ½TP (v3) and IMPULSE ½TP
+// (v4) read the SAME live main/impulse signals but track them under the partial-TP +
+// breakeven exit model (50% out at ½ distance to TP, stop → entry) — Live view tracks
+// the lifecycle in real time; Backtest reads the nightly v3/v4 resolution.
+// PULSE retired 2026-06-10; RADAR/SQUEEZE removed 2026-06-11.
 const GROUPS = [
   { key: 'main',         label: 'MAIN',        icon: <IconCommand />, modes: ['live', 'backtest'] },
   { key: 'impulse',      label: 'IMPULSE',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'main_half',    label: 'MAIN ½TP',    icon: <IconCommand />, modes: ['backtest'] },
-  { key: 'impulse_half', label: 'IMPULSE ½TP', icon: <IconImpulse />, modes: ['backtest'] },
+  { key: 'main_half',    label: 'MAIN ½TP',    icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse_half', label: 'IMPULSE ½TP', icon: <IconImpulse />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

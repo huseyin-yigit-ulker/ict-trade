@@ -20,8 +20,11 @@ const IconLine = () => (
 const ENTRY_EXPIRY_MINUTES = 180;
 
 const ChartModal = () => {
-  const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses } = useTradeContext();
+  const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses, strategy } = useTradeContext();
   const { t, locale } = useLang();
+  // ½TP modules: the chart annotates the partial-TP + breakeven lifecycle —
+  // TP/2 dashed line, "%50 kapandı, SL→Entry" marker, BE stop segment.
+  const isHalf = strategy === 'main_half' || strategy === 'impulse_half';
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
@@ -58,8 +61,10 @@ const ChartModal = () => {
   const LIVE_STATUS_DISPLAY = {
     'TP Oldu':                      { label: 'TP',       cls: 'st-tp' },
     'SL Oldu':                      { label: 'SL',       cls: 'st-sl' },
+    'BE Oldu':                      { label: 'BE',       cls: 'st-tp' },      // ½TP: breakeven close
     'TP/SL Aynı Mum':               { label: 'TP+SL',    cls: 'st-mixed' },
     'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    cls: 'st-active' },
+    'İşlem Aktif (Kısmi ½TP Alındı)': { label: '½TP·BE',  cls: 'st-active' }, // ½TP: 50% banked, stop at entry
     'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    cls: 'st-cancel' },
     'İptal (Süre Doldu)':           { label: 'İPTAL',    cls: 'st-cancel' },
     'Sinyal Bekliyor':              { label: 'BEKLİYOR', cls: 'st-wait' },
@@ -281,23 +286,47 @@ const ChartModal = () => {
         const signalVisible = candles.length > 0 && entryTs >= candles[0].time;
 
         // --- Touch scan (both modes): entry-fill bar + the bar that closed the trade ---
+        // ½TP modules additionally track the partial scale-out: at TP/2 the position
+        // halves and the stop moves to entry (BE) — so the close after a partial is
+        // detected against ENTRY, not the original SL (mirror of _resolve_partial).
+        const halfLevel = (isHalf && entry && tp) ? entry + (tp - entry) / 2 : null;  // long & short
         let entryFilled = false, entryFillSec = null, closeBarSec = null, closeBarIdx = -1;
+        let partialBarSec = null, beClose = false;
         if (entry && tp && sl && signalVisible) {
-          let hit = false;
+          let hit = false, partial = false, stop = sl;
           for (let idx = 0; idx < candles.length; idx++) {
             const c = candles[idx];
             if (c.time < entryTs) continue;
             const tpHit = isLong ? c.high >= tp : c.low <= tp;
-            const slHit = isLong ? c.low <= sl : c.high >= sl;
+            const stopHit = isLong ? c.low <= stop : c.high >= stop;
             if (!hit) {
               const eHit = isLong ? c.low <= entry : c.high >= entry;
-              if (!eHit && (tpHit || slHit)) { closeBarSec = c.time; closeBarIdx = idx; break; } // pre-entry iptal
+              if (!eHit && (tpHit || stopHit)) { closeBarSec = c.time; closeBarIdx = idx; break; } // pre-entry iptal
               if (eHit) {
                 hit = true; entryFilled = true; entryFillSec = c.time;
-                if (tpHit || slHit) { closeBarSec = c.time; closeBarIdx = idx; break; }
+                if (tpHit || stopHit) { closeBarSec = c.time; closeBarIdx = idx; break; }
+                if (halfLevel != null) {
+                  const hHit = isLong ? c.high >= halfLevel : c.low <= halfLevel;
+                  if (hHit) { partial = true; partialBarSec = c.time; stop = entry; } // BE from next bar
+                }
               }
-            } else if (tpHit || slHit) { closeBarSec = c.time; closeBarIdx = idx; break; }
+            } else if (halfLevel != null && !partial) {
+              if (stopHit) { closeBarSec = c.time; closeBarIdx = idx; break; }        // SL first (worst case)
+              if (tpHit) { partialBarSec = c.time; closeBarSec = c.time; closeBarIdx = idx; break; } // gap through ½+TP
+              const hHit = isLong ? c.high >= halfLevel : c.low <= halfLevel;
+              if (hHit) { partial = true; partialBarSec = c.time; stop = entry; }     // scale out, arm BE
+            } else if (tpHit || stopHit) {
+              if (partial && stopHit && !tpHit) beClose = true;                       // BE stop hit
+              closeBarSec = c.time; closeBarIdx = idx; break;
+            }
           }
+        }
+        // ½TP backtest rows resolved by the nightly sync close BE trades AT entry —
+        // if the coarse-bar scan missed the touch, recover BE from the DB exit price.
+        if (isHalf && !beClose && mode === 'backtest' && activeSignal.status === 'TP'
+            && Number.isFinite(activeSignal.exitPrice) && entry
+            && Math.abs(activeSignal.exitPrice - entry) / entry < 1e-6) {
+          beClose = true;
         }
 
         // Fallback: a closed backtest trade whose coarse re-fetch missed the exact touch —
@@ -310,7 +339,7 @@ const ChartModal = () => {
 
         // Live terminal state — computed early so the close anchor + trim can use it.
         const ctxStatus = liveStatuses[activeSignal.id]?.status;
-        const liveTerminalSet = new Set(['TP Oldu', 'SL Oldu', 'TP/SL Aynı Mum']);
+        const liveTerminalSet = new Set(['TP Oldu', 'SL Oldu', 'BE Oldu', 'TP/SL Aynı Mum']);
         const liveTerminal = !!ctxStatus && (liveTerminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'));
         const isTerminalState = mode === 'backtest'
           ? (activeSignal.status === 'TP' || activeSignal.status === 'SL')
@@ -378,10 +407,33 @@ const ChartModal = () => {
         }
         if (entry && tp && sl) {
           tpAreaSeries.setData([ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]);
-          slAreaSeries.setData([ { time: entryTs, value: sl }, { time: endTimeForGraph, value: sl } ]);
+          // ½TP: the original SL dies at the partial (stop → entry) — end its zone there
+          // so the chart reads "risk removed from this bar on".
+          const slZoneEnd = (isHalf && partialBarSec != null) ? Math.min(partialBarSec, endTimeForGraph) : endTimeForGraph;
+          slAreaSeries.setData(slZoneEnd > entryTs
+            ? [ { time: entryTs, value: sl }, { time: slZoneEnd, value: sl } ]
+            : [ { time: entryTs, value: sl } ]);
         } else {
           tpAreaSeries.setData([]);
           slAreaSeries.setData([]);
+        }
+
+        // ½TP: breakeven stop segment — a yellow dashed line AT entry from the partial
+        // bar to the close, marking the new risk-free stop. Created once, refreshed
+        // every pass (live refresh re-runs this block every 3s).
+        if (isHalf && !chartRef.current._beSeries) {
+          chartRef.current._beSeries = chart.addSeries(LineSeries, {
+            color: '#F0B90B', lineWidth: 2, lineStyle: 2,
+            lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+            priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+          });
+        }
+        if (chartRef.current._beSeries) {
+          chartRef.current._beSeries.setData(
+            (partialBarSec != null && entry && endTimeForGraph > partialBarSec)
+              ? [ { time: partialBarSec, value: entry }, { time: endTimeForGraph, value: entry } ]
+              : (partialBarSec != null && entry ? [ { time: partialBarSec, value: entry } ] : [])
+          );
         }
 
         // 4. Referans çizgileri (tek sefer) — eksen etiketine fiyat/yüzde
@@ -390,6 +442,11 @@ const ChartModal = () => {
           const riskPct = entry && sl ? ((sl - entry) / entry) * 100 : null;
           if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')} ${formatPrice(entry)}`, axisLabelVisible: true });
           if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // ½TP ara hedef — kesik çizgi: burada pozisyonun %50'si kapanır, SL entry'ye çekilir.
+          if (halfLevel != null) {
+            const halfPct = entry ? ((halfLevel - entry) / entry) * 100 : null;
+            mainSeries.createPriceLine({ price: halfLevel, color: '#F5B942', lineWidth: 1, lineStyle: 2, title: `½TP %50${halfPct != null ? ' ' + (halfPct >= 0 ? '+' : '') + halfPct.toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          }
           if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
             mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
@@ -431,17 +488,23 @@ const ChartModal = () => {
           chartRef.current._geoAdded = true;
         }
 
-        // 5. Zaman-bağlı işaretler: Sinyal / Giriş / Çıkış (çıkış rengi sonuca göre)
-        const isTP = (mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu');
+        // 5. Zaman-bağlı işaretler: Sinyal / Giriş / ½TP Kısmi / Çıkış (renk sonuca göre).
+        // ½TP'de BE kapanışı ayrı etiketlenir (sarı 'BE') — TP/SL ile karışmasın.
+        const isBE = isHalf && (beClose || (mode === 'live' && ctxStatus === 'BE Oldu'));
+        const isTP = !isBE && ((mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
         const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
         const exitColor = isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
-        const exitText = isTP ? t('TP') : isSL ? t('SL') : t('Çıkış');
+        const exitText = isTP ? t('TP') : isSL ? t('SL') : isBE ? 'BE' : t('Çıkış');
         const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(activeSignal.exitTs) ? snapBar(activeSignal.exitTs) : null);
 
         const markers = [];
         if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
         if (entryFilled && entryFillSec != null && entryFillSec !== signalSec) {
           markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: t('Giriş'), size: 1 });
+        }
+        // ½TP kısmi kâr işareti: fiyat TP/2'ye değdi — %50 kapandı, SL→Entry (BE).
+        if (isHalf && partialBarSec != null && (partialBarSec !== exitSec || !isTerminalState)) {
+          markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: '#F5B942', text: '½TP %50 · SL→BE', size: 1 });
         }
         if (isTerminalState && exitSec != null) {
           markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar', shape: isLong ? 'arrowDown' : 'arrowUp', color: exitColor, text: exitText, size: 1 });
@@ -511,7 +574,7 @@ const ChartModal = () => {
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeSignal, showTv, mode, chartStyle]);
+  }, [activeSignal, showTv, mode, chartStyle, isHalf]);
 
   // UI Formatters
   const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
@@ -644,6 +707,18 @@ const ChartModal = () => {
                {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
              </b>
           </div>
+          {isHalf && Number.isFinite(activeSignal.entry) && Number.isFinite(activeSignal.tp) && (() => {
+            const halfLevelP = activeSignal.entry + (activeSignal.tp - activeSignal.entry) / 2;
+            const halfPctP = pctDist(activeSignal.entry, halfLevelP);
+            return (
+              <div className="position-row">
+                <span>½TP ({t('Kısmi')})</span>
+                <b><span style={{color:'#F5B942'}}>{formatPrice(halfLevelP)}</span>
+                  {halfPctP != null && <span style={{color:'#848E9C', fontWeight:400}}> · {halfPctP >= 0 ? '+' : ''}{halfPctP.toFixed(2)}%</span>}
+                </b>
+              </div>
+            );
+          })()}
           <div className="position-row">
              <span>{t('Stop')}</span>
              <b><span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span>
@@ -653,7 +728,9 @@ const ChartModal = () => {
           {rr != null && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
-              <b style={{ color: '#F5B942' }}>1:{rr.toFixed(2)}</b>
+              <b style={{ color: '#F5B942' }}>1:{rr.toFixed(2)}
+                {isHalf && <span style={{color:'#848E9C', fontWeight:400}}> · ½TP maks +{(0.75 * rr).toFixed(2)}R</span>}
+              </b>
             </div>
           )}
           {mode === 'live' && Number.isFinite(liveLastPrice) && (

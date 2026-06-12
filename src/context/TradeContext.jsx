@@ -34,9 +34,12 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impul
 // (sync/backfill_v3_year.py / backfill_v4_year.py write them with PARTIAL_TP_ENABLED).
 const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
-// impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams have no live
-// emitter (the exit model is a backtest overlay) -> backtest-only; loadLive falls back.
-const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse' };
+// impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
+// SAME live signals as their parent (the ½TP exit model only changes what happens
+// AFTER entry) — live status is then tracked under partial-TP + breakeven rules.
+const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse' };
+// ½TP modules: scale out 50% at half the distance entry→TP, stop -> entry (BE).
+const HALF_STRATEGIES = new Set(['main_half', 'impulse_half']);
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // LTF bar duration in ms ('1h' -> 3600000). The signal fires at its bar CLOSE,
@@ -585,6 +588,31 @@ export const TradeProvider = ({ children }) => {
 
     if (entryHitTime === null) return { status: 'Sinyal Bekliyor', lastPrice };
 
+    // ½TP modules: after the fill, run the partial-TP + breakeven lifecycle
+    // (mirror of backtest _resolve_partial): at half the distance entry→TP close
+    // 50% and pull the stop to entry; the rest rides to TP or stops at BE.
+    // Same-bar TP+stop → worst case stop first; BE arms from the NEXT bar.
+    if (HALF_STRATEGIES.has(strategyRef.current)) {
+      const halfLevel = sig.entry + (sig.tp - sig.entry) / 2;   // long & short
+      let partial = false;
+      let stop = sig.sl;
+      for (const c of candles) {
+        if (c.time < entryHitTime) continue;
+        const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
+        const stopHit = sig.dir === 'LONG' ? c.low <= stop : c.high >= stop;
+        const halfHit = sig.dir === 'LONG' ? c.high >= halfLevel : c.low <= halfLevel;
+        if (!partial) {
+          if (stopHit && !tpHit) return { status: 'SL Oldu', lastPrice };
+          if (tpHit) return { status: stopHit ? 'SL Oldu' : 'TP Oldu', lastPrice }; // gap through
+          if (halfHit) { partial = true; stop = sig.entry; continue; }
+        } else {
+          if (tpHit && !stopHit) return { status: 'TP Oldu', lastPrice };
+          if (stopHit) return { status: 'BE Oldu', lastPrice };
+        }
+      }
+      return { status: partial ? 'İşlem Aktif (Kısmi ½TP Alındı)' : 'İşlem Aktif (Entry Geldi)', lastPrice };
+    }
+
     for (const c of candles) {
       if (c.time < entryHitTime) continue;
       const tpHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;
@@ -601,6 +629,7 @@ export const TradeProvider = ({ children }) => {
     if (!status) return { terminal: false };
     if (status === 'TP Oldu') return { terminal: true };
     if (status === 'SL Oldu') return { terminal: true };
+    if (status === 'BE Oldu') return { terminal: true };   // ½TP breakeven close
     if (status === 'TP/SL Aynı Mum') return { terminal: true };
     if (status.startsWith('İptal')) return { terminal: true };
     return { terminal: false };
