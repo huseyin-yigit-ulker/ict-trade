@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useTradeContext } from '../../context/TradeContext';
+import { useTradeContext, KARMA_MAP } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
+import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 
 const STRAT_LABEL = { main: 'Main', impulse: 'Impulse', main_half: 'Main ½TP', impulse_half: 'Impulse ½TP', karma: 'Karma' };
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
@@ -59,7 +60,8 @@ const Topbar = () => {
     sidebarHidden, toggleSidebar, dbStatus, dbMessage, strategy, mode,
     statusFilter, setStatusFilter,
     selectedSymbols, pendingSymbols, allSignals,
-    toggleSymbol, applySymbols, clearPendingSymbols, selectAllPendingSymbols,
+    toggleSymbol, applySymbols, applySymbolSet, symbolPerf,
+    clearPendingSymbols, selectAllPendingSymbols,
     refresh, refreshing, lastUpdated,
   } = useTradeContext();
   const { t, locale } = useLang();
@@ -74,6 +76,23 @@ const Topbar = () => {
     return uniqueSymbols.filter((s) => s.toLowerCase().includes(q));
   }, [uniqueSymbols, symQuery]);
   useEffect(() => { if (!symOpen) setSymQuery(''); }, [symOpen]);
+
+  // best/worst ranking is by resolved backtest R — only meaningful when loaded
+  // signals carry pnlR (backtest mode). In live mode the chips are hidden.
+  const hasPerf = useMemo(
+    () => uniqueSymbols.some((s) => (symbolPerf?.[s]?.closed || 0) > 0),
+    [uniqueSymbols, symbolPerf]
+  );
+  const rankedByR = useMemo(
+    () => uniqueSymbols
+      .filter((s) => (symbolPerf?.[s]?.closed || 0) > 0)
+      .sort((a, b) => (symbolPerf[b].totalR || 0) - (symbolPerf[a].totalR || 0)),
+    [uniqueSymbols, symbolPerf]
+  );
+  const TOP_N = 5;
+  const applyMarket = (key) => { applySymbolSet(uniqueSymbols.filter((s) => marketOf(s) === key)); setSymOpen(false); };
+  const applyBest = () => { applySymbolSet(rankedByR.slice(0, TOP_N)); setSymOpen(false); };
+  const applyWorst = () => { applySymbolSet(rankedByR.slice(-TOP_N)); setSymOpen(false); };
 
   // Symbols + status filter are per-view controls — shown only on the 4 strategy×mode
   // views, on the RIGHT side of the bar. Hidden on Intelligence / Settings.
@@ -129,14 +148,63 @@ const Topbar = () => {
                   className="symbol-search" type="text" placeholder={t('Sembol ara...')}
                   value={symQuery} onChange={(e) => setSymQuery(e.target.value)} onClick={(e) => e.stopPropagation()}
                 />
+                {/* Quick-selects: market category + best/worst — one click applies. */}
+                <div
+                  className="symbol-quickrow"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 2px 6px' }}
+                >
+                  {MARKETS.map((mk) => (
+                    <button
+                      key={mk.key} className="apply-btn ghost" onClick={() => applyMarket(mk.key)}
+                      title={t('Sadece bu piyasayı seç')}
+                      style={{ flex: '0 0 auto', padding: '3px 8px', fontSize: 11 }}
+                    >
+                      {t(mk.label)}
+                    </button>
+                  ))}
+                  {hasPerf && (
+                    <>
+                      <button
+                        className="apply-btn ghost" onClick={applyBest}
+                        title={t('Backtest R’ye göre en iyi 5 sembol')}
+                        style={{ flex: '0 0 auto', padding: '3px 8px', fontSize: 11 }}
+                      >
+                        🏆 {t('En İyi')} {TOP_N}
+                      </button>
+                      <button
+                        className="apply-btn ghost" onClick={applyWorst}
+                        title={t('Backtest R’ye göre en kötü 5 sembol')}
+                        style={{ flex: '0 0 auto', padding: '3px 8px', fontSize: 11 }}
+                      >
+                        🔻 {t('En Kötü')} {TOP_N}
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div className="symbol-list" onClick={(e) => e.stopPropagation()}>
                   {filteredSymbols.length === 0 && <div className="symbol-empty">{t('Sonuç yok')}</div>}
-                  {filteredSymbols.map((sym) => (
-                    <label key={sym}>
-                      <input type="checkbox" checked={pendingSymbols.has(sym)} onChange={() => toggleSymbol(sym)} />
-                      {sym}
-                    </label>
-                  ))}
+                  {filteredSymbols.map((sym) => {
+                    const badge = strategyBadge(strategy, sym, KARMA_MAP);
+                    const r = symbolPerf?.[sym];
+                    return (
+                      <label key={sym} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input type="checkbox" checked={pendingSymbols.has(sym)} onChange={() => toggleSymbol(sym)} />
+                        <span style={{ flex: 1 }}>{sym}</span>
+                        {badge && (
+                          <span style={{ fontSize: 10, opacity: 0.7, fontVariant: 'all-small-caps', letterSpacing: 0.3 }}>{badge}</span>
+                        )}
+                        {hasPerf && r && r.closed > 0 && (
+                          <span
+                            className={r.totalR >= 0 ? 'win' : 'loss'}
+                            style={{ fontSize: 10, minWidth: 38, textAlign: 'right' }}
+                          >
+                            {r.totalR >= 0 ? '+' : ''}{r.totalR.toFixed(1)}R
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
                 <button className="apply-btn" onClick={() => { applySymbols(); setSymOpen(false); }}>✅ {t('Uygula')}</button>
                 <button className="apply-btn" onClick={selectAllPendingSymbols}>{t('Tümünü Seç')}</button>

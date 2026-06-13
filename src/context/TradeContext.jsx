@@ -798,6 +798,31 @@ export const TradeProvider = ({ children }) => {
     setSelectedSymbols(new Set(pendingSymbols));
   }, [pendingSymbols]);
 
+  // One-click apply: stage AND commit a symbol set in one go (used by the
+  // market / best-worst quick-selects, which shouldn't need a separate Uygula).
+  const applySymbolSet = useCallback((syms) => {
+    const next = new Set(syms);
+    setPendingSymbols(next);
+    setSelectedSymbols(next);
+  }, []);
+
+  // Per-symbol performance over ALL loaded signals (not the current filter) so
+  // the best/worst quick-selects rank the full universe. totalR/wins are only
+  // meaningful in backtest (live rows carry no resolved pnlR yet).
+  const symbolPerf = useMemo(() => {
+    const m = {};
+    for (const s of allSignals) {
+      const e = m[s.symbol] || (m[s.symbol] = { n: 0, closed: 0, wins: 0, totalR: 0 });
+      e.n += 1;
+      if (s.status === 'TP' || s.status === 'SL') {
+        e.closed += 1;
+        if (s.status === 'TP') e.wins += 1;
+        if (Number.isFinite(s.pnlR)) e.totalR += s.pnlR;
+      }
+    }
+    return m;
+  }, [allSignals]);
+
   const clearPendingSymbols = useCallback(() => {
     setPendingSymbols(new Set());
   }, []);
@@ -824,6 +849,8 @@ export const TradeProvider = ({ children }) => {
     setShowStats,
     toggleSymbol,
     applySymbols,
+    applySymbolSet,
+    symbolPerf,
     clearPendingSymbols,
     selectAllPendingSymbols,
     chartView,
@@ -869,6 +896,8 @@ export const TradeProvider = ({ children }) => {
     showStats,
     toggleSymbol,
     applySymbols,
+    applySymbolSet,
+    symbolPerf,
     clearPendingSymbols,
     selectAllPendingSymbols,
     chartView,
