@@ -59,10 +59,8 @@ const IntroPage = () => {
 
   const matchCat = (s) =>
     cat === 'all' ||
-    (cat === 'chop' && s.chop) ||
     (cat === 'light' && s.light) ||
     (cat === 'full' && s.exit === 'full') ||
-    (cat === 'half' && s.exit === 'half') ||
     (cat === 'adaptive' && s.family === 'adaptive') ||
     (cat === 'session' && s.family === 'session');
 
@@ -92,10 +90,8 @@ const IntroPage = () => {
   const CATS = [
     { key: 'all', label: t('Tümü') },
     { key: 'full', label: t('Tam TP') },
-    { key: 'half', label: '½TP' },
     { key: 'adaptive', label: t('Adaptif') },
     { key: 'session', label: t('Seans') },
-    { key: 'chop', label: 'Chop' },
     { key: 'light', label: 'Light' },
   ];
   const SORTS = [

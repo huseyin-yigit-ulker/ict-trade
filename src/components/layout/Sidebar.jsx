@@ -52,42 +52,24 @@ const IconRegime = () => (
 );
 
 // Strategy × Mode nested nav. MAIN runs the v1 set (mode='live'), IMPULSE the refined
-// v2 set (mode='impulse') — dag.py emits each hourly. MAIN ½TP (v3) and IMPULSE ½TP
-// (v4) read the SAME live main/impulse signals but track them under the partial-TP +
-// breakeven exit model (50% out at ½ distance to TP, stop → entry) — Live view tracks
-// the lifecycle in real time; Backtest reads the nightly v3/v4 resolution.
+// v2 set (mode='impulse') — dag.py emits each hourly. KARMA = per-symbol best cell of
+// {main,impulse} × {tam,½TP} from the 2026 selection run (sync/karma_map.py) — live
+// reads both parents, filtered per symbol. OPUS = MAIN signals kept only in each
+// symbol's edge NY-session. IMPULSE · Light / KARMA · Light = the same stream filtered
+// to the light-trend 4h-ER band [0.20,0.35) (the regime-routing audit's edge zone).
+// 2026-06-13 prune: the standalone ½TP streams (v3/v4, karma_half, opus_half), the 8
+// Chop twins and the redundant Light cells were removed (UI + DB) to focus R&D.
 // PULSE retired 2026-06-10; RADAR/SQUEEZE removed 2026-06-11.
-// KARMA = per-symbol best cell of {main,impulse} x {tam,½TP} from the 2026
-// selection run (sync/karma_map.py) — live reads both parents, filtered per symbol.
 const GROUPS = [
-  { key: 'main',         label: 'MAIN',        icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse',      label: 'IMPULSE',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'main_half',    label: 'MAIN ½TP',    icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse_half', label: 'IMPULSE ½TP', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma',        label: 'KARMA',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_half',   label: 'KARMA ½TP',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'opus',         label: 'OPUS',        icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'opus_half',    label: 'OPUS ½TP',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  // CHOP-filtered twins — same stream, but skip signals fired while the symbol's 4h
-  // was choppy (Efficiency Ratio < 0.25). Helps the broad/½TP streams; redundant on
-  // the already-selective ones (shown by their 2026 backtest).
-  { key: 'main_chop',         label: 'MAIN · Chop',        icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse_chop',      label: 'IMPULSE · Chop',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'main_half_chop',    label: 'MAIN ½TP · Chop',    icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse_half_chop', label: 'IMPULSE ½TP · Chop', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_chop',        label: 'KARMA · Chop',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_half_chop',   label: 'KARMA ½TP · Chop',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'opus_chop',         label: 'OPUS · Chop',        icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'opus_half_chop',    label: 'OPUS ½TP · Chop',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'main',    label: 'MAIN',    icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse', label: 'IMPULSE', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma',   label: 'KARMA',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'opus',    label: 'OPUS',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
   // LIGHT band-pass twins — keep only signals fired in the light-trend regime
   // (4h ER 0.20–0.35), where the 2026 routing audit found our edge concentrates.
-  // Scope = core/½TP/karma (no opus). Flips the losing ½TP streams positive.
-  { key: 'main_light',         label: 'MAIN · Light',        icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse_light',      label: 'IMPULSE · Light',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'main_half_light',    label: 'MAIN ½TP · Light',    icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse_half_light', label: 'IMPULSE ½TP · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_light',        label: 'KARMA · Light',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_half_light',   label: 'KARMA ½TP · Light',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  // Kept on the two streams it helps most (highest per-trade expectancy).
+  { key: 'impulse_light', label: 'IMPULSE · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_light',   label: 'KARMA · Light',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

@@ -470,7 +470,16 @@ def run_once(*, discover_days: int, dry_run: bool) -> None:
         f"{' (dry-run)' if dry_run else ''}")
 
 
+# RETIRED 2026-06-13: the standalone MAIN ½TP / IMPULSE ½TP (v3/v4) streams this
+# monitor fed were removed from the dashboard + DB during the strategy prune, so it no
+# longer has a destination. Disabled by default; set HALFTP_MONITOR_ENABLED=1 to force a
+# run (e.g. if the ½TP streams are ever reinstated). ACTION: remove its `*/5 * * * *`
+# line from the VM crontab — with this guard a stray cron fire is a harmless no-op.
 def main() -> None:
+    if os.getenv("HALFTP_MONITOR_ENABLED", "0") != "1":
+        log("½TP monitor RETIRED (2026-06-13): v3/v4 streams removed in the strategy prune. "
+            "No-op. Set HALFTP_MONITOR_ENABLED=1 to override; remove its cron line on the VM.")
+        return
     ap = argparse.ArgumentParser(description="Live ½TP partial-TP + breakeven trade monitor")
     ap.add_argument("--dry-run", action="store_true", help="resolve + print cards, no Telegram / no DB")
     ap.add_argument("--discover-days", type=int, default=DISCOVER_DAYS_DEFAULT,

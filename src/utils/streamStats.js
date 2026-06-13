@@ -6,33 +6,15 @@
 // Stream → RPC version tag (mirror of TradeContext STRATEGY_VERSION) + the axes
 // the hub filters on: exit model (full / half / per-symbol mixed) and family.
 export const STREAMS = [
-  { key: 'main',         version: 'v1',         exit: 'full',  family: 'core' },
-  { key: 'impulse',      version: 'v2',         exit: 'full',  family: 'core' },
-  { key: 'opus',         version: 'opus',       exit: 'full',  family: 'session' },
-  { key: 'karma',        version: 'karma',      exit: 'mixed', family: 'adaptive' },
-  { key: 'main_half',    version: 'v3',         exit: 'half',  family: 'core' },
-  { key: 'impulse_half', version: 'v4',         exit: 'half',  family: 'core' },
-  { key: 'opus_half',    version: 'opus_half',  exit: 'half',  family: 'session' },
-  { key: 'karma_half',   version: 'karma_half', exit: 'half',  family: 'adaptive' },
-  // CHOP twins — parent + 4h-Efficiency-Ratio regime gate. Short version tags
-  // (trading_signals.version is varchar(10)); mirror of backfill_chop.CHOP_TAG.
-  { key: 'main_chop',         version: 'v1_chop',   exit: 'full', family: 'core',     chop: true },
-  { key: 'impulse_chop',      version: 'v2_chop',   exit: 'full', family: 'core',     chop: true },
-  { key: 'opus_chop',         version: 'ops_chop',  exit: 'full', family: 'session',  chop: true },
-  { key: 'karma_chop',        version: 'kma_chop',  exit: 'mixed', family: 'adaptive', chop: true },
-  { key: 'main_half_chop',    version: 'v3_chop',   exit: 'half', family: 'core',     chop: true },
-  { key: 'impulse_half_chop', version: 'v4_chop',   exit: 'half', family: 'core',     chop: true },
-  { key: 'opus_half_chop',    version: 'opsh_chop', exit: 'half', family: 'session',  chop: true },
-  { key: 'karma_half_chop',   version: 'kmah_chop', exit: 'half', family: 'adaptive', chop: true },
+  { key: 'main',    version: 'v1',    exit: 'full',  family: 'core' },
+  { key: 'impulse', version: 'v2',    exit: 'full',  family: 'core' },
+  { key: 'opus',    version: 'opus',  exit: 'full',  family: 'session' },
+  { key: 'karma',   version: 'karma', exit: 'mixed', family: 'adaptive' },
   // LIGHT band-pass twins — keep only signals fired in the light-trend regime
   // (4h ER in [0.20,0.35)), where the 2026 routing audit found our edge lives.
-  // Scope = core/½TP/karma (no opus). Short tags; mirror backfill_light.LIGHT_TAG.
-  { key: 'main_light',         version: 'v1_light',   exit: 'full', family: 'core',     light: true },
-  { key: 'impulse_light',      version: 'v2_light',   exit: 'full', family: 'core',     light: true },
-  { key: 'karma_light',        version: 'kma_light',  exit: 'mixed', family: 'adaptive', light: true },
-  { key: 'main_half_light',    version: 'v3_light',   exit: 'half', family: 'core',     light: true },
-  { key: 'impulse_half_light', version: 'v4_light',   exit: 'half', family: 'core',     light: true },
-  { key: 'karma_half_light',   version: 'kmah_light', exit: 'half', family: 'adaptive', light: true },
+  // Kept on the two streams it helps most. Mirror of backfill_light.LIGHT_TAG.
+  { key: 'impulse_light', version: 'v2_light',  exit: 'full',  family: 'core',     light: true },
+  { key: 'karma_light',   version: 'kma_light', exit: 'mixed', family: 'adaptive', light: true },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

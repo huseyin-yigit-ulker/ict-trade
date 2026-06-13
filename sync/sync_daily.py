@@ -6,21 +6,19 @@ the last N=3 full days and upserts — so a signal still 'active' yesterday gets
 and updated to its terminal status on a later run. A safety-net pass also re-resolves any
 row still 'active' in trading_signals regardless of age.
 
-Live streams, each -> its own backtest version tag:
-  - main         : mode='live'    -> version='v1'     (1h, static set, ltf 60m, dedup floor 1h)
-  - impulse      : mode='impulse' -> version='v2'     (1h, static set, ltf 60m, dedup floor 1h)
-  - main_half    : mode='live'    -> version='v3'     (SAME live signals as main, resolved
-  - impulse_half : mode='impulse' -> version='v4'      under the partial-TP + breakeven exit
-                                                       model — PARTIAL_TP_ENABLED per stream)
-  - karma        : per-symbol blend -> version='karma' (source mode AND exit model
-                                                       chosen per symbol by sync/karma_map.py)
-  - karma_half   : per-symbol blend -> version='karma_half' (same per-symbol source set
-                                                       as karma, but ALWAYS the ½TP+BE exit)
-  - opus         : MAIN signals -> version='opus' (kept only for the per-symbol weekday
-                                                   NY session(s) in sync/opus_map.py)
-  - opus_half    : same gated OPUS signals -> version='opus_half' (½TP+BE exit)
-  - radar_legacy : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
-  - pulse        : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
+Live streams, each -> its own backtest version tag (2026-06-13 prune: the standalone
+½TP streams v3/v4/karma_half/opus_half, the 8 Chop twins and the redundant Light cells
+were removed UI+DB; kept set below):
+  - main          : mode='live'    -> version='v1'     (1h, static set, ltf 60m, dedup floor 1h)
+  - impulse       : mode='impulse' -> version='v2'     (1h, static set, ltf 60m, dedup floor 1h)
+  - karma         : per-symbol blend -> version='karma' (source mode AND exit model
+                                                        chosen per symbol by sync/karma_map.py)
+  - opus          : MAIN signals -> version='opus' (kept only for the per-symbol weekday
+                                                    NY session(s) in sync/opus_map.py)
+  - impulse_light : impulse, kept only in the 4h-ER light band [0.20,0.35) -> version='v2_light'
+  - karma_light   : karma, kept only in the 4h-ER light band [0.20,0.35)   -> version='kma_light'
+  - radar_legacy  : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
+  - pulse         : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
 
 Idempotent: upsert key (symbol, signal_time, trade_type, version) — re-running never
 duplicates; it only updates status/exit/pnl when they change.
@@ -72,27 +70,20 @@ STATIC_SYMBOLS = [
 STREAMS = {
     "main":         {"mode": "live",    "version": "v1",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
     "impulse":      {"mode": "impulse", "version": "v2",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
-    "main_half":    {"mode": "live",    "version": "v3",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS, "partial": True},
-    "impulse_half": {"mode": "impulse", "version": "v4",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS, "partial": True},
     "radar_legacy": {"mode": "dynamic", "version": "v1-dyn", "ltf_min": 60, "floor": "h",     "symbols": None},
     "pulse":        {"mode": "pulse",   "version": "v1-15m", "ltf_min": 15, "floor": "15min", "symbols": STATIC_SYMBOLS},
 }
 
-# Streams processed by `--stream all`. radar_legacy (the retired dynamic stream,
-# formerly keyed "radar") and pulse stopped emitting 2026-06-10 — pass their key
-# explicitly to re-resolve historical rows. The ½TP streams ride the nightly cron
-# so v3/v4 stay current without manual backfills (dag/halftp_monitor.py covers the
-# intraday cards; this is the end-of-day authoritative resolution).
+# Streams processed by `--stream all`. radar_legacy (retired dynamic stream) and pulse
+# stopped emitting 2026-06-10 — pass their key explicitly to re-resolve historical rows.
+# 2026-06-13 prune: the standalone ½TP streams (v3/v4, karma_half, opus_half), the 8 Chop
+# twins and the redundant Light cells were removed (UI + DB). Kept set = main, impulse,
+# karma, opus + the two Light twins (impulse_light, karma_light).
 # "karma" is the per-symbol best-cell blend (sync/karma_map.py): it consumes the
 # SAME live signals as main/impulse — per symbol it picks the source set and the
 # exit model from the 2026 selection run — and tags rows version='karma'.
-ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half", "karma", "karma_half", "opus", "opus_half",
-                  "main_chop", "impulse_chop", "main_half_chop", "impulse_half_chop",
-                  "karma_chop", "karma_half_chop", "opus_chop", "opus_half_chop",
-                  # LIGHT band-pass twins (ER in [0.20,0.35)); scope = core/½TP/karma (not opus)
-                  "main_light", "impulse_light", "main_half_light", "impulse_half_light",
-                  "karma_light", "karma_half_light"]
-LIGHT_PARENTS = ("main", "impulse", "main_half", "impulse_half", "karma", "karma_half")
+ACTIVE_STREAMS = ["main", "impulse", "karma", "opus", "impulse_light", "karma_light"]
+LIGHT_PARENTS = ("impulse", "karma")
 
 
 def fetch_live_window(conn, mode, symbols, w_start, w_end) -> list[dict]:
@@ -226,61 +217,8 @@ def resolve_karma(live, bt, w_start, w_end, now, *, rescan, symbols_override=Non
     return rows
 
 
-# chop version tags per base stream (<=10 chars; mirror backfill_chop.CHOP_TAG)
-CHOP_TAG = {"v1": "v1_chop", "v2": "v2_chop", "v3": "v3_chop", "v4": "v4_chop",
-            "karma": "kma_chop", "karma_half": "kmah_chop", "opus": "ops_chop", "opus_half": "opsh_chop"}
-
-
-def _chop_keep():
-    """Returns keep(symbol, bar_open_utc) gating on the 4h Efficiency Ratio, or a
-    pass-through if regime.py is unavailable. ER series are built+cached per symbol."""
-    try:
-        import regime
-    except ImportError:
-        print("  [chop] sync/regime.py yok — ER kapısı atlandı (hepsi geçer)")
-        return lambda sym, st: True
-    cache, now = {}, pd.Timestamp.now(tz="UTC")
-    def keep(sym, st):
-        if sym not in cache:
-            cache[sym] = regime.build_er(sym, now - pd.Timedelta(days=60), now)
-        return regime.chop_ok(cache[sym], st)
-    return keep
-
-
-def resolve_chop(name, live, bt, w_start, w_end, now, *, rescan, symbols_override=None) -> list:
-    """CHOP variant of a base stream: resolve the parent's live signals, but keep only
-    the ones passing the 4h-ER regime gate. name is like 'main_chop' / 'opus_half_chop'.
-    Re-tags rows with the short chop version (CHOP_TAG)."""
-    base = name[:-5]                                   # strip '_chop'
-    keep = _chop_keep()
-    if base in ("karma", "karma_half"):
-        rows = resolve_karma(live, bt, w_start, w_end, now, rescan=rescan,
-                             symbols_override=symbols_override,
-                             force_half=(base == "karma_half"), version=base)
-        rows = [r for r in rows if keep(r["symbol"], pd.Timestamp(r["signal_time"]).tz_convert("UTC"))]
-    elif base in ("opus", "opus_half"):
-        try:
-            from opus_map import OPUS_MAP, opus_allows
-        except ImportError:
-            return []
-        syms = sorted(OPUS_MAP) if symbols_override is None else [s for s in symbols_override if s in OPUS_MAP]
-        cfg = {"mode": "live", "version": base, "ltf_min": 60, "floor": "h",
-               "symbols": syms, "partial": base == "opus_half"}
-        rows, _ = resolve_stream(name, cfg, live, bt, w_start, w_end, now, rescan=rescan,
-                                 keep=lambda sym, st: opus_allows(sym, st) and keep(sym, st))
-    else:                                              # main / impulse / *_half
-        rows, _ = resolve_stream(name, STREAMS[base], live, bt, w_start, w_end, now,
-                                 rescan=rescan, symbols_override=symbols_override, keep=keep)
-    base_ver = STREAMS[base]["version"] if base in STREAMS else base
-    tag = CHOP_TAG[base_ver]
-    for r in rows:
-        r["version"] = tag
-    return rows
-
-
 # light version tags per base stream (<=10 chars; mirror backfill_light.LIGHT_TAG)
-LIGHT_TAG = {"v1": "v1_light", "v2": "v2_light", "v3": "v3_light", "v4": "v4_light",
-             "karma": "kma_light", "karma_half": "kmah_light"}
+LIGHT_TAG = {"v2": "v2_light", "karma": "kma_light"}
 
 
 def _light_keep():
@@ -302,16 +240,15 @@ def _light_keep():
 
 def resolve_light(name, live, bt, w_start, w_end, now, *, rescan, symbols_override=None) -> list:
     """LIGHT variant of a base stream: resolve the parent's live signals, but keep
-    only the ones fired in the 4h-ER light band [0.20,0.35). name is like
-    'main_light' / 'karma_half_light'. Re-tags rows with the short light version."""
+    only the ones fired in the 4h-ER light band [0.20,0.35). name is 'impulse_light'
+    or 'karma_light'. Re-tags rows with the short light version."""
     base = name[:-6]                                   # strip '_light'
     keep = _light_keep()
-    if base in ("karma", "karma_half"):
+    if base == "karma":
         rows = resolve_karma(live, bt, w_start, w_end, now, rescan=rescan,
-                             symbols_override=symbols_override,
-                             force_half=(base == "karma_half"), version=base)
+                             symbols_override=symbols_override, version="karma")
         rows = [r for r in rows if keep(r["symbol"], pd.Timestamp(r["signal_time"]).tz_convert("UTC"))]
-    else:                                              # main / impulse / *_half
+    else:                                              # impulse
         rows, _ = resolve_stream(name, STREAMS[base], live, bt, w_start, w_end, now,
                                  rescan=rescan, symbols_override=symbols_override, keep=keep)
     base_ver = STREAMS[base]["version"] if base in STREAMS else base
@@ -344,9 +281,7 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
     # Default is MAIN ONLY. radar_legacy (retired dynamic stream) & pulse were
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
-    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "karma_half", "opus", "opus_half", "all"]
-                    + [f"{b}_chop" for b in ("main", "impulse", "main_half", "impulse_half",
-                                             "karma", "karma_half", "opus", "opus_half")]
+    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "opus", "all"]
                     + [f"{b}_light" for b in LIGHT_PARENTS], default="main")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -366,22 +301,15 @@ def main():
 
     all_rows = []
     for name in names:
-        if name in ("karma", "karma_half"):
+        if name == "karma":
             all_rows += resolve_karma(live, bt, w_start, w_end, now,
                                       rescan=not args.no_active_rescan,
-                                      symbols_override=args.symbols,
-                                      force_half=(name == "karma_half"), version=name)
+                                      symbols_override=args.symbols, version="karma")
             continue
-        if name in ("opus", "opus_half"):
+        if name == "opus":
             all_rows += resolve_opus(live, bt, w_start, w_end, now,
                                      rescan=not args.no_active_rescan,
-                                     symbols_override=args.symbols,
-                                     half=(name == "opus_half"), version=name)
-            continue
-        if name.endswith("_chop"):
-            all_rows += resolve_chop(name, live, bt, w_start, w_end, now,
-                                     rescan=not args.no_active_rescan,
-                                     symbols_override=args.symbols)
+                                     symbols_override=args.symbols, version="opus")
             continue
         if name.endswith("_light"):
             all_rows += resolve_light(name, live, bt, w_start, w_end, now,

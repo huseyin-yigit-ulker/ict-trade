@@ -139,54 +139,41 @@ export const opusAllows = (symbol, signalTimeUtc) => {
 export const marketLabel = (symbol) => MARKET_LABEL[marketOf(symbol)];
 
 // Long, human-readable "which cell does this symbol trade under" label.
-// karma/karma_half are per-symbol (from karmaMap); the other modules are uniform.
-// karma_half forces the ½TP exit; karma uses each symbol's chosen exit.
-// A '_chop' suffix = same as the parent + a 4h-ER regime gate; label gets "· Chop".
+// karma is per-symbol (from karmaMap, with its own ½TP/Tam exit); the other modules
+// are uniform. A '_light' suffix = same as the parent + a 4h-ER light-band gate; the
+// label gets "· Light".
 export const strategyCellLabel = (strategy, symbol, karmaMap) => {
-  if (strategy.endsWith('_chop')) {
-    const base = strategyCellLabel(strategy.slice(0, -5), symbol, karmaMap);
-    return base === '—' ? base : `${base} · Chop`;
-  }
   if (strategy.endsWith('_light')) {
     const base = strategyCellLabel(strategy.slice(0, -6), symbol, karmaMap);
     return base === '—' ? base : `${base} · Light`;
   }
-  if (strategy === 'karma' || strategy === 'karma_half') {
+  if (strategy === 'karma') {
     const sel = karmaMap?.[symbol];
     if (!sel) return '—';                       // unmapped → karma doesn't trade it
-    const exit = strategy === 'karma_half' ? '½TP' : (sel.half ? '½TP' : 'Tam');
-    return `${sel.set === 'impulse' ? 'Impulse' : 'Main'} · ${exit}`;
+    return `${sel.set === 'impulse' ? 'Impulse' : 'Main'} · ${sel.half ? '½TP' : 'Tam'}`;
   }
-  if (strategy === 'opus' || strategy === 'opus_half') {
+  if (strategy === 'opus') {
     const sess = OPUS_MAP[symbol];
     if (!sess) return '—';
-    const w = `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
-    return strategy === 'opus_half' ? `${w} · ½TP` : w;
+    return `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
   }
-  if (strategy === 'main_half') return 'Main · ½TP';
-  if (strategy === 'impulse_half') return 'Impulse · ½TP';
   if (strategy === 'impulse') return 'Impulse';
   return 'Main';
 };
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
-  if (strategy.endsWith('_chop')) {
-    const base = strategyBadge(strategy.slice(0, -5), symbol, karmaMap);
-    return base ? `${base}·ch` : 'ch';
-  }
   if (strategy.endsWith('_light')) {
     const base = strategyBadge(strategy.slice(0, -6), symbol, karmaMap);
     return base ? `${base}·lt` : 'lt';
   }
-  if (strategy === 'opus' || strategy === 'opus_half') {
+  if (strategy === 'opus') {
     const sess = OPUS_MAP[symbol];
     if (!sess) return '—';
-    return strategy === 'opus_half' ? `${sess.join('/')}·½` : sess.join('/');
+    return sess.join('/');
   }
-  if (strategy !== 'karma' && strategy !== 'karma_half') return null;  // uniform elsewhere
+  if (strategy !== 'karma') return null;  // uniform elsewhere
   const sel = karmaMap?.[symbol];
   if (!sel) return '—';
-  const half = strategy === 'karma_half' ? true : sel.half;
-  return `${sel.set === 'impulse' ? 'I' : 'M'}${half ? '·½' : ''}`;
+  return `${sel.set === 'impulse' ? 'I' : 'M'}${sel.half ? '·½' : ''}`;
 };

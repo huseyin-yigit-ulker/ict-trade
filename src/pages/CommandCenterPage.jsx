@@ -5,8 +5,8 @@ import Dashboard from '../components/Dashboard';
 
 // Strategy × Mode view. The URL (/:strategy/:mode) is the source of truth: it syncs
 // the route params into context (setView) so the single data-load effect fetches the
-// right set. Every module (main/impulse/karma/opus × classic/½TP, plus their _chop
-// and _light regime twins) has Live + Backtest. Invalid combos bounce to /main/live.
+// right set. Every module (main, impulse, karma, opus + the impulse_light / karma_light
+// regime twins) has Live + Backtest. Invalid combos bounce to /main/live.
 const CommandCenterPage = () => {
   const { strategy: pStrat, mode: pMode } = useParams();
   const { strategy, mode, setView } = useTradeContext();

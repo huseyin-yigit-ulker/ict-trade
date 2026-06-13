@@ -32,68 +32,40 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180, karma_half: 180, opus: 180, opus_half: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, karma: 180, opus: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
-// sync/backfill_v2_year.py). 'main_half'/'impulse_half' = the SAME main(v1)/impulse(v2)
-// signals scored under the partial-TP + breakeven EXIT model (scale out half at half
-// the distance to TP1, pull the stop to entry) — backtest-only streams tagged v3/v4
-// (sync/backfill_v3_year.py / backfill_v4_year.py write them with PARTIAL_TP_ENABLED).
-// 'karma' = per-symbol best cell of {main,impulse} x {tam,½TP} (sync/karma_map.py).
-// 'karma_half' = karma's per-symbol SOURCE set, but always the ½TP+BE exit (the
-// analog of MAIN ½TP/v3 and IMPULSE ½TP/v4 for the karma blend).
+// sync/backfill_v2_year.py). 'karma' = per-symbol best cell of {main,impulse} ×
+// {tam,½TP} (sync/karma_map.py; the ½TP exit survives only here, per symbol).
 // 'opus' = MAIN signals kept only in each symbol's edge NY-session (sync/opus_map.py).
-// 'opus_half' = the same gated OPUS signals under the ½TP+BE exit.
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma', karma_half: 'karma_half', opus: 'opus', opus_half: 'opus_half' };
+// The two '_light' twins (added below) keep only signals fired in the 4h-ER light
+// band. 2026-06-13 prune removed the standalone ½TP streams (v3/v4, karma_half,
+// opus_half), the 8 Chop twins and the redundant Light cells (UI + DB).
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', karma: 'karma', opus: 'opus' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
 // AFTER entry) — live status is then tracked under partial-TP + breakeven rules.
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
-const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse', opus: 'live', opus_half: 'live' };
-// ½TP modules: scale out 50% at half the distance entry→TP, stop -> entry (BE).
-// karma_half/opus_half force ½TP on their gated signals, so they live here too.
-const HALF_STRATEGIES = new Set(['main_half', 'impulse_half', 'karma_half', 'opus_half']);
-// karma + karma_half both read BOTH live modes and filter per-symbol via KARMA_MAP.
-const KARMA_STRATEGIES = new Set(['karma', 'karma_half']);
-// opus + opus_half read mode='live' and filter per-symbol+session (OPUS_MAP).
-const OPUS_STRATEGIES = new Set(['opus', 'opus_half']);
-
-// CHOP-filtered twin of every stream: backtest version + '_chop', SAME live mode /
-// exit / per-symbol logic as its parent, plus a 4h Efficiency-Ratio gate (skip
-// signals fired in chop, ER < REGIME_ER_MIN). Built programmatically so the 8
-// parents and 8 chop twins never drift.
-const REGIME_ER_MIN = 0.25;
-// chop backtest version tags — kept <=10 chars (trading_signals.version is varchar(10)),
-// must match sync/backfill_chop.py CHOP_TAG exactly.
-const CHOP_VER = {
-  main: 'v1_chop', impulse: 'v2_chop', main_half: 'v3_chop', impulse_half: 'v4_chop',
-  karma: 'kma_chop', karma_half: 'kmah_chop', opus: 'ops_chop', opus_half: 'opsh_chop',
-};
-const CHOP_PARENTS = ['main', 'impulse', 'main_half', 'impulse_half', 'karma', 'karma_half', 'opus', 'opus_half'];
-CHOP_PARENTS.forEach((b) => {
-  const c = `${b}_chop`;
-  STRATEGY_VERSION[c] = CHOP_VER[b];
-  STRATEGY_EXPIRY_MINUTES[c] = STRATEGY_EXPIRY_MINUTES[b];
-  if (STRATEGY_LIVE_MODE[b]) STRATEGY_LIVE_MODE[c] = STRATEGY_LIVE_MODE[b];
-  if (HALF_STRATEGIES.has(b)) HALF_STRATEGIES.add(c);
-  if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
-  if (OPUS_STRATEGIES.has(b)) OPUS_STRATEGIES.add(c);
-});
+const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', opus: 'live' };
+// ½TP is no longer a standalone stream — the partial-TP + breakeven exit survives
+// only as KARMA's per-symbol exit (KARMA_MAP[sym].half) and the live status machine.
+const HALF_STRATEGIES = new Set();
+// karma reads BOTH live modes and filters per-symbol via KARMA_MAP.
+const KARMA_STRATEGIES = new Set(['karma']);
+// opus reads mode='live' and filters per-symbol+session (OPUS_MAP).
+const OPUS_STRATEGIES = new Set(['opus']);
 
 // LIGHT band-pass twin: same stream, but keep ONLY signals fired while the
 // symbol's 4h ER was in the light-trend band [0.20, 0.35) — where the 2026
 // regime-routing audit found our edge actually lives (strong/mid trend is
-// break-even-to-negative). Scope = core/½TP/karma (NOT opus, a session gate of
-// its own). Tags <=10 chars; mirror sync/backfill_light.py LIGHT_TAG.
+// break-even-to-negative). Kept only on the two streams it helps most (IMPULSE,
+// KARMA). Tags <=10 chars; mirror sync/backfill_light.py LIGHT_TAG.
 const LIGHT_ER_LO = 0.20;
 const LIGHT_ER_HI = 0.35;
-const LIGHT_VER = {
-  main: 'v1_light', impulse: 'v2_light', main_half: 'v3_light', impulse_half: 'v4_light',
-  karma: 'kma_light', karma_half: 'kmah_light',
-};
-const LIGHT_PARENTS = ['main', 'impulse', 'main_half', 'impulse_half', 'karma', 'karma_half'];
+const LIGHT_VER = { impulse: 'v2_light', karma: 'kma_light' };
+const LIGHT_PARENTS = ['impulse', 'karma'];
 LIGHT_PARENTS.forEach((b) => {
   const c = `${b}_light`;
   STRATEGY_VERSION[c] = LIGHT_VER[b];
@@ -151,29 +123,23 @@ export const KARMA_MAP = {
   AVAXUSDT: { set: 'main', half: true },
 };
 
-// ½TP lifecycle applies to this signal? *_half modules (incl. *_half_chop /
-// *_half_light): always. karma / karma_chop / karma_light: per symbol (KARMA_MAP).
-// HALF_STRATEGIES already carries the _chop/_light twins of the half modules.
+// ½TP lifecycle applies to this signal? karma / karma_light: per symbol (KARMA_MAP).
+// (No standalone ½TP stream remains, so HALF_STRATEGIES is empty.)
 export const isHalfFor = (strat, symbol) => {
   if (HALF_STRATEGIES.has(strat)) return true;
-  const base = strat.replace(/_(chop|light)$/, '');
+  const base = strat.replace(/_light$/, '');
   return base === 'karma' && !!KARMA_MAP[symbol]?.half;
 };
 
-// Is this a known strategy module (incl. the _chop twins)? Used by route guarding.
+// Is this a known strategy module (incl. the _light twins)? Used by route guarding.
 export const isValidStrategy = (s) => VALID_STRATEGIES.has(s);
 
-// CHOP gate (live): keep only signals whose symbol's 4h Efficiency Ratio at the
-// last completed 4h bar before the signal is >= REGIME_ER_MIN. Mirror of
-// sync/regime.py. Module-level + fully graceful — any fetch/parse error keeps the
-// symbol's signals (never over-filter on absence).
+// LIGHT gate (live): keep ONLY signals whose symbol's 4h Efficiency Ratio at the
+// last completed 4h bar before the signal is in [LIGHT_ER_LO, LIGHT_ER_HI) — the
+// light-trend band where our edge lives. Mirror of sync/regime.light_ok: an
+// INCLUSION gate, so a missing/failed ER drops the signal.
 const ER_N_4H = 10;
-// Regime gate on live signals, mirroring the backtest gates (sync/regime.py).
-//   kind='chop'  : keep ER >= REGIME_ER_MIN (drop chop). Missing ER -> KEEP (never
-//                  over-filter on absence). Mirrors regime.chop_ok.
-//   kind='light' : keep ER in [LIGHT_ER_LO, LIGHT_ER_HI) (the light-trend band where
-//                  our edge lives). INCLUSION gate — missing ER -> DROP. regime.light_ok.
-const applyRegimeGate = async (signals, kind = 'chop') => {
+const applyLightGate = async (signals) => {
   const syms = [...new Set(signals.map((s) => s.symbol))];
   const er = {};
   await Promise.all(syms.map(async (sym) => {
@@ -200,8 +166,7 @@ const applyRegimeGate = async (signals, kind = 'chop') => {
   };
   return signals.filter((s) => {
     const v = erAt(s);
-    if (kind === 'light') return v !== null && v >= LIGHT_ER_LO && v < LIGHT_ER_HI;
-    return v === null ? true : v >= REGIME_ER_MIN;        // chop: drop chop, keep on absence
+    return v !== null && v >= LIGHT_ER_LO && v < LIGHT_ER_HI;   // keep only the light band
   });
 };
 
@@ -451,7 +416,6 @@ export const TradeProvider = ({ children }) => {
       // OPUS reads 'live' (MAIN signals) and is filtered to per-symbol NY sessions below.
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
       const isOpus = OPUS_STRATEGIES.has(strategyRef.current);
-      const isChop = strategyRef.current.endsWith('_chop');    // 4h-ER gate: drop chop
       const isLight = strategyRef.current.endsWith('_light');  // 4h-ER gate: keep light band only
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
@@ -499,13 +463,10 @@ export const TradeProvider = ({ children }) => {
         context: r.context,
       }));
 
-      // CHOP modules: drop live signals fired in chop (ER < REGIME_ER_MIN).
-      // LIGHT modules: keep ONLY signals fired in the light band [0.20,0.35).
-      // Mirrors sync/regime.py. CHOP is graceful (keeps on fetch failure); LIGHT is
-      // an inclusion gate (a failed/absent ER drops the signal).
-      const finalMapped = isChop ? await applyRegimeGate(mapped, 'chop')
-        : isLight ? await applyRegimeGate(mapped, 'light')
-          : mapped;
+      // LIGHT modules: keep ONLY signals fired in the light band [0.20,0.35) (the
+      // regime where our edge lives). Mirrors sync/regime.light_ok — an inclusion
+      // gate, so a failed/absent ER drops the signal.
+      const finalMapped = isLight ? await applyLightGate(mapped) : mapped;
 
       processData(finalMapped);
       setLastUpdated(new Date());
