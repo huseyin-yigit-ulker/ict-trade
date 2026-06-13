@@ -25,6 +25,13 @@ import trade_sync_common as tsc
 
 ER_N = 10            # 4h bars (~1.7 days) lookback
 ER_MIN = 0.25        # keep signals with ER >= this (drop the choppiest ~1/3)
+# LIGHT band-pass — the 2026 regime-routing audit (sync/regime_route_analysis.py)
+# found our (trend-following ICT) signals make ~85-90% of their R in the LIGHT
+# regime (ER 0.20-0.35); strong/mid trend is break-even-to-negative. The LIGHT
+# streams keep ONLY signals fired in this band. Matches REGIME_BANDS in
+# src/utils/symbolMeta.js (light = [0.20, 0.35)).
+LIGHT_LO = 0.20
+LIGHT_HI = 0.35
 _AGG = {"open": "first", "high": "max", "low": "min", "close": "last"}
 
 
@@ -75,3 +82,12 @@ def is_choppy(er_series: pd.Series | None, ts) -> bool:
     diagnostic CHOP-ONLY stream."""
     v = _er_at(er_series, ts)
     return v is not None and v < ER_MIN
+
+
+def light_ok(er_series: pd.Series | None, ts) -> bool:
+    """LIGHT band-pass: True only when ER is PRESENT and in [LIGHT_LO, LIGHT_HI)
+    (the light-trend regime where our signals earn their edge). Unlike chop_ok this
+    is an INCLUSION gate — missing ER -> False (can't confirm light, so don't trade
+    it). Used by the LIGHT stream variants."""
+    v = _er_at(er_series, ts)
+    return v is not None and LIGHT_LO <= v < LIGHT_HI

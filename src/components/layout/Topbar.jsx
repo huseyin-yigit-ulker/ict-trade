@@ -5,9 +5,13 @@ import { useLang } from '../../context/LanguageContext';
 import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 
 const STRAT_BASE_LABEL = { main: 'Main', impulse: 'Impulse', main_half: 'Main ½TP', impulse_half: 'Impulse ½TP', karma: 'Karma', karma_half: 'Karma ½TP', opus: 'Opus', opus_half: 'Opus ½TP' };
-// chop twins reuse the parent label + " · Chop"
+// chop twins reuse the parent label + " · Chop"; light twins + " · Light"
+// (light scope = core/½TP/karma, not opus — but labelling every base is harmless).
 const STRAT_LABEL = { ...STRAT_BASE_LABEL };
-Object.keys(STRAT_BASE_LABEL).forEach((b) => { STRAT_LABEL[`${b}_chop`] = `${STRAT_BASE_LABEL[b]} · Chop`; });
+Object.keys(STRAT_BASE_LABEL).forEach((b) => {
+  STRAT_LABEL[`${b}_chop`] = `${STRAT_BASE_LABEL[b]} · Chop`;
+  STRAT_LABEL[`${b}_light`] = `${STRAT_BASE_LABEL[b]} · Light`;
+});
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
 // ICT killzones (UTC) — the windows the engine actually hunts in. The pill

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, LineSeries, HistogramSeries } from 'lightweight-charts';
 import { useLang } from '../context/LanguageContext';
-import { REGIME_BANDS, regimeOf, efficiencyRatio } from '../utils/symbolMeta';
+import { REGIME_BANDS, regimeOf, efficiencyRatio, regimeAccuracy } from '../utils/symbolMeta';
 
 // TREND DETAIL — interactive (lightweight-charts, like the app's other charts).
 // The price is a single-colour LINE; the REGIME is painted as full-height background
@@ -61,7 +61,8 @@ const TrendDetail = ({ symbol, onClose }) => {
       const mix = {}; REGIME_BANDS.forEach((bd) => { mix[bd.key] = 0; });
       valid.forEach((v) => { mix[regimeOf(v).key] += 1; });
       const curER = valid[valid.length - 1];
-      setMeta({ curER, curRegime: regimeOf(curER), mix, n: valid.length });
+      const acc = regimeAccuracy(closes, ER_N);   // predictive accuracy over this window
+      setMeta({ curER, curRegime: regimeOf(curER), mix, n: valid.length, acc });
 
       const W = wrapRef.current.clientWidth || 760;
       chart = createChart(wrapRef.current, {
@@ -160,6 +161,15 @@ const TrendDetail = ({ symbol, onClose }) => {
                 {t(bd.label)} <b style={{ opacity: 0.7 }}>%{Math.round(meta.mix[bd.key] / meta.n * 100)}</b>
               </span>
             ))}
+          </div>
+        )}
+        {meta && meta.acc && (
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, fontSize: 11, alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>{t('Rejim Doğruluğu')}</span>
+            <span>{t('Süreklilik')} <b style={{ color: meta.acc.contP >= 0.54 ? '#0ECB81' : meta.acc.contP <= 0.46 ? '#F6465D' : '#C9CDD4' }}>%{Math.round((meta.acc.contP ?? 0) * 100)}</b></span>
+            <span>{t('İleriye dönük uyum')} <b style={{ color: meta.acc.overall >= meta.acc.baseline ? '#0ECB81' : '#F6465D' }}>%{Math.round(meta.acc.overall * 100)}</b>
+              <span style={{ opacity: 0.5 }}> · {t('Temel oran')} %{Math.round(meta.acc.baseline * 100)}</span></span>
+            <span style={{ opacity: 0.5 }}>{t('Örnek')} {meta.acc.n} {t('bar')}</span>
           </div>
         )}
         <div style={{ fontSize: 11, opacity: 0.55, marginTop: 8 }}>

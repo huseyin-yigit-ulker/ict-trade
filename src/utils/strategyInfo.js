@@ -189,17 +189,37 @@ const CHOP_SECTION = {
   en: { h: 'Choppy filter', t: 'SAME signals as the parent — but those fired while the symbol’s 4h Efficiency Ratio was < 0.25 (price round-tripping, no clean trend) are skipped. ~⅓ of trades are dropped. In 2026 it lifts total R on the broad/½TP streams (e.g. MAIN +39→+55R, IMPULSE ½TP −13→+2R, MAIN ½TP −39→−11R) but can LOWER it on already-selective streams (OPUS +157→+109R) by cutting winners too. The live 2026 R below shows where it helps.' },
 };
 
+// LIGHT band-pass twins: keep only signals fired in the light-trend regime
+// (4h ER 0.20-0.35), where the 2026 routing audit found our edge actually lives.
+const LIGHT_SECTION = {
+  tr: { h: 'Light-rejim filtresi', t: 'Ebeveyn akımla AYNI sinyaller — fakat YALNIZCA sembolün 4h Efficiency Ratio’su 0.20–0.35 (light trend) bandındayken üretilenler tutulur. 2026 rejim-yönlendirme analizi, ICT setimizin asıl edge’inin bu bantta olduğunu gösterdi (güçlü/orta trendde başabaş–negatif, orta bant MAIN’de zarar). İşlemlerin yalnızca ~%22’si kalır; işlem başı beklenti her akımda belirgin yükselir. Ekside olan ½TP akımlarını artıya çevirir (MAIN ½TP −39→+36R, IMPULSE ½TP −13→+40R, KARMA ½TP +0→+43R); MAIN’de toplam R’yi de yükseltir (+39→+55R). Zaten güçlü tam-TP akımlarda (IMPULSE +76→+59R, KARMA +109→+75R) işlem sayısı düştüğü için toplam R düşer ama beklenti çok artar.' },
+  en: { h: 'Light-regime filter', t: 'SAME signals as the parent — but ONLY those fired while the symbol’s 4h Efficiency Ratio was in the 0.20–0.35 (light-trend) band. The 2026 regime-routing audit found this is where our ICT set’s edge actually lives (strong/mid trend is break-even-to-negative; the mid band loses on MAIN). Only ~22% of trades survive, but per-trade expectancy rises sharply on every stream. It flips the losing ½TP streams positive (MAIN ½TP −39→+36R, IMPULSE ½TP −13→+40R, KARMA ½TP +0→+43R) and lifts MAIN’s total R (+39→+55R). On the already-strong full-TP streams (IMPULSE +76→+59R, KARMA +109→+75R) total R is lower because volume drops, but expectancy is far higher.' },
+};
+
 export const infoFor = (strategy, lang) => {
   const isChop = strategy.endsWith('_chop');
-  const e = STRATEGY_INFO[isChop ? strategy.slice(0, -5) : strategy];
+  const isLight = strategy.endsWith('_light');
+  const baseKey = isChop ? strategy.slice(0, -5) : isLight ? strategy.slice(0, -6) : strategy;
+  const e = STRATEGY_INFO[baseKey];
   if (!e) return null;
   const info = { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
-  if (!isChop) return info;
-  const cs = CHOP_SECTION[lang] || CHOP_SECTION.tr;
-  return {
-    ...info,
-    title: `${info.title} · Chop`,
-    tagline: lang === 'en' ? `${info.tagline} + choppy filter` : `${info.tagline} + choppy filtre`,
-    sections: [cs, ...(info.sections || [])],
-  };
+  if (isChop) {
+    const cs = CHOP_SECTION[lang] || CHOP_SECTION.tr;
+    return {
+      ...info,
+      title: `${info.title} · Chop`,
+      tagline: lang === 'en' ? `${info.tagline} + choppy filter` : `${info.tagline} + choppy filtre`,
+      sections: [cs, ...(info.sections || [])],
+    };
+  }
+  if (isLight) {
+    const ls = LIGHT_SECTION[lang] || LIGHT_SECTION.tr;
+    return {
+      ...info,
+      title: `${info.title} · Light`,
+      tagline: lang === 'en' ? `${info.tagline} + light-regime filter` : `${info.tagline} + light-rejim filtre`,
+      sections: [ls, ...(info.sections || [])],
+    };
+  }
+  return info;
 };

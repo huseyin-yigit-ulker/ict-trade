@@ -79,6 +79,15 @@ const GROUPS = [
   { key: 'karma_half_chop',   label: 'KARMA ½TP · Chop',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus_chop',         label: 'OPUS · Chop',        icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus_half_chop',    label: 'OPUS ½TP · Chop',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  // LIGHT band-pass twins — keep only signals fired in the light-trend regime
+  // (4h ER 0.20–0.35), where the 2026 routing audit found our edge concentrates.
+  // Scope = core/½TP/karma (no opus). Flips the losing ½TP streams positive.
+  { key: 'main_light',         label: 'MAIN · Light',        icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse_light',      label: 'IMPULSE · Light',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'main_half_light',    label: 'MAIN ½TP · Light',    icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse_half_light', label: 'IMPULSE ½TP · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_light',        label: 'KARMA · Light',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_half_light',   label: 'KARMA ½TP · Light',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

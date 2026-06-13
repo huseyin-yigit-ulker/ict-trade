@@ -24,6 +24,15 @@ export const STREAMS = [
   { key: 'impulse_half_chop', version: 'v4_chop',   exit: 'half', family: 'core',     chop: true },
   { key: 'opus_half_chop',    version: 'opsh_chop', exit: 'half', family: 'session',  chop: true },
   { key: 'karma_half_chop',   version: 'kmah_chop', exit: 'half', family: 'adaptive', chop: true },
+  // LIGHT band-pass twins — keep only signals fired in the light-trend regime
+  // (4h ER in [0.20,0.35)), where the 2026 routing audit found our edge lives.
+  // Scope = core/½TP/karma (no opus). Short tags; mirror backfill_light.LIGHT_TAG.
+  { key: 'main_light',         version: 'v1_light',   exit: 'full', family: 'core',     light: true },
+  { key: 'impulse_light',      version: 'v2_light',   exit: 'full', family: 'core',     light: true },
+  { key: 'karma_light',        version: 'kma_light',  exit: 'mixed', family: 'adaptive', light: true },
+  { key: 'main_half_light',    version: 'v3_light',   exit: 'half', family: 'core',     light: true },
+  { key: 'impulse_half_light', version: 'v4_light',   exit: 'half', family: 'core',     light: true },
+  { key: 'karma_half_light',   version: 'kmah_light', exit: 'half', family: 'adaptive', light: true },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

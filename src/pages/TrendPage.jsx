@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLang } from '../context/LanguageContext';
 import { BACKTEST_ALLOWED_SYMBOLS } from '../context/TradeContext';
-import { REGIME_BANDS, regimeOf, efficiencyRatio, marketOf, MARKETS } from '../utils/symbolMeta';
+import { REGIME_BANDS, regimeOf, efficiencyRatio, regimeAccuracy, marketOf, MARKETS } from '../utils/symbolMeta';
 import Sparkline from '../components/viz/Sparkline';
 import TrendDetail from './TrendDetail';
 
@@ -37,7 +37,8 @@ const TrendPage = () => {
       const out = await Promise.all(BACKTEST_ALLOWED_SYMBOLS.map(async (sym) => {
         try {
           const b = sym.replace(/[^A-Za-z0-9]/g, '');
-          const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${b}&interval=4h&limit=180`);
+          // 500 bars (~83 days) — enough to measure the classifier's predictive accuracy
+          const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${b}&interval=4h&limit=500`);
           const d = await res.json();
           if (!Array.isArray(d) || d.length < ER_N + 5) return null;
           const now = Date.now();
@@ -56,8 +57,10 @@ const TrendPage = () => {
           const vol = bars.slice(-DIST_BARS).reduce((a, k) => a + (Number(k[7]) || 0), 0);
           // recent ER trail (oldest→newest) for the hover tooltip = "past chop scores"
           const erHist = er.slice(-12).filter(Number.isFinite).map((v) => Math.round(v * 100) / 100);
+          // predictive accuracy of the regime label over the full window (null if thin)
+          const acc = regimeAccuracy(closes, ER_N);
           return { sym, market: marketOf(sym), er: cur, regime: regimeOf(cur),
-                   closes: closes.slice(-DIST_BARS), dist, vol, erHist };
+                   closes: closes.slice(-DIST_BARS), dist, vol, erHist, acc };
         } catch { return null; }
       }));
       if (alive) { setRows(out.filter(Boolean)); setLoading(false); }
@@ -87,6 +90,24 @@ const TrendPage = () => {
     return c;
   }, [rows]);
 
+  // Bar-weighted predictive accuracy across every symbol with enough history.
+  const accAgg = useMemo(() => {
+    const sub = rows.filter((r) => r.acc);
+    if (!sub.length) return null;
+    const w = sub.reduce((a, r) => a + r.acc.n, 0);
+    const wa = (sel) => sub.reduce((a, r) => a + sel(r.acc) * r.acc.n, 0) / w;
+    const overall = wa((a) => a.overall);
+    const baseline = wa((a) => a.baseline);
+    return { n: w, symbols: sub.length, overall, baseline, lift: overall - baseline,
+             contP: wa((a) => a.contP ?? 0) };
+  }, [rows]);
+
+  // Continuation is the headline per-symbol number: green if it beats a coin-flip,
+  // red if worse, muted around 50% (where the classifier mostly sits).
+  const accColor = (p) => (p == null ? 'var(--muted, #848E9C)'
+    : p >= 0.54 ? '#0ECB81' : p <= 0.46 ? '#F6465D' : 'var(--muted, #848E9C)');
+  const accPct = (p) => (p == null ? '—' : `%${Math.round(p * 100)}`);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows
@@ -108,10 +129,15 @@ const TrendPage = () => {
   const Card = ({ r }) => {
     const mixStr = REGIME_BANDS.map((b) => `${t(b.label)} %${Math.round((r.dist[b.key] || 0) * 100)}`).join(' · ');
     // hover tooltip = past chop/ER scores (regime names follow the language toggle)
+    const accTip = r.acc
+      ? `\n${t('Süreklilik')}: ${accPct(r.acc.contP)} (${t('trend yönü korunur')})`
+        + `\n${t('Doğruluk')}: ${accPct(r.acc.overall)} · ${t('Temel oran')} ${accPct(r.acc.baseline)} · ${t('Beceri')} ${r.acc.lift >= 0 ? '+' : ''}${Math.round(r.acc.lift * 100)}`
+        + `\n${t('Örnek')}: ${r.acc.n} ${t('bar')}`
+      : `\n${t('Doğruluk')}: ${t('Yetersiz veri')}`;
     const tip = `${r.sym}
 ${t('Güncel')}: ${t(r.regime.label)} (ER ${r.er.toFixed(2)})
 ${t('Rejim karışımı')}: ${mixStr}
-${t('Son ER skorları')}: ${r.erHist.join(' · ')}`;
+${t('Son ER skorları')}: ${r.erHist.join(' · ')}${accTip}`;
     return (
       <div title={tip} onClick={() => setDetail(r.sym)} style={{
         border: '1px solid var(--border, #2a2f3a)', borderLeft: `3px solid ${r.regime.color}`,
@@ -137,7 +163,18 @@ ${t('Son ER skorları')}: ${r.erHist.join(' · ')}`;
                   style={{ width: `${r.dist[bd.key] * 100}%`, background: bd.color }} />
           )))}
         </div>
-        <div style={{ fontSize: 10, opacity: 0.5 }}>{t('Hacim')}: {fmtVol(r.vol)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, opacity: 0.6 }}>
+          <span>{t('Hacim')}: {fmtVol(r.vol)}</span>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                title={`${t('Süreklilik')}: ${accPct(r.acc?.contP)} · ${t('Doğruluk')}: ${accPct(r.acc?.overall)} · ${t('Temel oran')}: ${accPct(r.acc?.baseline)}`}>
+            {r.acc ? (
+              <>
+                <span style={{ opacity: 0.7 }}>{t('Süreklilik')}</span>
+                <b style={{ color: accColor(r.acc.contP) }}>{accPct(r.acc.contP)}</b>
+              </>
+            ) : <span style={{ opacity: 0.5 }}>{t('Yetersiz veri')}</span>}
+          </span>
+        </div>
       </div>
     );
   };
@@ -150,6 +187,40 @@ ${t('Son ER skorları')}: ${r.erHist.join(' · ')}`;
         <p style={{ opacity: 0.7, fontSize: 13, lineHeight: 1.55, margin: '0 0 16px', maxWidth: 760 }}>
           {t('Her sembolün 4 saatlik fiyatından Efficiency Ratio hesaplanır ve anlık rejim sınıflanır (trend mi, yatay mı). Salt fiyat verisi — sinyal/backtest değil.')}
         </p>
+
+        {/* REGIME ACCURACY — does the trailing label actually predict the next window? */}
+        {accAgg && (
+          <div style={{
+            border: '1px solid var(--border, #2a2f3a)',
+            borderLeft: `3px solid ${accAgg.lift >= 0 ? '#0ECB81' : '#F6465D'}`,
+            borderRadius: 10, padding: '14px 16px', marginBottom: 16,
+            background: 'var(--panel, rgba(255,255,255,0.02))',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              <span style={{ fontWeight: 800, fontSize: 14 }}>{t('Rejim Doğruluğu')}</span>
+              <span style={{ fontSize: 11, opacity: 0.55 }}>{accAgg.symbols} {t('sembol')} · {accAgg.n.toLocaleString()} {t('bar')}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 10 }}>
+              {[
+                { label: t('Süreklilik'), txt: accPct(accAgg.contP), sub: t('trend yönü korunur'), color: accColor(accAgg.contP) },
+                { label: t('İleriye dönük uyum'), txt: accPct(accAgg.overall), sub: `${t('Temel oran')} ${accPct(accAgg.baseline)}`, color: accAgg.overall >= accAgg.baseline ? '#0ECB81' : '#F6465D' },
+                { label: t('Beceri'), txt: `${accAgg.lift >= 0 ? '+' : ''}${Math.round(accAgg.lift * 100)}%`, sub: `${t('Doğruluk')} − ${t('Temel oran')}`, color: accAgg.lift >= 0 ? '#0ECB81' : '#F6465D' },
+              ].map((s) => (
+                <div key={s.label} style={{ border: '1px solid var(--border, #2a2f3a)', borderRadius: 8, padding: '9px 11px' }}>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 }}>{s.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: s.color, lineHeight: 1.2 }}>{s.txt}</div>
+                  <div style={{ fontSize: 10, opacity: 0.5 }}>{s.sub}</div>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 12, lineHeight: 1.55, opacity: 0.78, margin: '0 0 6px' }}>
+              {t('ER rejim etiketi geçmiş pencereyi birebir tanımlar; ancak bir sonraki pencereyi öngörmede beceri göstermez. “Trend” dediğinde fiyat yönünü ~yarı yarıya (yazı-tura) sürdürür ve ileriye dönük uyum, hep çoğunluğu söyleme (temel oran) doğruluğunun altında kalır. Yani “şu an trend” bir tahmin değil, geçmişin betimlemesidir.')}
+            </p>
+            <p style={{ fontSize: 10.5, lineHeight: 1.5, opacity: 0.5, margin: 0 }}>
+              {t('Yöntem: her 4h barın geriye-dönük ER etiketi (trend ER≥0.25) bir sonraki 10-bar (~40s) penceredeki gerçekleşmeyle karşılaştırılır; pencereler ayrıktır. Temel oran = hep çoğunluğu söylemenin doğruluğu, Beceri = doğruluk − temel oran.')}
+            </p>
+          </div>
+        )}
 
         {/* VOLUME-WEIGHTED GROUP TREND — click a tile to filter the grid to that market */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>

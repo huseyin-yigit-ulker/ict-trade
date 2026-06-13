@@ -161,6 +161,22 @@ const EN = {
   'eşik': 'thresholds',
   'Arka plan rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.':
     "The background colour is each 4h bar's regime — red choppy, green strong trend. Lower pane is the ER score.",
+  // --- Regime accuracy (predictive audit) ---
+  'Rejim Doğruluğu': 'Regime Accuracy',
+  'Süreklilik': 'Continuation',
+  'İleriye dönük uyum': 'Forward agreement',
+  'Doğruluk': 'Accuracy',
+  'Temel oran': 'Baseline',
+  'Beceri': 'Skill',
+  'Örnek': 'Sample',
+  'bar': 'bars',
+  'Yetersiz veri': 'Insufficient data',
+  'ER rejim etiketi geçmiş pencereyi birebir tanımlar; ancak bir sonraki pencereyi öngörmede beceri göstermez. “Trend” dediğinde fiyat yönünü ~yarı yarıya (yazı-tura) sürdürür ve ileriye dönük uyum, hep çoğunluğu söyleme (temel oran) doğruluğunun altında kalır. Yani “şu an trend” bir tahmin değil, geçmişin betimlemesidir.':
+    'The ER regime label describes the trailing window exactly, but shows no skill at predicting the next one. When it calls "trend," price keeps its direction roughly half the time (a coin-flip), and forward agreement stays below the always-guess-majority baseline. "Trend now" is a description of the past, not a forecast.',
+  'Yöntem: her 4h barın geriye-dönük ER etiketi (trend ER≥0.25) bir sonraki 10-bar (~40s) penceredeki gerçekleşmeyle karşılaştırılır; pencereler ayrıktır. Temel oran = hep çoğunluğu söylemenin doğruluğu, Beceri = doğruluk − temel oran.':
+    "Method: each 4h bar's trailing ER label (trend if ER≥0.25) is compared with what actually happens over the next 10-bar (~40h) window; the windows are disjoint. Baseline = accuracy of always guessing the majority class, Skill = accuracy − baseline.",
+  'trend yönü korunur': 'trend keeps its direction',
+  'sonraki pencere rejimi tutar': 'next window matches the label',
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',

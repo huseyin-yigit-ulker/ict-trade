@@ -60,6 +60,7 @@ const IntroPage = () => {
   const matchCat = (s) =>
     cat === 'all' ||
     (cat === 'chop' && s.chop) ||
+    (cat === 'light' && s.light) ||
     (cat === 'full' && s.exit === 'full') ||
     (cat === 'half' && s.exit === 'half') ||
     (cat === 'adaptive' && s.family === 'adaptive') ||
@@ -95,6 +96,7 @@ const IntroPage = () => {
     { key: 'adaptive', label: t('Adaptif') },
     { key: 'session', label: t('Seans') },
     { key: 'chop', label: 'Chop' },
+    { key: 'light', label: 'Light' },
   ];
   const SORTS = [
     { key: 'r', label: t('Toplam R') },

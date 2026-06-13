@@ -52,6 +52,48 @@ export const efficiencyRatio = (closes, n = 10) => {
   return out;
 };
 
+// Trend/chop boundary used by both the regime map and the strategies' chop gate.
+export const REGIME_ER_MIN = 0.25;
+
+// ---- How ACCURATE is the regime label as a PREDICTOR? -----------------------
+// The trailing ER label is exact for the window it measures (it IS that window).
+// The honest test is whether it predicts the NEXT window: the trailing label at
+// bar i is series[i] (closes[i-n..i]); the realized forward label is series[i+n]
+// (closes[i..i+n]) — disjoint windows sharing only closes[i], so no overlap
+// tautology. Mirrors sync/regime_accuracy.py.
+//   overall  P(forward class == trailing class)          — is the label right
+//   contP    P(price keeps its direction | labelled trend)— does a "trend" hold
+//   base     realized forward trend rate ; baseline = max(base, 1-base)
+//   lift     overall - baseline  (skill ABOVE guessing the majority class)
+// Returns null when there aren't enough evaluable bars (new listings).
+export const regimeAccuracy = (closes, n = 10, erMin = REGIME_ER_MIN, minN = 120) => {
+  if (!Array.isArray(closes) || closes.length < 2 * n + minN) return null;
+  const er = efficiencyRatio(closes, n);
+  const sgn = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
+  let agree = 0, total = 0, trendT = 0, trendHit = 0, cont = 0, rt = 0;
+  for (let i = n; i < closes.length - n; i += 1) {
+    const a = er[i], b = er[i + n];                   // trailing label vs forward label
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    const pTr = a >= erMin, rTr = b >= erMin;
+    total += 1; if (rTr) rt += 1;
+    if (pTr === rTr) agree += 1;
+    if (pTr) {
+      trendT += 1;
+      if (rTr) trendHit += 1;
+      if (sgn(closes[i] - closes[i - n]) === sgn(closes[i + n] - closes[i])) cont += 1;
+    }
+  }
+  if (total < minN) return null;
+  const base = rt / total;
+  const baseline = Math.max(base, 1 - base);
+  const overall = agree / total;
+  return {
+    n: total, overall, baseline, lift: overall - baseline, base,
+    contP: trendT ? cont / trendT : null,
+    trendP: trendT ? trendHit / trendT : null,
+  };
+};
+
 // ---- OPUS: per-symbol NY-session allowlist (mirror of sync/opus_map.py) ----
 // Each symbol is traded only in the NY session(s) where its 2026 signals had an
 // edge. 'am' = 09:00–12:00 ET, 'pm' = 12:00–16:00 ET. Symbols absent → not traded.
@@ -105,6 +147,10 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
     const base = strategyCellLabel(strategy.slice(0, -5), symbol, karmaMap);
     return base === '—' ? base : `${base} · Chop`;
   }
+  if (strategy.endsWith('_light')) {
+    const base = strategyCellLabel(strategy.slice(0, -6), symbol, karmaMap);
+    return base === '—' ? base : `${base} · Light`;
+  }
   if (strategy === 'karma' || strategy === 'karma_half') {
     const sel = karmaMap?.[symbol];
     if (!sel) return '—';                       // unmapped → karma doesn't trade it
@@ -128,6 +174,10 @@ export const strategyBadge = (strategy, symbol, karmaMap) => {
   if (strategy.endsWith('_chop')) {
     const base = strategyBadge(strategy.slice(0, -5), symbol, karmaMap);
     return base ? `${base}·ch` : 'ch';
+  }
+  if (strategy.endsWith('_light')) {
+    const base = strategyBadge(strategy.slice(0, -6), symbol, karmaMap);
+    return base ? `${base}·lt` : 'lt';
   }
   if (strategy === 'opus' || strategy === 'opus_half') {
     const sess = OPUS_MAP[symbol];

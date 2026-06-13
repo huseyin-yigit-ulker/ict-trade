@@ -81,6 +81,27 @@ CHOP_PARENTS.forEach((b) => {
   if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
   if (OPUS_STRATEGIES.has(b)) OPUS_STRATEGIES.add(c);
 });
+
+// LIGHT band-pass twin: same stream, but keep ONLY signals fired while the
+// symbol's 4h ER was in the light-trend band [0.20, 0.35) — where the 2026
+// regime-routing audit found our edge actually lives (strong/mid trend is
+// break-even-to-negative). Scope = core/½TP/karma (NOT opus, a session gate of
+// its own). Tags <=10 chars; mirror sync/backfill_light.py LIGHT_TAG.
+const LIGHT_ER_LO = 0.20;
+const LIGHT_ER_HI = 0.35;
+const LIGHT_VER = {
+  main: 'v1_light', impulse: 'v2_light', main_half: 'v3_light', impulse_half: 'v4_light',
+  karma: 'kma_light', karma_half: 'kmah_light',
+};
+const LIGHT_PARENTS = ['main', 'impulse', 'main_half', 'impulse_half', 'karma', 'karma_half'];
+LIGHT_PARENTS.forEach((b) => {
+  const c = `${b}_light`;
+  STRATEGY_VERSION[c] = LIGHT_VER[b];
+  STRATEGY_EXPIRY_MINUTES[c] = STRATEGY_EXPIRY_MINUTES[b];
+  if (STRATEGY_LIVE_MODE[b]) STRATEGY_LIVE_MODE[c] = STRATEGY_LIVE_MODE[b];
+  if (HALF_STRATEGIES.has(b)) HALF_STRATEGIES.add(c);
+  if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
+});
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
@@ -130,12 +151,12 @@ export const KARMA_MAP = {
   AVAXUSDT: { set: 'main', half: true },
 };
 
-// ½TP lifecycle applies to this signal? *_half modules (incl. *_half_chop): always.
-// karma / karma_chop: per symbol (KARMA_MAP). HALF_STRATEGIES already carries the
-// _chop twins of the half modules (added in the CHOP_PARENTS loop).
+// ½TP lifecycle applies to this signal? *_half modules (incl. *_half_chop /
+// *_half_light): always. karma / karma_chop / karma_light: per symbol (KARMA_MAP).
+// HALF_STRATEGIES already carries the _chop/_light twins of the half modules.
 export const isHalfFor = (strat, symbol) => {
   if (HALF_STRATEGIES.has(strat)) return true;
-  const base = strat.replace('_chop', '');
+  const base = strat.replace(/_(chop|light)$/, '');
   return base === 'karma' && !!KARMA_MAP[symbol]?.half;
 };
 
@@ -147,10 +168,12 @@ export const isValidStrategy = (s) => VALID_STRATEGIES.has(s);
 // sync/regime.py. Module-level + fully graceful — any fetch/parse error keeps the
 // symbol's signals (never over-filter on absence).
 const ER_N_4H = 10;
-// invert=false (chop streams): keep signals with ER >= REGIME_ER_MIN (drop chop).
-// invert=true  (choponly test): keep only confirmed-choppy signals (ER present and
-// < REGIME_ER_MIN). Missing ER -> kept when !invert, dropped when invert.
-const applyChopGate = async (signals, { invert = false } = {}) => {
+// Regime gate on live signals, mirroring the backtest gates (sync/regime.py).
+//   kind='chop'  : keep ER >= REGIME_ER_MIN (drop chop). Missing ER -> KEEP (never
+//                  over-filter on absence). Mirrors regime.chop_ok.
+//   kind='light' : keep ER in [LIGHT_ER_LO, LIGHT_ER_HI) (the light-trend band where
+//                  our edge lives). INCLUSION gate — missing ER -> DROP. regime.light_ok.
+const applyRegimeGate = async (signals, kind = 'chop') => {
   const syms = [...new Set(signals.map((s) => s.symbol))];
   const er = {};
   await Promise.all(syms.map(async (sym) => {
@@ -177,8 +200,8 @@ const applyChopGate = async (signals, { invert = false } = {}) => {
   };
   return signals.filter((s) => {
     const v = erAt(s);
-    if (invert) return v !== null && v < REGIME_ER_MIN;   // choppy-only (test)
-    return v === null ? true : v >= REGIME_ER_MIN;        // drop chop
+    if (kind === 'light') return v !== null && v >= LIGHT_ER_LO && v < LIGHT_ER_HI;
+    return v === null ? true : v >= REGIME_ER_MIN;        // chop: drop chop, keep on absence
   });
 };
 
@@ -428,7 +451,8 @@ export const TradeProvider = ({ children }) => {
       // OPUS reads 'live' (MAIN signals) and is filtered to per-symbol NY sessions below.
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
       const isOpus = OPUS_STRATEGIES.has(strategyRef.current);
-      const isChop = strategyRef.current.endsWith('_chop');   // adds the 4h-ER regime gate
+      const isChop = strategyRef.current.endsWith('_chop');    // 4h-ER gate: drop chop
+      const isLight = strategyRef.current.endsWith('_light');  // 4h-ER gate: keep light band only
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {
@@ -475,10 +499,13 @@ export const TradeProvider = ({ children }) => {
         context: r.context,
       }));
 
-      // CHOP modules: drop live signals fired while the symbol's 4h was choppy
-      // (Efficiency Ratio < REGIME_ER_MIN). Mirrors sync/regime.py. Graceful — any
-      // fetch/parse failure keeps the signal (never over-filter on absence).
-      const finalMapped = isChop ? await applyChopGate(mapped) : mapped;
+      // CHOP modules: drop live signals fired in chop (ER < REGIME_ER_MIN).
+      // LIGHT modules: keep ONLY signals fired in the light band [0.20,0.35).
+      // Mirrors sync/regime.py. CHOP is graceful (keeps on fetch failure); LIGHT is
+      // an inclusion gate (a failed/absent ER drops the signal).
+      const finalMapped = isChop ? await applyRegimeGate(mapped, 'chop')
+        : isLight ? await applyRegimeGate(mapped, 'light')
+          : mapped;
 
       processData(finalMapped);
       setLastUpdated(new Date());
