@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, karma: 180, opus: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, karma: 180, opus: 180, range: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -42,7 +42,9 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, karma: 180, opus: 180
 // The two '_light' twins (added below) keep only signals fired in the 4h-ER light
 // band. 2026-06-13 prune removed the standalone ½TP streams (v3/v4, karma_half,
 // opus_half), the 8 Chop twins and the redundant Light cells (UI + DB).
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', karma: 'karma', opus: 'opus' };
+// 'range' = Burak's RANGE_DEV range-deviation fade, full-TP, gated to ER>=0.20 (skip
+// deep chop). Backtest-only stream (no live scanner yet) — sync/backfill_range.py.
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', karma: 'karma', opus: 'opus', range: 'range' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens

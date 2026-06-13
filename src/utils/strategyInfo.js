@@ -50,7 +50,7 @@ export const STRATEGY_INFO = {
   karma: {
     icon: '🜲', accent: '#A78BFA',
     tr: {
-      title: 'KARMA', tagline: 'Sembol başına en iyi hücre seçimi',
+      title: 'KARMA ½', tagline: 'Sembol başına en iyi hücre (7/40 sembol ½TP, gerisi tam)',
       summary: 'Tek beden değil: her sembol için en kârlı yapıyı seçer. {MAIN / IMPULSE} sinyal seti × {Tam TP / ½TP} çıkışı 2×2 matrisinin, o sembolde en yüksek R veren hücresi kullanılır.',
       sections: [
         { h: 'Nasıl seçer', t: 'Her sembolde 4 hücre 2026 boyunca koşulur, toplam R’ye göre kazanan seçilir. Örn. bir sembol IMPULSE/Tam, bir başkası MAIN/½TP altında işlenir. Seçimler sync/karma_map.py’de sabittir.' },
@@ -60,7 +60,7 @@ export const STRATEGY_INFO = {
       caveat: 'Hücre seçimi 2026 verisi üzerinde yapıldı (in-sample) — bu bir üst sınırdır, forward beklenti daha düşüktür.',
     },
     en: {
-      title: 'KARMA', tagline: 'Per-symbol best-cell selection',
+      title: 'KARMA ½', tagline: 'Per-symbol best-cell (7/40 symbols ½TP, rest full)',
       summary: 'Not one-size-fits-all: it picks the most profitable construct per symbol. The winning cell of the 2×2 matrix {MAIN / IMPULSE} signals × {full TP / ½TP} exit is used for each symbol.',
       sections: [
         { h: 'How it picks', t: 'For each symbol all 4 cells are run across 2026 and the highest-total-R winner is chosen. E.g. one symbol trades IMPULSE/full, another MAIN/½TP. Selections are frozen in sync/karma_map.py.' },
@@ -93,6 +93,33 @@ export const STRATEGY_INFO = {
         { h: '2026 result', t: 'Weekdays only, in-sample ≈ +157R / ≈ +0.73R per trade (18 symbols) — highly selective, well above MAIN’s broad low-edge average. Weekend (US-closed) trades are dropped.' },
       ],
       caveat: 'Hour × symbol selection is in-sample (2026). COIN/HOOD samples are small. Expect shrinkage forward; a split-half validation is recommended.',
+    },
+  },
+  range: {
+    icon: '⬍', accent: '#2EC5C5',
+    tr: {
+      title: 'RANGE', tagline: 'Range-sapma fade (Burak PA) — yatay piyasa',
+      summary: 'ICT setinden bağımsız bir mean-reversion kaynağı: bir yatay aralık (range) çizilir; fiyat sınırın dışına taşıp tekrar içeri kapanınca (deviation) bunu karşı uca doğru fade eder. Yatay/range piyasada çalışması için tasarlandı.',
+      sections: [
+        { h: 'Sinyal mantığı', t: '~4 günlük (96 bar) pencerede high/low/EQ ile bir range tanımlanır (genişlik 2.5–12 ATR arası olmalı). Fiyat sınırı ≥0.25 ATR aşıp içeri kapanırsa = sapma → ters yöne fade. SL sapma ekstreminin ötesi, TP karşı range ucu; R/R tabanı 1.5, tavanı 3 (uçuk hedef yok).' },
+        { h: 'Rejim kapısı', t: 'Yalnızca 4h Efficiency Ratio ≥ 0.20 iken üretilen sinyaller tutulur — DERIN choppy (ER<0.20) elenir, çünkü orada range sürekli whipsaw yapar (2026: deep-chop −5R; light +25R, mid +15R).' },
+        { h: 'Çıkış', t: 'TAM TP (kısmi-TP YOK): RANGE_DEV’de ½TP+başa-baş toplam R’yi batırıyor (+37R → −11R), o yüzden tek seferde hedefe taşınır.' },
+        { h: '2026 sonucu', t: 'Tam-TP, ER≥0.20, 29 sembol: toplam +41.6R, WR %31, işlem başı +0.12R (light +25 / mid +15 / strong ~0). ICT sinyallerinden farklı bir mantık → light rejimini ikinci bir yoldan hasat eder (çeşitlendirme).' },
+        { h: 'Evren', t: 'XRP/DOGE/LINK/AVAX HARİÇ — bu 4 sembolde range-fade çalışmıyor (2026 −35R; dump/trend ediyorlar, fade stop yiyor). Kalan 29 sembolde işler.' },
+      ],
+      caveat: 'Yalnızca backtest — canlı tarayıcı henüz yok (emisyon için ayrı bir DAG işi gerekir). Parametreler bizim Burak kodifikasyonumuz; eşik/band ve evren seçimi 2026 üzerinde (in-sample) — out-of-sample doğrulanmalı.',
+    },
+    en: {
+      title: 'RANGE', tagline: 'Range-deviation fade (Burak PA) — sideways markets',
+      summary: 'A mean-reversion source independent of the ICT set: draw a horizontal range; when price pokes outside a boundary and closes back inside (a deviation), fade it toward the opposite side. Built to work in sideways/ranging markets.',
+      sections: [
+        { h: 'Signal logic', t: 'A range (high/low/EQ) is established over ~4 days (96 bars); width must be 2.5–12 ATR. If price exceeds a boundary by ≥0.25 ATR and closes back inside = deviation → fade the other way. SL beyond the deviation extreme, TP the opposite range end; R/R floor 1.5, cap 3.' },
+        { h: 'Regime gate', t: 'Keep only signals fired with 4h Efficiency Ratio ≥ 0.20 — DEEP chop (ER<0.20) is dropped because the range just whipsaws there (2026: deep-chop −5R; light +25R, mid +15R).' },
+        { h: 'Exit', t: 'FULL TP (NO partial): on RANGE_DEV a ½TP+breakeven exit sinks total R (+37R → −11R), so it rides to target in one piece.' },
+        { h: '2026 result', t: 'Full-TP, ER≥0.20, 29 symbols: total +41.6R, WR 31%, +0.12R/trade (light +25 / mid +15 / strong ~0). A different logic from the ICT signals → harvests the light regime by a second route (diversification).' },
+        { h: 'Universe', t: 'EXCLUDES XRP/DOGE/LINK/AVAX — range-fade fails on those 4 (2026 −35R; they dump/trend, the fade gets stopped). Works on the other 29.' },
+      ],
+      caveat: 'Backtest only — no live scanner yet (emission would need a dedicated DAG job). Parameters are our codification of Burak; the threshold/band and universe choice are in-sample (2026) — validate out-of-sample.',
     },
   },
 };

@@ -60,6 +60,7 @@ const IntroPage = () => {
   const matchCat = (s) =>
     cat === 'all' ||
     (cat === 'light' && s.light) ||
+    (cat === 'range' && s.family === 'range') ||
     (cat === 'full' && s.exit === 'full') ||
     (cat === 'adaptive' && s.family === 'adaptive') ||
     (cat === 'session' && s.family === 'session');
@@ -93,6 +94,7 @@ const IntroPage = () => {
     { key: 'adaptive', label: t('Adaptif') },
     { key: 'session', label: t('Seans') },
     { key: 'light', label: 'Light' },
+    { key: 'range', label: 'Range' },
   ];
   const SORTS = [
     { key: 'r', label: t('Toplam R') },
@@ -100,7 +102,7 @@ const IntroPage = () => {
     { key: 'exp', label: t('Beklenti') },
     { key: 'pf', label: 'PF' },
   ];
-  const FAMILY_LABEL = { core: t('ICT Çekirdek'), adaptive: t('Adaptif'), session: t('Seans') };
+  const FAMILY_LABEL = { core: t('ICT Çekirdek'), adaptive: t('Adaptif'), session: t('Seans'), range: 'Range' };
   const EXIT_LABEL = { full: t('Tam TP'), half: '½TP', mixed: t('Sembol-bazlı çıkış') };
 
   const LeaderTile = ({ label, entry, fmt }) => {

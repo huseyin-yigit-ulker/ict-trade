@@ -157,6 +157,7 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
     if (!sess) return '—';
     return `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
   }
+  if (strategy === 'range') return 'Range-Dev · Tam';     // RANGE_DEV fade, full-TP, ER>=0.20
   if (strategy === 'impulse') return 'Impulse';
   return 'Main';
 };

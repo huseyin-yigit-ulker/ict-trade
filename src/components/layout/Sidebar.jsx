@@ -43,6 +43,14 @@ const IconStrategies = () => (
     <path d="M2.6 13.6 10 17.6 17.4 13.6" />
   </svg>
 );
+// Range: price oscillating between two horizontal boundaries (a tradeable range).
+const IconRange = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="2.5" y1="4.5" x2="17.5" y2="4.5" />
+    <line x1="2.5" y1="15.5" x2="17.5" y2="15.5" />
+    <polyline points="4,10 7,5.5 10,14 13,6 16,11" strokeWidth="1.3" opacity="0.85" />
+  </svg>
+);
 // Regime / Trend map: a price line that chops on the left, then trends up-right + arrow.
 const IconRegime = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -63,13 +71,16 @@ const IconRegime = () => (
 const GROUPS = [
   { key: 'main',    label: 'MAIN',    icon: <IconCommand />, modes: ['live', 'backtest'] },
   { key: 'impulse', label: 'IMPULSE', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma',   label: 'KARMA',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma',   label: 'KARMA ½', icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus',    label: 'OPUS',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
   // LIGHT band-pass twins — keep only signals fired in the light-trend regime
   // (4h ER 0.20–0.35), where the 2026 routing audit found our edge concentrates.
   // Kept on the two streams it helps most (highest per-trade expectancy).
   { key: 'impulse_light', label: 'IMPULSE · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_light',   label: 'KARMA · Light',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_light',   label: 'KARMA ½ · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  // RANGE — Burak RANGE_DEV range-fade, full-TP, ER>=0.20. Backtest-only for now
+  // (no live scanner; emission would need a dedicated DAG job).
+  { key: 'range',         label: 'RANGE',           icon: <IconRange />,   modes: ['backtest'] },
 ];
 
 const Sidebar = () => {

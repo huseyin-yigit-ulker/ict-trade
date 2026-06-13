@@ -4,7 +4,7 @@ import { useTradeContext, KARMA_MAP } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 
-const STRAT_BASE_LABEL = { main: 'Main', impulse: 'Impulse', karma: 'Karma', opus: 'Opus' };
+const STRAT_BASE_LABEL = { main: 'Main', impulse: 'Impulse', karma: 'Karma ½', opus: 'Opus', range: 'Range' };
 // light twins reuse the parent label + " · Light"
 const STRAT_LABEL = { ...STRAT_BASE_LABEL };
 Object.keys(STRAT_BASE_LABEL).forEach((b) => {

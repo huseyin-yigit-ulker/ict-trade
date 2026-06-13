@@ -15,6 +15,10 @@ export const STREAMS = [
   // Kept on the two streams it helps most. Mirror of backfill_light.LIGHT_TAG.
   { key: 'impulse_light', version: 'v2_light',  exit: 'full',  family: 'core',     light: true },
   { key: 'karma_light',   version: 'kma_light', exit: 'mixed', family: 'adaptive', light: true },
+  // RANGE — Burak's RANGE_DEV range-deviation fade, full-TP, gated to ER>=0.20
+  // (skip deep chop). A range/mean-reversion source independent of the ICT set.
+  // Backtest-only (no live scanner yet). sync/backfill_range.py.
+  { key: 'range', version: 'range', exit: 'full', family: 'range' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.
