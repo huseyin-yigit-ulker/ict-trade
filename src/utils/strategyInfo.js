@@ -158,6 +158,29 @@ export const STRATEGY_INFO = {
       caveat: 'Hour × symbol selection is in-sample (2026). COIN/HOOD samples are small. Expect shrinkage forward; a split-half validation is recommended.',
     },
   },
+  opus_half: {
+    icon: '🕐', accent: '#0ECB81',
+    tr: {
+      title: 'OPUS ½TP', tagline: 'OPUS kapısı + kısmi kâr / başa-baş',
+      summary: 'OPUS ile birebir aynı sinyaller (MAIN seti + sembol-bazlı hafta-içi NY seans kapısı), ama çıkış kısmi-TP + başa-baş’a sabit. OPUS’un MAIN ½TP / KARMA ½TP karşılığı.',
+      sections: [
+        { h: 'Çıkış modeli', t: 'Giriş→TP1 yarısında %50 kapat, stop’u girişe çek; kalan yarı TP1’e taşınır. Kısmi sonrası tam zarar yok.' },
+        { h: 'Kapı', t: 'OPUS ile aynı: yalnızca hafta içi NY-AM (09:00–12:00 ET) / NY-PM (12:00–16:00 ET), sembol-bazlı allowlist. Cmt/Paz elenir.' },
+        { h: 'Etki', t: 'OPUS’a göre daha yüksek isabet, daha düşük toplam R — diğer ½TP akımlarındaki evrensel takasla aynı. Sermaye koruma önceliğinde.' },
+      ],
+      caveat: 'Saat × sembol seçimi in-sample (2026); yalnızca çıkış modeli zorlanır.',
+    },
+    en: {
+      title: 'OPUS ½TP', tagline: 'OPUS gate + partial take-profit / breakeven',
+      summary: 'Exactly the same signals as OPUS (MAIN set + per-symbol weekday NY-session gate), but the exit is fixed to partial-TP + breakeven. The OPUS analog of MAIN ½TP / KARMA ½TP.',
+      sections: [
+        { h: 'Exit model', t: 'Close 50% at half the entry→TP1 distance, pull the stop to entry; the rest rides to TP1. No full loss after the partial.' },
+        { h: 'Gate', t: 'Same as OPUS: weekdays only, NY-AM (09:00–12:00 ET) / NY-PM (12:00–16:00 ET), per-symbol allowlist. Sat/Sun dropped.' },
+        { h: 'Effect', t: 'Higher hit-rate, lower total R than OPUS — the same universal trade-off as the other ½TP streams. For capital-preservation priority.' },
+      ],
+      caveat: 'Hour × symbol selection is in-sample (2026); only the exit is forced.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {

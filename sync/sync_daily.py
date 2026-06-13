@@ -16,8 +16,9 @@ Live streams, each -> its own backtest version tag:
                                                        chosen per symbol by sync/karma_map.py)
   - karma_half   : per-symbol blend -> version='karma_half' (same per-symbol source set
                                                        as karma, but ALWAYS the ½TP+BE exit)
-  - opus         : MAIN signals -> version='opus' (kept only for the per-symbol NY
-                                                   session(s) in sync/opus_map.py)
+  - opus         : MAIN signals -> version='opus' (kept only for the per-symbol weekday
+                                                   NY session(s) in sync/opus_map.py)
+  - opus_half    : same gated OPUS signals -> version='opus_half' (½TP+BE exit)
   - radar_legacy : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
   - pulse        : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
 
@@ -82,7 +83,7 @@ STREAMS = {
 # "karma" is the per-symbol best-cell blend (sync/karma_map.py): it consumes the
 # SAME live signals as main/impulse — per symbol it picks the source set and the
 # exit model from the 2026 selection run — and tags rows version='karma'.
-ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half", "karma", "karma_half", "opus"]
+ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half", "karma", "karma_half", "opus", "opus_half"]
 
 
 def fetch_live_window(conn, mode, symbols, w_start, w_end) -> list[dict]:
@@ -216,17 +217,20 @@ def resolve_karma(live, bt, w_start, w_end, now, *, rescan, symbols_override=Non
     return rows
 
 
-def resolve_opus(live, bt, w_start, w_end, now, *, rescan, symbols_override=None) -> list:
+def resolve_opus(live, bt, w_start, w_end, now, *, rescan, symbols_override=None,
+                 half=False, version="opus") -> list:
     """OPUS stream: MAIN ('live') signals, kept only for symbols+sessions in the
-    per-symbol NY-session allowlist (sync/opus_map.py). version='opus', full-TP."""
+    per-symbol weekday NY-session allowlist (sync/opus_map.py). version='opus' (full
+    TP); half=True -> ½TP+BE exit on the same gated signals (version='opus_half')."""
     try:
         from opus_map import OPUS_MAP, opus_allows
     except ImportError:
         print("  [opus] sync/opus_map.py yok — stream atlandı")
         return []
     syms = sorted(OPUS_MAP) if symbols_override is None else [s for s in symbols_override if s in OPUS_MAP]
-    cfg = {"mode": "live", "version": "opus", "ltf_min": 60, "floor": "h", "symbols": syms}
-    rows, _ = resolve_stream("opus", cfg, live, bt, w_start, w_end, now, rescan=rescan,
+    cfg = {"mode": "live", "version": version, "ltf_min": 60, "floor": "h",
+           "symbols": syms, "partial": half}
+    rows, _ = resolve_stream(version, cfg, live, bt, w_start, w_end, now, rescan=rescan,
                              keep=lambda sym, st: opus_allows(sym, st))
     return rows
 
@@ -236,7 +240,7 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
     # Default is MAIN ONLY. radar_legacy (retired dynamic stream) & pulse were
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
-    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "karma_half", "opus", "all"], default="main")
+    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "karma_half", "opus", "opus_half", "all"], default="main")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=None, help="override symbol scope (all streams)")
@@ -261,10 +265,11 @@ def main():
                                       symbols_override=args.symbols,
                                       force_half=(name == "karma_half"), version=name)
             continue
-        if name == "opus":
+        if name in ("opus", "opus_half"):
             all_rows += resolve_opus(live, bt, w_start, w_end, now,
                                      rescan=not args.no_active_rescan,
-                                     symbols_override=args.symbols)
+                                     symbols_override=args.symbols,
+                                     half=(name == "opus_half"), version=name)
             continue
         rows, _ = resolve_stream(name, STREAMS[name], live, bt, w_start, w_end, now,
                                  rescan=not args.no_active_rescan,

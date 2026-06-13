@@ -30,7 +30,7 @@ const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180, karma_half: 180, opus: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180, karma_half: 180, opus: 180, opus_half: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -42,16 +42,17 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impul
 // 'karma_half' = karma's per-symbol SOURCE set, but always the ½TP+BE exit (the
 // analog of MAIN ½TP/v3 and IMPULSE ½TP/v4 for the karma blend).
 // 'opus' = MAIN signals kept only in each symbol's edge NY-session (sync/opus_map.py).
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma', karma_half: 'karma_half', opus: 'opus' };
+// 'opus_half' = the same gated OPUS signals under the ½TP+BE exit.
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma', karma_half: 'karma_half', opus: 'opus', opus_half: 'opus_half' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
 // AFTER entry) — live status is then tracked under partial-TP + breakeven rules.
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
-const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse', opus: 'live' };
+const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse', opus: 'live', opus_half: 'live' };
 // ½TP modules: scale out 50% at half the distance entry→TP, stop -> entry (BE).
-// karma_half forces ½TP on every karma symbol, so it lives here too.
-const HALF_STRATEGIES = new Set(['main_half', 'impulse_half', 'karma_half']);
+// karma_half/opus_half force ½TP on their gated signals, so they live here too.
+const HALF_STRATEGIES = new Set(['main_half', 'impulse_half', 'karma_half', 'opus_half']);
 // karma + karma_half both read BOTH live modes and filter per-symbol via KARMA_MAP.
 const KARMA_STRATEGIES = new Set(['karma', 'karma_half']);
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
@@ -347,7 +348,7 @@ export const TradeProvider = ({ children }) => {
       // KARMA reads both modes; per symbol only the KARMA_MAP-selected side is kept below.
       // OPUS reads 'live' (MAIN signals) and is filtered to per-symbol NY sessions below.
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
-      const isOpus = strategyRef.current === 'opus';
+      const isOpus = strategyRef.current === 'opus' || strategyRef.current === 'opus_half';
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {

@@ -80,10 +80,11 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
     const exit = strategy === 'karma_half' ? '½TP' : (sel.half ? '½TP' : 'Tam');
     return `${sel.set === 'impulse' ? 'Impulse' : 'Main'} · ${exit}`;
   }
-  if (strategy === 'opus') {
+  if (strategy === 'opus' || strategy === 'opus_half') {
     const sess = OPUS_MAP[symbol];
     if (!sess) return '—';
-    return `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
+    const w = `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
+    return strategy === 'opus_half' ? `${w} · ½TP` : w;
   }
   if (strategy === 'main_half') return 'Main · ½TP';
   if (strategy === 'impulse_half') return 'Impulse · ½TP';
@@ -93,9 +94,10 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
-  if (strategy === 'opus') {
+  if (strategy === 'opus' || strategy === 'opus_half') {
     const sess = OPUS_MAP[symbol];
-    return sess ? sess.join('/') : '—';     // 'am', 'pm', 'am/pm'
+    if (!sess) return '—';
+    return strategy === 'opus_half' ? `${sess.join('/')}·½` : sess.join('/');
   }
   if (strategy !== 'karma' && strategy !== 'karma_half') return null;  // uniform elsewhere
   const sel = karmaMap?.[symbol];
