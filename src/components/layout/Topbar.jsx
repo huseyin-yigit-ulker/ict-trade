@@ -4,7 +4,10 @@ import { useTradeContext, KARMA_MAP } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 
-const STRAT_LABEL = { main: 'Main', impulse: 'Impulse', main_half: 'Main ½TP', impulse_half: 'Impulse ½TP', karma: 'Karma', karma_half: 'Karma ½TP', opus: 'Opus', opus_half: 'Opus ½TP' };
+const STRAT_BASE_LABEL = { main: 'Main', impulse: 'Impulse', main_half: 'Main ½TP', impulse_half: 'Impulse ½TP', karma: 'Karma', karma_half: 'Karma ½TP', opus: 'Opus', opus_half: 'Opus ½TP' };
+// chop twins reuse the parent label + " · Chop"
+const STRAT_LABEL = { ...STRAT_BASE_LABEL };
+Object.keys(STRAT_BASE_LABEL).forEach((b) => { STRAT_LABEL[`${b}_chop`] = `${STRAT_BASE_LABEL[b]} · Chop`; });
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
 // ICT killzones (UTC) — the windows the engine actually hunts in. The pill

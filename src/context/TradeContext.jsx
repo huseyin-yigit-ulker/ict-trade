@@ -57,6 +57,30 @@ const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live'
 const HALF_STRATEGIES = new Set(['main_half', 'impulse_half', 'karma_half', 'opus_half']);
 // karma + karma_half both read BOTH live modes and filter per-symbol via KARMA_MAP.
 const KARMA_STRATEGIES = new Set(['karma', 'karma_half']);
+// opus + opus_half read mode='live' and filter per-symbol+session (OPUS_MAP).
+const OPUS_STRATEGIES = new Set(['opus', 'opus_half']);
+
+// CHOP-filtered twin of every stream: backtest version + '_chop', SAME live mode /
+// exit / per-symbol logic as its parent, plus a 4h Efficiency-Ratio gate (skip
+// signals fired in chop, ER < REGIME_ER_MIN). Built programmatically so the 8
+// parents and 8 chop twins never drift.
+const REGIME_ER_MIN = 0.25;
+// chop backtest version tags — kept <=10 chars (trading_signals.version is varchar(10)),
+// must match sync/backfill_chop.py CHOP_TAG exactly.
+const CHOP_VER = {
+  main: 'v1_chop', impulse: 'v2_chop', main_half: 'v3_chop', impulse_half: 'v4_chop',
+  karma: 'kma_chop', karma_half: 'kmah_chop', opus: 'ops_chop', opus_half: 'opsh_chop',
+};
+const CHOP_PARENTS = ['main', 'impulse', 'main_half', 'impulse_half', 'karma', 'karma_half', 'opus', 'opus_half'];
+CHOP_PARENTS.forEach((b) => {
+  const c = `${b}_chop`;
+  STRATEGY_VERSION[c] = CHOP_VER[b];
+  STRATEGY_EXPIRY_MINUTES[c] = STRATEGY_EXPIRY_MINUTES[b];
+  if (STRATEGY_LIVE_MODE[b]) STRATEGY_LIVE_MODE[c] = STRATEGY_LIVE_MODE[b];
+  if (HALF_STRATEGIES.has(b)) HALF_STRATEGIES.add(c);
+  if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
+  if (OPUS_STRATEGIES.has(b)) OPUS_STRATEGIES.add(c);
+});
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
@@ -106,9 +130,50 @@ export const KARMA_MAP = {
   AVAXUSDT: { set: 'main', half: true },
 };
 
-// ½TP lifecycle applies to this signal? *_half modules: always. karma: per symbol.
-export const isHalfFor = (strat, symbol) =>
-  HALF_STRATEGIES.has(strat) || (strat === 'karma' && !!KARMA_MAP[symbol]?.half);
+// ½TP lifecycle applies to this signal? *_half modules (incl. *_half_chop): always.
+// karma / karma_chop: per symbol (KARMA_MAP). HALF_STRATEGIES already carries the
+// _chop twins of the half modules (added in the CHOP_PARENTS loop).
+export const isHalfFor = (strat, symbol) => {
+  if (HALF_STRATEGIES.has(strat)) return true;
+  const base = strat.replace('_chop', '');
+  return base === 'karma' && !!KARMA_MAP[symbol]?.half;
+};
+
+// Is this a known strategy module (incl. the _chop twins)? Used by route guarding.
+export const isValidStrategy = (s) => VALID_STRATEGIES.has(s);
+
+// CHOP gate (live): keep only signals whose symbol's 4h Efficiency Ratio at the
+// last completed 4h bar before the signal is >= REGIME_ER_MIN. Mirror of
+// sync/regime.py. Module-level + fully graceful — any fetch/parse error keeps the
+// symbol's signals (never over-filter on absence).
+const ER_N_4H = 10;
+const applyChopGate = async (signals) => {
+  const syms = [...new Set(signals.map((s) => s.symbol))];
+  const er = {};
+  await Promise.all(syms.map(async (sym) => {
+    try {
+      const b = sym.replace(/[^A-Za-z0-9]/g, '');
+      const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${b}&interval=4h&limit=150`);
+      const d = await res.json();
+      if (Array.isArray(d) && d.length) {
+        er[sym] = { ct: d.map((k) => Number(k[6])), c: d.map((k) => Number(k[4])) };
+      }
+    } catch { /* keep on failure */ }
+  }));
+  return signals.filter((s) => {
+    const e = er[s.symbol];
+    if (!e) return true;
+    const tsMs = new Date(s.signal_time).getTime();
+    let pos = -1;
+    for (let i = 0; i < e.ct.length; i += 1) { if (e.ct[i] <= tsMs) pos = i; else break; }
+    if (pos < ER_N_4H) return true;
+    const change = Math.abs(e.c[pos] - e.c[pos - ER_N_4H]);
+    let vol = 0;
+    for (let j = pos - ER_N_4H + 1; j <= pos; j += 1) vol += Math.abs(e.c[j] - e.c[j - 1]);
+    if (vol <= 0) return false;
+    return (change / vol) >= REGIME_ER_MIN;
+  });
+};
 
 // LTF bar duration in ms ('1h' -> 3600000). The signal fires at its bar CLOSE,
 // so live entry-fill scanning starts at signal_time + this (backtest parity).
@@ -355,7 +420,8 @@ export const TradeProvider = ({ children }) => {
       // KARMA reads both modes; per symbol only the KARMA_MAP-selected side is kept below.
       // OPUS reads 'live' (MAIN signals) and is filtered to per-symbol NY sessions below.
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
-      const isOpus = strategyRef.current === 'opus' || strategyRef.current === 'opus_half';
+      const isOpus = OPUS_STRATEGIES.has(strategyRef.current);
+      const isChop = strategyRef.current.endsWith('_chop');   // adds the 4h-ER regime gate
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {
@@ -402,7 +468,12 @@ export const TradeProvider = ({ children }) => {
         context: r.context,
       }));
 
-      processData(mapped);
+      // CHOP modules: drop live signals fired while the symbol's 4h was choppy
+      // (Efficiency Ratio < REGIME_ER_MIN). Mirrors sync/regime.py. Fully graceful —
+      // any fetch/parse failure keeps the signal (never over-filter on absence).
+      const finalMapped = isChop ? await applyChopGate(mapped) : mapped;
+
+      processData(finalMapped);
       setLastUpdated(new Date());
     } catch (err) {
       setLiveError('Live veri alınamadı.');

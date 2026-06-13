@@ -183,8 +183,23 @@ export const STRATEGY_INFO = {
   },
 };
 
+// CHOP twins: one shared "regime gate" section prepended to the parent's card.
+const CHOP_SECTION = {
+  tr: { h: 'Choppy filtre', t: 'Ebeveyn akımla AYNI sinyaller — fakat sembolün 4h Efficiency Ratio’su < 0.25 iken (fiyat gidip geliyor, net trend yok) üretilenler atlanır. İşlemlerin ~⅓’ü elenir. 2026’da geniş/½TP akımlarda toplam R’yi yükseltir (örn. MAIN +39→+55R, IMPULSE ½TP −13→+2R, MAIN ½TP −39→−11R); zaten çok seçici akımlarda (OPUS) kazananları da kestiği için DÜŞÜREBİLİR (OPUS +157→+109R). Hangisinde işe yaradığını altta canlı 2026 R’sinden görebilirsin.' },
+  en: { h: 'Choppy filter', t: 'SAME signals as the parent — but those fired while the symbol’s 4h Efficiency Ratio was < 0.25 (price round-tripping, no clean trend) are skipped. ~⅓ of trades are dropped. In 2026 it lifts total R on the broad/½TP streams (e.g. MAIN +39→+55R, IMPULSE ½TP −13→+2R, MAIN ½TP −39→−11R) but can LOWER it on already-selective streams (OPUS +157→+109R) by cutting winners too. The live 2026 R below shows where it helps.' },
+};
+
 export const infoFor = (strategy, lang) => {
-  const e = STRATEGY_INFO[strategy];
+  const isChop = strategy.endsWith('_chop');
+  const e = STRATEGY_INFO[isChop ? strategy.slice(0, -5) : strategy];
   if (!e) return null;
-  return { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
+  const info = { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
+  if (!isChop) return info;
+  const cs = CHOP_SECTION[lang] || CHOP_SECTION.tr;
+  return {
+    ...info,
+    title: `${info.title} · Chop`,
+    tagline: lang === 'en' ? `${info.tagline} + choppy filter` : `${info.tagline} + choppy filtre`,
+    sections: [cs, ...(info.sections || [])],
+  };
 };

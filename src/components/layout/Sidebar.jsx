@@ -53,6 +53,17 @@ const GROUPS = [
   { key: 'karma_half',   label: 'KARMA ½TP',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus',         label: 'OPUS',        icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus_half',    label: 'OPUS ½TP',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  // CHOP-filtered twins — same stream, but skip signals fired while the symbol's 4h
+  // was choppy (Efficiency Ratio < 0.25). Helps the broad/½TP streams; redundant on
+  // the already-selective ones (shown by their 2026 backtest).
+  { key: 'main_chop',         label: 'MAIN · Chop',        icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse_chop',      label: 'IMPULSE · Chop',     icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'main_half_chop',    label: 'MAIN ½TP · Chop',    icon: <IconCommand />, modes: ['live', 'backtest'] },
+  { key: 'impulse_half_chop', label: 'IMPULSE ½TP · Chop', icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_chop',        label: 'KARMA · Chop',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_half_chop',   label: 'KARMA ½TP · Chop',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'opus_chop',         label: 'OPUS · Chop',        icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'opus_half_chop',    label: 'OPUS ½TP · Chop',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

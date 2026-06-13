@@ -75,7 +75,12 @@ export const marketLabel = (symbol) => MARKET_LABEL[marketOf(symbol)];
 // Long, human-readable "which cell does this symbol trade under" label.
 // karma/karma_half are per-symbol (from karmaMap); the other modules are uniform.
 // karma_half forces the ½TP exit; karma uses each symbol's chosen exit.
+// A '_chop' suffix = same as the parent + a 4h-ER regime gate; label gets "· Chop".
 export const strategyCellLabel = (strategy, symbol, karmaMap) => {
+  if (strategy.endsWith('_chop')) {
+    const base = strategyCellLabel(strategy.slice(0, -5), symbol, karmaMap);
+    return base === '—' ? base : `${base} · Chop`;
+  }
   if (strategy === 'karma' || strategy === 'karma_half') {
     const sel = karmaMap?.[symbol];
     if (!sel) return '—';                       // unmapped → karma doesn't trade it
@@ -96,6 +101,10 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
+  if (strategy.endsWith('_chop')) {
+    const base = strategyBadge(strategy.slice(0, -5), symbol, karmaMap);
+    return base ? `${base}·ch` : 'ch';
+  }
   if (strategy === 'opus' || strategy === 'opus_half') {
     const sess = OPUS_MAP[symbol];
     if (!sess) return '—';

@@ -1,18 +1,16 @@
 import { useEffect } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { useTradeContext } from '../context/TradeContext';
+import { useTradeContext, isValidStrategy } from '../context/TradeContext';
 import Dashboard from '../components/Dashboard';
 
 // Strategy × Mode view. The URL (/:strategy/:mode) is the source of truth: it syncs
 // the route params into context (setView) so the single data-load effect fetches the
-// right set. All four modules (main/impulse × classic/½TP) have Live + Backtest —
-// the ½TP modules read the SAME live signals as their parent and track them under
-// the partial-TP + breakeven exit rules. Invalid combos bounce to /main/live.
+// right set. Every module (main/impulse/karma/opus × classic/½TP, plus their _chop
+// twins) has Live + Backtest. Invalid combos bounce to /main/live.
 const CommandCenterPage = () => {
   const { strategy: pStrat, mode: pMode } = useParams();
   const { strategy, mode, setView } = useTradeContext();
-  const isHalf = pStrat === 'main_half' || pStrat === 'impulse_half' || pStrat === 'karma_half' || pStrat === 'opus_half';
-  const validS = (pStrat === 'main' || pStrat === 'impulse' || pStrat === 'karma' || pStrat === 'opus' || isHalf) ? pStrat : null;
+  const validS = isValidStrategy(pStrat) ? pStrat : null;
   const validM = (pMode === 'backtest' || pMode === 'live') ? pMode : null;
 
   useEffect(() => {
