@@ -42,11 +42,19 @@ export const OPUS_MAP = {
 const _etHourFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York', hour: '2-digit', hour12: false,
 });
+const _etWeekdayFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', weekday: 'short',
+});
 export const etHour = (utc) => {
   const h = parseInt(_etHourFmt.format(new Date(utc)), 10);
   return h === 24 ? 0 : h;        // some engines render midnight as '24'
 };
+export const isWeekendET = (utc) => {
+  const d = _etWeekdayFmt.format(new Date(utc));
+  return d === 'Sat' || d === 'Sun';    // US market closed
+};
 export const opusSession = (utc) => {
+  if (isWeekendET(utc)) return null;     // weekend = no US session
   const h = etHour(utc);
   if (h >= 9 && h < 12) return 'am';
   if (h >= 12 && h < 16) return 'pm';

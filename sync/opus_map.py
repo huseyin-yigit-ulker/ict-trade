@@ -6,7 +6,9 @@ traded in the NY session(s) where its 2026 signals actually carried an edge
 this map are NOT traded at all (structurally negative across every session, or too
 few trades to trust: ADA/PLTR/XAU/TSLA/BABA/NEAR/SOL/META/MSFT/NVDA/AVGO/AMZN/...).
 
-Sessions (signal = bar OPEN, converted to America/New_York; DST-aware):
+Sessions (signal = bar OPEN, converted to America/New_York; DST-aware), WEEKDAYS only
+(Sat/Sun dropped — the US market is closed; 24/7 crypto would otherwise pass the
+hour-only gate):
   'am' = 09:00–12:00 ET  (NY-AM: NY open + silver-bullet AM ~10:00 ET)
   'pm' = 12:00–16:00 ET  (NY-PM: silver-bullet PM ~14:00 ET)
 
@@ -42,8 +44,13 @@ OPUS_MAP: dict[str, list[str]] = {
 
 
 def opus_session(signal_time_utc) -> str | None:
-    """ET session of a signal's bar-open timestamp, or None if outside AM/PM."""
-    h = signal_time_utc.astimezone(ET).hour
+    """ET session of a signal's bar-open timestamp, or None if outside AM/PM
+    OR on a weekend (US market closed Sat/Sun ET — 24/7 crypto would otherwise
+    sneak weekend bars through the hour-only gate)."""
+    et = signal_time_utc.astimezone(ET)
+    if et.weekday() >= 5:          # 5=Sat, 6=Sun (ET) -> US market closed
+        return None
+    h = et.hour
     if 9 <= h < 12:
         return "am"
     if 12 <= h < 16:
@@ -52,7 +59,7 @@ def opus_session(signal_time_utc) -> str | None:
 
 
 def opus_allows(symbol: str, signal_time_utc) -> bool:
-    """True iff this symbol is traded in the session this signal fired in."""
+    """True iff this symbol is traded in the (weekday) session this signal fired in."""
     sess = OPUS_MAP.get(symbol)
     if not sess:
         return False
