@@ -157,6 +157,10 @@ const EN = {
   'Güncel': 'Current',
   'Rejim karışımı': 'Regime mix',
   'Son ER skorları': 'Recent ER scores',
+  'Fiyat & Rejim': 'Price & Regime',
+  'eşik': 'thresholds',
+  'Arka plan rengi her 4h barın rejimidir — kırmızı bölgeler choppy, yeşil bölgeler güçlü trend.':
+    "Each 4h bar's background colour is its regime — red zones are choppy, green zones strong trend.",
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',

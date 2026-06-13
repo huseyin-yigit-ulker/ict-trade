@@ -3,6 +3,7 @@ import { useLang } from '../context/LanguageContext';
 import { BACKTEST_ALLOWED_SYMBOLS } from '../context/TradeContext';
 import { REGIME_BANDS, regimeOf, efficiencyRatio, marketOf, MARKETS } from '../utils/symbolMeta';
 import Sparkline from '../components/viz/Sparkline';
+import TrendDetail from './TrendDetail';
 
 // REGIME / TREND MAP — pure price-data classification, NO signals/backtest.
 // Per symbol: 4h klines -> Kaufman Efficiency Ratio -> current regime
@@ -28,6 +29,7 @@ const TrendPage = () => {
   const [regime, setRegime] = useState('all');   // regime filter
   const [group, setGroup] = useState('all');      // market filter/group
   const [query, setQuery] = useState('');
+  const [detail, setDetail] = useState(null);     // symbol opened in the price+regime modal
 
   useEffect(() => {
     let alive = true;
@@ -111,9 +113,10 @@ ${t('Güncel')}: ${t(r.regime.label)} (ER ${r.er.toFixed(2)})
 ${t('Rejim karışımı')}: ${mixStr}
 ${t('Son ER skorları')}: ${r.erHist.join(' · ')}`;
     return (
-      <div title={tip} style={{
+      <div title={tip} onClick={() => setDetail(r.sym)} style={{
         border: '1px solid var(--border, #2a2f3a)', borderLeft: `3px solid ${r.regime.color}`,
         borderRadius: 10, padding: '12px 14px', background: 'var(--panel, rgba(255,255,255,0.02))',
+        cursor: 'pointer',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontWeight: 700, fontSize: 14 }}>{r.sym.replace('USDT', '')}</span>
@@ -207,6 +210,7 @@ ${t('Son ER skorları')}: ${r.erHist.join(' · ')}`;
           </div>
         ))}
       </div>
+      {detail && <TrendDetail symbol={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 };
