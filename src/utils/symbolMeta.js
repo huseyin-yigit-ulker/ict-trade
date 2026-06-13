@@ -36,6 +36,8 @@ export const OPUS_MAP = {
   CRCLUSDT: ['am'], ONDOUSDT: ['am'], XAGUSDT: ['am'], SUIUSDT: ['am'], INTCUSDT: ['am'],
   MSTRUSDT: ['am', 'pm'], ARBUSDT: ['am', 'pm'], FETUSDT: ['am', 'pm'],
   WIFUSDT: ['pm'], '1000PEPEUSDT': ['pm'], COINUSDT: ['pm'], HOODUSDT: ['pm'],
+  // 2026-06-13 crypto re-add: only edge sessions (LINK NY-PM +8.3R; DOGE NY-PM +1.0R marginal).
+  LINKUSDT: ['pm'], DOGEUSDT: ['pm'],
 };
 
 // Hour-of-day in America/New_York for a UTC timestamp (DST handled by Intl).

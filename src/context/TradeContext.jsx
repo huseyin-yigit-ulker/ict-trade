@@ -99,6 +99,11 @@ export const KARMA_MAP = {
   WIFUSDT: { set: 'main', half: false },
   XAGUSDT: { set: 'main', half: false },
   XAUUSDT: { set: 'impulse', half: false },
+  // 2026-06-13 crypto re-add (net-negative in 2026 except LINK; universe consistency).
+  XRPUSDT: { set: 'main', half: false },
+  DOGEUSDT: { set: 'main', half: false },
+  LINKUSDT: { set: 'main', half: false },
+  AVAXUSDT: { set: 'main', half: true },
 };
 
 // ½TP lifecycle applies to this signal? *_half modules: always. karma: per symbol.

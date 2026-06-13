@@ -55,4 +55,10 @@ KARMA_MAP: dict[str, dict] = {
     "WIFUSDT": {"set": "main", "half": False},
     "XAGUSDT": {"set": "main", "half": False},
     "XAUUSDT": {"set": "impulse", "half": False},
+    # 2026-06-13 crypto re-add (best cell each; net-negative in 2026 except LINK +3.2R —
+    # included for universe consistency, re-validate next audit).
+    "XRPUSDT": {"set": "main", "half": False},
+    "DOGEUSDT": {"set": "main", "half": False},
+    "LINKUSDT": {"set": "main", "half": False},
+    "AVAXUSDT": {"set": "main", "half": True},
 }

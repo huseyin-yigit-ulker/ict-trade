@@ -40,6 +40,11 @@ OPUS_MAP: dict[str, list[str]] = {
     "1000PEPEUSDT": ["pm"],
     "COINUSDT":     ["pm"],
     "HOODUSDT":     ["pm"],
+    # 2026-06-13 crypto re-add: only the sessions that passed the gate (n>=6, avg>=+0.05R).
+    # LINK NY-PM +8.3R (n=11, strong); DOGE NY-PM +1.0R (n=7, marginal). XRP/AVAX: no
+    # positive session -> not traded by OPUS.
+    "LINKUSDT":     ["pm"],
+    "DOGEUSDT":     ["pm"],
 }
 
 
