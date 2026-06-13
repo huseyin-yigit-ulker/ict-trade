@@ -70,6 +70,8 @@ SYMBOLS = [
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
+    # 2026-06-13: crypto re-add by user decision (DOGE already present; +XRP/LINK/AVAX).
+    "XRPUSDT", "LINKUSDT", "AVAXUSDT",
     "XAUUSDT", "XAGUSDT",
     # Stock-backed perps (underlying equities)
     "TSLAUSDT", "NVDAUSDT", "METAUSDT", "GOOGLUSDT",

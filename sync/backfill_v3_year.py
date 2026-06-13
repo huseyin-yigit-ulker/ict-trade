@@ -49,6 +49,9 @@ SYMBOLS = [
     "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
     "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
     "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
+    # 2026-06-13: crypto re-add by user decision (XRP/LINK/DOGE were cut for weak
+    # 2025-26 backtests; AVAX is new) — re-validate in the next audit.
+    "XRPUSDT", "DOGEUSDT", "LINKUSDT", "AVAXUSDT",
     "XAUUSDT", "XAGUSDT",
     "NVDAUSDT", "METAUSDT",
     "AMZNUSDT", "COINUSDT", "MSTRUSDT",
