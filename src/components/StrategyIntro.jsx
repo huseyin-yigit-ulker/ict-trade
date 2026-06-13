@@ -50,18 +50,36 @@ const StrategyIntro = () => {
       </div>
 
       {open && (
-        <>
-          <ul style={{ margin: '10px 0 0', paddingLeft: 18, lineHeight: 1.55, fontSize: 13 }}>
-            {info.bullets.map((b, i) => (
-              <li key={i} style={{ opacity: 0.9, marginBottom: 3 }}>{b}</li>
-            ))}
-          </ul>
+        <div style={{ marginTop: 10 }}>
+          {info.summary && (
+            <p style={{ margin: '0 0 10px', fontSize: 13, lineHeight: 1.6, opacity: 0.92 }}>
+              {info.summary}
+            </p>
+          )}
+          {Array.isArray(info.sections) && info.sections.map((s, i) => (
+            <div key={i} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: info.accent, opacity: 0.9 }}>
+                {s.h}
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.55, opacity: 0.85 }}>{s.t}</div>
+            </div>
+          ))}
+          {/* backward-compat: old bullet-only entries still render */}
+          {!info.sections && Array.isArray(info.bullets) && (
+            <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.55, fontSize: 13 }}>
+              {info.bullets.map((b, i) => <li key={i} style={{ opacity: 0.9, marginBottom: 3 }}>{b}</li>)}
+            </ul>
+          )}
           {info.caveat && (
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7, fontStyle: 'italic' }}>
+            <div style={{
+              marginTop: 10, padding: '7px 10px', fontSize: 12, lineHeight: 1.5,
+              opacity: 0.85, fontStyle: 'italic', borderRadius: 7,
+              background: 'rgba(245,185,66,0.10)', border: '1px solid rgba(245,185,66,0.25)',
+            }}>
               ⚠ {info.caveat}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
