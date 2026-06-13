@@ -152,6 +152,8 @@ const EN = {
   'Hafif Trend': 'Light Trend',
   'Choppy': 'Choppy',
   'Son 10 günün rejim dağılımı': "Last 10 days' regime mix",
+  'Hacim': 'Volume',
+  'Hacim-ağırlıklı': 'Volume-weighted',
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',
