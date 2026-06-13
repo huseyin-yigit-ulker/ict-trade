@@ -44,7 +44,7 @@ def _clean(v):
     return v
 
 
-def rows_from_csv(path: str) -> list[dict]:
+def rows_from_csv(path: str, version: str) -> list[dict]:
     df = pd.read_csv(path)
     rows = []
     for rec in df.to_dict("records"):
@@ -55,20 +55,24 @@ def rows_from_csv(path: str) -> list[dict]:
         for c in _TS_COLS:
             row[c] = None if row[c] is None else str(row[c])
         row["confluence_score"] = None if row["confluence_score"] is None else int(float(row["confluence_score"]))
-        row["version"] = "karma"          # enforce, never trust the CSV cell
+        row["version"] = version          # enforce, never trust the CSV cell
         rows.append(row)
     return rows
 
 
-def wipe(conn, scope: str, win_start: pd.Timestamp, win_end: pd.Timestamp) -> int:
+# preview file prefix -> trading_signals version tag
+SOURCES = [("karma_preview", "karma"), ("karma_half_preview", "karma_half")]
+
+
+def wipe(conn, scope: str, win_start: pd.Timestamp, win_end: pd.Timestamp, version: str) -> int:
     cur = conn.cursor()
     if scope == "all":
-        cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version = 'karma'")
+        cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version = %s", (version,))
     elif scope == "year":
         cur.execute(
-            f"DELETE FROM {tsc.TABLE} WHERE version = 'karma' "
+            f"DELETE FROM {tsc.TABLE} WHERE version = %s "
             f"AND signal_time >= %s AND signal_time < %s",
-            (win_start.to_pydatetime(), win_end.to_pydatetime()))
+            (version, win_start.to_pydatetime(), win_end.to_pydatetime()))
     n = cur.rowcount
     conn.commit()
     cur.close()
@@ -85,41 +89,41 @@ def main():
     if not args.dry_run and args.wipe_scope is None:
         raise SystemExit("Real run requires --wipe-scope {none|year|all} (or --dry-run).")
 
-    paths = sorted(glob.glob(str(OUT / f"karma_preview_{args.year}_*.csv")))
-    if not paths:
-        raise SystemExit(f"No karma previews in {OUT} for {args.year}.")
-
-    all_rows, per_sym = [], {}
-    for p in paths:
-        rows = rows_from_csv(p)
-        sym = Path(p).stem.replace(f"karma_preview_{args.year}_", "")
-        per_sym[sym] = len(rows)
-        all_rows.extend(rows)
-
-    resolved = sum(1 for r in all_rows if r["status"] in ("closed_tp", "closed_sl"))
-    print(f"=== KARMA preview load | {args.year} | {len(paths)} dosya | "
-          f"{len(all_rows)} satır ({resolved} dolan) | dry_run={args.dry_run} ===")
-    for sym in sorted(per_sym):
-        print(f"  {sym:<13} {per_sym[sym]}")
-
     win_start = pd.Timestamp(f"{args.year}-01-01", tz="UTC")
     win_end = pd.Timestamp(f"{args.year + 1}-01-01", tz="UTC")
 
+    # collect rows per version from the matching preview files
+    by_version = {}
+    for prefix, version in SOURCES:
+        paths = sorted(glob.glob(str(OUT / f"{prefix}_{args.year}_*.csv")))
+        rows = [r for p in paths for r in rows_from_csv(p, version)]
+        if rows:
+            by_version[version] = rows
+        resolved = sum(1 for r in rows if r["status"] in ("closed_tp", "closed_sl"))
+        print(f"  {version:<11} {len(paths)} dosya · {len(rows)} satır ({resolved} dolan)")
+    if not by_version:
+        raise SystemExit(f"No karma previews in {OUT} for {args.year}.")
+
+    all_rows = [r for rows in by_version.values() for r in rows]
+    print(f"=== KARMA preview load | {args.year} | toplam {len(all_rows)} satır | dry_run={args.dry_run} ===")
+
     if args.dry_run:
-        print(f"\n[dry-run] {len(all_rows)} satır upsert edilecekti — DB'ye yazılmadı.")
+        print(f"[dry-run] {len(all_rows)} satır upsert edilecekti — DB'ye yazılmadı.")
         return
 
     conn = tsc.backtest_conn()
-    if args.wipe_scope in ("year", "all"):
-        deleted = wipe(conn, args.wipe_scope, win_start, win_end)
-        print(f"wiped {deleted} mevcut karma satırı (scope={args.wipe_scope})")
+    for version in by_version:
+        if args.wipe_scope in ("year", "all"):
+            deleted = wipe(conn, args.wipe_scope, win_start, win_end, version)
+            print(f"wiped {deleted} mevcut {version} satırı (scope={args.wipe_scope})")
     n = tsc.upsert_rows(conn, all_rows)
     cur = conn.cursor()
-    cur.execute(f"SELECT count(*) FROM {tsc.TABLE} WHERE version='karma'")
-    total = cur.fetchone()[0]
+    cur.execute(f"SELECT version, count(*) FROM {tsc.TABLE} WHERE version = ANY(%s) GROUP BY version",
+                (list(by_version.keys()),))
+    totals = {v: c for v, c in cur.fetchall()}
     cur.close()
     conn.close()
-    print(f"upserted {n} karma satırı -> {tsc.TABLE} | DB'deki toplam karma: {total}")
+    print(f"upserted {n} satır -> {tsc.TABLE} | DB toplam: {totals}")
 
 
 if __name__ == "__main__":

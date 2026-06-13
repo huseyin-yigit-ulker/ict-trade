@@ -76,10 +76,20 @@ def _resolve_rows(symbol, signals, df1m, win_start, win_end):
         row = tsc.build_row(symbol, s.timestamp, s.direction, s.entry, s.stop_loss,
                             s.take_profit_1, full, strategy=s.strategy,
                             quality=s.quality, confluence_score=s.confluence_score)
+        # keep the COMPLETE ½TP outcome too (not just pnl_r) so KARMA ½TP rows carry
+        # the correct partial/breakeven exit time+price, not the full-TP ones.
         row["pnl_r_half"] = half["pnl_r"]
         row["status_half"] = half["status"]
+        row["real_entry_time_half"] = half["real_entry_time"]
+        row["exit_time_half"] = half["exit_time"]
+        row["exit_price_half"] = half["exit_price"]
         rows.append(row)
     return rows
+
+
+# helper columns carried on resolved rows that must NOT leak into a DB/CSV row
+_HALF_HELPERS = ("pnl_r_half", "status_half", "real_entry_time_half",
+                 "exit_time_half", "exit_price_half", "pnl_r_alt", "status_alt")
 
 
 def _tot(rows, exit_model):
@@ -122,12 +132,31 @@ def run_symbol(symbol, win_start, win_end):
         k["version"] = "karma"
         if bexit == "yarim":                      # winner exit becomes the headline pnl
             k["pnl_r"], k["status"] = r["pnl_r_half"], r["status_half"]
+            k["real_entry_time"] = r["real_entry_time_half"]
+            k["exit_time"], k["exit_price"] = r["exit_time_half"], r["exit_price_half"]
             k["pnl_r_alt"], k["status_alt"] = r["pnl_r"], r["status"]
         else:
             k["pnl_r_alt"], k["status_alt"] = r["pnl_r_half"], r["status_half"]
-        k.pop("pnl_r_half", None); k.pop("status_half", None)
+        for c in _HALF_HELPERS:
+            if c not in ("pnl_r_alt", "status_alt"):
+                k.pop(c, None)
         k["karma_set"], k["karma_exit"] = bset, bexit
         karma_rows.append(k)
+
+    # KARMA ½TP: SAME per-symbol source set as karma, but ALWAYS the ½TP+BE exit
+    # (the analog of MAIN ½TP/v3 and IMPULSE ½TP/v4). Built from the same run so it
+    # stays coherent with the karma rows above; exit time/price come from the ½TP sim.
+    karma_half_rows = []
+    for r in cells[best]["rows"]:
+        k = dict(r)
+        k["version"] = "karma_half"
+        k["pnl_r"], k["status"] = r["pnl_r_half"], r["status_half"]
+        k["real_entry_time"] = r["real_entry_time_half"]
+        k["exit_time"], k["exit_price"] = r["exit_time_half"], r["exit_price_half"]
+        for c in _HALF_HELPERS:
+            k.pop(c, None)
+        k["karma_set"], k["karma_exit"] = bset, "yarim"
+        karma_half_rows.append(k)
 
     sel = {"symbol": symbol,
            "main_tam": round(cells[("main", "tam")]["totR"], 2),
@@ -143,18 +172,20 @@ def run_symbol(symbol, win_start, win_end):
           f"imp: tam={cells[('impulse','tam')]['totR']:+7.2f} "
           f"yarim={cells[('impulse','yarim')]['totR']:+7.2f} "
           f"-> KARMA {bset}/{bexit} n={c['n']} totR={c['totR']:+.2f}", flush=True)
-    return karma_rows, sel
+    return karma_rows, karma_half_rows, sel
 
 
-def wipe(conn, scope, win_start, win_end) -> int:
+def wipe(conn, scope, win_start, win_end, versions=("karma", "karma_half")) -> int:
     cur = conn.cursor()
-    if scope == "all":
-        cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version = 'karma'")
-    elif scope == "year":
-        cur.execute(
-            f"DELETE FROM {tsc.TABLE} WHERE version = 'karma' AND signal_time >= %s AND signal_time < %s",
-            (win_start.to_pydatetime(), win_end.to_pydatetime()))
-    n = cur.rowcount
+    n = 0
+    for ver in versions:
+        if scope == "all":
+            cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version = %s", (ver,))
+        elif scope == "year":
+            cur.execute(
+                f"DELETE FROM {tsc.TABLE} WHERE version = %s AND signal_time >= %s AND signal_time < %s",
+                (ver, win_start.to_pydatetime(), win_end.to_pydatetime()))
+        n += cur.rowcount
     conn.commit()
     cur.close()
     return n
@@ -177,37 +208,41 @@ def main():
     print(f"=== KARMA backtest (per-symbol best of main/impulse x tam/½TP) | "
           f"{win_start.date()}..{win_end.date()} | {len(args.symbols)} sembol | CSV-only ===", flush=True)
 
-    all_rows, sels = [], []
+    all_rows, half_rows, sels = [], [], []
     sel_fp = OUT / f"karma_selection_{args.year}.csv"
     for sym in args.symbols:
         res = run_symbol(sym, win_start, win_end)
         if res is None:
             continue
-        rows, sel = res
+        rows, hrows, sel = res
         all_rows.extend(rows)
+        half_rows.extend(hrows)
         sels.append(sel)
-        if rows:
-            fp = OUT / f"karma_preview_{args.year}_{sym}.csv"
-            with open(fp, "w", newline="") as f:
-                w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-                w.writeheader(); w.writerows(rows)
+        for tag, rws in (("karma", rows), ("karma_half", hrows)):
+            if rws:
+                fp = OUT / f"{tag}_preview_{args.year}_{sym}.csv"
+                with open(fp, "w", newline="") as f:
+                    w = csv.DictWriter(f, fieldnames=list(rws[0].keys()))
+                    w.writeheader(); w.writerows(rws)
         # rewrite the selection table after EVERY symbol so a mid-run crash loses nothing
         with open(sel_fp, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(sels[0].keys()))
             w.writeheader(); w.writerows(sels)
 
-    res = [r for r in all_rows if r["status"] in RESOLVED and r["pnl_r"] is not None]
-    w = sum(1 for r in res if r["pnl_r"] > 0)
-    tot = sum(r["pnl_r"] for r in res)
-    print(f"\nKARMA TOPLAM: sinyal={len(all_rows)} dolan={len(res)} W/L={w}/{len(res)-w} "
-          f"WR={w/len(res)*100 if res else 0:.0f}% ortR={tot/len(res) if res else 0:+.3f} topR={tot:+.2f}")
-    for nm, key_set, key_exit in [("saf main/tam", "main_tam", None), ("saf main/yarim", "main_yarim", None),
-                                  ("saf impulse/tam", "impulse_tam", None), ("saf impulse/yarim", "impulse_yarim", None)]:
+    def _summary(label, rws):
+        r = [x for x in rws if x["status"] in RESOLVED and x["pnl_r"] is not None]
+        w = sum(1 for x in r if x["pnl_r"] > 0)
+        tot = sum(x["pnl_r"] for x in r)
+        print(f"{label}: sinyal={len(rws)} dolan={len(r)} W/L={w}/{len(r)-w} "
+              f"WR={w/len(r)*100 if r else 0:.0f}% ortR={tot/len(r) if r else 0:+.3f} topR={tot:+.2f}")
+
+    print()
+    _summary("KARMA      (tam/seçili)", all_rows)
+    _summary("KARMA ½TP  (hep ½TP)   ", half_rows)
+    for nm, key_set in [("saf main/tam", "main_tam"), ("saf main/yarim", "main_yarim"),
+                        ("saf impulse/tam", "impulse_tam"), ("saf impulse/yarim", "impulse_yarim")]:
         print(f"  {nm:<18}: {sum(s[key_set] for s in sels):+8.2f}R")
-    pos = [s for s in sels if s["secim_totR"] > 0]
-    print(f"  karma (tum semboller): {sum(s['secim_totR'] for s in sels):+8.2f}R")
-    print(f"  karma+ (sadece pozitif hucre, {len(pos)} sembol): {sum(s['secim_totR'] for s in pos):+8.2f}R")
-    print(f"\npreviews: {OUT}/karma_preview_{args.year}_*.csv + karma_selection_{args.year}.csv")
+    print(f"\npreviews: {OUT}/karma_preview_* + karma_half_preview_* + karma_selection_{args.year}.csv")
 
     if args.wipe_scope is None:
         print("[CSV-only] --wipe-scope verilmedi, DB'ye yazilmadi.")
@@ -215,10 +250,10 @@ def main():
     conn = tsc.backtest_conn()
     if args.wipe_scope in ("year", "all"):
         deleted = wipe(conn, args.wipe_scope, win_start, win_end)
-        print(f"wiped {deleted} existing karma rows (scope={args.wipe_scope})")
-    n = tsc.upsert_rows(conn, all_rows)
+        print(f"wiped {deleted} existing karma + karma_half rows (scope={args.wipe_scope})")
+    n = tsc.upsert_rows(conn, all_rows + half_rows)
     conn.close()
-    print(f"upserted {n} karma rows into {tsc.TABLE}")
+    print(f"upserted {n} rows (karma + karma_half) into {tsc.TABLE}")
 
 
 if __name__ == "__main__":

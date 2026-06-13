@@ -43,6 +43,7 @@ const GROUPS = [
   { key: 'main_half',    label: 'MAIN ½TP',    icon: <IconCommand />, modes: ['live', 'backtest'] },
   { key: 'impulse_half', label: 'IMPULSE ½TP', icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'karma',        label: 'KARMA',       icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'karma_half',   label: 'KARMA ½TP',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

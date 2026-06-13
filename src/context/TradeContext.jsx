@@ -29,7 +29,7 @@ const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180, karma_half: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -38,7 +38,9 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impul
 // the distance to TP1, pull the stop to entry) — backtest-only streams tagged v3/v4
 // (sync/backfill_v3_year.py / backfill_v4_year.py write them with PARTIAL_TP_ENABLED).
 // 'karma' = per-symbol best cell of {main,impulse} x {tam,½TP} (sync/karma_map.py).
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma' };
+// 'karma_half' = karma's per-symbol SOURCE set, but always the ½TP+BE exit (the
+// analog of MAIN ½TP/v3 and IMPULSE ½TP/v4 for the karma blend).
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma', karma_half: 'karma_half' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -46,7 +48,10 @@ const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_h
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
 const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse' };
 // ½TP modules: scale out 50% at half the distance entry→TP, stop -> entry (BE).
-const HALF_STRATEGIES = new Set(['main_half', 'impulse_half']);
+// karma_half forces ½TP on every karma symbol, so it lives here too.
+const HALF_STRATEGIES = new Set(['main_half', 'impulse_half', 'karma_half']);
+// karma + karma_half both read BOTH live modes and filter per-symbol via KARMA_MAP.
+const KARMA_STRATEGIES = new Set(['karma', 'karma_half']);
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
@@ -338,7 +343,7 @@ export const TradeProvider = ({ children }) => {
       // Module -> its own live mode tag: MAIN='live' (hourly B/C/D/E), IMPULSE='impulse'
       // (hourly v2 set). Excludes pulse (15m), dynamic (radar) and legacy rows.
       // KARMA reads both modes; per symbol only the KARMA_MAP-selected side is kept below.
-      const isKarma = strategyRef.current === 'karma';
+      const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {

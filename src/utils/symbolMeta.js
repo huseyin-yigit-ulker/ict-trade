@@ -31,12 +31,14 @@ export const marketOf = (symbol) =>
 export const marketLabel = (symbol) => MARKET_LABEL[marketOf(symbol)];
 
 // Long, human-readable "which cell does this symbol trade under" label.
-// karma is per-symbol (from karmaMap); the other modules are uniform.
+// karma/karma_half are per-symbol (from karmaMap); the other modules are uniform.
+// karma_half forces the ½TP exit; karma uses each symbol's chosen exit.
 export const strategyCellLabel = (strategy, symbol, karmaMap) => {
-  if (strategy === 'karma') {
+  if (strategy === 'karma' || strategy === 'karma_half') {
     const sel = karmaMap?.[symbol];
     if (!sel) return '—';                       // unmapped → karma doesn't trade it
-    return `${sel.set === 'impulse' ? 'Impulse' : 'Main'} · ${sel.half ? '½TP' : 'Tam'}`;
+    const exit = strategy === 'karma_half' ? '½TP' : (sel.half ? '½TP' : 'Tam');
+    return `${sel.set === 'impulse' ? 'Impulse' : 'Main'} · ${exit}`;
   }
   if (strategy === 'main_half') return 'Main · ½TP';
   if (strategy === 'impulse_half') return 'Impulse · ½TP';
@@ -46,8 +48,9 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
-  if (strategy !== 'karma') return null;        // uniform elsewhere → no per-row badge
+  if (strategy !== 'karma' && strategy !== 'karma_half') return null;  // uniform elsewhere
   const sel = karmaMap?.[symbol];
   if (!sel) return '—';
-  return `${sel.set === 'impulse' ? 'I' : 'M'}${sel.half ? '·½' : ''}`;
+  const half = strategy === 'karma_half' ? true : sel.half;
+  return `${sel.set === 'impulse' ? 'I' : 'M'}${half ? '·½' : ''}`;
 };

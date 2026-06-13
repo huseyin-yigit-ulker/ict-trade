@@ -14,6 +14,8 @@ Live streams, each -> its own backtest version tag:
                                                        model — PARTIAL_TP_ENABLED per stream)
   - karma        : per-symbol blend -> version='karma' (source mode AND exit model
                                                        chosen per symbol by sync/karma_map.py)
+  - karma_half   : per-symbol blend -> version='karma_half' (same per-symbol source set
+                                                       as karma, but ALWAYS the ½TP+BE exit)
   - radar_legacy : mode='dynamic' -> version='v1-dyn' (RETIRED dynamic-symbol stream)
   - pulse        : mode='pulse'   -> version='v1-15m' (RETIRED 15m stream)
 
@@ -78,7 +80,7 @@ STREAMS = {
 # "karma" is the per-symbol best-cell blend (sync/karma_map.py): it consumes the
 # SAME live signals as main/impulse — per symbol it picks the source set and the
 # exit model from the 2026 selection run — and tags rows version='karma'.
-ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half", "karma"]
+ACTIVE_STREAMS = ["main", "impulse", "main_half", "impulse_half", "karma", "karma_half"]
 
 
 def fetch_live_window(conn, mode, symbols, w_start, w_end) -> list[dict]:
@@ -177,11 +179,15 @@ def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
     return rows, status_counts
 
 
-def resolve_karma(live, bt, w_start, w_end, now, *, rescan, symbols_override=None) -> list:
+def resolve_karma(live, bt, w_start, w_end, now, *, rescan, symbols_override=None,
+                  force_half=False, version="karma") -> list:
     """KARMA stream: per symbol, resolve its live parent signals under the cell the
     2026 selection chose (set in {main,impulse} x exit in {tam,yarim}). Symbols are
     grouped into (set, exit) buckets and each bucket rides resolve_stream with the
-    matching mode + partial flag; every row is tagged version='karma'."""
+    matching mode + partial flag; every row is tagged `version`.
+
+    force_half=True forces the ½TP+BE exit on every symbol (keeping each symbol's
+    chosen SOURCE set) — the KARMA ½TP stream (version='karma_half')."""
     try:
         from karma_map import KARMA_MAP
     except ImportError:
@@ -191,12 +197,13 @@ def resolve_karma(live, bt, w_start, w_end, now, *, rescan, symbols_override=Non
     for sym, cfg in KARMA_MAP.items():
         if symbols_override is not None and sym not in symbols_override:
             continue
-        buckets[(cfg["set"], cfg["half"])].append(sym)
+        eff_half = True if force_half else cfg["half"]
+        buckets[(cfg["set"], eff_half)].append(sym)
     rows = []
     for (set_name, half), syms in sorted(buckets.items()):
-        cfg = {"mode": "live" if set_name == "main" else "impulse", "version": "karma",
+        cfg = {"mode": "live" if set_name == "main" else "impulse", "version": version,
                "ltf_min": 60, "floor": "h", "symbols": sorted(syms), "partial": half}
-        r, _ = resolve_stream(f"karma[{set_name}/{'yarim' if half else 'tam'}]",
+        r, _ = resolve_stream(f"{version}[{set_name}/{'yarim' if half else 'tam'}]",
                               cfg, live, bt, w_start, w_end, now, rescan=rescan)
         rows += r
     return rows
@@ -207,7 +214,7 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
     # Default is MAIN ONLY. radar_legacy (retired dynamic stream) & pulse were
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
-    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "all"], default="main")
+    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "karma_half", "all"], default="main")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=None, help="override symbol scope (all streams)")
@@ -226,10 +233,11 @@ def main():
 
     all_rows = []
     for name in names:
-        if name == "karma":
+        if name in ("karma", "karma_half"):
             all_rows += resolve_karma(live, bt, w_start, w_end, now,
                                       rescan=not args.no_active_rescan,
-                                      symbols_override=args.symbols)
+                                      symbols_override=args.symbols,
+                                      force_half=(name == "karma_half"), version=name)
             continue
         rows, _ = resolve_stream(name, STREAMS[name], live, bt, w_start, w_end, now,
                                  rescan=not args.no_active_rescan,
