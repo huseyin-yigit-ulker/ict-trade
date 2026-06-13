@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LanguageContext';
@@ -28,6 +29,12 @@ const IconSettings = () => (
     <line x1="3" y1="13.5" x2="17" y2="13.5" /><circle cx="7" cy="13.5" r="2.1" fill="var(--panel)" />
   </svg>
 );
+const IconHome = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2.6" y="2.6" width="6" height="6" rx="1.2" /><rect x="11.4" y="2.6" width="6" height="6" rx="1.2" />
+    <rect x="2.6" y="11.4" width="6" height="6" rx="1.2" /><rect x="11.4" y="11.4" width="6" height="6" rx="1.2" />
+  </svg>
+);
 
 // Strategy × Mode nested nav. MAIN runs the v1 set (mode='live'), IMPULSE the refined
 // v2 set (mode='impulse') — dag.py emits each hourly. MAIN ½TP (v3) and IMPULSE ½TP
@@ -55,6 +62,18 @@ const Sidebar = () => {
 
   const leafLabel = { live: t('Live'), backtest: t('Backtest') };
 
+  // The 8 strategy streams are collected under a collapsible "Stratejiler" header
+  // so the rail stays calm now that "Genel Bakış" is the home. Default open;
+  // collapse state persists like the other PUSU prefs.
+  const [stratOpen, setStratOpen] = useState(() => {
+    try { return localStorage.getItem('pusu.navStrategies') !== '0'; } catch { return true; }
+  });
+  const toggleStrategies = () => setStratOpen((o) => {
+    const next = !o;
+    try { localStorage.setItem('pusu.navStrategies', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
+
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
@@ -65,19 +84,37 @@ const Sidebar = () => {
       </div>
 
       <nav className="sidebar__nav">
-        {GROUPS.map((g) => (
-          <div key={g.key} className={`sidebar__group sidebar__group--${g.key}`}>
-            <div className="sidebar__group-label">
-              <span className="sidebar__icon">{g.icon}</span>{g.label}
-            </div>
-            {g.modes.map((m) => (
-              <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">
-                <span className={`sidebar__leaf-dot sidebar__leaf-dot--${m}`} />
-                <span>{leafLabel[m]}</span>
-              </NavLink>
+        <NavLink to="/" end className="sidebar__link sidebar__home">
+          <span className="sidebar__icon"><IconHome /></span><span>{t('Genel Bakış')}</span>
+        </NavLink>
+
+        <button
+          className="sidebar__section"
+          onClick={toggleStrategies}
+          aria-expanded={stratOpen}
+          title={stratOpen ? t('Gizle') : t('Göster')}
+        >
+          <span className="sidebar__section-label">{t('Stratejiler')}</span>
+          <span className="sidebar__section-chev" aria-hidden="true">{stratOpen ? '▾' : '▸'}</span>
+        </button>
+
+        {stratOpen && (
+          <div className="sidebar__strategies">
+            {GROUPS.map((g) => (
+              <div key={g.key} className={`sidebar__group sidebar__group--${g.key}`}>
+                <div className="sidebar__group-label">
+                  <span className="sidebar__icon">{g.icon}</span>{g.label}
+                </div>
+                {g.modes.map((m) => (
+                  <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">
+                    <span className={`sidebar__leaf-dot sidebar__leaf-dot--${m}`} />
+                    <span>{leafLabel[m]}</span>
+                  </NavLink>
+                ))}
+              </div>
             ))}
           </div>
-        ))}
+        )}
 
         <div className="sidebar__navsep" />
         <NavLink to="/intelligence" className="sidebar__link">

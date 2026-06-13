@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, usingDefaultCreds, consumeAuthNote } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
+import { STRATEGY_INFO } from '../utils/strategyInfo';
+import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct } from '../utils/streamStats';
 import PusuLogo from './PusuLogo';
 
 const EyeIcon = ({ off }) => (
@@ -89,6 +91,80 @@ const MarketPulse = () => {
   );
 };
 
+// Read-only track record on the login screen — the 2026 backtest result of every
+// strategy stream, displayed as ranked bars. PURELY informational: no links, no
+// detail, no navigation (the operator must sign in to reach any of it). Pulls the
+// same public backtest RPC the dashboard uses; renders nothing until data lands.
+const TrackRecord = () => {
+  const { lang, t } = useLang();
+  const [stats, setStats] = useState(getCachedStats());
+
+  useEffect(() => {
+    if (getCachedStats()) return undefined;
+    let alive = true;
+    fetchAllSummaries().then((d) => { if (alive) setStats(d); }).catch(() => { /* silent on the login */ });
+    return () => { alive = false; };
+  }, []);
+
+  if (!stats) return null;
+  const rows = STREAMS
+    .map((s) => ({ s, m: stats[s.version] }))
+    .filter((x) => x.m)
+    .sort((a, b) => Number(b.m.total_r) - Number(a.m.total_r));
+  if (!rows.length) return null;
+
+  const nfmt = (n) => Number(n).toLocaleString(lang === 'en' ? 'en-US' : 'tr-TR');
+  const maxAbsR = Math.max(1, ...rows.map((x) => Math.abs(Number(x.m.total_r) || 0)));
+  const totalSignals = rows.reduce((sum, x) => sum + (Number(x.m.total_trades) || 0), 0);
+  const top = rows[0];
+  const bestExp = rows.reduce((a, b) => (Number(b.m.avg_r) > Number(a.m.avg_r) ? b : a));
+  const head = (s) => STRATEGY_INFO[s.key]?.[lang] || STRATEGY_INFO[s.key]?.tr;
+
+  return (
+    <div className="login-track">
+      <div className="login-track__title">
+        <span>{t('Başarı Geçmişi')}</span>
+        <span className="login-track__year">2026 · {t('örneklem içi')}</span>
+      </div>
+
+      <div className="login-track__leaders">
+        <div className="login-track__lead">
+          <b className="win">{fmtR(Number(top.m.total_r))}</b>
+          <span>{head(top.s).title}</span>
+        </div>
+        <div className="login-track__lead">
+          <b className="win">{fmtExp(Number(bestExp.m.avg_r))}</b>
+          <span>{t('işlem başına')}</span>
+        </div>
+        <div className="login-track__lead">
+          <b>{nfmt(totalSignals)}</b>
+          <span>{t('sinyal')}</span>
+        </div>
+      </div>
+
+      <div className="login-track__rows">
+        {rows.map(({ s, m }) => {
+          const r = Number(m.total_r);
+          const info = STRATEGY_INFO[s.key];
+          return (
+            <div key={s.key} className="login-track__row" style={{ '--acc': info.accent }}>
+              <span className="login-track__icon" aria-hidden="true">{info.icon}</span>
+              <span className="login-track__name">{head(s).title}</span>
+              <span className="login-track__bar">
+                <span className={`login-track__fill ${r >= 0 ? 'win' : 'loss'}`} style={{ width: `${Math.min(100, (Math.abs(r) / maxAbsR) * 100)}%` }} />
+              </span>
+              <span className={`login-track__r ${r >= 0 ? 'win' : 'loss'}`}>{fmtR(r)}</span>
+              <span className="login-track__win">{fmtPct(Number(m.win_rate))}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="login-track__note">{t('Tüm sayılar 2026 backtest — örneklem içi. Forward beklenti daha düşüktür.')}</div>
+    </div>
+  );
+};
+
 const LoginScreen = () => {
   const { isAuthed, login, lockRemainingMs } = useAuth();
   const { lang, setLang, t } = useLang();
@@ -123,7 +199,7 @@ const LoginScreen = () => {
   if (isAuthed) {
     // Deep link respected: a guarded page bounced here with its origin in state.
     const from = location.state?.from;
-    return <Navigate to={from && from !== '/login' ? from : '/main/live'} replace />;
+    return <Navigate to={from && from !== '/login' ? from : '/'} replace />;
   }
 
   const failFeedback = (msg) => {
@@ -144,7 +220,7 @@ const LoginScreen = () => {
       const res = await login(username.trim(), password, remember);
       if (res.ok) {
         const from = location.state?.from;
-        navigate(from && from !== '/login' ? from : '/main/live', { replace: true });
+        navigate(from && from !== '/login' ? from : '/', { replace: true });
         return;
       }
       setLoading(false);
@@ -165,7 +241,7 @@ const LoginScreen = () => {
   const canSubmit = !loading && !locked && username.trim().length > 0 && password.length > 0;
 
   return (
-    <div className="login-screen login-screen--premium">
+    <div className="login-screen login-screen--premium login-screen--split">
       <div className="boot-glow" aria-hidden="true" />
       <div className="boot-grid" aria-hidden="true" />
       <div className="boot-rings" aria-hidden="true"><span /><span /><span /></div>
@@ -178,16 +254,26 @@ const LoginScreen = () => {
         <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
       </div>
 
-      <div className={`login-card${shake ? ' login-card--shake' : ''}`}>
-        <div className="boot-reticle"><PusuLogo size={84} animated /></div>
-        <div className="boot-text">
-          <div className="boot-title">PUSU</div>
-          <div className="boot-sub">Liquidity Ambush Intelligence</div>
-        </div>
+      <div className="login-split">
+        <section className="login-hero">
+          <div className="boot-reticle"><PusuLogo size={68} animated /></div>
+          <div className="boot-text">
+            <div className="boot-title">PUSU</div>
+            <div className="boot-sub">Liquidity Ambush Intelligence</div>
+          </div>
+          <p className="login-hero__manifesto">{t('Sekiz işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.')}</p>
+          <TrackRecord />
+        </section>
 
-        {note === 'expired' && (
-          <div className="login-note" role="status">{t('Oturum süresi doldu. Lütfen tekrar giriş yapın.')}</div>
-        )}
+        <div className={`login-card login-card--auth${shake ? ' login-card--shake' : ''}`}>
+          <div className="login-card__head">
+            <span className="login-card__kicker">{t('Operatör Girişi')}</span>
+            <span className="login-card__lock"><LockIcon /> {t('Şifreli Oturum')}</span>
+          </div>
+
+          {note === 'expired' && (
+            <div className="login-note" role="status">{t('Oturum süresi doldu. Lütfen tekrar giriş yapın.')}</div>
+          )}
 
         <form className="login-form" onSubmit={submit}>
           <label className="login-field">
@@ -253,11 +339,11 @@ const LoginScreen = () => {
         )}
 
         <div className="login-meta">
-          <span className="login-badge"><LockIcon /> {t('Şifreli Oturum')}</span>
           <span className="login-ver">PUSU · v1.1</span>
         </div>
 
         <MarketPulse />
+        </div>
       </div>
 
       <div className="boot-footer">© 2026 PUSU · {t('Likidite Avı')}</div>

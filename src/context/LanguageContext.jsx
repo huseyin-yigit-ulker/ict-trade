@@ -96,6 +96,31 @@ const EN = {
   'sembol': 'symbols',
   'strateji': 'strategies',
 
+  // --- Intro / hub (Genel Bakış) ---
+  'Genel Bakış': 'Overview',
+  'Stratejiler': 'Strategies',
+  'Sekiz işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.':
+    'Eight trading streams, one liquidity-ambush philosophy — catch institutional sweeps, manage them with disciplined exits.',
+  'Tüm sayılar 2026 backtest — örneklem içi. Forward beklenti daha düşüktür.':
+    'All figures are 2026 backtest — in-sample. Forward expectancy is lower.',
+  'En Yüksek R': 'Top Total R',
+  'En İyi Beklenti': 'Best Expectancy',
+  'En Yüksek İsabet': 'Top Win Rate',
+  'Tam TP': 'Full TP',
+  'Adaptif': 'Adaptive',
+  'Seans': 'Session',
+  'ICT Çekirdek': 'ICT Core',
+  'Sembol-bazlı çıkış': 'Per-symbol exit',
+  'Sırala': 'Sort',
+  'İsabet': 'Win Rate',
+  'Akım ara...': 'Search stream...',
+  'Akım': 'Streams',
+  'Detay': 'Detail',
+  'Sonuç verisi yok': 'No result data',
+  'Sonuç verisi alınamadı — akım açıklamaları yine de aşağıda.': "Couldn't load results — stream descriptions still below.",
+  'örneklem içi': 'in-sample',
+  'Operatör Girişi': 'Operator Login',
+
   // --- common / trade fields ---
   'Kapat': 'Close',
   'KAPAT': 'CLOSE',

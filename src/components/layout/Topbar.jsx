@@ -96,7 +96,7 @@ const Topbar = () => {
 
   // Symbols + status filter are per-view controls — shown only on the 4 strategy×mode
   // views, on the RIGHT side of the bar. Hidden on Intelligence / Settings.
-  const isView = loc.pathname !== '/settings' && loc.pathname !== '/intelligence';
+  const isView = loc.pathname !== '/settings' && loc.pathname !== '/intelligence' && loc.pathname !== '/';
   const STATUS_FILTERS = [
     { key: 'all', label: t('Tümü') },
     { key: 'tp', label: 'TP' },
@@ -117,7 +117,8 @@ const Topbar = () => {
           {sidebarHidden ? '☰' : '‹‹'}
         </button>
         <div className="topbar__title">
-          {loc.pathname === '/settings' ? t('Ayarlar')
+          {loc.pathname === '/' ? t('Genel Bakış')
+            : loc.pathname === '/settings' ? t('Ayarlar')
             : loc.pathname === '/intelligence' ? t('İstihbarat')
             : `${t(STRAT_LABEL[strategy] || 'Main')} · ${t(MODE_LABEL[mode] || 'Live')}`}
         </div>
