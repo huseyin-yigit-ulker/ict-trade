@@ -3,6 +3,7 @@ import { useTradeContext, isHalfFor } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import Sparkline from './viz/Sparkline';
 import PusuLogo from './PusuLogo';
+import StrategyIntro from './StrategyIntro';
 
 // Click-to-copy price value — copies the RAW value (full precision, ready to
 // paste into an order ticket) and flashes a ✓. Stops propagation so the card's
@@ -769,6 +770,7 @@ const Dashboard = () => {
       <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
         <div className="backtest-flow">
           {renderError()}
+          <StrategyIntro />
           {renderKpiHero()}
           <div className="drill-header">
             <div className="drill-path">
@@ -876,6 +878,7 @@ const Dashboard = () => {
   return (
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {renderError()}
+      <StrategyIntro />
       {renderKpiHero()}
       {filteredSignals.length === 0 && (
         <div className="dash-empty">

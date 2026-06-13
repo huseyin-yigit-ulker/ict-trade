@@ -114,6 +114,8 @@ const EN = {
   'ABD Hisse': 'US Stocks',
   'En İyi': 'Top',
   'En Kötü': 'Worst',
+  'Gizle': 'Hide',
+  'Göster': 'Show',
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',
