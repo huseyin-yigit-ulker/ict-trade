@@ -52,8 +52,10 @@ const TrendPage = () => {
           REGIME_BANDS.forEach((bd) => { dist[bd.key] /= tot; });
           // recent USDT quote volume (kline[7]) over the window = group weight
           const vol = bars.slice(-DIST_BARS).reduce((a, k) => a + (Number(k[7]) || 0), 0);
+          // recent ER trail (oldest→newest) for the hover tooltip = "past chop scores"
+          const erHist = er.slice(-12).filter(Number.isFinite).map((v) => Math.round(v * 100) / 100);
           return { sym, market: marketOf(sym), er: cur, regime: regimeOf(cur),
-                   closes: closes.slice(-DIST_BARS), dist, vol };
+                   closes: closes.slice(-DIST_BARS), dist, vol, erHist };
         } catch { return null; }
       }));
       if (alive) { setRows(out.filter(Boolean)); setLoading(false); }
@@ -101,32 +103,41 @@ const TrendPage = () => {
   const REGIME_CHIPS = [{ key: 'all', label: t('Tümü'), color: 'var(--accent, #F5B942)' },
     ...REGIME_BANDS.map((b) => ({ key: b.key, label: t(b.label), color: b.color }))];
 
-  const Card = ({ r }) => (
-    <div style={{
-      border: '1px solid var(--border, #2a2f3a)', borderLeft: `3px solid ${r.regime.color}`,
-      borderRadius: 10, padding: '12px 14px', background: 'var(--panel, rgba(255,255,255,0.02))',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 14 }}>{r.sym.replace('USDT', '')}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.7 }}>ER {r.er.toFixed(2)}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: `${r.regime.color}22`, color: r.regime.color }}>
-          {t(r.regime.label)}
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Sparkline values={r.closes} width={120} height={26} variant="line"
-                     zeroBaseline={false} colorBySign={false} color={r.regime.color} showEndDot={false} />
+  const Card = ({ r }) => {
+    const mixStr = REGIME_BANDS.map((b) => `${t(b.label)} %${Math.round((r.dist[b.key] || 0) * 100)}`).join(' · ');
+    // hover tooltip = past chop/ER scores (regime names follow the language toggle)
+    const tip = `${r.sym}
+${t('Güncel')}: ${t(r.regime.label)} (ER ${r.er.toFixed(2)})
+${t('Rejim karışımı')}: ${mixStr}
+${t('Son ER skorları')}: ${r.erHist.join(' · ')}`;
+    return (
+      <div title={tip} style={{
+        border: '1px solid var(--border, #2a2f3a)', borderLeft: `3px solid ${r.regime.color}`,
+        borderRadius: 10, padding: '12px 14px', background: 'var(--panel, rgba(255,255,255,0.02))',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{r.sym.replace('USDT', '')}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.7 }}>ER {r.er.toFixed(2)}</span>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: `${r.regime.color}22`, color: r.regime.color }}>
+            {t(r.regime.label)}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }} title={`${t('Son ER skorları')}: ${r.erHist.join(' · ')}`}>
+            <Sparkline values={r.closes} width={120} height={26} variant="line"
+                       zeroBaseline={false} colorBySign={false} color={r.regime.color} showEndDot={false} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', height: 6, borderRadius: 4, overflow: 'hidden', margin: '6px 0 4px' }}>
+          {REGIME_BANDS.map((bd) => (r.dist[bd.key] > 0 && (
+            <span key={bd.key} title={`${t(bd.label)} %${Math.round(r.dist[bd.key] * 100)}`}
+                  style={{ width: `${r.dist[bd.key] * 100}%`, background: bd.color }} />
+          )))}
+        </div>
+        <div style={{ fontSize: 10, opacity: 0.5 }}>{t('Hacim')}: {fmtVol(r.vol)}</div>
       </div>
-      <div style={{ display: 'flex', height: 6, borderRadius: 4, overflow: 'hidden', margin: '6px 0 4px' }} title={t('Son 10 günün rejim dağılımı')}>
-        {REGIME_BANDS.map((bd) => (r.dist[bd.key] > 0 && (
-          <span key={bd.key} style={{ width: `${r.dist[bd.key] * 100}%`, background: bd.color }} />
-        )))}
-      </div>
-      <div style={{ fontSize: 10, opacity: 0.5 }}>{t('Hacim')}: {fmtVol(r.vol)}</div>
-    </div>
-  );
+    );
+  };
 
   const wrap = { maxWidth: 1180, margin: '0 auto', padding: '20px 22px 60px' };
   return (
@@ -141,6 +152,7 @@ const TrendPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
           {groupAgg.map((g) => (
             <button key={g.key} onClick={() => setGroup(g.key)}
+              title={`${g.label} — ${t('Hacim-ağırlıklı')} ${t(g.regime.label)} (ER ${g.er.toFixed(2)})\n${g.n} ${t('sembol')} · ${t('Hacim')} ${fmtVol(g.vol)}`}
               style={{
                 textAlign: 'left', cursor: 'pointer', borderRadius: 10, padding: '11px 13px',
                 border: `1px solid ${group === g.key ? g.regime.color : 'var(--border, #2a2f3a)'}`,
