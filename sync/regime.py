@@ -45,18 +45,33 @@ def build_er(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series |
     return pd.Series(er, index=df4.index)
 
 
-def chop_ok(er_series: pd.Series | None, ts) -> bool:
-    """True if the signal at `ts` is NOT choppy (ER >= ER_MIN). Missing -> True."""
+def _er_at(er_series, ts):
+    """ER value at the last 4h bar at/before ts, or None if unavailable."""
     if er_series is None or len(er_series) == 0:
-        return True
+        return None
     idx = er_series.index
     t = pd.Timestamp(ts)
     if t.tz is None:
         t = t.tz_localize("UTC")
-    pos = int(idx.searchsorted(t, side="right")) - 1     # last 4h bar at/before the signal
+    pos = int(idx.searchsorted(t, side="right")) - 1
     if pos < 0 or pos >= len(er_series):
-        return True
+        return None
     v = er_series.iloc[pos]
     if v is None or (isinstance(v, float) and math.isnan(v)):
-        return True
-    return float(v) >= ER_MIN
+        return None
+    return float(v)
+
+
+def chop_ok(er_series: pd.Series | None, ts) -> bool:
+    """True if the signal at `ts` is NOT choppy (ER >= ER_MIN). Missing -> True
+    (never over-filter on absent data)."""
+    v = _er_at(er_series, ts)
+    return True if v is None else v >= ER_MIN
+
+
+def is_choppy(er_series: pd.Series | None, ts) -> bool:
+    """True only when ER is PRESENT and < ER_MIN — the confirmed-choppy complement
+    of chop_ok (missing data -> False, so it isn't counted as choppy). Used by the
+    diagnostic CHOP-ONLY stream."""
+    v = _er_at(er_series, ts)
+    return v is not None and v < ER_MIN

@@ -77,6 +77,7 @@ export const marketLabel = (symbol) => MARKET_LABEL[marketOf(symbol)];
 // karma_half forces the ½TP exit; karma uses each symbol's chosen exit.
 // A '_chop' suffix = same as the parent + a 4h-ER regime gate; label gets "· Chop".
 export const strategyCellLabel = (strategy, symbol, karmaMap) => {
+  if (strategy === 'choponly') return 'Main · Choppy (test)';
   if (strategy.endsWith('_chop')) {
     const base = strategyCellLabel(strategy.slice(0, -5), symbol, karmaMap);
     return base === '—' ? base : `${base} · Chop`;
@@ -101,6 +102,7 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
+  if (strategy === 'choponly') return 'choppy';
   if (strategy.endsWith('_chop')) {
     const base = strategyBadge(strategy.slice(0, -5), symbol, karmaMap);
     return base ? `${base}·ch` : 'ch';

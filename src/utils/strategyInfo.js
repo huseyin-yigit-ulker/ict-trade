@@ -187,6 +187,29 @@ export const STRATEGY_INFO = {
 const CHOP_SECTION = {
   tr: { h: 'Choppy filtre', t: 'Ebeveyn akımla AYNI sinyaller — fakat sembolün 4h Efficiency Ratio’su < 0.25 iken (fiyat gidip geliyor, net trend yok) üretilenler atlanır. İşlemlerin ~⅓’ü elenir. 2026’da geniş/½TP akımlarda toplam R’yi yükseltir (örn. MAIN +39→+55R, IMPULSE ½TP −13→+2R, MAIN ½TP −39→−11R); zaten çok seçici akımlarda (OPUS) kazananları da kestiği için DÜŞÜREBİLİR (OPUS +157→+109R). Hangisinde işe yaradığını altta canlı 2026 R’sinden görebilirsin.' },
   en: { h: 'Choppy filter', t: 'SAME signals as the parent — but those fired while the symbol’s 4h Efficiency Ratio was < 0.25 (price round-tripping, no clean trend) are skipped. ~⅓ of trades are dropped. In 2026 it lifts total R on the broad/½TP streams (e.g. MAIN +39→+55R, IMPULSE ½TP −13→+2R, MAIN ½TP −39→−11R) but can LOWER it on already-selective streams (OPUS +157→+109R) by cutting winners too. The live 2026 R below shows where it helps.' },
+  choponly: {
+    icon: '🧪', accent: '#F6465D',
+    tr: {
+      title: 'CHOP-ONLY', tagline: 'Teşhis modülü — chop filtresinin ELEDİĞİ sinyaller',
+      summary: 'Test amaçlı. MAIN sinyallerinden yalnızca sembolün 4h Efficiency Ratio’su < 0.25 iken (onaylı choppy) üretilenleri TUTAR — yani MAIN·Chop’un tam tersi. Filtrenin neyi attığını ve o sinyallerin ne kadar kötü olduğunu görmek için.',
+      sections: [
+        { h: 'Amaç', t: 'Chop kapısının doğruluğunu denetlemek: bu küme net-negatif olmalı (eğer pozitifse, eşiği yanlış seçmişiz demektir). MAIN = MAIN·Chop + CHOP-ONLY (kapı v1’i ikiye böler).' },
+        { h: 'Kapı', t: 'ER mevcut VE < 0.25 olan sinyaller (veri yoksa choppy sayılmaz, dışarıda kalır). Sadece v1/MAIN evreni; tam-TP çıkış.' },
+        { h: 'Uyarı', t: 'Üretim akımı DEĞİL — sadece backtest/teşhis. Overview hub’ında listelenmez.' },
+      ],
+      caveat: 'Test modülü. Bu kümeyle işlem AÇMAK için değil; chop filtresini doğrulamak için.',
+    },
+    en: {
+      title: 'CHOP-ONLY', tagline: 'Diagnostic — the signals the chop filter DROPS',
+      summary: 'For testing. Keeps only the MAIN signals fired while the symbol’s 4h Efficiency Ratio was < 0.25 (confirmed choppy) — the exact inverse of MAIN·Chop. Shows what the filter discards and how badly those signals do.',
+      sections: [
+        { h: 'Purpose', t: 'Audits the chop gate: this set should be net-negative (if it’s positive, the threshold is wrong). MAIN = MAIN·Chop + CHOP-ONLY (the gate splits v1 in two).' },
+        { h: 'Gate', t: 'Signals with ER present AND < 0.25 (missing data isn’t counted as choppy → excluded). v1/MAIN universe only; full-TP exit.' },
+        { h: 'Note', t: 'NOT a production stream — backtest/diagnostic only. Not listed in the Overview hub.' },
+      ],
+      caveat: 'Test module. Not meant for taking trades; it exists to validate the chop filter.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {

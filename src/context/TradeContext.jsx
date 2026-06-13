@@ -81,6 +81,12 @@ CHOP_PARENTS.forEach((b) => {
   if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
   if (OPUS_STRATEGIES.has(b)) OPUS_STRATEGIES.add(c);
 });
+// Diagnostic (test) module: the MAIN signals the chop gate REMOVES — i.e. the
+// confirmed-choppy ones (ER < REGIME_ER_MIN). Inverse of main_chop. Backtest reads
+// version='choponly'; live reuses MAIN signals with the INVERTED ER gate.
+STRATEGY_VERSION.choponly = 'choponly';
+STRATEGY_EXPIRY_MINUTES.choponly = 180;
+STRATEGY_LIVE_MODE.choponly = 'live';
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
@@ -147,7 +153,10 @@ export const isValidStrategy = (s) => VALID_STRATEGIES.has(s);
 // sync/regime.py. Module-level + fully graceful — any fetch/parse error keeps the
 // symbol's signals (never over-filter on absence).
 const ER_N_4H = 10;
-const applyChopGate = async (signals) => {
+// invert=false (chop streams): keep signals with ER >= REGIME_ER_MIN (drop chop).
+// invert=true  (choponly test): keep only confirmed-choppy signals (ER present and
+// < REGIME_ER_MIN). Missing ER -> kept when !invert, dropped when invert.
+const applyChopGate = async (signals, { invert = false } = {}) => {
   const syms = [...new Set(signals.map((s) => s.symbol))];
   const er = {};
   await Promise.all(syms.map(async (sym) => {
@@ -160,18 +169,22 @@ const applyChopGate = async (signals) => {
       }
     } catch { /* keep on failure */ }
   }));
-  return signals.filter((s) => {
+  const erAt = (s) => {
     const e = er[s.symbol];
-    if (!e) return true;
+    if (!e) return null;
     const tsMs = new Date(s.signal_time).getTime();
     let pos = -1;
     for (let i = 0; i < e.ct.length; i += 1) { if (e.ct[i] <= tsMs) pos = i; else break; }
-    if (pos < ER_N_4H) return true;
+    if (pos < ER_N_4H) return null;
     const change = Math.abs(e.c[pos] - e.c[pos - ER_N_4H]);
     let vol = 0;
     for (let j = pos - ER_N_4H + 1; j <= pos; j += 1) vol += Math.abs(e.c[j] - e.c[j - 1]);
-    if (vol <= 0) return false;
-    return (change / vol) >= REGIME_ER_MIN;
+    return vol > 0 ? change / vol : 0;
+  };
+  return signals.filter((s) => {
+    const v = erAt(s);
+    if (invert) return v !== null && v < REGIME_ER_MIN;   // choppy-only (test)
+    return v === null ? true : v >= REGIME_ER_MIN;        // drop chop
   });
 };
 
@@ -422,6 +435,7 @@ export const TradeProvider = ({ children }) => {
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
       const isOpus = OPUS_STRATEGIES.has(strategyRef.current);
       const isChop = strategyRef.current.endsWith('_chop');   // adds the 4h-ER regime gate
+      const isChopOnly = strategyRef.current === 'choponly';  // diagnostic: keep ONLY choppy
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {
@@ -469,9 +483,11 @@ export const TradeProvider = ({ children }) => {
       }));
 
       // CHOP modules: drop live signals fired while the symbol's 4h was choppy
-      // (Efficiency Ratio < REGIME_ER_MIN). Mirrors sync/regime.py. Fully graceful —
-      // any fetch/parse failure keeps the signal (never over-filter on absence).
-      const finalMapped = isChop ? await applyChopGate(mapped) : mapped;
+      // (Efficiency Ratio < REGIME_ER_MIN). choponly: the inverse (keep ONLY choppy).
+      // Mirrors sync/regime.py. Graceful — any fetch/parse failure keeps the signal.
+      let finalMapped = mapped;
+      if (isChop) finalMapped = await applyChopGate(mapped);
+      else if (isChopOnly) finalMapped = await applyChopGate(mapped, { invert: true });
 
       processData(finalMapped);
       setLastUpdated(new Date());
