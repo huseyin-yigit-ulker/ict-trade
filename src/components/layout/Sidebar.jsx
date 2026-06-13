@@ -35,6 +35,13 @@ const IconHome = () => (
     <rect x="2.6" y="11.4" width="6" height="6" rx="1.2" /><rect x="11.4" y="11.4" width="6" height="6" rx="1.2" />
   </svg>
 );
+// Regime / Trend map: a price line that chops on the left, then trends up-right + arrow.
+const IconRegime = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="2,14 5,12 7,13.5 9.5,8.5 12.5,10 17,3.5" />
+    <path d="M17 3.5 H13.6 M17 3.5 V6.9" />
+  </svg>
+);
 
 // Strategy × Mode nested nav. MAIN runs the v1 set (mode='live'), IMPULSE the refined
 // v2 set (mode='impulse') — dag.py emits each hourly. MAIN ½TP (v3) and IMPULSE ½TP
@@ -129,7 +136,7 @@ const Sidebar = () => {
 
         <div className="sidebar__navsep" />
         <NavLink to="/trend" className="sidebar__link">
-          <span className="sidebar__icon"><IconImpulse /></span><span>{t('Rejim Haritası')}</span>
+          <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
         </NavLink>
         <NavLink to="/intelligence" className="sidebar__link">
           <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
