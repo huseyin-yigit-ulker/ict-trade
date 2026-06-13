@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
-import { STRATEGY_INFO } from '../utils/strategyInfo';
+import { infoFor } from '../utils/strategyInfo';
 import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct, fmtPf } from '../utils/streamStats';
 import PusuLogo from '../components/PusuLogo';
 
@@ -59,6 +59,7 @@ const IntroPage = () => {
 
   const matchCat = (s) =>
     cat === 'all' ||
+    (cat === 'chop' && s.chop) ||
     (cat === 'full' && s.exit === 'full') ||
     (cat === 'half' && s.exit === 'half') ||
     (cat === 'adaptive' && s.family === 'adaptive') ||
@@ -79,8 +80,8 @@ const IntroPage = () => {
       .filter(matchCat)
       .filter((s) => {
         if (!q) return true;
-        const info = STRATEGY_INFO[s.key];
-        const blob = `${s.key} ${info?.[lang]?.title || ''} ${info?.[lang]?.tagline || ''} ${info?.[lang]?.summary || ''}`.toLowerCase();
+        const c = infoFor(s.key, lang);
+        const blob = `${s.key} ${c?.title || ''} ${c?.tagline || ''} ${c?.summary || ''}`.toLowerCase();
         return blob.includes(q);
       })
       .sort((a, b) => metricOf(b) - metricOf(a));
@@ -93,6 +94,7 @@ const IntroPage = () => {
     { key: 'half', label: '½TP' },
     { key: 'adaptive', label: t('Adaptif') },
     { key: 'session', label: t('Seans') },
+    { key: 'chop', label: 'Chop' },
   ];
   const SORTS = [
     { key: 'r', label: t('Toplam R') },
@@ -105,13 +107,13 @@ const IntroPage = () => {
 
   const LeaderTile = ({ label, entry, fmt }) => {
     if (!entry) return null;
-    const info = STRATEGY_INFO[entry.s.key];
-    const head = info?.[lang] || info?.tr;
+    const info = infoFor(entry.s.key, lang);
+    if (!info) return null;
     return (
       <button className="intro-leader" onClick={() => navigate(`/${entry.s.key}/backtest`)} style={{ '--acc': info.accent }}>
         <span className="intro-leader__label">{label}</span>
         <span className="intro-leader__value win">{fmt(entry.m)}</span>
-        <span className="intro-leader__who"><span aria-hidden="true">{info.icon}</span> {head.title}</span>
+        <span className="intro-leader__who"><span aria-hidden="true">{info.icon}</span> {info.title}</span>
       </button>
     );
   };
@@ -130,7 +132,7 @@ const IntroPage = () => {
             <div className="intro-reticle"><PusuLogo size={72} animated /></div>
             <h1 className="intro-title">PUSU</h1>
             <div className="intro-sub">Liquidity Ambush Intelligence</div>
-            <p className="intro-manifesto">{t('Sekiz işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.')}</p>
+            <p className="intro-manifesto">{t('{n} işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.', { n: STREAMS.length })}</p>
 
             <div className="intro-leaders">
               <div className="intro-overview-tile">
@@ -184,8 +186,8 @@ const IntroPage = () => {
         <div className="intro-cards">
           {visible.length === 0 && <div className="intro-empty">{t('Sonuç yok')}</div>}
           {visible.map((s) => {
-            const info = STRATEGY_INFO[s.key];
-            const head = info?.[lang] || info?.tr;
+            const info = infoFor(s.key, lang);
+            const head = info;
             const m = statOf(s);
             const open = openKey === s.key;
             const totalR = m ? Number(m.total_r) : null;

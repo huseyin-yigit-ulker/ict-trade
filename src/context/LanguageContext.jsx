@@ -101,6 +101,8 @@ const EN = {
   'Stratejiler': 'Strategies',
   'Sekiz işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.':
     'Eight trading streams, one liquidity-ambush philosophy — catch institutional sweeps, manage them with disciplined exits.',
+  '{n} işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.':
+    '{n} trading streams, one liquidity-ambush philosophy — catch institutional sweeps, manage them with disciplined exits.',
   'Tüm sayılar 2026 backtest — örneklem içi. Forward beklenti daha düşüktür.':
     'All figures are 2026 backtest — in-sample. Forward expectancy is lower.',
   'En Yüksek R': 'Top Total R',
