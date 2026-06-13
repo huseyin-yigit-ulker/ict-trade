@@ -158,7 +158,6 @@ const EN = {
   'Rejim karışımı': 'Regime mix',
   'Son ER skorları': 'Recent ER scores',
   'Fiyat & Rejim': 'Price & Regime',
-  'Rejim': 'Regime',
   'eşik': 'thresholds',
   'Arka plan rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.':
     "The background colour is each 4h bar's regime — red choppy, green strong trend. Lower pane is the ER score.",
