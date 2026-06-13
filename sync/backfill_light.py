@@ -29,12 +29,10 @@ import pandas as pd
 import trade_sync_common as tsc
 import regime
 
-PARENTS = ["v1", "v2", "v3", "v4", "karma", "karma_half"]
-# light version tag per parent — kept <=10 chars (trading_signals.version is varchar(10)).
-LIGHT_TAG = {
-    "v1": "v1_light", "v2": "v2_light", "v3": "v3_light", "v4": "v4_light",
-    "karma": "kma_light", "karma_half": "kmah_light",
-}
+# Kept LIGHT streams after the 2026-06-13 prune: only IMPULSE·Light (v2_light) and
+# KARMA·Light (kma_light). (The v1/v3/v4/karma_half light cells were removed.)
+PARENTS = ["v2", "karma"]
+LIGHT_TAG = {"v2": "v2_light", "karma": "kma_light"}
 RESOLVED = ("closed_tp", "closed_sl")
 
 
