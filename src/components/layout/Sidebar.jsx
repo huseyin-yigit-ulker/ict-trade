@@ -35,6 +35,14 @@ const IconHome = () => (
     <rect x="2.6" y="11.4" width="6" height="6" rx="1.2" /><rect x="11.4" y="11.4" width="6" height="6" rx="1.2" />
   </svg>
 );
+// Strategies: stacked layers (a collection of strategy streams).
+const IconStrategies = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 2.4 17.4 6.4 10 10.4 2.6 6.4Z" />
+    <path d="M2.6 10 10 14 17.4 10" />
+    <path d="M2.6 13.6 10 17.6 17.4 13.6" />
+  </svg>
+);
 // Regime / Trend map: a price line that chops on the left, then trends up-right + arrow.
 const IconRegime = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -112,6 +120,7 @@ const Sidebar = () => {
           aria-expanded={stratOpen}
           title={stratOpen ? t('Gizle') : t('Göster')}
         >
+          <span className="sidebar__icon"><IconStrategies /></span>
           <span className="sidebar__section-label">{t('Stratejiler')}</span>
           <span className="sidebar__section-chev" aria-hidden="true">{stratOpen ? '▾' : '▸'}</span>
         </button>

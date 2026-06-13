@@ -1891,15 +1891,18 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
 .sidebar__navsep { height: 1px; background: var(--border); margin: 5px 12px; }
 
 /* collapsible "Stratejiler" section header — collects the 8 strategy streams */
+/* Strategies header — styled like the other nav links (icon + Title-Case label),
+   not a tiny mono-uppercase divider (which also broke as "STRATEGİES" under the
+   Turkish uppercase casing). */
 .sidebar__section {
-  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  display: flex; align-items: center; gap: 11px; width: 100%;
   background: none; border: none; cursor: pointer; text-align: left;
-  padding: 9px 12px 4px; margin-top: 4px;
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase;
-  color: var(--muted); transition: color 0.12s ease;
+  padding: 7px 12px; border-radius: 6px;
+  font-weight: 600; font-size: 13px; color: var(--muted);
+  border-left: 2px solid transparent; transition: background 0.12s ease, color 0.12s ease;
 }
-.sidebar__section:hover { color: var(--text); }
-.sidebar__section-chev { font-size: 10px; color: var(--muted-2); }
+.sidebar__section:hover { background: var(--hover); color: var(--text); }
+.sidebar__section-chev { margin-left: auto; font-size: 10px; color: var(--muted-2); }
 .sidebar__strategies { display: grid; gap: 2px; padding-left: 6px; border-left: 1px solid var(--border-soft); margin-left: 12px; }
 .dash-empty { padding: 44px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 13px; }
 
