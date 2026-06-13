@@ -9,8 +9,9 @@ import { infoFor } from '../utils/strategyInfo';
 const StrategyIntro = () => {
   const { strategy } = useTradeContext();
   const { lang, t } = useLang();
+  // Default COLLAPSED — the header is just a trigger; detail appears on click.
   const [open, setOpen] = useState(() => {
-    try { return localStorage.getItem('pusu.introOpen') !== '0'; } catch { return true; }
+    try { return localStorage.getItem('pusu.introOpen') === '1'; } catch { return false; }
   });
   const toggle = () => {
     setOpen((o) => {
