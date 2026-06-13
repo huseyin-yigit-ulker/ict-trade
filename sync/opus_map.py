@@ -4,7 +4,9 @@ OPUS = the MAIN signal set (strategies B/C/D/E, full-TP) but each symbol is only
 traded in the NY session(s) where its 2026 signals actually carried an edge
 (sembol × seans analizi — sync/out/_symbol_hour_analysis.py). Symbols absent from
 this map are NOT traded at all (structurally negative across every session, or too
-few trades to trust: ADA/PLTR/XAU/TSLA/BABA/NEAR/SOL/META/MSFT/NVDA/AVGO/AMZN/...).
+few trades to trust: ADA/PLTR/XAU/TSLA/BABA/NEAR/SOL/META/MSFT/NVDA/AVGO/AMZN/XRP/AVAX/...).
+2026-06-13: of the re-added crypto, only LINK (NY-PM) and DOGE (NY-PM, marginal)
+cleared the gate; XRP/AVAX had no positive session and stay out.
 
 Sessions (signal = bar OPEN, converted to America/New_York; DST-aware), WEEKDAYS only
 (Sat/Sun dropped — the US market is closed; 24/7 crypto would otherwise pass the

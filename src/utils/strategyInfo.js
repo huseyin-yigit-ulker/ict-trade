@@ -140,9 +140,9 @@ export const STRATEGY_INFO = {
       summary: 'Doğru sembolü doğru saatte: MAIN sinyallerini alır, ama her sembol yalnızca 2026’da edge taşıdığı NY borsa seansında işlenir. Sembol×saat analizinden türetildi.',
       sections: [
         { h: 'Seans kapısı', t: 'İki pencere (DST-duyarlı, NY saati): NY-AM 09:00–12:00 ET ve NY-PM 12:00–16:00 ET. Yalnızca hafta içi — US borsası kapalı olduğu için Cmt/Paz sinyalleri (kripto 7/24 üretse de) elenir. Bar bu pencereye düşmüyorsa atlanır.' },
-        { h: 'Sembol başına', t: '16 seçili sembol. Çoğu yalnızca NY-AM (BTC, ETH, BNB, S, CRCL, ONDO, XAG, SUI, INTC); bazıları yalnızca NY-PM (WIF, PEPE, COIN, HOOD); üçü her iki seans (ARB, FET, MSTR). ADA/PLTR/XAU/TSLA gibi yapısal negatifler tamamen elenir.' },
+        { h: 'Sembol başına', t: '18 seçili sembol. Çoğu yalnızca NY-AM (BTC, ETH, BNB, S, CRCL, ONDO, XAG, SUI, INTC); yalnızca NY-PM (WIF, PEPE, COIN, HOOD, LINK, DOGE); üçü her iki seans (ARB, FET, MSTR). 2026-06-13 eklenen kriptodan LINK/DOGE NY-PM edge’iyle girdi; XRP/AVAX (ve ADA/PLTR/XAU/TSLA) pozitif seansı olmadığı için elenir.' },
         { h: 'Çıkış & evren', t: 'MAIN ile aynı tam-TP çıkış ve risk; tek fark sinyal-emisyonundaki sembol+seans kapısı. 1h sinyal, 1m çözümleme.' },
-        { h: '2026 sonucu', t: 'Hafta içi, in-sample ≈ +147R / işlem başına ≈ +0.74R; MAIN tüm-saat tüm-sembol +106R / +0.16’ya karşı. Hafta sonu işlemleri (US kapalı) elenince toplam R düşer ama işlem başına verim artar.' },
+        { h: '2026 sonucu', t: 'Hafta içi, in-sample ≈ +157R / işlem başına ≈ +0.73R (18 sembol) — yüksek seçicilik, MAIN’in geniş düşük-edge’li ortalamasının çok üstünde. Hafta sonu (US kapalı) işlemleri elenir.' },
       ],
       caveat: 'Saat × sembol seçimi 2026 üzerinde yapıldı (in-sample). COIN/HOOD örneklemleri küçük. Forward’da küçülmeyi bekle; split-half doğrulaması önerilir.',
     },
@@ -151,9 +151,9 @@ export const STRATEGY_INFO = {
       summary: 'Right symbol, right hour: it takes MAIN signals, but each symbol trades only in the NY market session where it carried an edge in 2026. Derived from the symbol×hour analysis.',
       sections: [
         { h: 'Session gate', t: 'Two windows (DST-aware, NY time): NY-AM 09:00–12:00 ET and NY-PM 12:00–16:00 ET. Weekdays only — Sat/Sun signals are dropped (US market closed, even though 24/7 crypto produces them). Bars outside the window are skipped.' },
-        { h: 'Per symbol', t: '16 chosen symbols. Most are NY-AM only (BTC, ETH, BNB, S, CRCL, ONDO, XAG, SUI, INTC); some NY-PM only (WIF, PEPE, COIN, HOOD); three trade both (ARB, FET, MSTR). Structural losers like ADA/PLTR/XAU/TSLA are dropped entirely.' },
+        { h: 'Per symbol', t: '18 chosen symbols. Most are NY-AM only (BTC, ETH, BNB, S, CRCL, ONDO, XAG, SUI, INTC); NY-PM only (WIF, PEPE, COIN, HOOD, LINK, DOGE); three trade both (ARB, FET, MSTR). Of the 2026-06-13 crypto re-adds, LINK/DOGE qualified on NY-PM; XRP/AVAX (and ADA/PLTR/XAU/TSLA) have no positive session and are dropped.' },
         { h: 'Exit & universe', t: 'Same full-TP exit and risk as MAIN; the only change is the per-symbol+session gate on emission. 1h signals, 1m resolution.' },
-        { h: '2026 result', t: 'Weekdays only, in-sample ≈ +147R / ≈ +0.74R per trade, vs MAIN all-hours all-symbols +106R / +0.16. Dropping weekend (US-closed) trades lowers total R but raises per-trade efficiency.' },
+        { h: '2026 result', t: 'Weekdays only, in-sample ≈ +157R / ≈ +0.73R per trade (18 symbols) — highly selective, well above MAIN’s broad low-edge average. Weekend (US-closed) trades are dropped.' },
       ],
       caveat: 'Hour × symbol selection is in-sample (2026). COIN/HOOD samples are small. Expect shrinkage forward; a split-half validation is recommended.',
     },
