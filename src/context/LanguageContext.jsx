@@ -143,6 +143,15 @@ const EN = {
   'En Kötü': 'Worst',
   'Gizle': 'Hide',
   'Göster': 'Show',
+  // --- Regime / Trend map ---
+  'Rejim Haritası': 'Regime Map',
+  'Her sembolün 4 saatlik fiyatından Efficiency Ratio hesaplanır ve anlık rejim sınıflanır (trend mi, yatay mı). Salt fiyat verisi — sinyal/backtest değil.':
+    "Each symbol's regime is classified from its 4h price via the Efficiency Ratio (trending vs ranging). Pure price data — no signals/backtest.",
+  'Güçlü Trend': 'Strong Trend',
+  'Orta Trend': 'Mid Trend',
+  'Hafif Trend': 'Light Trend',
+  'Choppy': 'Choppy',
+  'Son 10 günün rejim dağılımı': "Last 10 days' regime mix",
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',

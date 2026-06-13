@@ -9,6 +9,7 @@ import IntroPage from './pages/IntroPage';
 import CommandCenterPage from './pages/CommandCenterPage';
 import IntelligencePage from './pages/IntelligencePage';
 import SettingsPage from './pages/SettingsPage';
+import TrendPage from './pages/TrendPage';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
                 <Route path="/login" element={<LoginScreen />} />
                 <Route element={<RequireAuth><AppShell /></RequireAuth>}>
                   <Route index element={<IntroPage />} />
+                  <Route path="/trend" element={<TrendPage />} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
                   <Route path="/intelligence" element={<IntelligencePage />} />
                   <Route path="/settings" element={<SettingsPage />} />

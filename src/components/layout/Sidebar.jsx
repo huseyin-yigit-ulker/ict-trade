@@ -64,9 +64,6 @@ const GROUPS = [
   { key: 'karma_half_chop',   label: 'KARMA ½TP · Chop',   icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus_chop',         label: 'OPUS · Chop',        icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'opus_half_chop',    label: 'OPUS ½TP · Chop',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  // Diagnostic (test): the MAIN signals the chop gate REMOVES (confirmed-choppy,
-  // ER<0.25) — the inverse of MAIN·Chop. Expected net-negative; validates the gate.
-  { key: 'choponly',          label: 'CHOP-ONLY · test',   icon: <IconCommand />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {
@@ -131,6 +128,9 @@ const Sidebar = () => {
         )}
 
         <div className="sidebar__navsep" />
+        <NavLink to="/trend" className="sidebar__link">
+          <span className="sidebar__icon"><IconImpulse /></span><span>{t('Rejim Haritası')}</span>
+        </NavLink>
         <NavLink to="/intelligence" className="sidebar__link">
           <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
         </NavLink>

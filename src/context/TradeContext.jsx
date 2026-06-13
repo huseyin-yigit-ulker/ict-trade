@@ -12,7 +12,7 @@ const BACKTEST_ALLOWED_HOURS = new Set(Array.from({ length: 24 }, (_, h) => h));
 // audit (PLTR/TSLA were cut too but re-added 2026-06-12 by user decision with
 // the tokenized-equity expansion). Old rows for hidden symbols stay in the
 // database but the dashboard hides them. Mirrors dag/dag.py SYMBOLS.
-const BACKTEST_ALLOWED_SYMBOLS = [
+export const BACKTEST_ALLOWED_SYMBOLS = [
   'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT',
   '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
   'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'SUSDT',
@@ -81,12 +81,6 @@ CHOP_PARENTS.forEach((b) => {
   if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
   if (OPUS_STRATEGIES.has(b)) OPUS_STRATEGIES.add(c);
 });
-// Diagnostic (test) module: the MAIN signals the chop gate REMOVES — i.e. the
-// confirmed-choppy ones (ER < REGIME_ER_MIN). Inverse of main_chop. Backtest reads
-// version='choponly'; live reuses MAIN signals with the INVERTED ER gate.
-STRATEGY_VERSION.choponly = 'choponly';
-STRATEGY_EXPIRY_MINUTES.choponly = 180;
-STRATEGY_LIVE_MODE.choponly = 'live';
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
@@ -435,7 +429,6 @@ export const TradeProvider = ({ children }) => {
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
       const isOpus = OPUS_STRATEGIES.has(strategyRef.current);
       const isChop = strategyRef.current.endsWith('_chop');   // adds the 4h-ER regime gate
-      const isChopOnly = strategyRef.current === 'choponly';  // diagnostic: keep ONLY choppy
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {
@@ -483,11 +476,9 @@ export const TradeProvider = ({ children }) => {
       }));
 
       // CHOP modules: drop live signals fired while the symbol's 4h was choppy
-      // (Efficiency Ratio < REGIME_ER_MIN). choponly: the inverse (keep ONLY choppy).
-      // Mirrors sync/regime.py. Graceful — any fetch/parse failure keeps the signal.
-      let finalMapped = mapped;
-      if (isChop) finalMapped = await applyChopGate(mapped);
-      else if (isChopOnly) finalMapped = await applyChopGate(mapped, { invert: true });
+      // (Efficiency Ratio < REGIME_ER_MIN). Mirrors sync/regime.py. Graceful — any
+      // fetch/parse failure keeps the signal (never over-filter on absence).
+      const finalMapped = isChop ? await applyChopGate(mapped) : mapped;
 
       processData(finalMapped);
       setLastUpdated(new Date());

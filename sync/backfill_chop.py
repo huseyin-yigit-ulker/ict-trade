@@ -49,7 +49,7 @@ def fetch_rows(conn, version, w_start, w_end):
 
 def wipe(conn, scope, w_start, w_end):
     cur = conn.cursor(); n = 0
-    for ver in [CHOP_TAG[b] for b in PARENTS] + ["choponly"]:
+    for ver in [CHOP_TAG[b] for b in PARENTS]:
         if scope == "all":
             cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version=%s", (ver,))
         elif scope == "year":
@@ -104,20 +104,8 @@ def main():
               f"   ->   n={cn:>4} WR={cw/cn*100 if cn else 0:3.0f}% topR={cr:+7.2f}"
               f"   %{keep:.0f} sinyal", flush=True)
 
-    # CHOP-ONLY diagnostic stream (test): the v1/MAIN signals the chop gate REMOVES
-    # — i.e. confirmed-choppy (ER present and < ER_MIN). version='choponly'. Lets us
-    # see how bad the dropped signals are (expected net-negative -> validates the gate).
-    chop_only = []
-    for r in parent_rows["v1"]:
-        if regime.is_choppy(er.get(r["symbol"]), r["signal_time"]):
-            k = dict(r); k["version"] = "choponly"; chop_only.append(k)
-    on, ow, orr = tot(chop_only)
-    print(f"\n  {'choponly (test)':<14} v1’in choppy tamamlayıcısı: "
-          f"n={on} WR={ow/on*100 if on else 0:3.0f}% topR={orr:+7.2f}  ({len(chop_only)} satır)", flush=True)
-    all_chop.extend(chop_only)
-
     if args.dry_run:
-        print(f"\n[dry-run] {len(all_chop)} satır yazılacaktı — DB'ye yazılmadı.")
+        print(f"\n[dry-run] {len(all_chop)} _chop satırı yazılacaktı — DB'ye yazılmadı.")
         conn.close(); return
     if args.wipe_scope in ("year", "all"):
         print(f"\nwiped {wipe(conn, args.wipe_scope, w_start, w_end)} existing *_chop rows")

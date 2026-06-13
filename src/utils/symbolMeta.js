@@ -28,6 +28,30 @@ const MARKET_LABEL = { crypto: 'Kripto', metal: 'Metal', stock: 'ABD Hisse' };
 export const marketOf = (symbol) =>
   METAL_SYMBOLS.has(symbol) ? 'metal' : STOCK_SYMBOLS.has(symbol) ? 'stock' : 'crypto';
 
+// ---- Price-regime classification (4h Efficiency Ratio) for the TREND map ----
+// Bands match the regime study table: chop < 0.20, light 0.20-0.35, mid 0.35-0.50,
+// strong >= 0.50. Pure price-data classification (no signals/backtest).
+export const REGIME_BANDS = [
+  { key: 'strong', min: 0.50, label: 'Güçlü Trend', color: '#0ECB81' },
+  { key: 'mid',    min: 0.35, label: 'Orta Trend',  color: '#5C93FF' },
+  { key: 'light',  min: 0.20, label: 'Hafif Trend', color: '#F5B942' },
+  { key: 'chop',   min: 0,    label: 'Choppy',      color: '#F6465D' },
+];
+export const regimeOf = (er) =>
+  REGIME_BANDS.find((b) => er >= b.min) || REGIME_BANDS[REGIME_BANDS.length - 1];
+
+// Kaufman Efficiency Ratio series from a closes array (NaN for the first n).
+export const efficiencyRatio = (closes, n = 10) => {
+  const out = new Array(closes.length).fill(NaN);
+  for (let i = n; i < closes.length; i += 1) {
+    const change = Math.abs(closes[i] - closes[i - n]);
+    let vol = 0;
+    for (let j = i - n + 1; j <= i; j += 1) vol += Math.abs(closes[j] - closes[j - 1]);
+    out[i] = vol > 0 ? change / vol : 0;
+  }
+  return out;
+};
+
 // ---- OPUS: per-symbol NY-session allowlist (mirror of sync/opus_map.py) ----
 // Each symbol is traded only in the NY session(s) where its 2026 signals had an
 // edge. 'am' = 09:00–12:00 ET, 'pm' = 12:00–16:00 ET. Symbols absent → not traded.
@@ -77,7 +101,6 @@ export const marketLabel = (symbol) => MARKET_LABEL[marketOf(symbol)];
 // karma_half forces the ½TP exit; karma uses each symbol's chosen exit.
 // A '_chop' suffix = same as the parent + a 4h-ER regime gate; label gets "· Chop".
 export const strategyCellLabel = (strategy, symbol, karmaMap) => {
-  if (strategy === 'choponly') return 'Main · Choppy (test)';
   if (strategy.endsWith('_chop')) {
     const base = strategyCellLabel(strategy.slice(0, -5), symbol, karmaMap);
     return base === '—' ? base : `${base} · Chop`;
@@ -102,7 +125,6 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
-  if (strategy === 'choponly') return 'choppy';
   if (strategy.endsWith('_chop')) {
     const base = strategyBadge(strategy.slice(0, -5), symbol, karmaMap);
     return base ? `${base}·ch` : 'ch';

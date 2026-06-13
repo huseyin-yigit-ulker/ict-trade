@@ -6,7 +6,7 @@ import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 
 const STRAT_BASE_LABEL = { main: 'Main', impulse: 'Impulse', main_half: 'Main ½TP', impulse_half: 'Impulse ½TP', karma: 'Karma', karma_half: 'Karma ½TP', opus: 'Opus', opus_half: 'Opus ½TP' };
 // chop twins reuse the parent label + " · Chop"
-const STRAT_LABEL = { ...STRAT_BASE_LABEL, choponly: 'Chop-Only (test)' };
+const STRAT_LABEL = { ...STRAT_BASE_LABEL };
 Object.keys(STRAT_BASE_LABEL).forEach((b) => { STRAT_LABEL[`${b}_chop`] = `${STRAT_BASE_LABEL[b]} · Chop`; });
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
@@ -99,7 +99,8 @@ const Topbar = () => {
 
   // Symbols + status filter are per-view controls — shown only on the 4 strategy×mode
   // views, on the RIGHT side of the bar. Hidden on Intelligence / Settings.
-  const isView = loc.pathname !== '/settings' && loc.pathname !== '/intelligence' && loc.pathname !== '/';
+  const isView = loc.pathname !== '/settings' && loc.pathname !== '/intelligence'
+    && loc.pathname !== '/' && loc.pathname !== '/trend';
   const STATUS_FILTERS = [
     { key: 'all', label: t('Tümü') },
     { key: 'tp', label: 'TP' },
@@ -123,6 +124,7 @@ const Topbar = () => {
           {loc.pathname === '/' ? t('Genel Bakış')
             : loc.pathname === '/settings' ? t('Ayarlar')
             : loc.pathname === '/intelligence' ? t('İstihbarat')
+            : loc.pathname === '/trend' ? t('Rejim Haritası')
             : `${t(STRAT_LABEL[strategy] || 'Main')} · ${t(MODE_LABEL[mode] || 'Live')}`}
         </div>
         <KillzoneClock />
