@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, CandlestickSeries, LineSeries } from 'lightweight-charts';
+import { createChart, LineSeries, HistogramSeries } from 'lightweight-charts';
 import { useLang } from '../context/LanguageContext';
 import { REGIME_BANDS, regimeOf, efficiencyRatio } from '../utils/symbolMeta';
 
 // TREND DETAIL — interactive (lightweight-charts, like the app's other charts).
-// 4h candles are coloured by their REGIME (choppy=red … strong trend=green) so chop
-// vs trend history is visible right on the price; a second pane plots the Efficiency
-// Ratio score against the 0.20/0.35/0.50 band lines. Crosshair hover reads out the
-// bar's date / ER / regime. Pure price data (Binance 4h klines).
+// The price is a single-colour LINE; the REGIME is painted as full-height background
+// bands behind it (choppy=red … strong trend=green) so chop vs trend history reads
+// right off the chart. A second pane plots the Efficiency Ratio against the
+// 0.20/0.35/0.50 band lines. Crosshair hover reads out the bar's date / ER / regime.
 
 const ER_N = 10;
-const NEUTRAL = '#5b6472';
+// hex -> rgba with alpha (for the translucent background bands)
+const hexA = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
 
 const TrendDetail = ({ symbol, onClose }) => {
   const { t, locale } = useLang();
@@ -41,14 +45,12 @@ const TrendDetail = ({ symbol, onClose }) => {
       const er = efficiencyRatio(closes, ER_N);
       const regAt = (i) => (Number.isFinite(er[i]) ? regimeOf(er[i]) : null);
 
-      const candles = bars.map((k, i) => {
+      const priceData = bars.map((k) => ({ time: Math.floor(Number(k[0]) / 1000), value: Number(k[4]) }));
+      // full-height regime background band per bar (translucent column behind the line)
+      const bgData = bars.map((k, i) => {
         const reg = regAt(i);
-        const col = reg ? reg.color : NEUTRAL;
-        return {
-          time: Math.floor(Number(k[0]) / 1000),
-          open: Number(k[1]), high: Number(k[2]), low: Number(k[3]), close: Number(k[4]),
-          color: col, borderColor: col, wickColor: col,
-        };
+        return { time: Math.floor(Number(k[0]) / 1000), value: 1,
+          color: reg ? hexA(reg.color, 0.16) : 'rgba(91,100,114,0.05)' };
       });
       const erData = bars.map((k, i) => ({ time: Math.floor(Number(k[0]) / 1000), value: er[i] }))
         .filter((p) => Number.isFinite(p.value));
@@ -78,8 +80,16 @@ const TrendDetail = ({ symbol, onClose }) => {
       });
       chartRef.current = chart;
 
-      const candle = chart.addSeries(CandlestickSeries, { borderVisible: true });
-      candle.setData(candles);
+      // regime background bands (add first = behind), on an isolated overlay scale
+      // forced to [0,1] full-height so the value=1 columns fill the pane.
+      const bg = chart.addSeries(HistogramSeries, {
+        priceScaleId: 'bg', base: 0, priceLineVisible: false, lastValueVisible: false,
+      });
+      bg.setData(bgData);
+      chart.priceScale('bg').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
+      // single-colour price line on top
+      const price = chart.addSeries(LineSeries, { color: '#EAECEF', lineWidth: 2, priceLineVisible: false });
+      price.setData(priceData);
 
       // ER score in a second pane, with the regime-band threshold lines
       const erLine = chart.addSeries(LineSeries, { color: '#C9CDD4', lineWidth: 1, priceLineVisible: false,
@@ -153,7 +163,7 @@ const TrendDetail = ({ symbol, onClose }) => {
           </div>
         )}
         <div style={{ fontSize: 11, opacity: 0.55, marginTop: 8 }}>
-          {t('Mum rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.')}
+          {t('Arka plan rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.')}
         </div>
       </div>
     </div>

@@ -159,8 +159,8 @@ const EN = {
   'Son ER skorları': 'Recent ER scores',
   'Fiyat & Rejim': 'Price & Regime',
   'eşik': 'thresholds',
-  'Mum rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.':
-    "Each candle's colour is its 4h regime — red choppy, green strong trend. Lower pane is the ER score.",
+  'Arka plan rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.':
+    "The background colour is each 4h bar's regime — red choppy, green strong trend. Lower pane is the ER score.",
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',
