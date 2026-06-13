@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useContext, useRef, useCallback, useMemo } from 'react';
+import { opusAllows } from '../utils/symbolMeta';
 
 const TradeContext = createContext();
 
@@ -29,7 +30,7 @@ const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180, karma_half: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impulse_half: 180, karma: 180, karma_half: 180, opus: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -40,13 +41,14 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, main_half: 180, impul
 // 'karma' = per-symbol best cell of {main,impulse} x {tam,½TP} (sync/karma_map.py).
 // 'karma_half' = karma's per-symbol SOURCE set, but always the ½TP+BE exit (the
 // analog of MAIN ½TP/v3 and IMPULSE ½TP/v4 for the karma blend).
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma', karma_half: 'karma_half' };
+// 'opus' = MAIN signals kept only in each symbol's edge NY-session (sync/opus_map.py).
+const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', main_half: 'v3', impulse_half: 'v4', karma: 'karma', karma_half: 'karma_half', opus: 'opus' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
 // AFTER entry) — live status is then tracked under partial-TP + breakeven rules.
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
-const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse' };
+const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', main_half: 'live', impulse_half: 'impulse', opus: 'live' };
 // ½TP modules: scale out 50% at half the distance entry→TP, stop -> entry (BE).
 // karma_half forces ½TP on every karma symbol, so it lives here too.
 const HALF_STRATEGIES = new Set(['main_half', 'impulse_half', 'karma_half']);
@@ -343,7 +345,9 @@ export const TradeProvider = ({ children }) => {
       // Module -> its own live mode tag: MAIN='live' (hourly B/C/D/E), IMPULSE='impulse'
       // (hourly v2 set). Excludes pulse (15m), dynamic (radar) and legacy rows.
       // KARMA reads both modes; per symbol only the KARMA_MAP-selected side is kept below.
+      // OPUS reads 'live' (MAIN signals) and is filtered to per-symbol NY sessions below.
       const isKarma = KARMA_STRATEGIES.has(strategyRef.current);
+      const isOpus = strategyRef.current === 'opus';
       if (isKarma) {
         params.append('mode', 'in.(live,impulse)');
       } else {
@@ -365,11 +369,15 @@ export const TradeProvider = ({ children }) => {
       const rows = await res.json();
       const filteredRows = rows.filter((r) => {
         if (!isAllowedBacktestHour(r.signal_time)) return false;
-        if (!isKarma) return true;
-        // karma: keep only the per-symbol selected source (unmapped symbols don't trade)
-        const sel = KARMA_MAP[r.symbol];
-        if (!sel) return false;
-        return r.mode === (sel.set === 'impulse' ? 'impulse' : 'live');
+        if (isKarma) {
+          // karma: keep only the per-symbol selected source (unmapped symbols don't trade)
+          const sel = KARMA_MAP[r.symbol];
+          if (!sel) return false;
+          return r.mode === (sel.set === 'impulse' ? 'impulse' : 'live');
+        }
+        // opus: keep only symbols+sessions in the per-symbol NY-session allowlist
+        if (isOpus) return opusAllows(r.symbol, r.signal_time);
+        return true;
       });
       const mapped = filteredRows.map((r) => ({
         id: r.id,

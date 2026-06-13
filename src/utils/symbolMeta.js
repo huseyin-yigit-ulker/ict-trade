@@ -28,6 +28,38 @@ const MARKET_LABEL = { crypto: 'Kripto', metal: 'Metal', stock: 'ABD Hisse' };
 export const marketOf = (symbol) =>
   METAL_SYMBOLS.has(symbol) ? 'metal' : STOCK_SYMBOLS.has(symbol) ? 'stock' : 'crypto';
 
+// ---- OPUS: per-symbol NY-session allowlist (mirror of sync/opus_map.py) ----
+// Each symbol is traded only in the NY session(s) where its 2026 signals had an
+// edge. 'am' = 09:00–12:00 ET, 'pm' = 12:00–16:00 ET. Symbols absent → not traded.
+export const OPUS_MAP = {
+  BTCUSDT: ['am'], ETHUSDT: ['am'], BNBUSDT: ['am'], SUSDT: ['am'],
+  CRCLUSDT: ['am'], ONDOUSDT: ['am'], XAGUSDT: ['am'], SUIUSDT: ['am'], INTCUSDT: ['am'],
+  MSTRUSDT: ['am', 'pm'], ARBUSDT: ['am', 'pm'], FETUSDT: ['am', 'pm'],
+  WIFUSDT: ['pm'], '1000PEPEUSDT': ['pm'], COINUSDT: ['pm'], HOODUSDT: ['pm'],
+};
+
+// Hour-of-day in America/New_York for a UTC timestamp (DST handled by Intl).
+const _etHourFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', hour: '2-digit', hour12: false,
+});
+export const etHour = (utc) => {
+  const h = parseInt(_etHourFmt.format(new Date(utc)), 10);
+  return h === 24 ? 0 : h;        // some engines render midnight as '24'
+};
+export const opusSession = (utc) => {
+  const h = etHour(utc);
+  if (h >= 9 && h < 12) return 'am';
+  if (h >= 12 && h < 16) return 'pm';
+  return null;
+};
+// signal_time = bar OPEN (UTC); keep iff the symbol trades that session.
+export const opusAllows = (symbol, signalTimeUtc) => {
+  const sess = OPUS_MAP[symbol];
+  if (!sess) return false;
+  const s = opusSession(signalTimeUtc);
+  return s !== null && sess.includes(s);
+};
+
 export const marketLabel = (symbol) => MARKET_LABEL[marketOf(symbol)];
 
 // Long, human-readable "which cell does this symbol trade under" label.
@@ -40,6 +72,11 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
     const exit = strategy === 'karma_half' ? '½TP' : (sel.half ? '½TP' : 'Tam');
     return `${sel.set === 'impulse' ? 'Impulse' : 'Main'} · ${exit}`;
   }
+  if (strategy === 'opus') {
+    const sess = OPUS_MAP[symbol];
+    if (!sess) return '—';
+    return `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
+  }
   if (strategy === 'main_half') return 'Main · ½TP';
   if (strategy === 'impulse_half') return 'Impulse · ½TP';
   if (strategy === 'impulse') return 'Impulse';
@@ -48,6 +85,10 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
 
 // Compact badge for dense lists (the symbol picker).
 export const strategyBadge = (strategy, symbol, karmaMap) => {
+  if (strategy === 'opus') {
+    const sess = OPUS_MAP[symbol];
+    return sess ? sess.join('/') : '—';     // 'am', 'pm', 'am/pm'
+  }
   if (strategy !== 'karma' && strategy !== 'karma_half') return null;  // uniform elsewhere
   const sel = karmaMap?.[symbol];
   if (!sel) return '—';
