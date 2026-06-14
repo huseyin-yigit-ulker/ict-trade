@@ -81,6 +81,8 @@ const GROUPS = [
   // RANGE — Burak RANGE_DEV range-fade, full-TP, ER>=0.20. Backtest-only for now
   // (no live scanner; emission would need a dedicated DAG job).
   { key: 'range',         label: 'RANGE',           icon: <IconRange />,   modes: ['backtest'] },
+  // RANGE+ — high-conviction RANGE (trend gate + RR>=2 + ensemble score>=0.30).
+  { key: 'range_q',       label: 'RANGE+',          icon: <IconRange />,   modes: ['backtest'] },
 ];
 
 const Sidebar = () => {

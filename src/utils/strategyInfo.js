@@ -122,6 +122,31 @@ export const STRATEGY_INFO = {
       caveat: 'Backtest only — no live scanner yet (emission would need a dedicated DAG job). Parameters are our codification of Burak; the threshold/band and universe choice are in-sample (2026) — validate out-of-sample.',
     },
   },
+  range_q: {
+    icon: '⬍', accent: '#0ECB81',
+    tr: {
+      title: 'RANGE+', tagline: 'Yüksek-konviksiyon RANGE (SL-paterni filtreli)',
+      summary: 'RANGE ile AYNI range-sapma fade — ama SL analizinde bulduğumuz iki kaybeden özelliği eler: zayıf trend ve düşük ödül. Daha az ama belirgin daha yüksek-kaliteli işlem; OOS’ta daha sağlam.',
+      sections: [
+        { h: 'Ek kapı', t: 'RANGE’in ensemble-trend kapısına EK olarak: (1) ensemble skoru ≥ 0.30 (zayıf [0.20–0.30) trend bandı elenir — asıl SL kümesi orada), (2) ödül/risk ≥ 2.0 (RR<2 fade’ler matematiksel olarak −EV).' },
+        { h: 'SL paterni', t: 'İki yılda da tutarlı kaybedenler: zayıf-trend [0.20–0.30) skor + RR<2 + çok dar stop (<%1). Confluence “swept” bonusu (conf9) ise 2026’da iyi ama 2025’te negatif → güvenilmez, gate yapılmadı.' },
+        { h: 'Sonuç (analiz)', t: 'RR≥2 & skor≥0.30: 2026 +45.9R / işlem-başı +0.51 (RANGE: +0.32); 2025 OOS +15.8R / +0.16 (RANGE: +0.04 — ~4 kat). Toplam R düşer ama beklenti ve OOS sağlamlığı belirgin artar.' },
+        { h: 'Geri kalan', t: 'Çıkış (tam-TP), evren (29 sembol, XRP/DOGE/LINK/AVAX hariç), çözümleme (1m) RANGE ile birebir. Sadece backtest.' },
+      ],
+      caveat: 'Eşikler (skor 0.30, RR 2.0) 2026 SL-analizinden seçildi; 2025’te de tuttu ama yine de çok-yıllı/walk-forward doğrulama şart. Yalnızca backtest — canlı tarayıcı yok.',
+    },
+    en: {
+      title: 'RANGE+', tagline: 'High-conviction RANGE (SL-pattern filtered)',
+      summary: 'The SAME range-deviation fade as RANGE — but it drops the two loser traits the SL study found: weak trend and low reward. Fewer but markedly higher-quality trades; more robust out-of-sample.',
+      sections: [
+        { h: 'Extra gate', t: 'On top of RANGE’s ensemble-trend gate: (1) ensemble score ≥ 0.30 (drops the weak [0.20–0.30) trend band — the main SL cluster), (2) reward/risk ≥ 2.0 (RR<2 fades are mathematically −EV).' },
+        { h: 'SL pattern', t: 'Consistent losers both years: weak-trend [0.20–0.30) score + RR<2 + very tight stop (<1%). The confluence “swept” bonus (conf9) was good in 2026 but negative in 2025 → unreliable, not gated on.' },
+        { h: 'Result (analysis)', t: 'RR≥2 & score≥0.30: 2026 +45.9R / +0.51 per trade (RANGE: +0.32); 2025 OOS +15.8R / +0.16 (RANGE: +0.04 — ~4×). Total R drops but expectancy and OOS robustness rise sharply.' },
+        { h: 'Rest', t: 'Exit (full-TP), universe (29 symbols, ex-XRP/DOGE/LINK/AVAX), resolution (1m) identical to RANGE. Backtest only.' },
+      ],
+      caveat: 'Thresholds (score 0.30, RR 2.0) were chosen on the 2026 SL analysis; they held in 2025 too but still need multi-year / walk-forward validation. Backtest only — no live scanner.',
+    },
+  },
 };
 
 // LIGHT band-pass twins: keep only signals fired in the light-trend regime

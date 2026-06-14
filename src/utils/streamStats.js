@@ -19,6 +19,9 @@ export const STREAMS = [
   // (skip deep chop). A range/mean-reversion source independent of the ICT set.
   // Backtest-only (no live scanner yet). sync/backfill_range.py.
   { key: 'range', version: 'range', exit: 'full', family: 'range' },
+  // RANGE+ — same ensemble-trend gate + reward/risk>=2 + ensemble score>=0.30
+  // (higher conviction; the SL-pattern study's robust additive gate). Backtest-only.
+  { key: 'range_q', version: 'range_q', exit: 'full', family: 'range' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

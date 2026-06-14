@@ -29,6 +29,7 @@ import argparse
 import pandas as pd
 
 import json
+import math
 import time
 import urllib.request
 
@@ -51,6 +52,8 @@ GATE_MAP = {                              # --gate choice -> the verdict set kep
 }
 ENSEMBLE_WARMUP_DAYS = 60                 # 4h-kline warmup so the 150-bar window is full at y-start
 HOUR_MS = 3_600_000                       # signal fires at bar close = open + 1h (ltf 1h)
+MIN_SCORE = 0.0                           # optional extra gate: ensemble score floor (0 = off)
+MIN_RR = 0.0                              # optional extra gate: reward/risk floor (0 = off)
 
 # Universe = where RANGE_DEV actually range-fades. The 2026 run showed +41.6R over
 # these 29, but XRP/DOGE/LINK/AVAX were −35R (they dump/trend, don't fade — and were
@@ -97,15 +100,27 @@ def run_symbol(symbol, w_start, w_end, roll):
         return []
     sigs = [s for s in generate_signals(df)
             if s.strategy == "RANGE_DEV" and w_start <= s.timestamp < w_end]
-    # ENSEMBLE gate: keep only signals fired while the causal 6-detector verdict is TREND.
+    # ENSEMBLE gate: keep only signals fired while the causal 6-detector verdict is in
+    # GATE_VERDICTS, AND (optionally) the ensemble score >= MIN_SCORE and the signal's
+    # reward/risk >= MIN_RR (the high-conviction 'range_q' variant uses 0.30 / 2.0 —
+    # the SL-pattern study found mild-trend [0.20,0.30) + RR<2 fades are the loser cluster).
     by_band = {"trend": 0, "transition": 0, "range": 0, "n/a": 0}
     kept = []
     for s in sigs:
         fire_ms = int(s.timestamp.timestamp() * 1000) + HOUR_MS
-        v = RE.verdict(RE.score_at(roll, fire_ms)) if roll else "n/a"
+        sc = RE.score_at(roll, fire_ms) if roll else float("nan")
+        v = RE.verdict(sc)
         by_band[v if v in by_band else "n/a"] += 1
-        if v in GATE_VERDICTS:
-            kept.append(s)
+        if v not in GATE_VERDICTS:
+            continue
+        if MIN_SCORE > 0 and not (isinstance(sc, float) and math.isfinite(sc) and sc >= MIN_SCORE):
+            continue
+        if MIN_RR > 0:
+            risk = abs(s.entry - s.stop_loss)
+            reward = abs(s.take_profit_1 - s.entry)
+            if risk <= 0 or reward / risk < MIN_RR:
+                continue
+        kept.append(s)
     dropped = len(sigs) - len(kept)
     if not kept:
         print(f"  {symbol:<12} {len(sigs)} RANGE_DEV -> 0 kept  bands={by_band}", flush=True)
@@ -150,16 +165,22 @@ def wipe(conn, scope, w_start, w_end):
 
 
 def main():
+    global GATE_VERDICTS, VERSION, MIN_SCORE, MIN_RR
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", type=int, default=2026)
     ap.add_argument("--symbols", nargs="*", default=SYMBOLS)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--gate", choices=list(GATE_MAP), default="trend",
                     help="which ensemble verdict(s) to keep (default trend = production)")
+    ap.add_argument("--version", default=VERSION, help="DB version tag (default 'range')")
+    ap.add_argument("--min-score", type=float, default=0.0, help="ensemble score floor (0=off)")
+    ap.add_argument("--min-rr", type=float, default=0.0, help="reward/risk floor (0=off)")
     ap.add_argument("--wipe-scope", choices=["none", "year", "all"], default=None)
     args = ap.parse_args()
-    global GATE_VERDICTS
     GATE_VERDICTS = GATE_MAP[args.gate]
+    VERSION = args.version
+    MIN_SCORE = args.min_score
+    MIN_RR = args.min_rr
     if not args.dry_run and args.wipe_scope is None:
         raise SystemExit("Real run requires --wipe-scope {none|year|all} (or --dry-run).")
 
@@ -167,8 +188,8 @@ def main():
     w_start = pd.Timestamp(f"{args.year}-01-01", tz="UTC")
     w_end = min(pd.Timestamp(f"{args.year + 1}-01-01", tz="UTC"), now)
     ens_start = int((w_start - pd.Timedelta(days=ENSEMBLE_WARMUP_DAYS)).timestamp() * 1000)
-    print(f"=== RANGE backfill {args.year} | RANGE_DEV full-TP | gate=ensemble{sorted(GATE_VERDICTS)} "
-          f"| {len(args.symbols)} symbols | dry_run={args.dry_run} ===", flush=True)
+    print(f"=== RANGE backfill {args.year} | version='{VERSION}' | gate=ensemble{sorted(GATE_VERDICTS)} "
+          f"min_score={MIN_SCORE} min_rr={MIN_RR} | {len(args.symbols)} symbols | dry_run={args.dry_run} ===", flush=True)
 
     all_rows = []
     for sym in args.symbols:
