@@ -44,7 +44,11 @@ WARMUP_HOURS = 1500
 # ensemble's TREND verdict (+60.7R, avg +0.32 — the deviation gets follow-through to
 # the opposite boundary), is flat in transition (−1R) and LOSES in the ensemble's
 # RANGE/choppy verdict (−20R, the fade whipsaws). So the gate is ensemble == trend.
-GATE_VERDICTS = {"trend"}
+GATE_VERDICTS = {"trend"}                 # production gate (overridable via --gate)
+GATE_MAP = {                              # --gate choice -> the verdict set kept
+    "trend": {"trend"}, "range": {"range"}, "transition": {"transition"},
+    "not-trend": {"range", "transition"}, "all": {"trend", "transition", "range"},
+}
 ENSEMBLE_WARMUP_DAYS = 60                 # 4h-kline warmup so the 150-bar window is full at y-start
 HOUR_MS = 3_600_000                       # signal fires at bar close = open + 1h (ltf 1h)
 
@@ -122,7 +126,7 @@ def run_symbol(symbol, w_start, w_end, roll):
             rows.append(row)
     finally:
         C.PARTIAL_TP_ENABLED = prev
-    print(f"  {symbol:<12} {len(sigs)} RANGE_DEV -> {len(kept)} kept (trend-gated, dropped {dropped}) "
+    print(f"  {symbol:<12} {len(sigs)} RANGE_DEV -> {len(kept)} kept (gate={sorted(GATE_VERDICTS)}, dropped {dropped}) "
           f"bands={by_band} {sc}", flush=True)
     return rows
 
@@ -150,8 +154,12 @@ def main():
     ap.add_argument("--year", type=int, default=2026)
     ap.add_argument("--symbols", nargs="*", default=SYMBOLS)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--gate", choices=list(GATE_MAP), default="trend",
+                    help="which ensemble verdict(s) to keep (default trend = production)")
     ap.add_argument("--wipe-scope", choices=["none", "year", "all"], default=None)
     args = ap.parse_args()
+    global GATE_VERDICTS
+    GATE_VERDICTS = GATE_MAP[args.gate]
     if not args.dry_run and args.wipe_scope is None:
         raise SystemExit("Real run requires --wipe-scope {none|year|all} (or --dry-run).")
 
