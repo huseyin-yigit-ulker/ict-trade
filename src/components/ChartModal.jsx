@@ -133,9 +133,11 @@ const ChartModal = () => {
       },
       localization: {
         locale: locale, dateFormat: 'dd MMM yyyy',
+        // All chart times are shown in UTC (the timeframe the signals/klines live in),
+        // independent of the viewer's browser timezone.
         timeFormatter: (timestamp) => {
             const date = new Date(timestamp * 1000);
-            return date.toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleString(locale, { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' UTC';
         }
       },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
@@ -144,9 +146,9 @@ const ChartModal = () => {
       timeScale: {
         timeVisible: true, secondsVisible: false, borderColor: '#2B3139',
         tickMarkFormatter: (time, tickMarkType) => {
-            const date = new Date(time * 1000);
-            if (tickMarkType < 3) return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
-            return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+            const date = new Date(time * 1000);   // axis labels in UTC
+            if (tickMarkType < 3) return date.toLocaleDateString(locale, { timeZone: 'UTC', day: 'numeric', month: 'short' });
+            return date.toLocaleTimeString(locale, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
         }
       },
       crosshair: {
@@ -578,8 +580,10 @@ const ChartModal = () => {
   }, [activeSignal, showTv, mode, chartStyle, isHalf]);
 
   // UI Formatters
-  const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
-  const formatHoverTime = (ts) => ts ? new Date(ts * 1000).toLocaleString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+  // Signal/hover times in UTC (the data's native zone), labelled so it's unambiguous
+  // regardless of the viewer's browser timezone.
+  const formatSignalTime = (dateObj) => dateObj ? dateObj.toLocaleString(locale, { timeZone: 'UTC', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' UTC' : '--';
+  const formatHoverTime = (ts) => ts ? new Date(ts * 1000).toLocaleString(locale, { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' UTC' : '--';
   // Dynamic decimal precision (matches Dashboard's formatter)
   const formatPrice = (value) => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
@@ -696,7 +700,9 @@ const ChartModal = () => {
             >{panelCollapsed ? '▸' : '▾'}</button>
           </div>
           {!panelCollapsed && (<>
-          <div className="position-row"><span>{t('Tarih')}</span><b>{formatSignalTime(effDate)}</b></div>
+          <div className="position-row" title={t('Sinyalin üretildiği an (1h bar kapanışı), UTC')}>
+            <span>{t('Sinyal (UTC)')}</span><b>{formatSignalTime(effDate)}</b>
+          </div>
           <div className="position-row">
             <span>{mode === 'live' ? t('Süre (canlı)') : t('Süre')}</span>
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
