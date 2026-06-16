@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, opus: 180, range: 180, donchian: 180 };
+const STRATEGY_EXPIRY_MINUTES = { donchian: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -68,7 +68,11 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, opus: 180, range: 180, donchian: 18
 // RANGE/main book — gated to the strong-trend regime (Kaufman ER>=0.35) where main is
 // weak, so it harvests exactly the regime RANGE leaves on the table (sync/donchian/).
 // Live scanner: sync/donchian/canli.py (mode='donchian', hourly). 2026 +117.5R.
-const STRATEGY_VERSION = { main: 'v1', range: 'range', opus: 'opus', donchian: 'donchian' };
+// 2026-06-16: pruned to a SINGLE stream — donchian. v1(MAIN)/opus/opus_half/range were
+// removed from UI + DB (RETIRED_STREAMS_REPORT.md): v1 net −223R, opus OOS-negative
+// (2026-overfit), range positive but dropped for focus. donchian is the only multi-year
+// OOS-validated stream (2025 +662R, 2024 +179R, 2026 +288R).
+const STRATEGY_VERSION = { donchian: 'donchian' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -76,7 +80,7 @@ const STRATEGY_VERSION = { main: 'v1', range: 'range', opus: 'opus', donchian: '
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
 // OPUS reads mode='live' (the MAIN hourly emission) + the per-symbol NY-session gate.
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
-const STRATEGY_LIVE_MODE = { main: 'live', opus: 'live', range: 'range', donchian: 'donchian' };
+const STRATEGY_LIVE_MODE = { donchian: 'donchian' };
 // ½TP is no longer a standalone stream — the partial-TP + breakeven exit survives
 // only as KARMA's per-symbol exit (KARMA_MAP[sym].half) and the live status machine.
 const HALF_STRATEGIES = new Set();
@@ -240,7 +244,7 @@ export const TradeProvider = ({ children }) => {
   // mirrors state so the data-load effect + loadBacktest read it synchronously.
   // (stale localStorage values outside VALID_STRATEGIES fall back to main.)
   const [strategy, setStrategyState] = useState(() => {
-    try { const s = localStorage.getItem('pusu.strategy'); return VALID_STRATEGIES.has(s) ? s : 'main'; } catch { return 'main'; }
+    try { const s = localStorage.getItem('pusu.strategy'); return VALID_STRATEGIES.has(s) ? s : 'donchian'; } catch { return 'donchian'; }
   });
   const strategyRef = useRef(strategy);
   const [mode, setModeState] = useState(() => {

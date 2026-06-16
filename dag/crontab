@@ -1,19 +1,11 @@
-# PUSU live cron — installed on the VM. Apply with:  crontab dag/crontab   (verify: crontab -l)
-# Reconciled 2026-06-16 to the LIVE installed set + the new DONCHIAN emitter.
-# (The old repo file listed a RANGE :03 scan that was NOT actually installed/running — it is
-#  intentionally NOT re-added here. halftp_monitor is a retired stream, preserved as-is.)
+# PUSU live cron — DONCHIAN-ONLY (2026-06-16). Apply on VM: crontab dag/crontab (verify: crontab -l)
+# All other streams retired (UI + DB + live): MAIN(:01), IMPULSE(:02), halftp_monitor(*/5)
+# removed — see sync/donchian/RETIRED_STREAMS_REPORT.md.
 #
-# MAIN 'live' scan (minute :01) — KEPT: it is OPUS's signal source (MAIN signals filtered
-#   per-symbol to each symbol's NY session in the dashboard).
-1 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python dag/dag.py >> $HOME/ict-main.log 2>&1
-# DONCHIAN live emit (minute :01) — Donchian(55) breakout, ER>=0.35 strong-trend gate
-#   (mode='donchian'). Emits on freshly-closed 1h bars and sends a DONCHIAN-labelled Telegram
-#   alert per new signal. Resolved nightly by sync_daily --stream all (-> backtest version='donchian').
+# DONCHIAN live emit (minute :01, hourly) — Donchian(55) breakout, ER>=0.35 strong-trend
+#   gate (mode='donchian'). Emits on freshly-closed 1h bars and sends a DONCHIAN-labelled
+#   Telegram alert per new signal.
 1 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
-# IMPULSE scan (minute :02) — mode='impulse' (v2 set).
-2 * * * * cd $HOME/ict-trade && SCAN_MODE=impulse $HOME/ict-trade/.venv/bin/python dag/dag.py >> $HOME/ict-impulse.log 2>&1
-# Daily resolve/sync of live -> backtest trading_signals (also resolves the donchian stream
-#   via ACTIVE_STREAMS=['donchian'] in sync/sync_daily.py).
+# Daily resolve: donchian live signals -> backtest trading_signals (version='donchian')
+#   via sync_daily ACTIVE_STREAMS=['donchian'].
 30 0 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream all >> $HOME/ict-sync.log 2>&1
-# halftp_monitor (every 5 min) — RETIRED stream per project memory; preserved as-is (remove if unused).
-*/5 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python dag/halftp_monitor.py >> $HOME/ict-halftp.log 2>&1

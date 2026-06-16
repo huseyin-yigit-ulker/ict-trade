@@ -84,10 +84,8 @@ const IconTotal = () => (
 const GROUPS = [
   // Strategy set = MAIN + RANGE + OPUS. MAIN = the v1 ICT set (B/C/D/E), all symbols/
   // sessions; RANGE = RANGE_DEV every session; OPUS = MAIN gated to each symbol's NY session.
-  { key: 'main',       label: 'MAIN',                icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'range',      label: 'RANGE',               icon: <IconRange />,   modes: ['live', 'backtest'] },
-  { key: 'opus',       label: 'OPUS',                icon: <IconCommand />, modes: ['live', 'backtest'] },
-  // DONCHIAN = trend/momentum complement to RANGE (Donchian-55 breakout, ER>=0.35 gate).
+  // 2026-06-16: pruned to a SINGLE stream. MAIN/RANGE/OPUS removed (UI + DB) — see
+  // sync/donchian/RETIRED_STREAMS_REPORT.md. donchian is the only OOS-validated stream.
   { key: 'donchian',   label: 'DONCHIAN',            icon: <IconIntel />,   modes: ['live', 'backtest'] },
 ];
 
