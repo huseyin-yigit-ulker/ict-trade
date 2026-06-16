@@ -4,12 +4,9 @@ import { useTradeContext, KARMA_MAP } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 
-const STRAT_BASE_LABEL = { main: 'Main', impulse: 'Impulse', karma: 'Karma ½', opus: 'Opus', range: 'Range', range_q: 'Range+' };
+const STRAT_BASE_LABEL = { main: 'Main', range: 'Range', opus: 'Opus' };
 // light twins reuse the parent label + " · Light"
 const STRAT_LABEL = { ...STRAT_BASE_LABEL };
-Object.keys(STRAT_BASE_LABEL).forEach((b) => {
-  STRAT_LABEL[`${b}_light`] = `${STRAT_BASE_LABEL[b]} · Light`;
-});
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
 // ICT killzones (UTC) — the windows the engine actually hunts in. The pill

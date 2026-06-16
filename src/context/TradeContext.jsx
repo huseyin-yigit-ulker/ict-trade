@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, karma: 180, opus: 180, range: 180, range_q: 180 };
+const STRATEGY_EXPIRY_MINUTES = { main: 180, opus: 180, range: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -44,17 +44,35 @@ const STRATEGY_EXPIRY_MINUTES = { main: 180, impulse: 180, karma: 180, opus: 180
 // opus_half), the 8 Chop twins and the redundant Light cells (UI + DB).
 // 'range' = Burak's RANGE_DEV range-deviation fade, full-TP, gated to ER>=0.20 (skip
 // deep chop). Backtest-only stream (no live scanner yet) — sync/backfill_range.py.
-// 'range_q' = the high-conviction RANGE variant: same ensemble-trend gate PLUS
-// reward/risk>=2 and ensemble score>=0.30 (the SL-pattern study found mild-trend
-// [0.20,0.30) + RR<2 fades are the loser cluster). Backtest-only. sync/backfill_range.py
-// --version range_q --min-rr 2 --min-score 0.30.
-const STRATEGY_VERSION = { main: 'v1', impulse: 'v2', karma: 'karma', opus: 'opus', range: 'range', range_q: 'range_q' };
+// 'range_q' = the high-conviction RANGE variant ("Range+"): a strict subset of 'range'
+// keeping the same ensemble-trend gate PLUS reward/risk>=2 and dropping ONLY the loser
+// band — ensemble score in [0.20,0.30). The SL-pattern study found that mild-trend band
+// + RR<2 is the loser cluster; excluding it (rather than a plain score>=0.30 floor) keeps
+// the profitable score<0.20 tail, lifting 2025 OOS +9.2R->+26.2R vs the floor's +15.8R.
+// Backtest-only. Built by sync/promote_range_q.py (subset of the resolved 'range' rows);
+// equivalently backfill_range.py --version range_q --min-rr 2 --drop-score-band 0.20 0.30.
+// 'v2_light_r' = IMPULSE·Light gated to the ensemble RANGE verdict (score<=-0.15) — the
+// stream_rescue lead: the only non-RANGE_DEV subset that stays OOS-positive (2026 +30R,
+// 2025 +15.5R), ICT structure in genuine chop. Strict subset of v2_light, backtest-only
+// (no live scanner). Built by sync/promote_light_range.py.
+// 2026-06-14: v1/v2/karma/opus + the v2_light/kma_light twins removed (UI + DB) — all
+// OOS-negative in 2025 (period-fit). Only the OOS-positive backtest-only range book remains.
+// range_1h / range_q_1h = experiment: same RANGE_DEV signals gated by the 6-detector
+// ensemble computed on 1h bars instead of 4h (full universe 2026; sync/backfill_range_1h.py).
+// 2026: 1h underperforms 4h — range_1h +42.0R vs range +60.7R; rangeq_1h +33.5R vs range_q +49.6R.
+// Strategy set: MAIN + RANGE + OPUS. RANGE runs live every session (mode='range', dag.py
+// scanner); OPUS live = MAIN 'live' emission gated per-symbol to its NY session; MAIN live =
+// the same 'live' emission, ungated, all symbols. (range_q / v2_light_r / range_1h /
+// range_q_1h DB rows kept but not surfaced.)
+const STRATEGY_VERSION = { main: 'v1', range: 'range', opus: 'opus' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
 // AFTER entry) — live status is then tracked under partial-TP + breakeven rules.
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
-const STRATEGY_LIVE_MODE = { main: 'live', impulse: 'impulse', opus: 'live' };
+// OPUS reads mode='live' (the MAIN hourly emission) + the per-symbol NY-session gate.
+// RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
+const STRATEGY_LIVE_MODE = { main: 'live', opus: 'live', range: 'range' };
 // ½TP is no longer a standalone stream — the partial-TP + breakeven exit survives
 // only as KARMA's per-symbol exit (KARMA_MAP[sym].half) and the live status machine.
 const HALF_STRATEGIES = new Set();
@@ -70,16 +88,9 @@ const OPUS_STRATEGIES = new Set(['opus']);
 // KARMA). Tags <=10 chars; mirror sync/backfill_light.py LIGHT_TAG.
 const LIGHT_ER_LO = 0.20;
 const LIGHT_ER_HI = 0.35;
-const LIGHT_VER = { impulse: 'v2_light', karma: 'kma_light' };
-const LIGHT_PARENTS = ['impulse', 'karma'];
-LIGHT_PARENTS.forEach((b) => {
-  const c = `${b}_light`;
-  STRATEGY_VERSION[c] = LIGHT_VER[b];
-  STRATEGY_EXPIRY_MINUTES[c] = STRATEGY_EXPIRY_MINUTES[b];
-  if (STRATEGY_LIVE_MODE[b]) STRATEGY_LIVE_MODE[c] = STRATEGY_LIVE_MODE[b];
-  if (HALF_STRATEGIES.has(b)) HALF_STRATEGIES.add(c);
-  if (KARMA_STRATEGIES.has(b)) KARMA_STRATEGIES.add(c);
-});
+// LIGHT twin auto-registration (impulse_light / karma_light) removed 2026-06-14 with the
+// v2_light / kma_light streams (OOS-negative). LIGHT_ER_LO/HI above are retained only for
+// applyLightGate below — dead while no _light stream is selectable, kept to avoid dangling refs.
 const VALID_STRATEGIES = new Set(Object.keys(STRATEGY_VERSION));
 
 // KARMA selection map — mirror of sync/karma_map.py (generated from the 2026
@@ -229,7 +240,8 @@ export const TradeProvider = ({ children }) => {
   });
   const strategyRef = useRef(strategy);
   const [mode, setModeState] = useState(() => {
-    try { const m = localStorage.getItem('pusu.mode'); return (m === 'backtest' || m === 'live') ? m : 'live'; } catch { return 'live'; }
+    // Kept streams are all backtest-only; default to backtest (live mode has no streams now).
+    try { const m = localStorage.getItem('pusu.mode'); return (m === 'backtest' || m === 'live') ? m : 'backtest'; } catch { return 'backtest'; }
   });
   const setStrategy = useCallback((s) => {
     strategyRef.current = s;

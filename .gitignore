@@ -30,3 +30,5 @@ sync/backup/
 sync/out/
 backtest/validation/klines/
 backtest/validation/out/
+# Auto-generated crontab backups
+dag/crontab.backup.*

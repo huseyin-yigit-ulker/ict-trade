@@ -94,6 +94,42 @@ export const regimeAccuracy = (closes, n = 10, erMin = REGIME_ER_MIN, minN = 120
   };
 };
 
+// ---- Regime-map history fetch: 4h klines from the START OF 2025 → now --------
+// Binance fapi caps a single klines page at 1500 bars (~250 days). From 2025-01-01
+// that's ~3.3k 4h bars (2025 + 2026-to-date), so we PAGE FORWARD from the start time
+// until we reach the present (the loop allows up to 8 pages = 12k bars). For new
+// listings Binance simply starts at the symbol's first bar. Returns raw kline rows
+// (ascending, de-duped at page boundaries); callers slice/derive as before.
+export const REGIME_HISTORY_START = Date.UTC(2025, 0, 1);
+export const REGIME_INTERVALS = ['4h', '1h'];
+const INTERVAL_MS = { '1h': 60 * 60 * 1000, '4h': 4 * 60 * 60 * 1000 };
+// Per-interval fetch window. 4h pages from 2025-01-01 (the full regime history — ~3.3k
+// bars). A full year of 1h is ~9k bars/symbol — far too heavy for the on-load map across
+// every symbol, and only the trailing window feeds the snapshot — so 1h pages back ~50
+// days (1200 bars, one page), enough for the 150-bar ensemble + the accuracy panel.
+const regimeStart = (interval) => (interval === '1h'
+  ? Date.now() - 1200 * INTERVAL_MS['1h']
+  : REGIME_HISTORY_START);
+export const fetchRegimeKlines = async (symbol, interval = '4h', startMs) => {
+  const tfMs = INTERVAL_MS[interval] || INTERVAL_MS['4h'];
+  const b = symbol.replace(/[^A-Za-z0-9]/g, '');
+  const now = Date.now();
+  const all = [];
+  let from = startMs ?? regimeStart(interval);
+  for (let page = 0; page < 8; page += 1) {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${b}&interval=${interval}&startTime=${from}&limit=1500`);
+    const d = await res.json();
+    if (!Array.isArray(d) || d.length === 0) break;
+    for (const k of d) {
+      if (!all.length || Number(k[0]) > Number(all[all.length - 1][0])) all.push(k);
+    }
+    const lastOpen = Number(d[d.length - 1][0]);
+    if (d.length < 1500 || lastOpen >= now - tfMs) break;
+    from = lastOpen + 1;
+  }
+  return all;
+};
+
 // ---- OPUS: per-symbol NY-session allowlist (mirror of sync/opus_map.py) ----
 // Each symbol is traded only in the NY session(s) where its 2026 signals had an
 // edge. 'am' = 09:00–12:00 ET, 'pm' = 12:00–16:00 ET. Symbols absent → not traded.
@@ -147,6 +183,11 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
     const base = strategyCellLabel(strategy.slice(0, -6), symbol, karmaMap);
     return base === '—' ? base : `${base} · Light`;
   }
+  if (strategy.endsWith('_1h')) {
+    const base = strategyCellLabel(strategy.slice(0, -3), symbol, karmaMap);
+    return base === '—' ? base : `${base} · 1h`;
+  }
+  if (strategy === 'range_q') return 'Range-Dev+ · Tam';   // RANGE+ : trend gate + RR>=2 + drop [0.20,0.30)
   if (strategy === 'karma') {
     const sel = karmaMap?.[symbol];
     if (!sel) return '—';                       // unmapped → karma doesn't trade it
@@ -158,6 +199,7 @@ export const strategyCellLabel = (strategy, symbol, karmaMap) => {
     return `NY-${sess.map((s) => s.toUpperCase()).join('/')}`;   // e.g. "NY-AM", "NY-AM/PM"
   }
   if (strategy === 'range') return 'Range-Dev · Tam';     // RANGE_DEV fade, full-TP, ER>=0.20
+  if (strategy === 'v2_light_r') return 'Impulse·Light · Range-rejim';   // ER 0.20–0.35 + ensemble range verdict
   if (strategy === 'impulse') return 'Impulse';
   return 'Main';
 };

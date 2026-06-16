@@ -161,6 +161,37 @@ const EN = {
   'eşik': 'thresholds',
   'Arka plan rengi o 4h barın rejimidir — kırmızı choppy, yeşil güçlü trend. Alt panel ER skoru.':
     "The background colour is each 4h bar's regime — red choppy, green strong trend. Lower pane is the ER score.",
+  // --- Regime detectors / sub-modules (trend vs range ensemble) ---
+  'Geçiş': 'Transition',
+  'Range': 'Range',
+  'Konsensüs': 'Consensus',
+  'Rejim Submodülleri': 'Regime Sub-modules',
+  'Teknik Göstergeler': 'Technical Indicators',
+  'İstatistiksel': 'Statistical',
+  'Efficiency Ratio detayı': 'Efficiency Ratio detail',
+  'Hurst Üsteli': 'Hurst Exponent',
+  'Varyans Oranı': 'Variance Ratio',
+  'Otokorelasyon (lag-1)': 'Autocorrelation (lag-1)',
+  'Net hareket / toplam yol — 1’e yakın temiz trend, 0’a yakın gürültü/range.':
+    'Net move / total path — near 1 a clean trend, near 0 noise/range.',
+  'Wilder yönsel hareket endeksi. ≥25 trend, <20 yatay/range.':
+    'Wilder directional movement index. ≥25 trend, <20 sideways/range.',
+  'Choppiness Index. ≥61.8 yatay/range, ≤38.2 trend.':
+    'Choppiness Index. ≥61.8 sideways/range, ≤38.2 trend.',
+  'R/S analizi (getiriler). H>0.5 kalıcı/trend, H<0.5 ortalamaya dönüş, ≈0.5 rastgele.':
+    'R/S analysis (returns). H>0.5 persistent/trend, H<0.5 mean-reverting, ≈0.5 random.',
+  'Lo–MacKinlay VR(4). >1 momentum/trend, <1 ortalamaya dönüş, =1 rastgele yürüyüş.':
+    'Lo–MacKinlay VR(4). >1 momentum/trend, <1 mean-reversion, =1 random walk.',
+  'Getiri lag-1 otokorelasyonu. Pozitif → momentum/trend, negatif → ortalamaya dönüş/range.':
+    'Lag-1 autocorrelation of returns. Positive → momentum/trend, negative → mean-reversion/range.',
+  'Her sembolün “trend mi range mi” sorusu altı bağımsız yöntemle ölçülür — üç teknik (Efficiency Ratio, ADX, Choppiness) + üç istatistiksel (Hurst, Varyans Oranı, otokorelasyon) — ve TREND ↔ RANGE ekseninde tek bir konsensüse indirgenir. Salt fiyat verisi — sinyal/backtest değil.':
+    'Each symbol\'s "trend vs range" question is measured by six independent methods — three technical (Efficiency Ratio, ADX, Choppiness) + three statistical (Hurst, Variance Ratio, autocorrelation) — and reduced to one consensus on the TREND ↔ RANGE axis. Pure price data — no signals/backtest.',
+  'Her submodül trend(+1) ↔ range(−1) ekseninde bağımsız ölçer; ortalamaları konsensüsü verir. Rejim ölçek-bağımlıdır ve gerçek-zamanlı okuma gecikmelidir.':
+    'Each sub-module measures the trend(+1) ↔ range(−1) axis independently; their average is the consensus. Regime is scale-dependent and the real-time read lags.',
+  'Arka plan = bar bazında rolling rejim · alt pane = konsensüs skoru (−1..+1).':
+    'Background = per-bar rolling regime · lower pane = consensus score (−1..+1).',
+  'Yukarıdaki ER karışımı ve doğruluk denetimi yalnız Efficiency Ratio submodülüne aittir; ana grafik 6-yöntemli konsensüsü gösterir.':
+    'The ER mix and accuracy audit above are for the Efficiency Ratio sub-module only; the main chart shows the 6-method consensus.',
   // --- Regime accuracy (predictive audit) ---
   'Rejim Doğruluğu': 'Regime Accuracy',
   'Süreklilik': 'Continuation',
@@ -173,8 +204,8 @@ const EN = {
   'Yetersiz veri': 'Insufficient data',
   'ER rejim etiketi geçmiş pencereyi birebir tanımlar; ancak bir sonraki pencereyi öngörmede beceri göstermez. “Trend” dediğinde fiyat yönünü ~yarı yarıya (yazı-tura) sürdürür ve ileriye dönük uyum, hep çoğunluğu söyleme (temel oran) doğruluğunun altında kalır. Yani “şu an trend” bir tahmin değil, geçmişin betimlemesidir.':
     'The ER regime label describes the trailing window exactly, but shows no skill at predicting the next one. When it calls "trend," price keeps its direction roughly half the time (a coin-flip), and forward agreement stays below the always-guess-majority baseline. "Trend now" is a description of the past, not a forecast.',
-  'Yöntem: her 4h barın geriye-dönük ER etiketi (trend ER≥0.25) bir sonraki 10-bar (~40s) penceredeki gerçekleşmeyle karşılaştırılır; pencereler ayrıktır. Temel oran = hep çoğunluğu söylemenin doğruluğu, Beceri = doğruluk − temel oran.':
-    "Method: each 4h bar's trailing ER label (trend if ER≥0.25) is compared with what actually happens over the next 10-bar (~40h) window; the windows are disjoint. Baseline = accuracy of always guessing the majority class, Skill = accuracy − baseline.",
+  'Yöntem: her barın geriye-dönük ER etiketi (trend ER≥0.25) bir sonraki 10-bar penceredeki gerçekleşmeyle karşılaştırılır; pencereler ayrıktır. Temel oran = hep çoğunluğu söylemenin doğruluğu, Beceri = doğruluk − temel oran.':
+    "Method: each bar's trailing ER label (trend if ER≥0.25) is compared with what actually happens over the next 10-bar window; the windows are disjoint. Baseline = accuracy of always guessing the majority class, Skill = accuracy − baseline.",
   'trend yönü korunur': 'trend keeps its direction',
   'sonraki pencere rejimi tutar': 'next window matches the label',
   'Sadece bu piyasayı seç': 'Select only this market',

@@ -82,7 +82,13 @@ STREAMS = {
 # "karma" is the per-symbol best-cell blend (sync/karma_map.py): it consumes the
 # SAME live signals as main/impulse — per symbol it picks the source set and the
 # exit model from the 2026 selection run — and tags rows version='karma'.
-ACTIVE_STREAMS = ["main", "impulse", "karma", "opus", "impulse_light", "karma_light"]
+# 2026-06-14: live streams RETIRED. v1/v2/karma/opus + the two Light twins were all
+# OOS-negative in 2025 (period-fit) and removed from UI + DB. ACTIVE_STREAMS is now empty
+# so the nightly `--stream all` cron is a NO-OP and does NOT re-create the deleted rows.
+# (The OOS-positive range book — range/range_q/v2_light_r — is backtest-only, refreshed by
+# its own scripts: backfill_range.py / promote_range_q.py / promote_light_range.py.) To
+# re-resolve a retired stream's historical rows ad hoc, still pass its key (e.g. --stream main).
+ACTIVE_STREAMS = []
 LIGHT_PARENTS = ("impulse", "karma")
 
 
@@ -281,8 +287,10 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="trailing full days to (re)process")
     # Default is MAIN ONLY. radar_legacy (retired dynamic stream) & pulse were
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
+    # Default is now "all" (a no-op with ACTIVE_STREAMS empty) so a bare run does NOT
+    # re-create retired rows. Pass an explicit key to re-resolve a retired stream ad hoc.
     ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "opus", "all"]
-                    + [f"{b}_light" for b in LIGHT_PARENTS], default="main")
+                    + [f"{b}_light" for b in LIGHT_PARENTS], default="all")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=None, help="override symbol scope (all streams)")

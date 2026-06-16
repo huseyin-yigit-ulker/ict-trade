@@ -98,12 +98,16 @@ def build_symbol_rows(symbol: str, win_start: pd.Timestamp,
 
 
 def wipe(conn, scope: str, win_start: pd.Timestamp, win_end: pd.Timestamp) -> int:
+    # VERSION-SCOPED: this backfill only owns version='v1' (MAIN). The wipe MUST be
+    # scoped to it, otherwise a `--wipe-scope all` here `DELETE`s the WHOLE table and
+    # nukes every OTHER stream sharing it (range/range_q/v2_light_r/opus/…). That footgun
+    # wiped 2649 non-v1 rows on 2026-06-14; now scoped like backfill_range.py.
     cur = conn.cursor()
     if scope == "all":
-        cur.execute(f"DELETE FROM {tsc.TABLE}")
+        cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version='v1'")
     elif scope == "year":
         cur.execute(
-            f"DELETE FROM {tsc.TABLE} WHERE signal_time >= %s AND signal_time < %s",
+            f"DELETE FROM {tsc.TABLE} WHERE version='v1' AND signal_time >= %s AND signal_time < %s",
             (win_start.to_pydatetime(), win_end.to_pydatetime()))
     n = cur.rowcount
     conn.commit()

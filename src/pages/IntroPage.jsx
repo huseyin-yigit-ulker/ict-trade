@@ -88,13 +88,12 @@ const IntroPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, sort, query, stats, lang]);
 
+  // 2026-06-14: core/adaptive/session families removed with the OOS-negative streams —
+  // only the range book remains, so the category chips collapse to all / range / light.
   const CATS = [
     { key: 'all', label: t('Tümü') },
-    { key: 'full', label: t('Tam TP') },
-    { key: 'adaptive', label: t('Adaptif') },
-    { key: 'session', label: t('Seans') },
-    { key: 'light', label: 'Light' },
     { key: 'range', label: 'Range' },
+    { key: 'session', label: t('Seans') },
   ];
   const SORTS = [
     { key: 'r', label: t('Toplam R') },

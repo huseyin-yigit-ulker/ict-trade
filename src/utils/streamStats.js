@@ -5,23 +5,18 @@
 
 // Stream → RPC version tag (mirror of TradeContext STRATEGY_VERSION) + the axes
 // the hub filters on: exit model (full / half / per-symbol mixed) and family.
+// 2026-06-14: the 6 OOS-negative streams (v1/v2/karma/opus + the two _light twins) were
+// removed from UI + DB — all bled out-of-sample in 2025 (−60..−245R), in-sample period-fit.
+// Only the OOS-positive "range book" survives, all backtest-only:
+//   • range      — Burak RANGE_DEV range-deviation fade, full-TP, ensemble-trend gated (+9.2R OOS).
+//   • range_q    — RANGE+ : same gate + RR>=2 + drop ensemble score [0.20,0.30) (+26.2R OOS).
+//   • v2_light_r — IMPULSE·Light gated to the ensemble RANGE verdict (+15.5R OOS).
 export const STREAMS = [
-  { key: 'main',    version: 'v1',    exit: 'full',  family: 'core' },
-  { key: 'impulse', version: 'v2',    exit: 'full',  family: 'core' },
-  { key: 'opus',    version: 'opus',  exit: 'full',  family: 'session' },
-  { key: 'karma',   version: 'karma', exit: 'mixed', family: 'adaptive' },
-  // LIGHT band-pass twins — keep only signals fired in the light-trend regime
-  // (4h ER in [0.20,0.35)), where the 2026 routing audit found our edge lives.
-  // Kept on the two streams it helps most. Mirror of backfill_light.LIGHT_TAG.
-  { key: 'impulse_light', version: 'v2_light',  exit: 'full',  family: 'core',     light: true },
-  { key: 'karma_light',   version: 'kma_light', exit: 'mixed', family: 'adaptive', light: true },
-  // RANGE — Burak's RANGE_DEV range-deviation fade, full-TP, gated to ER>=0.20
-  // (skip deep chop). A range/mean-reversion source independent of the ICT set.
-  // Backtest-only (no live scanner yet). sync/backfill_range.py.
-  { key: 'range', version: 'range', exit: 'full', family: 'range' },
-  // RANGE+ — same ensemble-trend gate + reward/risk>=2 + ensemble score>=0.30
-  // (higher conviction; the SL-pattern study's robust additive gate). Backtest-only.
-  { key: 'range_q', version: 'range_q', exit: 'full', family: 'range' },
+  // Strategy set = MAIN + RANGE + OPUS. (range_q / v2_light_r / range_1h / range_q_1h
+  // DB rows remain but aren't surfaced.)
+  { key: 'main',       version: 'v1',         exit: 'full', family: 'core' },
+  { key: 'range',      version: 'range',      exit: 'full', family: 'range' },
+  { key: 'opus',       version: 'opus',       exit: 'full', family: 'session' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

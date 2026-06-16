@@ -1872,6 +1872,78 @@ def run_impulse_scan() -> int:
 
 
 # ============================================================================
+# RANGE live scan — Burak RANGE_DEV (range-deviation fade), ensemble-TREND gated
+# (causal 4h, parity with the backtest version='range'), over the FULL SYMBOLS
+# universe and EVERY session. DB tag mode='range'; DB-only (no Telegram). The
+# RANGE_DEV detector + the 6-detector ensemble live in the repo (backtest/sync),
+# imported lazily so the main scan is unaffected.
+# ============================================================================
+RANGE_MODE = "range"
+RANGE_WARMUP_HOURS = 1500           # 1h warmup for the range-deviation detector
+RANGE_ENS_WARMUP_DAYS = 90          # 4h warmup so the 150-bar ensemble window is full
+
+
+def run_range_scan() -> int:
+    """Emit RANGE_DEV signals at the last closed 1h bar for every symbol, kept only
+    where the causal 6-detector ensemble verdict (4h) is TREND — same gate as the
+    backtest 'range' stream, but no session restriction (every dilim)."""
+    from pathlib import Path
+    repo = Path(__file__).resolve().parents[1]
+    for p in (str(repo / "backtest"), str(repo / "sync")):
+        if p not in sys.path:
+            sys.path.insert(0, p)
+    try:
+        from burak_strategy import generate_signals
+        import regime_ensemble as RE
+    except Exception as e:
+        print(f"  RANGE import failed: {e}")
+        return 0
+
+    now = pd.Timestamp.now(tz="UTC")
+    now_ms = int(now.timestamp() * 1000)
+    h1_start = int((now - pd.Timedelta(hours=RANGE_WARMUP_HOURS)).timestamp() * 1000)
+    h4_start = int((now - pd.Timedelta(days=RANGE_ENS_WARMUP_DAYS + 30)).timestamp() * 1000)
+    total, errors, dropped = 0, 0, 0
+    print(f"⬍ RANGE 1h taraması: {len(SYMBOLS)} sembol (RANGE_DEV + ensemble-trend gate, her seans)")
+    for sym in SYMBOLS:
+        print(f"=== ⬍ {sym} ===")
+        try:
+            df = fetch_klines(sym, INTERVAL, h1_start, now_ms)
+            if df.empty:
+                print(f"  {sym}: no 1h data"); continue
+            df = trim_open_bar(df)
+            if len(df) < 120:
+                print(f"  {sym}: only {len(df)} bars, skip"); continue
+            last_open = df.index[-1]
+            sigs = [s for s in generate_signals(df)
+                    if s.strategy == "RANGE_DEV" and s.timestamp == last_open]
+            if not sigs:
+                print(f"  {sym}: no RANGE_DEV at last bar"); continue
+            # causal ensemble-trend gate (4h), same as sync/backfill_range.py
+            kl4 = fetch_klines(sym, "4h", h4_start, now_ms)
+            roll = None
+            if not kl4.empty:
+                rows = [[int(ts.timestamp() * 1000), float(r.open), float(r.high),
+                         float(r.low), float(r.close)] for ts, r in kl4.iterrows()]
+                roll = RE.build_rolling(rows) if len(rows) >= 80 else None
+            for s in sigs:
+                fire_ms = int(s.timestamp.timestamp() * 1000) + 3_600_000
+                sc = RE.score_at(roll, fire_ms) if roll else float("nan")
+                if RE.verdict(sc) != "trend":
+                    dropped += 1
+                    print(f"  {sym}: RANGE_DEV {s.direction} dropped (verdict={RE.verdict(sc)}, score={sc:.2f})")
+                    continue
+                s.symbol = sym                              # burak Signal carries no symbol
+                if save_signal_to_db(s, mode=RANGE_MODE, ltf=INTERVAL, htf="4h"):
+                    total += 1
+        except Exception as e:
+            errors += 1
+            print(f"  ERROR {sym}: {e}")
+    print(f"\nRANGE done. {total} new signal(s), {dropped} gate-dropped, {errors} error(s).")
+    return total
+
+
+# ============================================================================
 # AIRFLOW DAG (only built when Airflow is installed)
 # ============================================================================
 
@@ -1969,6 +2041,8 @@ def main() -> None:
             print("IMPULSE devre dışı — açmak için IMPULSE_ENABLED=1 ver.")
             return
         run_impulse_scan()
+    elif scan_mode == "range":
+        run_range_scan()
     else:
         run_scan()
 

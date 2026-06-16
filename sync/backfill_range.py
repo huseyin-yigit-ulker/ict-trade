@@ -54,6 +54,7 @@ ENSEMBLE_WARMUP_DAYS = 60                 # 4h-kline warmup so the 150-bar windo
 HOUR_MS = 3_600_000                       # signal fires at bar close = open + 1h (ltf 1h)
 MIN_SCORE = 0.0                           # optional extra gate: ensemble score floor (0 = off)
 MIN_RR = 0.0                              # optional extra gate: reward/risk floor (0 = off)
+DROP_BAND = None                          # optional extra gate: drop score in [lo,hi) (None = off)
 
 # Universe = where RANGE_DEV actually range-fades. The 2026 run showed +41.6R over
 # these 29, but XRP/DOGE/LINK/AVAX were −35R (they dump/trend, don't fade — and were
@@ -101,9 +102,12 @@ def run_symbol(symbol, w_start, w_end, roll):
     sigs = [s for s in generate_signals(df)
             if s.strategy == "RANGE_DEV" and w_start <= s.timestamp < w_end]
     # ENSEMBLE gate: keep only signals fired while the causal 6-detector verdict is in
-    # GATE_VERDICTS, AND (optionally) the ensemble score >= MIN_SCORE and the signal's
-    # reward/risk >= MIN_RR (the high-conviction 'range_q' variant uses 0.30 / 2.0 —
-    # the SL-pattern study found mild-trend [0.20,0.30) + RR<2 fades are the loser cluster).
+    # GATE_VERDICTS, AND (optionally) the ensemble score >= MIN_SCORE, the score NOT inside
+    # DROP_BAND [lo,hi), and the signal's reward/risk >= MIN_RR. The high-conviction
+    # 'range_q' variant first used score>=0.30 + RR>=2; the SL-pattern study found the
+    # loser cluster is specifically the mild-trend [0.20,0.30) band + RR<2 fades, so the
+    # OOS-better gate is --drop-score-band 0.20 0.30 --min-rr 2: it keeps the profitable
+    # score<0.20 tail a 0.30 floor would discard (2025 OOS +26.2R/157 trd vs floor +15.8R/96).
     by_band = {"trend": 0, "transition": 0, "range": 0, "n/a": 0}
     kept = []
     for s in sigs:
@@ -114,6 +118,8 @@ def run_symbol(symbol, w_start, w_end, roll):
         if v not in GATE_VERDICTS:
             continue
         if MIN_SCORE > 0 and not (isinstance(sc, float) and math.isfinite(sc) and sc >= MIN_SCORE):
+            continue
+        if DROP_BAND and isinstance(sc, float) and math.isfinite(sc) and DROP_BAND[0] <= sc < DROP_BAND[1]:
             continue
         if MIN_RR > 0:
             risk = abs(s.entry - s.stop_loss)
@@ -165,7 +171,7 @@ def wipe(conn, scope, w_start, w_end):
 
 
 def main():
-    global GATE_VERDICTS, VERSION, MIN_SCORE, MIN_RR
+    global GATE_VERDICTS, VERSION, MIN_SCORE, MIN_RR, DROP_BAND
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", type=int, default=2026)
     ap.add_argument("--symbols", nargs="*", default=SYMBOLS)
@@ -175,12 +181,15 @@ def main():
     ap.add_argument("--version", default=VERSION, help="DB version tag (default 'range')")
     ap.add_argument("--min-score", type=float, default=0.0, help="ensemble score floor (0=off)")
     ap.add_argument("--min-rr", type=float, default=0.0, help="reward/risk floor (0=off)")
+    ap.add_argument("--drop-score-band", nargs=2, type=float, default=None, metavar=("LO", "HI"),
+                    help="drop signals with ensemble score in [LO,HI), e.g. 0.20 0.30 (off by default)")
     ap.add_argument("--wipe-scope", choices=["none", "year", "all"], default=None)
     args = ap.parse_args()
     GATE_VERDICTS = GATE_MAP[args.gate]
     VERSION = args.version
     MIN_SCORE = args.min_score
     MIN_RR = args.min_rr
+    DROP_BAND = tuple(args.drop_score_band) if args.drop_score_band else None
     if not args.dry_run and args.wipe_scope is None:
         raise SystemExit("Real run requires --wipe-scope {none|year|all} (or --dry-run).")
 
@@ -189,7 +198,8 @@ def main():
     w_end = min(pd.Timestamp(f"{args.year + 1}-01-01", tz="UTC"), now)
     ens_start = int((w_start - pd.Timedelta(days=ENSEMBLE_WARMUP_DAYS)).timestamp() * 1000)
     print(f"=== RANGE backfill {args.year} | version='{VERSION}' | gate=ensemble{sorted(GATE_VERDICTS)} "
-          f"min_score={MIN_SCORE} min_rr={MIN_RR} | {len(args.symbols)} symbols | dry_run={args.dry_run} ===", flush=True)
+          f"min_score={MIN_SCORE} min_rr={MIN_RR} drop_band={DROP_BAND} | {len(args.symbols)} symbols | "
+          f"dry_run={args.dry_run} ===", flush=True)
 
     all_rows = []
     for sym in args.symbols:

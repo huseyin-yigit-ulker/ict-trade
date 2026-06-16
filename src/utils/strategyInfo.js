@@ -156,9 +156,17 @@ const LIGHT_SECTION = {
   en: { h: 'Light-regime filter', t: 'SAME signals as the parent — but ONLY those fired while the symbol’s 4h Efficiency Ratio was in the 0.20–0.35 (light-trend) band. The 2026 regime-routing audit found this is where our ICT set’s edge actually lives (strong/mid trend is break-even-to-negative; the mid band loses on MAIN). Only ~22% of trades survive, but per-trade expectancy rises sharply on every stream. It flips the losing ½TP streams positive (MAIN ½TP −39→+36R, IMPULSE ½TP −13→+40R, KARMA ½TP +0→+43R) and lifts MAIN’s total R (+39→+55R). On the already-strong full-TP streams (IMPULSE +76→+59R, KARMA +109→+75R) total R is lower because volume drops, but expectancy is far higher.' },
 };
 
+// 1h-regime twins: same RANGE_DEV signals, but the ensemble gate is computed on 1h
+// bars instead of 4h (window 150 1h ≈ 6 days vs 150 4h ≈ 25 days). Full RANGE universe.
+const REGIME_1H_SECTION = {
+  tr: { h: '1h rejim kapısı (deneysel)', t: 'Ebeveyn akımla AYNI RANGE_DEV sinyalleri — fakat rejim ensemble’i (6 dedektör) 4h yerine 1h barlar üzerinden hesaplanır (daha kısa, ~6 günlük pencere). 4h rejimiyle karşılaştırmak için tüm sembollerde, 2026. Sonuç: 1h, 4h’ten DAHA KÖTÜ — range·1h +42.0R (177 işlem) vs range 4h +60.7R; range+·1h +33.5R (111) vs range+ 4h +49.6R. 4h’in daha uzun (~25 gün) penceresi, deviation-fade’in karşı sınıra ulaşması için gereken geniş yönsel persistansı daha iyi yakalıyor; 1h penceresi gürültülü ve çok sinyali erken trend-DIŞı sayıyor. range·1h yine de net pozitif (kitabın ~%30 altında).' },
+  en: { h: '1h regime gate (experimental)', t: 'SAME RANGE_DEV signals as the parent — but the 6-detector regime ensemble is computed on 1h bars instead of 4h (a ~6-day window vs ~25 days). Full universe, 2026, to compare against the 4h gate. Result: 1h is WORSE than 4h — range·1h +42.0R (177 trades) vs range 4h +60.7R; range+·1h +33.5R (111) vs range+ 4h +49.6R. The 4h’s longer (~25-day) window better captures the broad directional persistence a deviation-fade needs to reach the opposite boundary; the 1h window is noisier and tags many signals NON-trend too early. range·1h is still net-positive (~30% below the book).' },
+};
+
 export const infoFor = (strategy, lang) => {
   const isLight = strategy.endsWith('_light');
-  const baseKey = isLight ? strategy.slice(0, -6) : strategy;
+  const is1h = strategy.endsWith('_1h');
+  const baseKey = isLight ? strategy.slice(0, -6) : is1h ? strategy.slice(0, -3) : strategy;
   const e = STRATEGY_INFO[baseKey];
   if (!e) return null;
   const info = { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
@@ -169,6 +177,15 @@ export const infoFor = (strategy, lang) => {
       title: `${info.title} · Light`,
       tagline: lang === 'en' ? `${info.tagline} + light-regime filter` : `${info.tagline} + light-rejim filtre`,
       sections: [ls, ...(info.sections || [])],
+    };
+  }
+  if (is1h) {
+    const rs = REGIME_1H_SECTION[lang] || REGIME_1H_SECTION.tr;
+    return {
+      ...info,
+      title: `${info.title} · 1h`,
+      tagline: lang === 'en' ? `${info.tagline} + 1h-regime gate` : `${info.tagline} + 1h-rejim kapısı`,
+      sections: [rs, ...(info.sections || [])],
     };
   }
   return info;

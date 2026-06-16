@@ -68,21 +68,16 @@ const IconRegime = () => (
 // 2026-06-13 prune: the standalone ½TP streams (v3/v4, karma_half, opus_half), the 8
 // Chop twins and the redundant Light cells were removed (UI + DB) to focus R&D.
 // PULSE retired 2026-06-10; RADAR/SQUEEZE removed 2026-06-11.
+// 2026-06-14: removed the 6 OOS-negative streams (v1/v2/karma/opus + the two _light
+// twins) from UI + DB — every one bled out-of-sample in 2025 (−60..−245R), in-sample
+// period-fit. Only the OOS-positive "range book" remains (range +9.2R, range_q +26.2R,
+// v2_light_r +15.5R in 2025). All three are backtest-only (no live scanner).
 const GROUPS = [
-  { key: 'main',    label: 'MAIN',    icon: <IconCommand />, modes: ['live', 'backtest'] },
-  { key: 'impulse', label: 'IMPULSE', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma',   label: 'KARMA ½', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'opus',    label: 'OPUS',    icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  // LIGHT band-pass twins — keep only signals fired in the light-trend regime
-  // (4h ER 0.20–0.35), where the 2026 routing audit found our edge concentrates.
-  // Kept on the two streams it helps most (highest per-trade expectancy).
-  { key: 'impulse_light', label: 'IMPULSE · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  { key: 'karma_light',   label: 'KARMA ½ · Light', icon: <IconImpulse />, modes: ['live', 'backtest'] },
-  // RANGE — Burak RANGE_DEV range-fade, full-TP, ER>=0.20. Backtest-only for now
-  // (no live scanner; emission would need a dedicated DAG job).
-  { key: 'range',         label: 'RANGE',           icon: <IconRange />,   modes: ['backtest'] },
-  // RANGE+ — high-conviction RANGE (trend gate + RR>=2 + ensemble score>=0.30).
-  { key: 'range_q',       label: 'RANGE+',          icon: <IconRange />,   modes: ['backtest'] },
+  // Strategy set = MAIN + RANGE + OPUS. MAIN = the v1 ICT set (B/C/D/E), all symbols/
+  // sessions; RANGE = RANGE_DEV every session; OPUS = MAIN gated to each symbol's NY session.
+  { key: 'main',       label: 'MAIN',                icon: <IconImpulse />, modes: ['live', 'backtest'] },
+  { key: 'range',      label: 'RANGE',               icon: <IconRange />,   modes: ['live', 'backtest'] },
+  { key: 'opus',       label: 'OPUS',                icon: <IconCommand />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {
