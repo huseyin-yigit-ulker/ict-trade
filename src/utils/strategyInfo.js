@@ -95,6 +95,33 @@ export const STRATEGY_INFO = {
       caveat: 'Hour × symbol selection is in-sample (2026). COIN/HOOD samples are small. Expect shrinkage forward; a split-half validation is recommended.',
     },
   },
+  donchian: {
+    icon: '⛰️', accent: '#F0B90B',
+    tr: {
+      title: 'DONCHIAN', tagline: 'Donchian-55 breakout — güçlü trend (momentum tamamlayıcı)',
+      summary: 'RANGE/MAIN’in tersi yönde bir trend-takip kaynağı. MAIN setimiz aslında bir RANGE stratejisi (R’sinin ~%85-90’ı light bantta, güçlü trendde başabaş–negatif). DONCHIAN tam da o boşluğu doldurur: fiyat son 55 barın ekstremini kırınca trende katılır ve YALNIZCA güçlü-trend rejiminde (Kaufman ER ≥ 0.35) ateşler — yani MAIN’in kaybettiği yerde kazanır (düşük örtüşme = gerçek çeşitlendirme).',
+      sections: [
+        { h: 'Sinyal mantığı', t: 'Taze Donchian(55) kırılımı (1h kapanış): close son 55 barın en yükseğini aşarsa LONG, en düşüğünü kırarsa SHORT. Sustained breakout’ta bir kez ateşler (her barda değil). Sebepsel: kanal current barı dışlar (shift(1)), look-ahead yok.' },
+        { h: 'Rejim kapısı', t: 'Kaufman Efficiency Ratio (24 bar) ≥ 0.35 — yalnızca GÜÇLÜ trend. ER-kovası kanıtı: kazancın tamamı ER>0.35’te (+122R), chop/light bantta zarar — yani MAIN’in yaşadığı rejimde para basmaz, onun bıraktığını toplar.' },
+        { h: 'Çıkış & risk', t: 'Stop = ATR(14)×2; hedef = sabit R/R = 4 (geniş hedef, trend-takip imzası). Tam-TP, kısmi yok. %0.1 round-trip ücret. Düşük WR (~%27) / büyük kazananlar — 4-5 ardışık kayıp normaldir.' },
+        { h: '2026 sonucu', t: 'Tam 2026 (Oca–Haz), 1m çözümleme, 5 sembol: toplam +117.5R, WR %27, 448 işlem. XAU +43.6 / XAG +40.0 / BTC +14.1 / ETH +13.8 / SOL +5.9 — hepsi pozitif (metaller H1’de sert trend yaptı).' },
+        { h: 'Evren', t: 'BTC, ETH, SOL, XAU, XAG (“temel” set). XAG DAHİL: eski −17R drag trailing-exit’e özgüydü; sabit-TP modelde nötr-pozitif. 2025 OOS sonrası genişletilebilir.' },
+      ],
+      caveat: 'In-sample (yalnız 2026) — size güvenmeden önce 2025 OOS şart (sync/donchian/backtest.py --start 2025-01-01 --end 2026-01-01). Parametreler (55/ER0.35/RR4) optimize edilmedi ama tek bir makul set; canlı yayın için VM’de cron aktive edilmeli.',
+    },
+    en: {
+      title: 'DONCHIAN', tagline: 'Donchian-55 breakout — strong trend (momentum complement)',
+      summary: 'A trend-following source that fires opposite to RANGE/MAIN. Our MAIN set is really a RANGE strategy (~85-90% of its R lives in the light band; it is break-even-to-negative in strong trends). DONCHIAN fills exactly that gap: it joins the trend when price breaks the 55-bar extreme and fires ONLY in the strong-trend regime (Kaufman ER ≥ 0.35) — i.e. it earns where MAIN loses (low overlap = true diversification).',
+      sections: [
+        { h: 'Signal logic', t: 'Fresh Donchian(55) breakout (1h close): LONG if close exceeds the prior 55-bar high, SHORT if it breaks the low. Fires once per sustained breakout (not every bar). Causal: the channel excludes the current bar (shift(1)), no look-ahead.' },
+        { h: 'Regime gate', t: 'Kaufman Efficiency Ratio (24 bars) ≥ 0.35 — STRONG trend only. ER-bucket proof: all of the profit is in ER>0.35 (+122R) while it loses in the chop/light bands — so it does not compete with MAIN’s regime, it harvests what MAIN leaves.' },
+        { h: 'Exit & risk', t: 'Stop = ATR(14)×2; target = fixed R/R = 4 (wide target, the trend-follower signature). Full-TP, no partial. 0.1% round-trip fee. Low WR (~27%) / large winners — 4-5 consecutive losers is normal.' },
+        { h: '2026 result', t: 'Full 2026 (Jan–Jun), 1m resolution, 5 symbols: total +117.5R, WR 27%, 448 trades. XAU +43.6 / XAG +40.0 / BTC +14.1 / ETH +13.8 / SOL +5.9 — all positive (metals trended hard in H1).' },
+        { h: 'Universe', t: 'BTC, ETH, SOL, XAU, XAG (the “basic” set). XAG INCLUDED: the old −17R drag was trailing-exit specific; in the fixed-TP model it is neutral-positive. Extend after 2025 OOS.' },
+      ],
+      caveat: 'In-sample (2026 only) — run 2025 OOS before trusting size (sync/donchian/backtest.py --start 2025-01-01 --end 2026-01-01). Parameters (55/ER0.35/RR4) are unoptimised but a single sensible set; going live needs the VM cron activated.',
+    },
+  },
   range: {
     icon: '⬍', accent: '#2EC5C5',
     tr: {

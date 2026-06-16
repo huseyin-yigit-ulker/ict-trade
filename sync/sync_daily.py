@@ -68,10 +68,15 @@ STATIC_SYMBOLS = [
 # partial-TP + breakeven model — ½TP streams v3/v4 read the SAME live signals as
 # main/impulse, only the exit differs).
 STREAMS = {
-    "main":         {"mode": "live",    "version": "v1",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
-    "impulse":      {"mode": "impulse", "version": "v2",     "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
-    "radar_legacy": {"mode": "dynamic", "version": "v1-dyn", "ltf_min": 60, "floor": "h",     "symbols": None},
-    "pulse":        {"mode": "pulse",   "version": "v1-15m", "ltf_min": 15, "floor": "15min", "symbols": STATIC_SYMBOLS},
+    "main":         {"mode": "live",     "version": "v1",       "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
+    "impulse":      {"mode": "impulse",  "version": "v2",       "ltf_min": 60, "floor": "h",     "symbols": STATIC_SYMBOLS},
+    "radar_legacy": {"mode": "dynamic",  "version": "v1-dyn",   "ltf_min": 60, "floor": "h",     "symbols": None},
+    "pulse":        {"mode": "pulse",    "version": "v1-15m",   "ltf_min": 15, "floor": "15min", "symbols": STATIC_SYMBOLS},
+    # Donchian(55) breakout trend stream (sync/donchian/) — the momentum complement to
+    # the RANGE/main book. Live signals are emitted hourly by sync/donchian/canli.py
+    # (mode='donchian'); this resolves them -> version='donchian'. symbols=None keeps the
+    # resolver universe-agnostic (only the donchian emitter writes mode='donchian').
+    "donchian":     {"mode": "donchian", "version": "donchian", "ltf_min": 60, "floor": "h",     "symbols": None},
 }
 
 # Streams processed by `--stream all`. radar_legacy (retired dynamic stream) and pulse
@@ -88,7 +93,10 @@ STREAMS = {
 # (The OOS-positive range book — range/range_q/v2_light_r — is backtest-only, refreshed by
 # its own scripts: backfill_range.py / promote_range_q.py / promote_light_range.py.) To
 # re-resolve a retired stream's historical rows ad hoc, still pass its key (e.g. --stream main).
-ACTIVE_STREAMS = []
+# 2026-06-16: 'donchian' (trend complement) wired live. Its hourly emitter
+# (sync/donchian/canli.py) writes mode='donchian' live signals; the nightly
+# `--stream all` now resolves them into backtest version='donchian'.
+ACTIVE_STREAMS = ["donchian"]
 LIGHT_PARENTS = ("impulse", "karma")
 
 
@@ -341,6 +349,16 @@ def main():
     n = tsc.upsert_rows(bt, all_rows)
     bt.close()
     print(f"  upserted {n} rows into {tsc.TABLE}")
+
+    # TOTAL/2/3 market-cap ground-truth snapshot — accrues forward, never blocks the
+    # sync (it's a research/regime-map feed, not part of the trade pipeline).
+    try:
+        import marketcap
+        s = marketcap.snapshot_live()
+        print(f"  marketcap snapshot: TOTAL3={marketcap._human(s['total3'])} "
+              f"BTC.D={s['btc_d']*100:.1f}%")
+    except Exception as e:  # noqa: BLE001 — never let the regime feed break the sync
+        print(f"  marketcap snapshot skipped: {e}")
 
 
 if __name__ == "__main__":

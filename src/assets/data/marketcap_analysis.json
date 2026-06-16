@@ -1,0 +1,304 @@
+{
+  "years": {
+    "2026": {
+      "orthogonality": [
+        {
+          "band": "strong",
+          "cells": {
+            "risk_on": {
+              "n": 87,
+              "totR": -15.9,
+              "avgR": -0.18
+            },
+            "neutral": {
+              "n": 29,
+              "totR": 2.1,
+              "avgR": 0.07
+            },
+            "risk_off": {
+              "n": 166,
+              "totR": 42.8,
+              "avgR": 0.26
+            }
+          }
+        },
+        {
+          "band": "mid",
+          "cells": {
+            "risk_on": {
+              "n": 72,
+              "totR": -1.0,
+              "avgR": -0.01
+            },
+            "neutral": {
+              "n": 40,
+              "totR": 20.4,
+              "avgR": 0.51
+            },
+            "risk_off": {
+              "n": 67,
+              "totR": -6.1,
+              "avgR": -0.09
+            }
+          }
+        },
+        {
+          "band": "light",
+          "cells": {
+            "risk_on": {
+              "n": 67,
+              "totR": -18.8,
+              "avgR": -0.28
+            },
+            "neutral": {
+              "n": 66,
+              "totR": 107.1,
+              "avgR": 1.62
+            },
+            "risk_off": {
+              "n": 69,
+              "totR": 14.4,
+              "avgR": 0.21
+            }
+          }
+        },
+        {
+          "band": "chop",
+          "cells": {
+            "risk_on": {
+              "n": 54,
+              "totR": -30.8,
+              "avgR": -0.57
+            },
+            "neutral": {
+              "n": 108,
+              "totR": 7.9,
+              "avgR": 0.07
+            },
+            "risk_off": {
+              "n": 52,
+              "totR": 57.6,
+              "avgR": 1.11
+            }
+          }
+        }
+      ],
+      "separation": {
+        "MAIN": {
+          "risk_on": {
+            "n": 191,
+            "totR": -95.9,
+            "avgR": -0.5
+          },
+          "neutral": {
+            "n": 178,
+            "totR": 61.2,
+            "avgR": 0.34
+          },
+          "risk_off": {
+            "n": 226,
+            "totR": 50.8,
+            "avgR": 0.22
+          },
+          "total": {
+            "n": 595,
+            "totR": 16.2
+          }
+        },
+        "OPUS": {
+          "risk_on": {
+            "n": 43,
+            "totR": -3.5,
+            "avgR": -0.08
+          },
+          "neutral": {
+            "n": 48,
+            "totR": 86.0,
+            "avgR": 1.79
+          },
+          "risk_off": {
+            "n": 70,
+            "totR": 42.3,
+            "avgR": 0.6
+          },
+          "total": {
+            "n": 161,
+            "totR": 124.7
+          }
+        },
+        "RANGE": {
+          "risk_on": {
+            "n": 46,
+            "totR": 32.9,
+            "avgR": 0.71
+          },
+          "neutral": {
+            "n": 17,
+            "totR": -9.8,
+            "avgR": -0.58
+          },
+          "risk_off": {
+            "n": 58,
+            "totR": 15.6,
+            "avgR": 0.27
+          },
+          "total": {
+            "n": 121,
+            "totR": 38.7
+          }
+        }
+      },
+      "in_sample": true
+    },
+    "2025": {
+      "orthogonality": [
+        {
+          "band": "strong",
+          "cells": {
+            "risk_on": {
+              "n": 237,
+              "totR": 13.4,
+              "avgR": 0.06
+            },
+            "neutral": {
+              "n": 30,
+              "totR": -6.3,
+              "avgR": -0.21
+            },
+            "risk_off": {
+              "n": 206,
+              "totR": -61.1,
+              "avgR": -0.3
+            }
+          }
+        },
+        {
+          "band": "mid",
+          "cells": {
+            "risk_on": {
+              "n": 140,
+              "totR": -45.3,
+              "avgR": -0.32
+            },
+            "neutral": {
+              "n": 50,
+              "totR": -10.3,
+              "avgR": -0.21
+            },
+            "risk_off": {
+              "n": 136,
+              "totR": -13.8,
+              "avgR": -0.1
+            }
+          }
+        },
+        {
+          "band": "light",
+          "cells": {
+            "risk_on": {
+              "n": 185,
+              "totR": -77.2,
+              "avgR": -0.42
+            },
+            "neutral": {
+              "n": 100,
+              "totR": 1.7,
+              "avgR": 0.02
+            },
+            "risk_off": {
+              "n": 167,
+              "totR": -45.7,
+              "avgR": -0.27
+            }
+          }
+        },
+        {
+          "band": "chop",
+          "cells": {
+            "risk_on": {
+              "n": 228,
+              "totR": -16.5,
+              "avgR": -0.07
+            },
+            "neutral": {
+              "n": 177,
+              "totR": -46.2,
+              "avgR": -0.26
+            },
+            "risk_off": {
+              "n": 210,
+              "totR": -61.1,
+              "avgR": -0.29
+            }
+          }
+        }
+      ],
+      "separation": {
+        "MAIN": {
+          "risk_on": {
+            "n": 544,
+            "totR": -75.8,
+            "avgR": -0.14
+          },
+          "neutral": {
+            "n": 268,
+            "totR": -67.4,
+            "avgR": -0.25
+          },
+          "risk_off": {
+            "n": 491,
+            "totR": -121.4,
+            "avgR": -0.25
+          },
+          "total": {
+            "n": 1303,
+            "totR": -264.7
+          }
+        },
+        "OPUS": {
+          "risk_on": {
+            "n": 149,
+            "totR": -66.1,
+            "avgR": -0.44
+          },
+          "neutral": {
+            "n": 64,
+            "totR": 2.7,
+            "avgR": 0.04
+          },
+          "risk_off": {
+            "n": 135,
+            "totR": -54.2,
+            "avgR": -0.4
+          },
+          "total": {
+            "n": 348,
+            "totR": -117.6
+          }
+        },
+        "RANGE": {
+          "risk_on": {
+            "n": 97,
+            "totR": 16.4,
+            "avgR": 0.17
+          },
+          "neutral": {
+            "n": 25,
+            "totR": 3.7,
+            "avgR": 0.15
+          },
+          "risk_off": {
+            "n": 93,
+            "totR": -6.0,
+            "avgR": -0.06
+          },
+          "total": {
+            "n": 215,
+            "totR": 14.0
+          }
+        }
+      },
+      "in_sample": false
+    }
+  }
+}

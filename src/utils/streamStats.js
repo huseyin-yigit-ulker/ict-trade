@@ -17,6 +17,9 @@ export const STREAMS = [
   { key: 'main',       version: 'v1',         exit: 'full', family: 'core' },
   { key: 'range',      version: 'range',      exit: 'full', family: 'range' },
   { key: 'opus',       version: 'opus',       exit: 'full', family: 'session' },
+  // donchian — Donchian-55 breakout trend stream, ER>=0.35 gate (2026 +117.5R). The
+  // momentum complement to the range book; harvests the strong-trend regime main leaves.
+  { key: 'donchian',   version: 'donchian',   exit: 'full', family: 'trend' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

@@ -101,7 +101,7 @@ const IntroPage = () => {
     { key: 'exp', label: t('Beklenti') },
     { key: 'pf', label: 'PF' },
   ];
-  const FAMILY_LABEL = { core: t('ICT Çekirdek'), adaptive: t('Adaptif'), session: t('Seans'), range: 'Range' };
+  const FAMILY_LABEL = { core: t('ICT Çekirdek'), adaptive: t('Adaptif'), session: t('Seans'), range: 'Range', trend: 'Trend' };
   const EXIT_LABEL = { full: t('Tam TP'), half: '½TP', mixed: t('Sembol-bazlı çıkış') };
 
   const LeaderTile = ({ label, entry, fmt }) => {

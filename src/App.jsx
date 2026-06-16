@@ -10,6 +10,7 @@ import CommandCenterPage from './pages/CommandCenterPage';
 import IntelligencePage from './pages/IntelligencePage';
 import SettingsPage from './pages/SettingsPage';
 import TrendPage from './pages/TrendPage';
+import MarketCapPage from './pages/MarketCapPage';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
                 <Route element={<RequireAuth><AppShell /></RequireAuth>}>
                   <Route index element={<IntroPage />} />
                   <Route path="/trend" element={<TrendPage />} />
+                  <Route path="/total" element={<MarketCapPage />} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
                   <Route path="/intelligence" element={<IntelligencePage />} />
                   <Route path="/settings" element={<SettingsPage />} />

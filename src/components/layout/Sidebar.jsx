@@ -58,6 +58,15 @@ const IconRegime = () => (
     <path d="M17 3.5 H13.6 M17 3.5 V6.9" />
   </svg>
 );
+// TOTAL / market-cap breadth: three stacked layers (TOTAL/TOTAL2/TOTAL3) on a baseline.
+const IconTotal = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="2.5" y1="17.5" x2="17.5" y2="17.5" />
+    <rect x="3" y="11" width="3.4" height="6.5" rx="0.8" />
+    <rect x="8.3" y="7" width="3.4" height="10.5" rx="0.8" />
+    <rect x="13.6" y="3" width="3.4" height="14.5" rx="0.8" />
+  </svg>
+);
 
 // Strategy × Mode nested nav. MAIN runs the v1 set (mode='live'), IMPULSE the refined
 // v2 set (mode='impulse') — dag.py emits each hourly. KARMA = per-symbol best cell of
@@ -78,6 +87,8 @@ const GROUPS = [
   { key: 'main',       label: 'MAIN',                icon: <IconImpulse />, modes: ['live', 'backtest'] },
   { key: 'range',      label: 'RANGE',               icon: <IconRange />,   modes: ['live', 'backtest'] },
   { key: 'opus',       label: 'OPUS',                icon: <IconCommand />, modes: ['live', 'backtest'] },
+  // DONCHIAN = trend/momentum complement to RANGE (Donchian-55 breakout, ER>=0.35 gate).
+  { key: 'donchian',   label: 'DONCHIAN',            icon: <IconIntel />,   modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {
@@ -145,6 +156,9 @@ const Sidebar = () => {
         <div className="sidebar__navsep" />
         <NavLink to="/trend" className="sidebar__link">
           <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
+        </NavLink>
+        <NavLink to="/total" className="sidebar__link">
+          <span className="sidebar__icon"><IconTotal /></span><span>{t('TOTAL')}</span>
         </NavLink>
         <NavLink to="/intelligence" className="sidebar__link">
           <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>

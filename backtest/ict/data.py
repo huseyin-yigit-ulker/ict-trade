@@ -28,12 +28,22 @@ def fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int,
             "endTime": end_ms,
             "limit": limit,
         }
-        try:
-            r = requests.get(base, params=params, timeout=20)
-            r.raise_for_status()
-            chunk = r.json()
-        except requests.exceptions.RequestException as e:
-            print(f"  fetch error ({base} {symbol}): {e}")
+        chunk = None
+        for attempt in range(5):
+            try:
+                r = requests.get(base, params=params, timeout=20)
+                # 429 (rate limit) / 418 (ban) / 5xx are transient -> back off & retry
+                if r.status_code in (418, 429) or r.status_code >= 500:
+                    raise requests.exceptions.RequestException(f"HTTP {r.status_code}")
+                r.raise_for_status()
+                chunk = r.json()
+                break
+            except requests.exceptions.RequestException as e:
+                if attempt == 4:
+                    print(f"  fetch error ({base} {symbol}): {e}")
+                    return pd.DataFrame(columns=OHLCV_COLS)
+                time.sleep(1.5 * (2 ** attempt))  # 1.5, 3, 6, 12s backoff
+        if chunk is None:
             return pd.DataFrame(columns=OHLCV_COLS)
         if not chunk:
             break
