@@ -1,0 +1,112 @@
+{
+    "ict_signal": [
+        {
+            "id": 2756,
+            "symbol": "MSTRUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T19:00:00+00:00",
+            "entry_price": 123.0,
+            "sl_price": 126.5951867697491,
+            "tp_price": 108.61925292100359,
+            "created_at": "2026-06-16T20:01:20.604250+00:00",
+            "status": "OPEN",
+            "signal_price": 123.0
+        },
+        {
+            "id": 2759,
+            "symbol": "CRDOUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T19:00:00+00:00",
+            "entry_price": 239.39,
+            "sl_price": 249.22927314606753,
+            "tp_price": 200.0329074157298,
+            "created_at": "2026-06-16T20:01:21.261881+00:00",
+            "status": "OPEN",
+            "signal_price": 239.39
+        },
+        {
+            "id": 2758,
+            "symbol": "AVGOUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T19:00:00+00:00",
+            "entry_price": 376.46,
+            "sl_price": 382.0543795574689,
+            "tp_price": 354.0824817701243,
+            "created_at": "2026-06-16T20:01:21.074518+00:00",
+            "status": "OPEN",
+            "signal_price": 376.46
+        },
+        {
+            "id": 2757,
+            "symbol": "INTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T19:00:00+00:00",
+            "entry_price": 117.08,
+            "sl_price": 121.25786850037366,
+            "tp_price": 100.36852599850538,
+            "created_at": "2026-06-16T20:01:20.899953+00:00",
+            "status": "OPEN",
+            "signal_price": 117.08
+        },
+        {
+            "id": 2755,
+            "symbol": "INTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T14:00:00+00:00",
+            "entry_price": 120.12,
+            "sl_price": 124.08226174031012,
+            "tp_price": 104.27095303875957,
+            "created_at": "2026-06-16T15:01:20.264539+00:00",
+            "status": "OPEN",
+            "signal_price": 120.12
+        },
+        {
+            "id": 2751,
+            "symbol": "PLTRUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T13:00:00+00:00",
+            "entry_price": 134.60000000000002,
+            "sl_price": 135.2375714285714,
+            "tp_price": 133.06,
+            "created_at": "2026-06-16T14:02:33.134092+00:00",
+            "status": "OPEN",
+            "signal_price": 134.60000000000002
+        },
+        {
+            "id": 2754,
+            "symbol": "AVGOUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T13:00:00+00:00",
+            "entry_price": 394.34000000000003,
+            "sl_price": 395.536,
+            "tp_price": 391.2,
+            "created_at": "2026-06-16T14:03:18.207559+00:00",
+            "status": "OPEN",
+            "signal_price": 394.34000000000003
+        },
+        {
+            "id": 2753,
+            "symbol": "PLTRUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T13:00:00+00:00",
+            "entry_price": 134.60000000000002,
+            "sl_price": 135.2375714285714,
+            "tp_price": 133.06,
+            "created_at": "2026-06-16T14:03:09.432199+00:00",
+            "status": "OPEN",
+            "signal_price": 134.60000000000002
+        },
+        {
+            "id": 2752,
+            "symbol": "AVGOUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-16T13:00:00+00:00",
+            "entry_price": 394.34000000000003,
+            "sl_price": 395.536,
+            "tp_price": 391.2,
+            "created_at": "2026-06-16T14:02:40.867841+00:00",
+            "status": "OPEN",
+            "signal_price": 394.34000000000003
+        }
+    ]
+}
