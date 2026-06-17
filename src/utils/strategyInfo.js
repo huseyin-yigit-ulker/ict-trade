@@ -60,6 +60,31 @@ export const STRATEGY_INFO = {
       caveat: 'The 4h confirm cuts trade count but raises quality. Parameters chosen on 2026; OOS validation pending. Live R will be below backtest.',
     },
   },
+  dch30_4h6: {
+    icon: '⛰️', accent: '#F0B90B',
+    tr: {
+      title: 'DONCHIAN 30m+4h · 6R', tagline: 'Hibrit, geniş hedef: 1:6 R/R',
+      summary: 'dch30_4h hibridiyle birebir AYNI giriş (30m kırılım + 4h yön onayı) ve AYNI −1R stop; tek fark hedef 6R. MFE analizi gösterdi ki kazananlar medyan ~+8R’ye gidiyor, kaybedenler doğruca stop’a (medyan +0R) — yani hedefi genişletmek kayıp tarafını değiştirmiyor, sadece kazananları daha çok yakalıyor.',
+      sections: [
+        { h: 'Neden 6R', t: 'RR-sweep’te R/işlem hedefle birlikte HER ÜÇ yılda da artıyor (2024/2025/2026); 6R, 4R’nin ~2 katı R/işlem veriyor. Tüm denenen filtreler içinde OOS’ta tutan TEK kaldıraç.' },
+        { h: 'Asimetri', t: 'Kaybedenlerin sadece ~%38’i +1R’ye değiyor (medyan +0R) → doğruca stop. 4R TP’lerinin ~%51’i +4R DAHA gidiyor. Geniş hedef bu yapısal asimetriyi paraya çeviriyor.' },
+        { h: 'Çıkış & risk', t: 'Stop = ATR(14)×2; hedef = sabit R/R = 6. Tam-TP. Çözülme hızlı: TP medyan ~1.4 gün, SL medyan ~6 saat.' },
+        { h: 'Bedeli', t: 'WR %23 → ~%15. Equity eğrisi daha lumpy, drawdown’lar daha derin ama nadir. Nadir büyük kazanana daha bağımlı.' },
+      ],
+      caveat: '6R, getiriyi artırır ama varyansı da. Daha düz eğri istersen 4R (dch30_4h) tercih et. Canlı R backtest’in altında olur.',
+    },
+    en: {
+      title: 'DONCHIAN 30m+4h · 6R', tagline: 'Hybrid, wider target: 1:6 R/R',
+      summary: 'Identical entry to the dch30_4h hybrid (30m breakout + 4h confirm) and the SAME −1R stop; only the target differs (6R). The MFE study found winners run to ~+8R median while losers go straight to stop (median +0R) — so widening the target does not change the loss side, it only captures more of the winners.',
+      sections: [
+        { h: 'Why 6R', t: 'In the RR-sweep, R/trade rises with the target in ALL THREE years (2024/2025/2026); 6R ~doubles R/trade vs 4R. The only lever that held up out-of-sample among everything tested.' },
+        { h: 'Asymmetry', t: 'Only ~38% of losers reach +1R (median +0R) → straight to stop. ~51% of 4R TPs run +4R BEYOND. The wider target monetises this structural asymmetry.' },
+        { h: 'Exit & risk', t: 'Stop = ATR(14)×2; target = fixed R/R = 6. Full-TP. Resolves fast: TP median ~1.4d, SL median ~6h.' },
+        { h: 'The cost', t: 'WR 23% → ~15%. Lumpier equity curve, deeper but rarer drawdowns, more dependent on rare big winners.' },
+      ],
+      caveat: '6R lifts returns but also variance. For a smoother curve prefer 4R (dch30_4h). Live R will be below backtest.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {

@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180 };
+const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180, dch30_4h6: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -81,7 +81,12 @@ const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180 };
 // 2026-06-17: pruned to donchian (1h) + dch30_4h (hybrid). The base donch_30m was dominated
 // by the hybrid (which beats it every OOS year with ~30% fewer trades); the ½TP twin
 // dch30_4hh was 2024-negative OOS. Both removed from UI + DB + live.
-const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h' };
+// 'dch30_4h6' = the 6R-target twin of the hybrid (same 30m breakout + 4h confirm, same -1R
+// stop, wider TP at 6R). The MFE study found winners run to ~8R median while losers go
+// straight to stop, so a wider target ~doubles R/trade vs 4R in ALL THREE years (OOS-robust)
+// — the only robust improvement found. Trade-off: WR ~15% (vs 23%), lumpier curve; resolves
+// fast (TP median ~1.4d, SL ~6h). Live: canli.py --tf 30m --confirm-htf 4h --rr 6.
+const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -89,7 +94,7 @@ const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h' };
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
 // OPUS reads mode='live' (the MAIN hourly emission) + the per-symbol NY-session gate.
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
-const STRATEGY_LIVE_MODE = { donchian: 'donchian', dch30_4h: 'dch30_4h' };
+const STRATEGY_LIVE_MODE = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6' };
 // No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();
 // karma reads BOTH live modes and filters per-symbol via KARMA_MAP.

@@ -49,16 +49,19 @@ def _load_1m(sym: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
 
 
 def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "1h",
-               confirm_htf: str | None = None, half: bool = False):
+               confirm_htf: str | None = None, half: bool = False, rr: float = strat.RR):
     """Return (rows, resolved_n, total_r) for one symbol.
 
     If confirm_htf is set (e.g. '4h'), only breakouts whose direction agrees with that
     higher timeframe's trend are kept (strat.htf_confirm); rows are tagged with the
     hybrid version (e.g. 'dch30_4h'). If half=True, resolve under the ½TP + breakeven
     exit model (scale out 50% at half the distance to TP, pull stop to entry) and append
-    an 'h' to the version tag."""
+    an 'h' to the version tag. rr sets the reward/risk target (default 4); a non-4 target
+    appends its integer to the tag (e.g. rr=6 -> 'dch30_4h6')."""
     ltf_min = TF_MINUTES[tf]
     version = strat.hybrid_tag(tf, confirm_htf) if confirm_htf else strat.version_for(tf)
+    if int(rr) != int(strat.RR):
+        version += str(int(rr))
     if half:
         version += "h"
     fetch_start = w_start - _warmup(tf)
@@ -67,7 +70,7 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
     if df is None or df.empty:
         print(f"  {sym:<10} SKIP (no {tf})", flush=True)
         return [], 0, 0.0
-    sigs = [s for s in strat.generate_signals(df, sym) if w_start <= s.timestamp < w_end]
+    sigs = [s for s in strat.generate_signals(df, sym, rr=rr) if w_start <= s.timestamp < w_end]
     if confirm_htf and sigs:
         hstart = w_start - _warmup(confirm_htf)
         hdf = tsc.fetch_klines(sym, confirm_htf, int(hstart.timestamp() * 1000),
@@ -120,6 +123,9 @@ def main():
     ap.add_argument("--half", action="store_true",
                     help="resolve under the ½TP + breakeven exit model (scale out 50%% at "
                          "half the distance to TP, stop->entry); version tag gets an 'h' suffix")
+    ap.add_argument("--rr", type=float, default=strat.RR,
+                    help=f"reward/risk target (default {strat.RR}); non-4 appends its int to "
+                         f"the tag, e.g. --rr 6 -> 'dch30_4h6'")
     ap.add_argument("--start", default=None, help="YYYY-MM-DD (default 2025-06-16)")
     ap.add_argument("--end", default=None, help="YYYY-MM-DD (default now)")
     ap.add_argument("--no-wipe", action="store_true",
@@ -131,19 +137,21 @@ def main():
     w_end = pd.Timestamp(args.end, tz="UTC") if args.end else pd.Timestamp.now(tz="UTC")
     version = strat.hybrid_tag(args.tf, args.confirm_htf) if args.confirm_htf \
         else strat.version_for(args.tf)
+    if int(args.rr) != int(strat.RR):
+        version += str(int(args.rr))
     if args.half:
         version += "h"
     htf_note = f" +{args.confirm_htf}-dir confirm" if args.confirm_htf else ""
     exit_note = " | ½TP+BE" if args.half else " | full-TP"
     print(f"=== Donchian backtest [{w_start.date()} .. {w_end.date()}) "
-          f"| tf={args.tf}{htf_note}{exit_note} | {len(args.symbols)} symbols "
+          f"| tf={args.tf}{htf_note} RR={args.rr:g}{exit_note} | {len(args.symbols)} symbols "
           f"| version='{version}' ===", flush=True)
 
     all_rows, tot_n, tot_r = [], 0, 0.0
     for sym in args.symbols:
         try:
             rows, n, r = run_symbol(sym, w_start, w_end, tf=args.tf,
-                                    confirm_htf=args.confirm_htf, half=args.half)
+                                    confirm_htf=args.confirm_htf, half=args.half, rr=args.rr)
             all_rows += rows
             tot_n += n
             tot_r += r

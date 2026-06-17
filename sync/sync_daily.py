@@ -84,6 +84,11 @@ STREAMS = {
     # 30m family). 2026-06-17: the base donch_30m (dominated by this) and the ½TP twin
     # dch30_4hh (2024-negative OOS) were removed.
     "dch30_4h":     {"mode": "dch30_4h", "version": "dch30_4h", "ltf_min": 30, "floor": "30min", "symbols": None},
+    # 6R-target twin of the hybrid (canli.py --tf 30m --confirm-htf 4h --rr 6, mode='dch30_4h6').
+    # MFE study: winners run to ~8R median, losers go straight to stop -> a wider 6R target
+    # ~doubles R/trade vs 4R in ALL THREE years (2024/2025/2026) — the one OOS-robust lever.
+    # Lower WR (~15% vs 23%), but resolves fast (TP median ~1.4d, SL ~6h).
+    "dch30_4h6":    {"mode": "dch30_4h6", "version": "dch30_4h6", "ltf_min": 30, "floor": "30min", "symbols": None},
 }
 
 # Streams processed by `--stream all`. radar_legacy (retired dynamic stream) and pulse
@@ -103,7 +108,7 @@ STREAMS = {
 # 2026-06-16: 'donchian' (trend complement) wired live. Its hourly emitter
 # (sync/donchian/canli.py) writes mode='donchian' live signals; the nightly
 # `--stream all` now resolves them into backtest version='donchian'.
-ACTIVE_STREAMS = ["donchian", "dch30_4h"]
+ACTIVE_STREAMS = ["donchian", "dch30_4h", "dch30_4h6"]
 LIGHT_PARENTS = ("impulse", "karma")
 
 

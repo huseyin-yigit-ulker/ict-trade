@@ -74,6 +74,9 @@ def run_symbol(sym, w_start, w_end):
     a = strat.atr(df); er = strat.eff_ratio(df["close"])
     hi = df["high"].rolling(strat.N_ENTRY).max().shift(1)
     lo = df["low"].rolling(strat.N_ENTRY).min().shift(1)
+    # VOLUME expansion: breakout-bar volume vs the trailing 20-bar avg (causal, shift(1)).
+    # vol_ratio>1 => the break fired on rising volume (higher-conviction, less likely false).
+    vol_sma = df["volume"].rolling(20).mean().shift(1)
     pos = {ts: i for i, ts in enumerate(df.index)}
 
     prev = C.PARTIAL_TP_ENABLED; C.PARTIAL_TP_ENABLED = False
@@ -85,6 +88,8 @@ def run_symbol(sym, w_start, w_end):
                 continue
             margin = ((s.entry - hi.iloc[i]) if s.direction == "long"
                       else (lo.iloc[i] - s.entry)) / a.iloc[i]   # ATR units, >=0 on a real break
+            vsma = vol_sma.iloc[i]
+            vratio = float(df["volume"].iloc[i] / vsma) if vsma and vsma > 0 else float("nan")
             res = tsc.simulate(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                                s.take_profit_1, df1m=df1m, ltf_minutes=30,
                                expiry_minutes=s.expiry_minutes)
@@ -92,21 +97,26 @@ def run_symbol(sym, w_start, w_end):
                 continue
             out.append({"month": f"{s.timestamp.year}-{s.timestamp.month:02d}",
                         "r": float(res["pnl_r"]), "win": res["status"] == "closed_tp",
-                        "margin": float(margin), "er30": float(er.iloc[i])})
+                        "margin": float(margin), "er30": float(er.iloc[i]), "vol": vratio})
     finally:
         C.PARTIAL_TP_ENABLED = prev
     return out
 
 
+def _v(r):  # NaN-safe volume ratio
+    x = r.get("vol"); return x if x == x else 0.0
+
+
 COMBOS = {
     "baseline":          lambda r: True,
-    "margin>=0.25":      lambda r: r["margin"] >= 0.25,
+    "vol>=1.0":          lambda r: _v(r) >= 1.0,
+    "vol>=1.25":         lambda r: _v(r) >= 1.25,
+    "vol>=1.5":          lambda r: _v(r) >= 1.5,
+    "vol>=2.0":          lambda r: _v(r) >= 2.0,
     "margin>=0.50":      lambda r: r["margin"] >= 0.50,
-    "margin>=0.75":      lambda r: r["margin"] >= 0.75,
-    "er30>=0.45":        lambda r: r["er30"] >= 0.45,
     "er30>=0.55":        lambda r: r["er30"] >= 0.55,
-    "m>=0.5 & er>=0.45": lambda r: r["margin"] >= 0.5 and r["er30"] >= 0.45,
-    "m>=0.5 & er>=0.55": lambda r: r["margin"] >= 0.5 and r["er30"] >= 0.55,
+    "vol>=1.5 & er>=0.45": lambda r: _v(r) >= 1.5 and r["er30"] >= 0.45,
+    "vol>=1.5 & m>=0.5": lambda r: _v(r) >= 1.5 and r["margin"] >= 0.5,
 }
 
 

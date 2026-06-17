@@ -90,6 +90,8 @@ const GROUPS = [
   // 2026-06-17: HYBRID — 30m breakout + 4h trend-direction confirm. Best stream overall
   // (+1106R / 2024-26). The base donch_30m + the ½TP twin dch30_4hh were removed.
   { key: 'dch30_4h',     label: 'DONCHIAN 30m+4h',   icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  // 2026-06-17: 6R-target twin (wider TP; ~2x R/trade vs 4R, OOS-robust, lower WR).
+  { key: 'dch30_4h6',    label: 'DONCHIAN 30m+4h·6R',icon: <IconIntel />,   modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

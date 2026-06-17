@@ -22,6 +22,9 @@ export const STREAMS = [
   // of the 30m family). 2026-06-17: the base donch_30m (dominated by this) and the ½TP twin
   // dch30_4hh (2024-negative OOS) were removed — see sync/donchian/.
   { key: 'dch30_4h',     version: 'dch30_4h',     exit: 'full', family: 'trend', tf: '30m+4h' },
+  // 2026-06-17: 6R-target twin — MFE study showed winners run to ~8R median, losers go
+  // straight to stop; a 6R target ~doubles R/trade vs 4R in all 3 years (OOS-robust).
+  { key: 'dch30_4h6',    version: 'dch30_4h6',    exit: 'full', family: 'trend', tf: '30m+4h·6R' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.
