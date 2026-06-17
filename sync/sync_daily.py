@@ -77,6 +77,13 @@ STREAMS = {
     # (mode='donchian'); this resolves them -> version='donchian'. symbols=None keeps the
     # resolver universe-agnostic (only the donchian emitter writes mode='donchian').
     "donchian":     {"mode": "donchian", "version": "donchian", "ltf_min": 60, "floor": "h",     "symbols": None},
+    # HYBRID: 30m breakout CONFIRMED by 4h trend direction (canli.py --tf 30m --confirm-htf
+    # 4h, mode='dch30_4h'). The 4h-dir filter is applied at EMIT time, so the resolver just
+    # resolves the confirmed 30m signals like any 30m stream -> version='dch30_4h'. Best
+    # stream overall: +1106R across 2024-26 (every OOS year positive, fewest trades of the
+    # 30m family). 2026-06-17: the base donch_30m (dominated by this) and the ½TP twin
+    # dch30_4hh (2024-negative OOS) were removed.
+    "dch30_4h":     {"mode": "dch30_4h", "version": "dch30_4h", "ltf_min": 30, "floor": "30min", "symbols": None},
 }
 
 # Streams processed by `--stream all`. radar_legacy (retired dynamic stream) and pulse
@@ -96,7 +103,7 @@ STREAMS = {
 # 2026-06-16: 'donchian' (trend complement) wired live. Its hourly emitter
 # (sync/donchian/canli.py) writes mode='donchian' live signals; the nightly
 # `--stream all` now resolves them into backtest version='donchian'.
-ACTIVE_STREAMS = ["donchian"]
+ACTIVE_STREAMS = ["donchian", "dch30_4h"]
 LIGHT_PARENTS = ("impulse", "karma")
 
 

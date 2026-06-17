@@ -6,6 +6,10 @@
 #   gate (mode='donchian'). Emits on freshly-closed 1h bars and sends a DONCHIAN-labelled
 #   Telegram alert per new signal.
 1 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
-# Daily resolve: donchian live signals -> backtest trading_signals (version='donchian')
-#   via sync_daily ACTIVE_STREAMS=['donchian'].
+# DONCHIAN 30m+4h HYBRID live emit (:01 and :31) — 30m breakout confirmed by 4h trend
+#   direction (mode='dch30_4h'). Best stream overall (+1106R / 2024-26). The plain-30m and
+#   ½TP streams were removed 2026-06-17 (see sync/donchian/).
+1,31 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h >> $HOME/ict-donchian.log 2>&1
+# Daily resolve: donchian live signals -> backtest trading_signals (version='donchian' +
+#   'dch30_4h') via sync_daily ACTIVE_STREAMS.
 30 0 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream all >> $HOME/ict-sync.log 2>&1

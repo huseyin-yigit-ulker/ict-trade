@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { donchian: 180 };
+const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -72,7 +72,16 @@ const STRATEGY_EXPIRY_MINUTES = { donchian: 180 };
 // removed from UI + DB (RETIRED_STREAMS_REPORT.md): v1 net −223R, opus OOS-negative
 // (2026-overfit), range positive but dropped for focus. donchian is the only multi-year
 // OOS-validated stream (2025 +662R, 2024 +179R, 2026 +288R).
-const STRATEGY_VERSION = { donchian: 'donchian' };
+// 'dch30_4h' = HYBRID: a 30m Donchian breakout TAKEN ONLY when the 4h trend agrees (4h
+// close on the trade's side of its 55-bar Donchian midline). The 2026 MTF-validation
+// winner: +349R vs the base 30m +240R, R/trade DOUBLED (~0.06 -> ~0.12) on ~30% fewer
+// trades (less fee/slippage drag). 4h-direction confirm beats a 4h-ER gate (ER hurts).
+// Live: canli.py --tf 30m --confirm-htf 4h (mode='dch30_4h', every :01/:31). The filter
+// is applied at emit time, so only confirmed signals ever reach the live table.
+// 2026-06-17: pruned to donchian (1h) + dch30_4h (hybrid). The base donch_30m was dominated
+// by the hybrid (which beats it every OOS year with ~30% fewer trades); the ½TP twin
+// dch30_4hh was 2024-negative OOS. Both removed from UI + DB + live.
+const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -80,9 +89,8 @@ const STRATEGY_VERSION = { donchian: 'donchian' };
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
 // OPUS reads mode='live' (the MAIN hourly emission) + the per-symbol NY-session gate.
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
-const STRATEGY_LIVE_MODE = { donchian: 'donchian' };
-// ½TP is no longer a standalone stream — the partial-TP + breakeven exit survives
-// only as KARMA's per-symbol exit (KARMA_MAP[sym].half) and the live status machine.
+const STRATEGY_LIVE_MODE = { donchian: 'donchian', dch30_4h: 'dch30_4h' };
+// No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();
 // karma reads BOTH live modes and filters per-symbol via KARMA_MAP.
 const KARMA_STRATEGIES = new Set(['karma']);
@@ -519,7 +527,7 @@ export const TradeProvider = ({ children }) => {
     // forced, restore from the in-memory session cache (no network round-trip).
     // Version is keyed off the active strategy module: main -> v1, impulse -> v2.
     const btVersion = STRATEGY_VERSION[strategyRef.current] || 'v1';
-    const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2025-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
+    const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2024-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
     const cached = backtestCacheRef.current;
     if (!force && cached && cached.key === cacheKey) {
       setLiveError('');
@@ -594,7 +602,7 @@ export const TradeProvider = ({ children }) => {
         order: 'signal_time.desc'
       });
       params.append('version', `eq.${btVersion}`);
-      params.append('signal_time', 'gte.2025-01-01T00:00:00Z');
+      params.append('signal_time', 'gte.2024-01-01T00:00:00Z');   // donchian multi-year history (2024+)
       params.append('symbol', `in.(${BACKTEST_ALLOWED_SYMBOLS.join(',')})`);
 
       const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;

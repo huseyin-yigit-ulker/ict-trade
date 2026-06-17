@@ -16,7 +16,12 @@ export const STREAMS = [
   // DB rows remain but aren't surfaced.)
   // 2026-06-16: pruned to a SINGLE stream — donchian. MAIN/RANGE/OPUS removed (UI + DB);
   // see sync/donchian/RETIRED_STREAMS_REPORT.md.
-  { key: 'donchian',   version: 'donchian',   exit: 'full', family: 'trend' },
+  { key: 'donchian',     version: 'donchian',     exit: 'full', family: 'trend', tf: '1h' },
+  // 2026-06-17: HYBRID — 30m breakout confirmed by 4h trend direction. The MTF-validation
+  // winner: best stream overall, +1106R across 2024-26 (every year positive, fewest trades
+  // of the 30m family). 2026-06-17: the base donch_30m (dominated by this) and the ½TP twin
+  // dch30_4hh (2024-negative OOS) were removed — see sync/donchian/.
+  { key: 'dch30_4h',     version: 'dch30_4h',     exit: 'full', family: 'trend', tf: '30m+4h' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

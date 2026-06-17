@@ -409,7 +409,15 @@ const ChartModal = () => {
             });
         }
         if (entry && tp && sl) {
-          tpAreaSeries.setData([ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]);
+          // Guard the zone span: lightweight-charts setData requires strictly-ascending
+          // unique times. For a freshly-emitted signal the entry-bar close (entryTs) can
+          // equal or exceed the latest loaded 1m candle (endTimeForGraph) — most often on
+          // the 30m stream, whose :00/:30 closes land exactly on 1m boundaries. Two equal
+          // (or descending) points would throw → "Veri alınamadı". Fall back to a single
+          // point until the candle window advances past the entry bar (next 3s refresh).
+          tpAreaSeries.setData(endTimeForGraph > entryTs
+            ? [ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]
+            : [ { time: entryTs, value: tp } ]);
           // ½TP: the original SL dies at the partial (stop → entry) — end its zone there
           // so the chart reads "risk removed from this bar on".
           const slZoneEnd = (isHalf && partialBarSec != null) ? Math.min(partialBarSec, endTimeForGraph) : endTimeForGraph;

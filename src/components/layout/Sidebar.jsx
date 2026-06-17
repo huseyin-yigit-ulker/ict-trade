@@ -86,7 +86,10 @@ const GROUPS = [
   // sessions; RANGE = RANGE_DEV every session; OPUS = MAIN gated to each symbol's NY session.
   // 2026-06-16: pruned to a SINGLE stream. MAIN/RANGE/OPUS removed (UI + DB) — see
   // sync/donchian/RETIRED_STREAMS_REPORT.md. donchian is the only OOS-validated stream.
-  { key: 'donchian',   label: 'DONCHIAN',            icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  { key: 'donchian',     label: 'DONCHIAN',          icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  // 2026-06-17: HYBRID — 30m breakout + 4h trend-direction confirm. Best stream overall
+  // (+1106R / 2024-26). The base donch_30m + the ½TP twin dch30_4hh were removed.
+  { key: 'dch30_4h',     label: 'DONCHIAN 30m+4h',   icon: <IconIntel />,   modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

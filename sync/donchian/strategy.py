@@ -37,8 +37,68 @@ ATR_MULT = 2.0        # stop distance = ATR_MULT * ATR
 RR = 4.0              # take-profit = entry +/- RR * risk
 EXPIRY_MINUTES = 180  # entry-fill window on the 1m resolver (breakout fills ~immediately)
 STRATEGY = "DONCHIAN_BO"
-VERSION = "donchian"  # backtest trading_signals.version tag
-MODE = "donchian"     # live ict_trade.signals.mode tag
+VERSION = "donchian"  # backtest trading_signals.version tag (1h base stream)
+MODE = "donchian"     # live ict_trade.signals.mode tag (1h base stream)
+
+
+# Short stem for suffixed timeframe tags. The backtest trading_signals.version column is
+# varchar(10), so the full 'donchian_30m' (12) overflows — 'donch_30m'/'donch_15m'/'donch_4h'
+# (<=9) fit. 1h keeps the bare 'donchian' tag (the original base stream).
+_SHORT = "donch"
+
+
+def version_for(tf: str) -> str:
+    """Backtest version tag per signal timeframe, e.g. 'donch_30m' (1h -> bare 'donchian')."""
+    return VERSION if tf == "1h" else f"{_SHORT}_{tf}"
+
+
+def mode_for(tf: str) -> str:
+    """Live ict_trade.signals.mode tag per signal timeframe (mirrors version_for)."""
+    return MODE if tf == "1h" else f"{_SHORT}_{tf}"
+
+
+# Bar duration per timeframe (minutes) — shared by backtest/live for fire-time math.
+TF_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
+
+
+def hybrid_tag(base_tf: str, htf_tf: str) -> str:
+    """Tag for a HYBRID stream = base-tf breakout confirmed by a higher tf's trend
+    direction, e.g. ('30m','4h') -> 'dch30_4h' (<=10 chars for the version column)."""
+    return f"dch{base_tf.rstrip('mh')}_{htf_tf}"
+
+
+def htf_confirm(signals: list["DonSignal"], base_tf: str, htf_df: pd.DataFrame,
+                htf_tf: str, *, n_entry: int = N_ENTRY) -> list["DonSignal"]:
+    """Keep only signals whose direction agrees with the HIGHER timeframe trend — HTF
+    close on the trade's side of its `n_entry`-bar Donchian midline — as of each signal's
+    FIRE time (= base bar close = signal.timestamp + base bar). Causal: only HTF bars that
+    have CLOSED by the fire time are consulted (close_time = bar open + htf bar). The
+    2026 sweep found this 4h-direction confirmation is the single best filter for the
+    30m/15m breakout (it doubles R/trade and rescues 15m from break-even); the HTF ER
+    gate, by contrast, hurts. Kept signals are annotated context['htf_confirm']=htf_tf."""
+    if htf_df is None or htf_df.empty or not signals:
+        return []
+    base_bar = pd.Timedelta(minutes=TF_MINUTES[base_tf])
+    htf_bar = pd.Timedelta(minutes=TF_MINUTES[htf_tf])
+    hi = htf_df["high"].rolling(n_entry).max().shift(1)
+    lo = htf_df["low"].rolling(n_entry).min().shift(1)
+    mid = ((hi + lo) / 2).values
+    close = htf_df["close"].values
+    close_time = htf_df.index + htf_bar          # the bar's real availability (close) time
+    out: list[DonSignal] = []
+    for s in signals:
+        fire = s.timestamp + base_bar
+        pos = int(close_time.searchsorted(fire, side="right")) - 1
+        if pos < 0 or pos >= len(mid):
+            continue                              # no closed HTF bar yet -> can't confirm
+        m = mid[pos]
+        if m != m:                                # NaN midline (warmup) -> skip
+            continue
+        ok = (close[pos] > m) if s.direction == "long" else (close[pos] < m)
+        if ok:
+            s.context = {**(s.context or {}), "htf_confirm": htf_tf}
+            out.append(s)
+    return out
 
 # Full universe — mirrors sync_daily.STATIC_SYMBOLS (the 40-symbol production set), so the
 # 2026 backtest and the live emitter both cover every symbol. The strategy was VALIDATED

@@ -14,7 +14,9 @@ const EquityCurvePanel = ({ signals, calculatePnL, profitFactor }) => {
     if (!Array.isArray(signals) || signals.length < 2) return null;
     const cum = [];
     const peakLine = [];
-    let c = 0, peak = -Infinity, peakIdx = 0, maxDD = 0, lo = 0, hi = 0;
+    // peak seeded at the 0 starting equity (matches lo/hi=0 baseline) so an opening
+    // drawdown before the first new high is counted, not silently dropped.
+    let c = 0, peak = 0, peakIdx = 0, maxDD = 0, lo = 0, hi = 0;
     signals.forEach((s, i) => {
       c += Number(calculatePnL(s)) || 0;
       cum.push(c);

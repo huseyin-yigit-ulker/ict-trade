@@ -14,9 +14,9 @@ DONCHIAN, mevcut ICT setimizin (MAIN/RANGE) yapısal olarak **zayıf olduğu gü
 |---|---|---|---|---|
 | 2026 (Oca–Haz, 40 sembol) | **+288.1R** | 2353 | %23 | tam, DB'de (in-sample) |
 | 2025 OOS (40 sembol) | **+662.1R** | 3151 | %25 | tam (out-of-sample) |
-| 2024 OOS (40 sembol) | *(devam ediyor)* | — | — | BTC +75.9R |
+| 2024 OOS (17 kripto) | **+102.5R** | 2723 | %21 | tam (out-of-sample) |
 
-Edge **out-of-sample'da daha da güçlü** (2025 +662R, 2026'nın iki katı) → 2026'ya özgü bir overfit değil.
+Edge **out-of-sample'da daha da güçlü** (2025 +662R, 2026'nın iki katı) ve **üç yılın üçünde de net pozitif** (2024 +102.5R, 2025 +662R, 2026 +288R) → 2026'ya özgü bir overfit değil. *(2024'te yalnızca 17 kripto sembol Binance'te listeliydi; metal ve hisse-perp'ler o yıl mevcut değil — bu yüzden evren daha küçük ve toplam R daha düşük.)*
 
 ---
 
@@ -149,12 +149,16 @@ Trend edge'i crypto+metallerde güçlü; hisse-perp'lerde zayıf (gap-driven mik
 ### 6.2 — 2025 OOS (out-of-sample), tam: **+662.1R** / 3151 işlem / WR %25
 En güçlüler: ARB +93.9, NEAR +88.3, FET +67.7, ETH +57.4, AVAX +49.6, SOL +46.7, LINK +43.6, S +35.8, ADA +24.5, BTC +20.3. Negatifler: ONDO −36.0, ORDI −3.0, BNB −0.6. (DOGE +115.7 — yıla bağlı.)
 
-### 6.3 — Sembol bazında iki-yıl tutarlılığı (2025 & 2026)
-- **✓ Her iki yıl pozitif (14):** BTC, ETH, SOL, PEPE, WIF, SUI, NEAR, FET, ADA, S, ARB, XRP, AVAX, XAU → **güvenli çekirdek evren**
-- **✗ Her iki yıl negatif (2):** ORDI (−3/−3), ONDO (−36/−10) → **budama adayı**
-- **~ Karışık (3):** DOGE (+116/−6), LINK (+44/−4), BNB (−1/+4)
+### 6.3 — 2024 OOS, sembol bazında (17 kripto): **+102.5R** / 2723 işlem / WR %21
+En güçlüler: BTC +75.8, FET +48.0, ETH +41.2, WIF +35.5, AVAX +23.6, SOL +18.4, XRP +17.4, SUI +9.6, BNB +8.7, DOGE +8.7, PEPE +6.8. Negatifler: ORDI −68.0, ONDO −49.2, LINK −38.7, NEAR −20.7, ADA −12.7, ARB −2.0.
 
-*(2024 OOS devam ediyor — BTC +75.9R ile üç-yıl pozitif; tamamlanınca tablo güncellenecek.)*
+### 6.4 — Sembol bazında üç-yıl tutarlılığı (2024 / 2025 / 2026, R)
+- **✓ Üç yıl da pozitif (8):** BTC (+76/+20/+14), ETH (+41/+57/+14), SOL (+18/+47/+6), SUI (+10/+18/+27), FET (+48/+67/+1), XRP (+17/+4/+44), AVAX (+24/+50/+24), PEPE (+7/+15/+16) → **güvenli çekirdek evren**
+- **✗ Üç yıl da negatif (2):** ORDI (−68/−3/−3), ONDO (−49/−37/−10) → **kesin budama adayı**
+- **~ Karışık (7):** DOGE (+9/+115/−6), BNB (+9/−1/+4), WIF (+36/−1/+42), ADA (−13/+24/+25), NEAR (−21/+88/+20), ARB (−2/+93/+17), LINK (−39/+44/−5)
+- **2024'te yok (2):** S, XAU → mevcut iki yılda pozitif (S +35/−1; XAU +15/+44)
+
+> 2024, RR4/ER0.35/N55 parametreleri için üçüncü bağımsız OOS penceresidir: net pozitif (+102.5R) ve çekirdek 8 sembol üç yılın üçünde de pozitif → parametre seçimi 2026-overfit değil. ORDI/ONDO üç yıl boyunca tutarlı negatif (budama gerekçesi güçleniyor).
 
 ---
 

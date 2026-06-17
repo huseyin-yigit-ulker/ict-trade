@@ -28,8 +28,13 @@ import strategy as strat                     # noqa: E402
 from ict import config as C                  # noqa: E402  (path added by tsc)
 
 DEFAULT_START = pd.Timestamp("2025-06-16", tz="UTC")
-WARMUP = pd.Timedelta(hours=2200)            # enough 1h history for the 55-bar channel + ER
 CACHE = Path(os.environ.get("DONCHIAN_1M_CACHE", "/tmp/donchian1m_cache"))  # per-window override
+
+# Signal timeframe -> (bar minutes, warmup). Warmup must cover the 55-bar channel + ER(24)
+# window before w_start, with generous slack, sized per timeframe.
+TF_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
+def _warmup(tf: str) -> pd.Timedelta:
+    return pd.Timedelta(minutes=TF_MINUTES[tf] * (strat.N_ENTRY + strat.ER_N) * 6)
 
 
 def _load_1m(sym: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
@@ -43,13 +48,31 @@ def _load_1m(sym: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     return df
 
 
-def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp):
-    """Return (rows, resolved_n, total_r) for one symbol — full-TP exit model."""
-    df = tsc.fetch_1h(sym, w_start - WARMUP, w_end)
+def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "1h",
+               confirm_htf: str | None = None, half: bool = False):
+    """Return (rows, resolved_n, total_r) for one symbol.
+
+    If confirm_htf is set (e.g. '4h'), only breakouts whose direction agrees with that
+    higher timeframe's trend are kept (strat.htf_confirm); rows are tagged with the
+    hybrid version (e.g. 'dch30_4h'). If half=True, resolve under the ½TP + breakeven
+    exit model (scale out 50% at half the distance to TP, pull stop to entry) and append
+    an 'h' to the version tag."""
+    ltf_min = TF_MINUTES[tf]
+    version = strat.hybrid_tag(tf, confirm_htf) if confirm_htf else strat.version_for(tf)
+    if half:
+        version += "h"
+    fetch_start = w_start - _warmup(tf)
+    df = tsc.fetch_klines(sym, tf, int(fetch_start.timestamp() * 1000),
+                          int(w_end.timestamp() * 1000))
     if df is None or df.empty:
-        print(f"  {sym:<10} SKIP (no 1h)", flush=True)
+        print(f"  {sym:<10} SKIP (no {tf})", flush=True)
         return [], 0, 0.0
     sigs = [s for s in strat.generate_signals(df, sym) if w_start <= s.timestamp < w_end]
+    if confirm_htf and sigs:
+        hstart = w_start - _warmup(confirm_htf)
+        hdf = tsc.fetch_klines(sym, confirm_htf, int(hstart.timestamp() * 1000),
+                               int(w_end.timestamp() * 1000))
+        sigs = strat.htf_confirm(sigs, tf, hdf, confirm_htf)
     if not sigs:
         print(f"  {sym:<10} 0 breakouts", flush=True)
         return [], 0, 0.0
@@ -59,16 +82,17 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp):
         return [], 0, 0.0
 
     prev = C.PARTIAL_TP_ENABLED
-    C.PARTIAL_TP_ENABLED = False              # full-TP stream
+    C.PARTIAL_TP_ENABLED = half               # full-TP (default) or ½TP+breakeven
     rows, resolved, tot = [], 0, 0.0
     try:
         for s in sigs:
             res = tsc.simulate(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
-                               s.take_profit_1, df1m=df1m, expiry_minutes=s.expiry_minutes)
+                               s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
+                               expiry_minutes=s.expiry_minutes)
             row = tsc.build_row(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                                 s.take_profit_1, res, strategy=s.strategy,
                                 quality=s.quality, confluence_score=s.confluence_score)
-            row["version"] = strat.VERSION
+            row["version"] = version
             rows.append(row)
             if res["status"] in ("closed_tp", "closed_sl") and res["pnl_r"] is not None:
                 resolved += 1
@@ -88,19 +112,38 @@ def main():
     g.add_argument("--dry-run", action="store_true")
     g.add_argument("--apply", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=strat.SYMBOLS)
+    ap.add_argument("--tf", default="1h", choices=sorted(TF_MINUTES),
+                    help="signal timeframe (default 1h)")
+    ap.add_argument("--confirm-htf", default=None, choices=["1h", "4h"],
+                    help="HYBRID: keep only breakouts aligned with this higher tf's trend "
+                         "direction (e.g. 4h) -> version='dch<base>_<htf>'")
+    ap.add_argument("--half", action="store_true",
+                    help="resolve under the ½TP + breakeven exit model (scale out 50%% at "
+                         "half the distance to TP, stop->entry); version tag gets an 'h' suffix")
     ap.add_argument("--start", default=None, help="YYYY-MM-DD (default 2025-06-16)")
     ap.add_argument("--end", default=None, help="YYYY-MM-DD (default now)")
+    ap.add_argument("--no-wipe", action="store_true",
+                    help="append: skip the version wipe (for multi-window backfill — "
+                         "upsert key includes signal_time so windows don't collide)")
     args = ap.parse_args()
 
     w_start = pd.Timestamp(args.start, tz="UTC") if args.start else DEFAULT_START
     w_end = pd.Timestamp(args.end, tz="UTC") if args.end else pd.Timestamp.now(tz="UTC")
+    version = strat.hybrid_tag(args.tf, args.confirm_htf) if args.confirm_htf \
+        else strat.version_for(args.tf)
+    if args.half:
+        version += "h"
+    htf_note = f" +{args.confirm_htf}-dir confirm" if args.confirm_htf else ""
+    exit_note = " | ½TP+BE" if args.half else " | full-TP"
     print(f"=== Donchian backtest [{w_start.date()} .. {w_end.date()}) "
-          f"| {len(args.symbols)} symbols | version='{strat.VERSION}' ===", flush=True)
+          f"| tf={args.tf}{htf_note}{exit_note} | {len(args.symbols)} symbols "
+          f"| version='{version}' ===", flush=True)
 
     all_rows, tot_n, tot_r = [], 0, 0.0
     for sym in args.symbols:
         try:
-            rows, n, r = run_symbol(sym, w_start, w_end)
+            rows, n, r = run_symbol(sym, w_start, w_end, tf=args.tf,
+                                    confirm_htf=args.confirm_htf, half=args.half)
             all_rows += rows
             tot_n += n
             tot_r += r
@@ -115,14 +158,17 @@ def main():
         return
 
     conn = tsc.backtest_conn()
-    cur = conn.cursor()
-    cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version=%s", (strat.VERSION,))
-    print(f"  wiped {cur.rowcount} existing '{strat.VERSION}' rows")
-    conn.commit()
-    cur.close()
+    if not args.no_wipe:
+        cur = conn.cursor()
+        cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version=%s", (version,))
+        print(f"  wiped {cur.rowcount} existing '{version}' rows")
+        conn.commit()
+        cur.close()
+    else:
+        print(f"  [--no-wipe] appending {len(all_rows)} rows (no wipe)")
     n = tsc.upsert_rows(conn, all_rows)
     conn.close()
-    print(f"  upserted {n} '{strat.VERSION}' rows into {tsc.TABLE}")
+    print(f"  upserted {n} '{version}' rows into {tsc.TABLE}")
 
 
 if __name__ == "__main__":

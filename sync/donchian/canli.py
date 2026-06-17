@@ -30,8 +30,10 @@ sys.path.insert(0, str(_HERE.parent))        # sync/donchian -> strategy
 import trade_sync_common as tsc              # noqa: E402
 import strategy as strat                     # noqa: E402
 
-LTF, HTF = "1h", "4h"
-FETCH_DAYS = 40                              # 1h history to cover 55-bar channel + ER + buffer
+HTF = "4h"                                   # trend-context label written to ict_trade.signals
+TF_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
+# history (days) per timeframe to cover the 55-bar channel + ER(24) + buffer
+FETCH_DAYS = {"15m": 12, "30m": 22, "1h": 40, "4h": 160}
 
 
 def _telegram_send(text_msg: str) -> None:
@@ -53,18 +55,30 @@ def _telegram_send(text_msg: str) -> None:
         print(f"  telegram exception: {e}")
 
 
-def _telegram_text(s: "strat.DonSignal") -> str:
-    """DONCHIAN-labelled alert so the receiver knows the signal's source strategy."""
+def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None = None) -> str:
+    """DONCHIAN-labelled alert so the receiver knows the signal's source strategy, its
+    timeframe (1h vs 30m look otherwise identical) AND, for the hybrid stream, that a
+    higher-tf trend confirmation gated it."""
     rr = abs(s.take_profit_1 - s.entry) / abs(s.entry - s.stop_loss)
     arrow = "🟢 LONG ▲" if s.direction == "long" else "🔴 SHORT ▼"
+    label = f"{tf}+{confirm_htf}" if confirm_htf else tf
+    if confirm_htf:
+        head = f"⛰️ <b>DONCHIAN {tf} + {confirm_htf} ONAY</b> — Hybrid Trend Breakout"
+        logic = (f"{tf} 55-bar kırılım + <b>{confirm_htf} trend yönü onayı</b> "
+                 f"(fiyat {confirm_htf} Donchian orta çizgisinin {('üstünde' if s.direction=='long' else 'altında')})")
+        src = f"DONCHIAN {tf}+{confirm_htf} (hybrid)"
+    else:
+        head = f"⛰️ <b>DONCHIAN {tf}</b> — Trend Breakout"
+        logic = f"55-bar kırılım ({tf}), güçlü trend"
+        src = f"DONCHIAN {tf}"
     return (
-        f"⛰️ <b>DONCHIAN</b> — Trend Breakout\n"
-        f"<b>{s.symbol}</b>  {arrow}\n"
+        f"{head}\n"
+        f"<b>{s.symbol}</b>  {arrow}  <code>{label}</code>\n"
         f"Giriş: <code>{s.entry:.6g}</code>\n"
         f"SL: <code>{s.stop_loss:.6g}</code>\n"
         f"TP: <code>{s.take_profit_1:.6g}</code>  (RR 1:{rr:.0f})\n"
-        f"ER: {s.er:.2f}  |  55-bar kırılım, güçlü trend\n"
-        f"<i>🤖 Sinyal DONCHIAN stratejisi tarafından üretildi</i>"
+        f"ER: {s.er:.2f}  |  {logic}\n"
+        f"<i>🤖 Sinyal {src} stratejisi tarafından üretildi</i>"
     )
 
 _EXISTS = """SELECT 1 FROM ict_trade.signals
@@ -75,19 +89,31 @@ _INSERT = """INSERT INTO ict_trade.signals
     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, CAST(%s AS JSONB))"""
 
 
-def fresh_signals(sym: str, now: pd.Timestamp, lookback: pd.Timedelta) -> list[strat.DonSignal]:
-    """Donchian signals on bars that CLOSED within [now-lookback, now]."""
-    df = tsc.fetch_1h(sym, now - pd.Timedelta(days=FETCH_DAYS), now)
+def fresh_signals(sym: str, now: pd.Timestamp, lookback: pd.Timedelta,
+                  tf: str = "1h", confirm_htf: str | None = None) -> list[strat.DonSignal]:
+    """Donchian signals on `tf` bars that CLOSED within [now-lookback, now].
+
+    If confirm_htf is set ('4h'), only breakouts whose direction agrees with that higher
+    timeframe's trend are emitted (strat.htf_confirm) — the hybrid stream."""
+    bar = pd.Timedelta(minutes=TF_MINUTES[tf])
+    df = tsc.fetch_klines(sym, tf, int((now - pd.Timedelta(days=FETCH_DAYS[tf])).timestamp() * 1000),
+                          int(now.timestamp() * 1000))
     if df is None or df.empty:
         return []
-    # drop the still-forming candle: keep bars whose close (open + 1h) is in the past
-    closed = df[df.index + pd.Timedelta(hours=1) <= now]
+    # drop the still-forming candle: keep bars whose close (open + bar) is in the past
+    closed = df[df.index + bar <= now]
     if closed.empty:
         return []
     sigs = strat.generate_signals(closed, sym)
     floor = now - lookback
-    # bar CLOSE = timestamp + 1h must fall inside the lookback window
-    return [s for s in sigs if floor <= s.timestamp + pd.Timedelta(hours=1) <= now]
+    # bar CLOSE = timestamp + bar must fall inside the lookback window
+    fresh = [s for s in sigs if floor <= s.timestamp + bar <= now]
+    if confirm_htf and fresh:
+        hdf = tsc.fetch_klines(sym, confirm_htf,
+                               int((now - pd.Timedelta(days=FETCH_DAYS[confirm_htf])).timestamp() * 1000),
+                               int(now.timestamp() * 1000))
+        fresh = strat.htf_confirm(fresh, tf, hdf, confirm_htf)
+    return fresh
 
 
 def main():
@@ -96,19 +122,30 @@ def main():
     g.add_argument("--dry-run", action="store_true")
     g.add_argument("--emit", action="store_true")
     ap.add_argument("--symbols", nargs="*", default=strat.SYMBOLS)
+    ap.add_argument("--tf", default="1h", choices=sorted(TF_MINUTES),
+                    help="signal timeframe (default 1h)")
+    ap.add_argument("--confirm-htf", default=None, choices=["1h", "4h"],
+                    help="HYBRID: emit only breakouts aligned with this higher tf's trend "
+                         "direction (e.g. 4h) -> mode='dch<base>_<htf>'")
     ap.add_argument("--lookback-hours", type=float, default=1.5,
                     help="emit signals whose bar closed within this many hours (default 1.5)")
+    ap.add_argument("--no-telegram", action="store_true",
+                    help="skip Telegram alerts (for back-filling past signals into the live table)")
     args = ap.parse_args()
 
+    tf = args.tf
+    confirm_htf = args.confirm_htf
+    mode = strat.hybrid_tag(tf, confirm_htf) if confirm_htf else strat.mode_for(tf)
     now = pd.Timestamp.now(tz="UTC")
     lookback = pd.Timedelta(hours=args.lookback_hours)
-    print(f"=== Donchian CANLI @ {now:%Y-%m-%d %H:%M}Z | {len(args.symbols)} symbols "
-          f"| lookback={args.lookback_hours}h | mode='{strat.MODE}' ===", flush=True)
+    htf_note = f" +{confirm_htf}-dir" if confirm_htf else ""
+    print(f"=== Donchian CANLI @ {now:%Y-%m-%d %H:%M}Z | tf={tf}{htf_note} | {len(args.symbols)} "
+          f"symbols | lookback={args.lookback_hours}h | mode='{mode}' ===", flush=True)
 
     found: list[strat.DonSignal] = []
     for sym in args.symbols:
         try:
-            sigs = fresh_signals(sym, now, lookback)
+            sigs = fresh_signals(sym, now, lookback, tf, confirm_htf)
             for s in sigs:
                 rr = abs(s.take_profit_1 - s.entry) / abs(s.entry - s.stop_loss)
                 print(f"  {sym:<10} {s.direction.upper():<5} @ {s.timestamp:%m-%d %H:%M} "
@@ -130,20 +167,21 @@ def main():
     for s in found:
         d = s.direction.upper()
         st = s.timestamp.to_pydatetime()
-        cur.execute(_EXISTS, (s.symbol, st, d, strat.MODE))
+        cur.execute(_EXISTS, (s.symbol, st, d, mode))
         if cur.fetchone():
             print(f"  dup {s.symbol} {d} @ {st} (skipped)")
             continue
         cur.execute(_INSERT, (s.symbol, d, float(s.entry), float(s.stop_loss),
-                              float(s.take_profit_1), st, strat.MODE, LTF, HTF,
+                              float(s.take_profit_1), st, mode, tf, confirm_htf or HTF,
                               s.strategy, s.quality, int(s.confluence_score),
                               json.dumps(s.context or {})))
         conn.commit()                         # commit before notifying (DB is source of truth)
         inserted += 1
-        _telegram_send(_telegram_text(s))     # DONCHIAN-labelled alert per new signal
+        if not args.no_telegram:
+            _telegram_send(_telegram_text(s, tf, confirm_htf))  # alert incl. tf + HTF-confirm note
     cur.close()
     conn.close()
-    print(f"  inserted {inserted} new row(s) into ict_trade.signals (mode='{strat.MODE}')")
+    print(f"  inserted {inserted} new row(s) into ict_trade.signals (mode='{mode}')")
 
 
 if __name__ == "__main__":
