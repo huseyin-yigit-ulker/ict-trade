@@ -95,7 +95,10 @@ def run_symbol(sym, w_start, w_end):
             advcum = np.maximum.accumulate(adv)
             t_sl = int(np.argmax(advcum >= 1.0)) if (advcum >= 1.0).any() else BIG
             tk = {k: (int(np.argmax(favcum >= k)) if (favcum >= k).any() else BIG) for k in LEVELS}
+            # max favourable R reached from entry up to (and incl.) the bar the -1R stop hit
+            fav_sl = float(favcum[t_sl]) if t_sl < len(favcum) else None
             out.append({"dir": s.direction, "mfe": float(favcum[-1]), "t_sl": t_sl, "tk": tk,
+                        "fav_sl": fav_sl,
                         "last": (float(Cl[p1 - 1]) - entry) / risk * (1 if lng else -1)})
     finally:
         C.PARTIAL_TP_ENABLED = prev
@@ -169,6 +172,26 @@ def main():
         tpd = f"{np.median(tps):.1f} / {tps.mean():.1f}g" if len(tps) else "-"
         sld = f"{np.median(sls):.2f} / {sls.mean():.2f}g" if len(sls) else "-"
         print(f"    {T:>5}R  {tpd:>16}  {sld:>16}  {100*res/n:>13.0f}% ({len(tps)}TP/{len(sls)}SL)")
+
+    # E) SL trades: distribution of max favourable R reached BEFORE the -1R stop
+    # (a loser at target T = hit -1R before +T). Tells if a trailing/BE would have salvaged.
+    bins = [(0, 0.5), (0.5, 1), (1, 1.5), (1.5, 2), (2, 3), (3, 99)]
+    for T in [4, 6]:
+        losers = [r["fav_sl"] for r in rows if r["t_sl"] < r["tk"][T] and r["fav_sl"] is not None]
+        m = len(losers)
+        if not m:
+            continue
+        fav = np.array(losers)
+        print(f"\n[E] SL işlemleri (hedef {T}R, {m} kaybeden) — stop'tan ÖNCE max pozitif R dağılımı:")
+        print(f"    {'aralık':>10}{'oran':>8}{'kümülatif≥':>12}")
+        cum = 0
+        for lo, hi in bins:
+            cnt = int(np.sum((fav >= lo) & (fav < hi)))
+            ge = int(np.sum(fav >= lo))
+            lbl = f"{lo:g}-{hi:g}R" if hi < 99 else f"{lo:g}R+"
+            print(f"    {lbl:>10}{100*cnt/m:>7.0f}%{100*ge/m:>11.0f}%")
+        print(f"    => medyan +{np.median(fav):.2f}R  ort +{fav.mean():.2f}R  "
+              f"| hiç +0.5R görmeden stop: {100*np.mean(fav<0.5):.0f}%")
 
 
 if __name__ == "__main__":

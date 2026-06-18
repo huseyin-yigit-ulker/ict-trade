@@ -76,6 +76,7 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
         hdf = tsc.fetch_klines(sym, confirm_htf, int(hstart.timestamp() * 1000),
                                int(w_end.timestamp() * 1000))
         sigs = strat.htf_confirm(sigs, tf, hdf, confirm_htf)
+    sigs = strat.us_hours_gate(sigs, sym, tf)   # US perps: only during US market hours
     if not sigs:
         print(f"  {sym:<10} 0 breakouts", flush=True)
         return [], 0, 0.0

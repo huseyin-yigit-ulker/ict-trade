@@ -115,7 +115,7 @@ def fresh_signals(sym: str, now: pd.Timestamp, lookback: pd.Timedelta,
                                int((now - pd.Timedelta(days=FETCH_DAYS[confirm_htf])).timestamp() * 1000),
                                int(now.timestamp() * 1000))
         fresh = strat.htf_confirm(fresh, tf, hdf, confirm_htf)
-    return fresh
+    return strat.us_hours_gate(fresh, sym, tf)   # US perps: only during US market hours
 
 
 def main():

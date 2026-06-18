@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { useTradeContext, KARMA_MAP } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
+import { usSignalsActive } from '../../utils/sessions';
+import SessionInfo from '../SessionInfo';
 
 const STRAT_BASE_LABEL = { main: 'Main', range: 'Range', opus: 'Opus' };
 // light twins reuse the parent label + " · Light"
@@ -70,6 +72,7 @@ const Topbar = () => {
   const loc = useLocation();
 
   const [symOpen, setSymOpen] = useState(false);
+  const [sessOpen, setSessOpen] = useState(false);
   const [symQuery, setSymQuery] = useState('');
   const uniqueSymbols = useMemo(() => [...new Set(allSignals.map((s) => s.symbol))].sort(), [allSignals]);
   const filteredSymbols = useMemo(() => {
@@ -127,7 +130,18 @@ const Topbar = () => {
             : `${t(STRAT_LABEL[strategy] || 'Main')} · ${t(MODE_LABEL[mode] || 'Live')}`}
         </div>
         <KillzoneClock />
+        <button
+          type="button"
+          className={`kz-pill${usSignalsActive() ? ' kz-pill--active' : ''}`}
+          onClick={() => setSessOpen(true)}
+          title={t('Seans Durumu (Kripto / ABD Hisse / Metaller)')}
+          style={{ cursor: 'pointer' }}
+        >
+          <span className={`kz-dot${usSignalsActive() ? ' kz-dot--on' : ''}`} />
+          🕑 {t('Seanslar')}
+        </button>
       </div>
+      {sessOpen && <SessionInfo onClose={() => setSessOpen(false)} />}
 
       <div className="topbar__controls">
         {isView && (

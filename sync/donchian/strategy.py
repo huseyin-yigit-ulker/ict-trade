@@ -60,6 +60,52 @@ def mode_for(tf: str) -> str:
 # Bar duration per timeframe (minutes) — shared by backtest/live for fire-time math.
 TF_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
 
+# US equity-backed perps: their underlying only has real price discovery during US market
+# hours, so breakouts fired outside (pre-market 04:00 ET .. regular close 16:00 ET, Mon-Fri)
+# are thin/noise. Gated out of BOTH backtest and live (us_hours_gate). Holidays are NOT
+# handled — weekday + time-of-day only. tz-aware via the America/New_York zone (DST-correct).
+STOCK_SYMBOLS = frozenset({
+    "NVDAUSDT", "METAUSDT", "AMZNUSDT", "COINUSDT", "MSTRUSDT", "CRCLUSDT", "PLTRUSDT",
+    "TSLAUSDT", "INTCUSDT", "HOODUSDT", "MSFTUSDT", "AVGOUSDT", "BABAUSDT", "BXUSDT",
+    "HPEUSDT", "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
+})
+US_OPEN_MIN = 4 * 60       # 04:00 ET — pre-market open
+US_CLOSE_MIN = 16 * 60     # 16:00 ET — regular-session close
+
+# NYSE full-day closures 2024-2026 (ET dates). On these the underlying equities don't trade,
+# so the perp has no real price discovery — treated like a weekend. (Early-close half-days
+# are not modelled.) Mirror in src/utils/sessions.js US_HOLIDAYS.
+US_HOLIDAYS = frozenset({
+    "2024-01-01", "2024-01-15", "2024-02-19", "2024-03-29", "2024-05-27", "2024-06-19",
+    "2024-07-04", "2024-09-02", "2024-11-28", "2024-12-25",
+    "2025-01-01", "2025-01-20", "2025-02-17", "2025-04-18", "2025-05-26", "2025-06-19",
+    "2025-07-04", "2025-09-01", "2025-11-27", "2025-12-25",
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19",
+    "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+})
+
+
+def in_us_market_hours(ts: pd.Timestamp) -> bool:
+    """True if ts falls in US pre-market+regular hours (Mon-Fri 04:00-16:00 ET, DST-correct),
+    excluding NYSE holidays (US_HOLIDAYS). Early-close half-days are not modelled."""
+    et = (ts.tz_convert("America/New_York") if ts.tz is not None
+          else ts.tz_localize("UTC").tz_convert("America/New_York"))
+    if et.weekday() >= 5:                      # Sat / Sun
+        return False
+    if et.strftime("%Y-%m-%d") in US_HOLIDAYS:  # NYSE full-day closure
+        return False
+    m = et.hour * 60 + et.minute
+    return US_OPEN_MIN <= m < US_CLOSE_MIN
+
+
+def us_hours_gate(signals: list["DonSignal"], symbol: str, tf: str) -> list["DonSignal"]:
+    """For US stock-perps, keep only signals whose bar CLOSE (fire time = open + tf bar) lands
+    in US market hours; non-stock symbols pass through unchanged."""
+    if symbol not in STOCK_SYMBOLS:
+        return signals
+    bar = pd.Timedelta(minutes=TF_MINUTES.get(tf, 60))
+    return [s for s in signals if in_us_market_hours(s.timestamp + bar)]
+
 
 def hybrid_tag(base_tf: str, htf_tf: str) -> str:
     """Tag for a HYBRID stream = base-tf breakout confirmed by a higher tf's trend
