@@ -70,6 +70,14 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
     if df is None or df.empty:
         print(f"  {sym:<10} SKIP (no {tf})", flush=True)
         return [], 0, 0.0
+    # Only FULLY-CLOSED bars — drop a still-forming last candle when w_end≈now (mirror of the live
+    # emitter canli.fresh_signals: `df.index + bar <= now`), so backtest and live pick the EXACT
+    # same bars. No effect on historical/daily-resolve windows (w_end is a past bar boundary).
+    bar_td = pd.Timedelta(minutes=ltf_min)
+    df = df[df.index + bar_td <= min(w_end, pd.Timestamp.now(tz="UTC"))]
+    if df.empty:
+        print(f"  {sym:<10} SKIP (no closed {tf})", flush=True)
+        return [], 0, 0.0
     sigs = [s for s in strat.generate_signals(df, sym, rr=rr) if w_start <= s.timestamp < w_end]
     if confirm_htf and sigs:
         hstart = w_start - _warmup(confirm_htf)

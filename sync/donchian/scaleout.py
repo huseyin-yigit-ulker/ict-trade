@@ -225,6 +225,12 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp):
     if df is None or df.empty:
         print(f"  {sym:<10} SKIP (no {TF})", flush=True)
         return [], 0, 0.0
+    # Only FULLY-CLOSED bars — drop a still-forming last candle when w_end≈now (mirror of the live
+    # emitter), so backtest and live pick the EXACT same bars. No effect on past/daily-resolve windows.
+    df = df[df.index + pd.Timedelta(minutes=ltf_min) <= min(w_end, pd.Timestamp.now(tz="UTC"))]
+    if df.empty:
+        print(f"  {sym:<10} SKIP (no closed {TF})", flush=True)
+        return [], 0, 0.0
     sigs = [s for s in strat.generate_signals(df, sym) if w_start <= s.timestamp < w_end]
     if sigs:
         hdf = tsc.fetch_klines(sym, CONFIRM_HTF, int((w_start - _warmup(CONFIRM_HTF)).timestamp() * 1000),
