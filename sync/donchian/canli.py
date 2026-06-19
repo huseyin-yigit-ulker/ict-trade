@@ -62,6 +62,12 @@ def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None
     rr = abs(s.take_profit_1 - s.entry) / abs(s.entry - s.stop_loss)
     arrow = "🟢 LONG ▲" if s.direction == "long" else "🔴 SHORT ▼"
     label = f"{tf}+{confirm_htf}" if confirm_htf else tf
+    # Signal FIRE time = the bar CLOSE (signal_time is the bar OPEN). This is the canonical
+    # signal time the UI shows + the entry reference — include it so the alert matches the UI
+    # regardless of WHEN Telegram delivered it (the message's own timestamp = emit time, which
+    # can lag the fire time until the directional gate confirms).
+    fire = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
+    fire_utc = fire.tz_convert("UTC") if fire.tz is not None else fire.tz_localize("UTC")
     if confirm_htf:
         head = f"⛰️ <b>DONCHIAN {tf} + {confirm_htf} ONAY</b> — Hybrid Trend Breakout"
         logic = (f"{tf} 55-bar kırılım + <b>{confirm_htf} trend yönü onayı</b> "
@@ -74,6 +80,7 @@ def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None
     return (
         f"{head}\n"
         f"<b>{s.symbol}</b>  {arrow}  <code>{label}</code>\n"
+        f"Sinyal saati: <code>{fire_utc:%Y-%m-%d %H:%M} UTC</code> (bar kapanışı)\n"
         f"Giriş: <code>{s.entry:.6g}</code>\n"
         f"SL: <code>{s.stop_loss:.6g}</code>\n"
         f"TP: <code>{s.take_profit_1:.6g}</code>  (RR 1:{rr:.0f})\n"
