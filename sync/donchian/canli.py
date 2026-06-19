@@ -88,8 +88,10 @@ def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None
         f"<i>🤖 Sinyal {src} stratejisi tarafından üretildi</i>"
     )
 
-_EXISTS = """SELECT 1 FROM ict_trade.signals
-             WHERE symbol=%s AND signal_time=%s AND direction=%s AND mode=%s LIMIT 1"""
+_GET_CTX = """SELECT context FROM ict_trade.signals
+              WHERE symbol=%s AND signal_time=%s AND direction=%s AND mode=%s LIMIT 1"""
+_UPDATE_CTX = """UPDATE ict_trade.signals SET context = CAST(%s AS JSONB)
+                 WHERE symbol=%s AND signal_time=%s AND direction=%s AND mode=%s"""
 _INSERT = """INSERT INTO ict_trade.signals
     (symbol, direction, entry, sl, tp, signal_time, mode, ltf_timeframe, htf_timeframe,
      strategy, quality, confluence_score, context)
@@ -169,54 +171,60 @@ def main():
         except Exception as e:  # noqa: BLE001
             print(f"  ! {sym}: {e}", flush=True)
 
-    # Directional entry confirmation (ict.config.ENTRY_CONFIRM_BUF): only EMIT a breakout that
-    # has confirmed its direction by now (favourable buf*risk before adverse buf*risk on the 1m
-    # path since the bar close). A reversal toward the stop / not-yet-confirmed is skipped — so
-    # no unconfirmed signal is ever written to ict_trade.signals. (Late confirmers are caught on
-    # a subsequent run while still inside the lookback window.)
-    if found:
-        confirmed: list[strat.DonSignal] = []
-        for s in found:
-            cts = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
-            try:
-                d1 = tsc.fetch_1m(s.symbol, cts - pd.Timedelta(minutes=2), now)
-            except Exception:  # noqa: BLE001
-                d1 = None
-            ok = (d1 is not None and not d1.empty and tsc.entry_confirmed(
-                d1, cts, s.direction, s.entry, s.stop_loss, expiry_minutes=s.expiry_minutes))
-            if ok:
-                confirmed.append(s)
-            else:
-                print(f"  {s.symbol:<10} {s.direction.upper():<5} — yön teyidi yok, atlandı", flush=True)
-        found = confirmed
-
+    # Emit IMMEDIATELY at the bar close (no confirmation gate) so the signal appears on the
+    # dashboard right away (entry = breakout close = the price at that moment). The directional
+    # confirmation (favourable buf*risk before adverse buf*risk = "price didn't reverse into the
+    # entry→SL zone toward the stop") is then tracked LIVE by the UI (Sinyal Bekliyor → Aktif /
+    # İptal Ters Yön), re-checked by the nightly prune (deletes reversed/expired rows), and the
+    # daily resolve writes ONLY confirmed breakouts to the backtest version. The TELEGRAM alert,
+    # however, is sent only ONCE the breakout has confirmed — so no alert ever fires for a signal
+    # that later cancels (tracked via context.tg_sent).
     print(f"\n{len(found)} fresh signal(s).")
     if args.dry_run or not found:
         if args.dry_run:
             print("[dry-run] no DB write.")
         return
 
+    def _confirmed(s) -> bool:
+        cts = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
+        try:
+            d1 = tsc.fetch_1m(s.symbol, cts - pd.Timedelta(minutes=2), now)
+        except Exception:  # noqa: BLE001
+            return False
+        return bool(d1 is not None and not d1.empty and tsc.entry_confirmed(
+            d1, cts, s.direction, s.entry, s.stop_loss, expiry_minutes=s.expiry_minutes))
+
     conn = tsc.live_conn()
     cur = conn.cursor()
-    inserted = 0
+    inserted = alerted = 0
     for s in found:
         d = s.direction.upper()
         st = s.timestamp.to_pydatetime()
-        cur.execute(_EXISTS, (s.symbol, st, d, mode))
-        if cur.fetchone():
-            print(f"  dup {s.symbol} {d} @ {st} (skipped)")
-            continue
-        cur.execute(_INSERT, (s.symbol, d, float(s.entry), float(s.stop_loss),
-                              float(s.take_profit_1), st, mode, tf, confirm_htf or HTF,
-                              s.strategy, s.quality, int(s.confluence_score),
-                              json.dumps(s.context or {})))
-        conn.commit()                         # commit before notifying (DB is source of truth)
-        inserted += 1
-        if not args.no_telegram:
-            _telegram_send(_telegram_text(s, tf, confirm_htf))  # alert incl. tf + HTF-confirm note
+        cur.execute(_GET_CTX, (s.symbol, st, d, mode))
+        existing = cur.fetchone()
+        if existing is None:                               # new -> write NOW (appears on dashboard)
+            ctx = {**(s.context or {}), "tg_sent": False}
+            cur.execute(_INSERT, (s.symbol, d, float(s.entry), float(s.stop_loss),
+                                  float(s.take_profit_1), st, mode, tf, confirm_htf or HTF,
+                                  s.strategy, s.quality, int(s.confluence_score), json.dumps(ctx)))
+            conn.commit()
+            inserted += 1
+            print(f"  + {s.symbol:<10} {d:<5} @ {st:%m-%d %H:%M} yazıldı (canlı teyit bekleniyor)", flush=True)
+        else:
+            raw = existing[0]
+            ctx = raw if isinstance(raw, dict) else (json.loads(raw) if raw else {})
+        # Telegram: once, only after the breakout has confirmed its direction
+        if not ctx.get("tg_sent") and _confirmed(s):
+            if not args.no_telegram:
+                _telegram_send(_telegram_text(s, tf, confirm_htf))
+            ctx["tg_sent"] = True
+            cur.execute(_UPDATE_CTX, (json.dumps(ctx), s.symbol, st, d, mode))
+            conn.commit()
+            alerted += 1
+            print(f"  📣 {s.symbol:<10} {d:<5} teyit oldu → Telegram", flush=True)
     cur.close()
     conn.close()
-    print(f"  inserted {inserted} new row(s) into ict_trade.signals (mode='{mode}')")
+    print(f"  {inserted} new row(s), {alerted} Telegram alert(s) (mode='{mode}')")
 
 
 if __name__ == "__main__":
