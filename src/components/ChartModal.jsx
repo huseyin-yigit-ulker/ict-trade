@@ -218,6 +218,15 @@ const ChartModal = () => {
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
     });
 
+    // Scale-out RUNNER bölgesi (+1R → +4R cap): +1R partial alınınca YEŞİLE döner — böylece iki
+    // hedef de tek bakışta okunur (önce +1R bandı, sonra gerçekleşince +4R runner bandı). baseline
+    // = +1R; render bloğunda partial seviyesine göre güncellenir.
+    const runnerZoneSeries = chart.addSeries(BaselineSeries, {
+        baseValue: { type: 'price', price: activeSignal.entry },
+        lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+        priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+    });
+
     // --- KATMAN 2: ANA SERİ (mum ↔ çizgi) ---
     const isLineChart = chartStyle === 'line';
     const mainSeries = isLineChart
@@ -514,6 +523,26 @@ const ChartModal = () => {
         } else {
           tpAreaSeries.setData([]);
           slAreaSeries.setData([]);
+        }
+
+        // Scale-out RUNNER band (+1R → +4R cap): turns GREEN from the bar the +1R partial fired
+        // (both live & backtest), showing the open runner's profit zone up to its cap. Before the
+        // partial it's empty — so the chart reads "first +1R, then the +4R part goes green".
+        if (isScaleOut && partialLevel != null && tp && partialBarSec != null) {
+          runnerZoneSeries.applyOptions(isLong ? {
+            baseValue: { type: 'price', price: partialLevel },
+            topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.22)', topFillColor2: 'rgba(14, 203, 129, 0.05)',
+            bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
+          } : {
+            baseValue: { type: 'price', price: partialLevel },
+            bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.22)', bottomFillColor2: 'rgba(14, 203, 129, 0.05)',
+            topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent'
+          });
+          runnerZoneSeries.setData(endTimeForGraph > partialBarSec
+            ? [ { time: partialBarSec, value: tp }, { time: endTimeForGraph, value: tp } ]
+            : [ { time: partialBarSec, value: tp } ]);
+        } else {
+          runnerZoneSeries.setData([]);
         }
 
         // ½TP: breakeven stop segment — a yellow dashed line AT entry from the partial
