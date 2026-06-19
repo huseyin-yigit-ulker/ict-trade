@@ -79,10 +79,33 @@ def _warmup(tf: str) -> pd.Timedelta:
     return pd.Timedelta(minutes=strat.TF_MINUTES[tf] * (strat.N_ENTRY + strat.ER_N) * 6)
 
 
+# How far PAST the window end the 1m data must reach so a signal fired right at the window
+# edge still has its FULL resolution window covered (20d partial-detection + 3d runner) — else
+# its runner/partial gets marked at the data edge instead of its true exit. Capped at "now"
+# in run_symbol (can't fetch the future).
+M1_TAIL = HORIZON + RUNNER_HORIZON + pd.Timedelta(days=1)   # 20d + 3d + slack
+
+
 def _load_1m(sym: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """1m frame covering [start, end]. If a cached frame ends before `end` (e.g. an old cache
+    built only to the window boundary), FETCH the missing tail and append — so runner/partial
+    windows near the window edge are resolved against complete data, not the stale cache end."""
     cf = CACHE / f"{sym}.pkl"
     if cf.exists():
-        return pickle.loads(cf.read_bytes())
+        df = pickle.loads(cf.read_bytes())
+        if df is not None and not df.empty:
+            last = df.index[-1]
+            if last.tz is None:
+                df = df.copy(); df.index = df.index.tz_localize("UTC"); last = df.index[-1]
+            if last < end - pd.Timedelta(minutes=1):                # cache stops short of `end`
+                tail = tsc.fetch_1m(sym, last + pd.Timedelta(minutes=1), end)
+                if tail is not None and not tail.empty:
+                    if tail.index.tz is None:
+                        tail.index = tail.index.tz_localize("UTC")
+                    df = pd.concat([df, tail[tail.index > last]])
+                    CACHE.mkdir(exist_ok=True)
+                    cf.write_bytes(pickle.dumps(df))
+            return df
     df = tsc.fetch_1m(sym, start - pd.Timedelta(hours=2), end)
     if df is not None and not df.empty:
         CACHE.mkdir(exist_ok=True)
@@ -211,7 +234,10 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp):
     if not sigs:
         print(f"  {sym:<10} 0 breakouts", flush=True)
         return [], 0, 0.0
-    df1m = _load_1m(sym, w_start, w_end)
+    # Extend the 1m window PAST w_end so edge-of-window signals get their full runner/partial
+    # resolution (capped at now — the future isn't fetchable).
+    m1_end = min(pd.Timestamp.now(tz="UTC"), w_end + M1_TAIL)
+    df1m = _load_1m(sym, w_start, m1_end)
     if df1m is None or df1m.empty:
         print(f"  {sym:<10} SKIP (no 1m)", flush=True)
         return [], 0, 0.0
