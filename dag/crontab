@@ -2,17 +2,24 @@
 # All other streams retired (UI + DB + live): MAIN(:01), IMPULSE(:02), halftp_monitor(*/5)
 # removed — see sync/donchian/RETIRED_STREAMS_REPORT.md.
 #
-# DONCHIAN live emit (minute :01, hourly) — Donchian(55) breakout, ER>=0.35 strong-trend
+# Bar-aligned firing (2026-06-19): each emit runs exactly 10s after its bar closes. Cron has
+# no sub-minute field, so we fire on the boundary minute and `sleep 10`. The directional
+# entry-confirm gate (ENTRY_CONFIRM_BUF) still defers emission of a breakout until it confirms
+# on a later run within the lookback window — the +10s alignment just pins each run to the
+# period boundary instead of a full minute late.
+#
+# DONCHIAN live emit (HH:00:10, hourly) — Donchian(55) breakout, ER>=0.35 strong-trend
 #   gate (mode='donchian'). Emits on freshly-closed 1h bars and sends a DONCHIAN-labelled
 #   Telegram alert per new signal.
-1 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
-# DONCHIAN 30m+4h HYBRID live emit (:01 and :31) — 30m breakout confirmed by 4h trend
+0 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
+# DONCHIAN 30m+4h HYBRID live emit (HH:00:10 and HH:30:10) — 30m breakout confirmed by 4h trend
 #   direction (mode='dch30_4h'). Best stream overall (+1106R / 2024-26). The plain-30m and
 #   ½TP streams were removed 2026-06-17 (see sync/donchian/).
-1,31 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h >> $HOME/ict-donchian.log 2>&1
-# DONCHIAN 30m+4h · 6R live emit (:01 and :31) — same hybrid signals, wider 6R target
+0,30 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h >> $HOME/ict-donchian.log 2>&1
+# DONCHIAN 30m+4h · 6R live emit (HH:00:10 and HH:30:10) — same hybrid signals, wider 6R target
 #   (mode='dch30_4h6'). MFE-validated: ~2x R/trade vs 4R, OOS-robust across 2024-26.
-1,31 * * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --rr 6 >> $HOME/ict-donchian.log 2>&1
+0,30 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --rr 6 >> $HOME/ict-donchian.log 2>&1
 # Daily resolve: donchian live signals -> backtest trading_signals (version='donchian' +
-#   'dch30_4h' + 'dch30_4h6') via sync_daily ACTIVE_STREAMS.
+#   'dch30_4h' + 'dch30_4h6' + 'd30_4h_so') via sync_daily ACTIVE_STREAMS; also self-heals the
+#   live table (prune_live deletes signals that failed directional confirmation).
 30 0 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream all >> $HOME/ict-sync.log 2>&1
