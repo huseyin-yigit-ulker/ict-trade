@@ -25,9 +25,9 @@ export const STREAMS = [
   // 2026-06-17: 6R-target twin — MFE study showed winners run to ~8R median, losers go
   // straight to stop; a 6R target ~doubles R/trade vs 4R in all 3 years (OOS-robust).
   { key: 'dch30_4h6',    version: 'dch30_4h6',    exit: 'full', family: 'trend', tf: '30m+4h·6R' },
-  // 2026-06-19: HIGH-WIN-RATE scale-out twin — same 30m+4h entry + −1R stop, but book 60%
-  // at +1R and let the breakeven runner ride (uncapped, 20-day time exit). ~54% WR (vs ~18%),
-  // OOS-positive every year (2024 +327R, 2025 +234R, 2026 +143R). version='d30_4h_so'.
+  // 2026-06-19: HIGH-WIN-RATE scale-out twin — same 30m+4h entry + −1R stop, but book 60% at
+  // +1R; runner (40%) exits at +4R cap / breakeven / 3-day time exit. WR set by the first target
+  // (gated 76-80%), OOS-positive every year. version='d30_4h_so'.
   { key: 'd30_4h_so',    version: 'd30_4h_so',    exit: 'scaleout', family: 'trend', tf: '30m+4h·SO' },
 ];
 

@@ -4,14 +4,16 @@ Goal: a high-WR Donchian model (user prefers WR over total R). The trend book (d
 RR=6) is ~18% WR / large winners; this is the opposite end of the same edge — a ~54% WR
 curve, still OOS-positive every year.
 
-Mechanic (validated 2024+2025+2026 OOS on crypto, /tmp/wr_sweep.py + /tmp/scaleout_sweep.py):
+Mechanic (validated 2024+2025+2026 OOS on crypto, /tmp/wr_sweep.py + /tmp/scaleout_sweep.py;
+runner cap/time-box added 2026-06-19 by user decision, /tmp/so_cap_sweep.py):
   entry = 30m breakout (4h-direction confirmed), risk = 2*ATR (stop = -1R)
   * FIRST target = +1R: close CLOSE_FRAC (60%) of the position there  -> this sets the WR
   * move the stop on the (1-CLOSE_FRAC) RUNNER to breakeven (entry)
-  * runner RIDES (no fixed cap): it exits at breakeven if price returns to entry, else it
-    is marked-to-market at the HORIZON (20-day time exit). The uncapped runner is what
-    keeps the high-WR config positive in trend years — capping the runner at +6R FAILED
-    2024 (-157R) while ride was +327R. (mirrors the original MFE "don't cut winners".)
+  * the RUNNER exits at the FIRST of: +RUNNER_CAP R (take-profit, default 4R), breakeven
+    (price back to entry), or the RUNNER_HORIZON time-exit (default 3 days, mark-to-market).
+    The 2024-2026 cap sweep chose 4R/3d: WR is unchanged (set by FIRST_R) and every year stays
+    OOS-positive (cap4/3d ~+2438R vs the old uncapped/20d +2776R) while bounding runner duration
+    to <=3d and per-trade R to 0.6*1 + 0.4*4 = 2.2R. (+4R == the dch30_4h signal's own TP.)
 WR is set entirely by the FIRST target; the runner only adds R, not WR.
 
 Faithfulness note: a trade that within HORIZON reaches NEITHER +1R nor -1R is counted as a
@@ -46,7 +48,15 @@ TF = "30m"
 CONFIRM_HTF = "4h"
 FIRST_R = 1.0                # first take-profit, in R (sets the win rate)
 CLOSE_FRAC = 0.6             # fraction of the position booked at +FIRST_R
-HORIZON = pd.Timedelta(days=int(os.environ.get("DCH_SO_HORIZON_DAYS", "20")))  # runner time exit
+HORIZON = pd.Timedelta(days=int(os.environ.get("DCH_SO_HORIZON_DAYS", "20")))  # +1R/-1R detection window (sets WR)
+# Runner (the 1-CLOSE_FRAC remainder) is now CAPPED + TIME-BOXED (2026-06-19, user decision): it
+# exits at +RUNNER_CAP R (take-profit), at breakeven if price returns to entry, or at the
+# RUNNER_HORIZON time-exit (mark-to-market) — whichever comes first. Sweep over 2024-2026 chose
+# cap=4R / 3d: keeps WR (set by FIRST_R, unchanged) and stays OOS-positive every year while
+# bounding runner duration and per-trade R (uncapped/20d was +2776R, cap4/3d ~+2438R). Note
+# +4R coincides with the dch30_4h signal's own TP (RR=4), so the runner's cap == the signal TP line.
+RUNNER_CAP = float(os.environ.get("DCH_SO_RUNNER_CAP", "4.0"))                 # runner take-profit, in R
+RUNNER_HORIZON = pd.Timedelta(days=int(os.environ.get("DCH_SO_RUNNER_DAYS", "3")))  # runner time exit
 BIG = 10**9
 
 DEFAULT_START = pd.Timestamp("2025-06-16", tz="UTC")
@@ -84,6 +94,7 @@ def resolve_scaleout(symbol: str, ts, direction: str, entry: float, sl: float, t
                      df1m: pd.DataFrame, ltf_minutes: int, expiry_minutes: int,
                      first_r: float = FIRST_R, close_frac: float = CLOSE_FRAC,
                      horizon: pd.Timedelta = HORIZON,
+                     runner_cap: float = RUNNER_CAP, runner_horizon: pd.Timedelta = RUNNER_HORIZON,
                      active_if_incomplete: bool = False) -> dict:
     """Resolve one breakout under the scale-out + breakeven-ride model on 1m bars.
 
@@ -152,21 +163,33 @@ def resolve_scaleout(symbol: str, ts, direction: str, entry: float, sl: float, t
                     pnl_r=float(-1.0 - fee), raw_status="sl_hit")  # neither within horizon -> -1R (faithful)
         return base
 
-    # partial fills at +first_r; arm breakeven on the runner
+    # partial books close_frac at +first_r; the runner (1-close_frac) exits at the FIRST of:
+    #   * +runner_cap R (take-profit) | * breakeven (price returns to entry) | * runner_horizon
+    #   time-exit (mark-to-market). All forward-walking; same-bar BE+cap tie -> breakeven (pessimistic).
     gross = close_frac * first_r
-    t_be = BIG                                              # first return to entry strictly after partial
-    if t_tf + 1 < len(adv):
-        seg = adv[t_tf + 1:] >= 0.0
-        t_be = (t_tf + 1 + int(np.argmax(seg))) if seg.any() else BIG
-    if t_be < BIG:                                         # runner trailed back to breakeven (0R)
-        base.update(status="closed_tp", exit_time=close_at(t_be), exit_price=float(entry),
-                    pnl_r=float(gross - fee), raw_status="tp_hit")
+    rbars = int(runner_horizon / pd.Timedelta(minutes=1))   # 1m bars in the runner window
+    dl = t_tf + 1 + rbars                                    # runner deadline index (rel to p0), exclusive
+    covered = dl <= len(adv)                                 # df1m spans the full runner window?
+    hi_i = min(dl, len(adv))
+    be_seg = adv[t_tf + 1:hi_i] >= 0.0                       # back to entry (breakeven)
+    cap_seg = favcum[t_tf + 1:hi_i] >= runner_cap            # runner reached +runner_cap R
+    t_be = (t_tf + 1 + int(np.argmax(be_seg))) if be_seg.any() else BIG
+    t_cap = (t_tf + 1 + int(np.argmax(cap_seg))) if cap_seg.any() else BIG
+    if min(t_be, t_cap) < BIG:
+        if t_be <= t_cap:                                   # breakeven first -> runner 0R
+            base.update(status="closed_tp", exit_time=close_at(t_be), exit_price=float(entry),
+                        pnl_r=float(gross - fee), raw_status="tp_hit")
+        else:                                               # runner ran to +runner_cap
+            cap_px = entry + runner_cap * risk * (1 if lng else -1)
+            base.update(status="closed_tp", exit_time=close_at(t_cap), exit_price=float(cap_px),
+                        pnl_r=float(gross + (1 - close_frac) * runner_cap - fee), raw_status="tp_hit")
         return base
-    if active_if_incomplete and not full_horizon:          # runner still riding, window open -> wait
+    if active_if_incomplete and not covered:                # runner still riding inside the window -> wait
         return still_active()
-    last = (Cl[p1 - 1] - entry) / risk * (1 if lng else -1)  # runner rode to the horizon -> mark to market
+    j = hi_i - 1                                            # neither cap nor BE -> mark to market at deadline
+    last = (Cl[p0 + j] - entry) / risk * (1 if lng else -1)
     gross += (1 - close_frac) * max(last, 0.0)
-    base.update(status="closed_tp", exit_time=close_at(p1 - 1 - p0), exit_price=float(Cl[p1 - 1]),
+    base.update(status="closed_tp", exit_time=close_at(j), exit_price=float(Cl[p0 + j]),
                 pnl_r=float(gross - fee), raw_status="tp_hit")
     return base
 
@@ -228,7 +251,8 @@ def main():
     w_start = pd.Timestamp(args.start, tz="UTC") if args.start else DEFAULT_START
     w_end = pd.Timestamp(args.end, tz="UTC") if args.end else pd.Timestamp.now(tz="UTC")
     print(f"=== Donchian SCALE-OUT [{w_start.date()} .. {w_end.date()}) "
-          f"| {TF}+{CONFIRM_HTF} | first=+{FIRST_R:g}R close={CLOSE_FRAC:g} ride/{HORIZON.days}d "
+          f"| {TF}+{CONFIRM_HTF} | first=+{FIRST_R:g}R close={CLOSE_FRAC:g} "
+          f"runner cap{RUNNER_CAP:g}R/{RUNNER_HORIZON.days}d "
           f"| {len(args.symbols)} symbols | version='{VERSION}' ===", flush=True)
 
     all_rows, tot_n, tot_r = [], 0, 0.0

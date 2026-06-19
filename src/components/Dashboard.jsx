@@ -147,10 +147,10 @@ const timeAgo = (date, t) => {
 // entry/tp/sl. Replaces the hard-coded "2R for TP" assumption.
 // ½TP modules (half=true): 50% banked at half distance (¼ RR) + 50% to TP
 // (½ RR) → TP = 0.75×RR; a breakeven close keeps only the banked ¼ RR.
-// Scale-out (so=true): 60% booked at +1R, 40% runner. BE close = 0.60×(+1R) + 0.40×0;
-// a -1R stop before +1R = full -1R. Fees (0.1% round-trip, in R) are subtracted so the
-// live R matches the backtest resolver. The runner's ride-to-horizon upside is unknown
-// live (resolved by the nightly sync) — BE is the floor the live view can prove.
+// Scale-out (so=true): 60% booked at +1R, 40% runner CAPPED at +4R (==signal TP) with a 3-day
+// time-exit. BE close = 0.60×(+1R) + 0.40×0; runner to +4R cap = 0.60×1 + 0.40×4 = 2.2R; a -1R
+// stop before +1R = full -1R. Fees (0.1% round-trip, in R) are subtracted so the live R matches
+// the backtest resolver. The rare 3-day mark-to-market tail is resolved by the nightly sync.
 const liveOutcomeR = (sig, status, half = false, so = false) => {
   if (!sig?.entry || !sig?.tp || !sig?.sl) return 0;
   const risk = Math.abs(sig.entry - sig.sl);
@@ -160,7 +160,7 @@ const liveOutcomeR = (sig, status, half = false, so = false) => {
     const fee = 0.0005 * (2 * sig.entry) / risk;   // round-trip fee on full notional, in R
     if (status === 'BE Oldu') return 0.6 * 1 - fee;                       // 60% @ +1R + 40% @ BE(0)
     if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return -1 - fee;
-    if (status === 'TP Oldu') return 0.6 * 1 + 0.4 * rr - fee;            // (rare live) runner ran to TP
+    if (status === 'TP Oldu') return 0.6 * 1 + 0.4 * Math.min(rr, 4) - fee;  // runner hit +4R cap (2.2R)
     return 0;
   }
   if (status === 'TP Oldu') return half ? 0.75 * rr : rr;

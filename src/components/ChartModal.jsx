@@ -44,10 +44,10 @@ const ChartModal = () => {
   // karma: ½TP'lik sembol bazında (KARMA_MAP) — isHalfFor iki durumu da çözer.
   const isHalf = isHalfFor(strategy, activeSignal?.symbol);
   // Scale-out stream (d30_4h_so): same 30m+4h entry + −1R stop as dch30_4h, but the exit
-  // scales out — book 60% at +1R (first target), pull the runner's stop to breakeven and let
-  // it RIDE uncapped (exits at breakeven or a 20-day time stop). The chart must surface the
-  // +1R partial level, the breakeven runner segment, and how much of the position is still open
-  // — NOT the misleading 4R "TP" line (that target is never used here).
+  // scales out — book 60% at +1R (first target), pull the runner's stop to breakeven; the runner
+  // then exits at its +4R cap (== the signal's own TP), breakeven, or a 3-day time exit. The chart
+  // surfaces the +1R partial level, the +4R runner cap, the breakeven runner segment, and how much
+  // of the position is still open.
   const isScaleOut = strategy === 'd30_4h_so';
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
@@ -341,8 +341,8 @@ const ChartModal = () => {
         // detected against ENTRY, not the original SL (mirror of _resolve_partial).
         // Partial-take level: ½TP books 50% at HALF the distance to TP1; scale-out books 60%
         // at +1R (= one risk unit from entry). After the partial the stop moves to breakeven and
-        // the remainder rides — ½TP toward the original TP1, scale-out UNCAPPED (only BE / the
-        // 20-day time exit ends it). The runner geometry is what the chart must surface.
+        // the remainder rides — ½TP toward the original TP1, scale-out's runner to its +4R cap
+        // (== signal TP) / breakeven / a 3-day time exit. The runner geometry is what the chart surfaces.
         const risk = (entry != null && sl != null) ? Math.abs(entry - sl) : null;
         const partialLevel = isScaleOut && risk
           ? (isLong ? entry + risk : entry - risk)
@@ -352,9 +352,9 @@ const ChartModal = () => {
         let partialBarSec = null, beClose = false;
 
         if (isScaleOut && entry && sl && partialLevel != null && signalVisible) {
-          // scale-out: entry fill -> +1R partial (60%, SL→BE) -> runner rides with a breakeven
-          // stop. If the runner never returns to entry in-window it falls through to the DB exit
-          // anchor (the 20-day time exit), shown as a neutral "Çıkış".
+          // scale-out: entry fill -> +1R partial (60%, SL→BE) -> runner exits at its +4R cap
+          // (== signal TP), breakeven, or a 3-day time exit. If none lands in-window it falls
+          // through to the DB exit anchor, shown as a neutral "Çıkış".
           let hit = false, partial = false, stop = sl;
           for (let idx = 0; idx < candles.length; idx++) {
             const c = candles[idx];
@@ -372,8 +372,10 @@ const ChartModal = () => {
             } else if (!partial) {
               if (stopHit) { closeBarSec = c.time; closeBarIdx = idx; break; }            // -1R before +1R
               if (soHit) { partial = true; partialBarSec = c.time; stop = entry; }         // +1R, arm BE
-            } else if (stopHit) {
-              beClose = true; closeBarSec = c.time; closeBarIdx = idx; break;              // runner back to BE
+            } else {                                                                       // runner riding
+              const capHit = isLong ? c.high >= tp : c.low <= tp;                           // +4R cap (== signal TP)
+              if (stopHit) { beClose = true; closeBarSec = c.time; closeBarIdx = idx; break; }  // runner back to BE (0R)
+              if (capHit) { closeBarSec = c.time; closeBarIdx = idx; break; }                    // runner +4R cap (win)
             }
           }
         } else if (entry && tp && sl && signalVisible) {
@@ -537,9 +539,9 @@ const ChartModal = () => {
           const targetPct = entry && tp ? ((tp - entry) / entry) * 100 : null;
           const riskPct = entry && sl ? ((sl - entry) / entry) * 100 : null;
           if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')} ${formatPrice(entry)}`, axisLabelVisible: true });
-          // Full 4R TP line — drawn for every stream EXCEPT scale-out, whose runner is uncapped
-          // (no 4R target), so a 4R line there would be misleading.
-          if (tp && !isScaleOut) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // 4R line: for scale-out it is the RUNNER CAP (runner takes profit at +4R == the
+          // signal's own TP); for every other stream it is the full take-profit. Drawn for both.
+          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +4R') : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
           // +1R and the runner then rides with a breakeven stop.
           if (partialLevel != null) {
@@ -794,7 +796,11 @@ const ChartModal = () => {
             else if (activeSignal.status === 'TP') {
               const beRunner = Number.isFinite(exitPrice) && activeSignal.entry
                 && Math.abs(exitPrice - activeSignal.entry) / activeSignal.entry < 1e-6;
-              soState = beRunner ? t('%60 +1R alındı · %40 runner BE (0R)') : t('%60 +1R alındı · %40 runner çıktı');
+              const capRunner = Number.isFinite(exitPrice) && activeSignal.tp
+                && Math.abs(exitPrice - activeSignal.tp) / activeSignal.tp < 1e-6;
+              soState = beRunner ? t('%60 +1R alındı · %40 runner BE (0R)')
+                : capRunner ? t('%60 +1R alındı · %40 runner +4R cap')
+                : t('%60 +1R alındı · %40 runner çıktı (3g mark)');
               soStateColor = '#0ECB81';
             } else { soState = t('Açık'); soStateColor = '#F5B942'; }
           } else {
@@ -845,8 +851,14 @@ const ChartModal = () => {
                </b>
             </div>
             <div className="position-row">
+               <span>{t('Runner Cap (+4R)')}</span>
+               <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span>
+                 {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
+               </b>
+            </div>
+            <div className="position-row">
                <span>{t('Runner (%40)')}</span>
-               <b style={{color:'#F5B942', fontWeight:500}}>{t('breakeven ride · 20g')}</b>
+               <b style={{color:'#F5B942', fontWeight:500}}>{t('+4R cap · breakeven · 3g')}</b>
             </div>
             {soState && (
               <div className="position-row">

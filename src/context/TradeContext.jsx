@@ -94,11 +94,11 @@ const ENTRY_CONFIRM_BUF = 0.5;
 // fast (TP median ~1.4d, SL ~6h). Live: canli.py --tf 30m --confirm-htf 4h --rr 6.
 // 'd30_4h_so' = the HIGH-WIN-RATE scale-out twin (the opposite end of the same edge). SAME
 // 30m+4h entry + −1R stop as dch30_4h, but the exit scales out: book 60% at +1R (this sets
-// the WR), pull the runner's stop to breakeven and let it RIDE (uncapped; exits at breakeven
-// or a 20-day time stop). ~54% WR, OOS-positive every year (2024 +327R, 2025 +234R, 2026
-// +143R). Capping the runner at 6R FAILED 2024 (−157R) — the uncapped ride is what survives
-// trend years. No own emitter: it RESOLVES the dch30_4h live signals under the scale-out
-// model (sync/donchian/scaleout.py), exactly as karma/½TP reuse their parent's live signals.
+// the WR), pull the runner's stop to breakeven; the runner (40%) then exits at the FIRST of
+// +4R cap (== the signal's own TP), breakeven, or a 3-day time-exit (2026-06-19 user decision —
+// caps runner duration ≤3d and per-trade R ≤2.2R). ~76-80% WR (gated), OOS-positive every year.
+// No own emitter: it RESOLVES the dch30_4h live signals under the scale-out model
+// (sync/donchian/scaleout.py), exactly as karma/½TP reuse their parent's live signals.
 const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6', d30_4h_so: 'd30_4h_so' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
@@ -823,11 +823,12 @@ export const TradeProvider = ({ children }) => {
       }
     }
 
-    // Scale-out (d30_4h_so): after the fill, book 60% at +1R and pull the stop to breakeven;
-    // the runner (40%) rides UNCAPPED. Live we can confirm three things: the +1R partial fired,
-    // a breakeven close (runner back to entry), or a full -1R stop before +1R. The runner's
-    // 20-day time-exit is resolved by the nightly sync (not live) — so a partial trade whose
-    // runner is still riding stays "+1R Alındı · Runner" until it returns to BE or the sync marks it.
+    // Scale-out (d30_4h_so): after the fill, book 60% at +1R and pull the stop to breakeven; the
+    // runner (40%) is CAPPED at +4R and time-boxed to 3 days. Live we catch the three intraday-
+    // observable terminals: a -1R stop before +1R, the runner hitting its +4R cap (== the signal's
+    // own TP, since RUNNER_CAP 4R == dch30_4h RR=4), or a breakeven close (runner back to entry).
+    // The rare 3-day mark-to-market tail is resolved by the nightly sync — until then a still-riding
+    // runner stays "+1R Alındı · Runner".
     if (strategyRef.current === 'd30_4h_so') {
       const risk = Math.abs(sig.entry - sig.sl);
       const r1 = sig.dir === 'LONG' ? sig.entry + risk : sig.entry - risk;   // +1R first target
@@ -836,12 +837,14 @@ export const TradeProvider = ({ children }) => {
       for (const c of candles) {
         if (c.time < entryHitTime) continue;
         const r1Hit = sig.dir === 'LONG' ? c.high >= r1 : c.low <= r1;
+        const capHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;  // runner +4R cap (==signal TP)
         const stopHit = sig.dir === 'LONG' ? c.low <= stop : c.high >= stop;
         if (!partial) {
           if (stopHit) return { status: 'SL Oldu', lastPrice };          // -1R before +1R (ties → stop)
           if (r1Hit) { partial = true; stop = sig.entry; continue; }      // +1R booked (60%), arm BE
-        } else if (stopHit) {
-          return { status: 'BE Oldu', lastPrice };                        // runner back to breakeven
+        } else {
+          if (stopHit) return { status: 'BE Oldu', lastPrice };          // runner back to breakeven (0R)
+          if (capHit) return { status: 'TP Oldu', lastPrice };           // runner hit +4R cap (2.2R)
         }
       }
       return { status: partial ? 'İşlem Aktif (+1R Alındı · Runner)' : 'İşlem Aktif (Entry Geldi)', lastPrice };
