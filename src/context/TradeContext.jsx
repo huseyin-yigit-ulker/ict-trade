@@ -917,22 +917,23 @@ export const TradeProvider = ({ children }) => {
     // Fetch 1m klines for ONE symbol covering from the earliest signal on that symbol to now.
     const fetchCandlesForSymbol = async (symbol, startMs) => {
       const baseSymbol = normalizeForBinance(symbol);
-      // Window: earliest pending signal − 2h .. now. But Binance caps at 1500 bars/request, and
-      // returns the FIRST 1500 from startTime — so if a symbol's pending signals span >~25h, the
-      // window would END ~25h after the earliest and a RECENT signal's [close, close+180m] gate
-      // window falls OUTSIDE the data → the directional gate evaluates on wrong/incomplete candles
-      // (false İptal / Bekliyor). Clamp the start to the last ~24h so the window ALWAYS reaches now
-      // and recent signals are fully covered. (A pending signal older than that is already past its
-      // 180m fill deadline → correctly resolved as 'İptal (Süre Doldu)'.)
+      // Window = earliest pending signal − 2h .. now. Binance caps at 1500 bars/request and returns
+      // the FIRST 1500 from startTime, so a span >1500 bars would TRUNCATE the recent end and drop
+      // a signal's [close, close+180m] gate window → wrong İptal/Bekliyor. So COARSEN the interval
+      // (1m→5m→15m…) until the FULL span fits ≤1500 bars — same as the chart. This keeps every
+      // signal's bars (signal/entry/confirm/runner) in view for ALL live strategies and ALL trade
+      // ages (recent trades stay 1m for precise 0.5R confirmation; only >~24h-old ones coarsen).
+      // (A hard 24h clamp was wrong: it dropped the bars of >24h trades — e.g. a 3-day scale-out
+      // runner — making the gate falsely return 'İptal (Süre Doldu)'.)
       const fetchEndTime = Date.now();
-      const fetchStartTime = Math.max(startMs - (60 * 1000 * 120), fetchEndTime - 1450 * 60 * 1000);
-      const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
-      const res = await fetch(urlFutures);
-      let rawData = await res.json();
+      const fetchStartTime = startMs - (60 * 1000 * 120);
+      const LADDER = [['1m', 60000], ['5m', 300000], ['15m', 900000], ['1h', 3600000], ['4h', 14400000]];
+      let interval = '1m';
+      for (const [iv, ms] of LADDER) { interval = iv; if ((fetchEndTime - fetchStartTime) / ms <= 1450) break; }
+      const q = `symbol=${baseSymbol}&interval=${interval}&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
+      let rawData = await (await fetch(`https://fapi.binance.com/fapi/v1/klines?${q}`)).json();
       if (!Array.isArray(rawData)) {
-        const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
-        const resSpot = await fetch(urlSpot);
-        rawData = await resSpot.json();
+        rawData = await (await fetch(`https://api.binance.com/api/v3/klines?${q}`)).json();
       }
       if (!Array.isArray(rawData) || rawData.length === 0) return [];
       return rawData.map((d) => ({
