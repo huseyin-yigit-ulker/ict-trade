@@ -798,9 +798,14 @@ const ChartModal = () => {
                 && Math.abs(exitPrice - activeSignal.entry) / activeSignal.entry < 1e-6;
               const capRunner = Number.isFinite(exitPrice) && activeSignal.tp
                 && Math.abs(exitPrice - activeSignal.tp) / activeSignal.tp < 1e-6;
+              // distinguish a TRUE 3-day mark from a data-edge mark (runner window cut short by
+              // the backtest data/window end — e.g. a signal in the last ~3 days of the window).
+              const runnerDays = (effDate && Number.isFinite(activeSignal.exitTs))
+                ? (activeSignal.exitTs - effDate.getTime()) / 86400000 : 99;
               soState = beRunner ? t('%60 +1R alındı · %40 runner BE (0R)')
                 : capRunner ? t('%60 +1R alındı · %40 runner +4R cap')
-                : t('%60 +1R alındı · %40 runner çıktı (3g mark)');
+                : runnerDays >= 2.9 ? t('%60 +1R alındı · %40 runner mark (3g)')
+                : t('%60 +1R alındı · %40 runner mark (veri sonu, <3g)');
               soStateColor = '#0ECB81';
             } else { soState = t('Açık'); soStateColor = '#F5B942'; }
           } else {
