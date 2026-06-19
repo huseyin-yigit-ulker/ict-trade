@@ -847,8 +847,14 @@ const ChartModal = () => {
               soStateColor = '#0ECB81';
             } else { soState = t('Açık'); soStateColor = '#F5B942'; }
           } else {
-            // live: AKTİF means the runner is still riding (or +1R not yet hit); terminal via status
-            soState = liveTradeStatus; soStateColor = '#F5B942';
+            // live: mirror the backtest runner breakdown from the live status, so the live panel
+            // reads as richly as backtest (not just a bare status string).
+            const s = liveTradeStatus;
+            if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
+            else if (s === 'BE Oldu') { soState = t('%60 +1R alındı · %40 runner BE (0R)'); soStateColor = '#0ECB81'; }
+            else if (s === 'TP Oldu') { soState = t('%60 +1R alındı · %40 runner +4R cap'); soStateColor = '#0ECB81'; }
+            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%60 +1R alındı · %40 runner aktif (≤+4R / 3g)'); soStateColor = '#F5B942'; }
+            else { soState = s; soStateColor = '#F5B942'; }   // Entry Geldi / Sinyal Bekliyor / İptal
           }
         }
 
