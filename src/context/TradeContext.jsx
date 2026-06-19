@@ -917,8 +917,15 @@ export const TradeProvider = ({ children }) => {
     // Fetch 1m klines for ONE symbol covering from the earliest signal on that symbol to now.
     const fetchCandlesForSymbol = async (symbol, startMs) => {
       const baseSymbol = normalizeForBinance(symbol);
-      const fetchStartTime = startMs - (60 * 1000 * 120);
+      // Window: earliest pending signal − 2h .. now. But Binance caps at 1500 bars/request, and
+      // returns the FIRST 1500 from startTime — so if a symbol's pending signals span >~25h, the
+      // window would END ~25h after the earliest and a RECENT signal's [close, close+180m] gate
+      // window falls OUTSIDE the data → the directional gate evaluates on wrong/incomplete candles
+      // (false İptal / Bekliyor). Clamp the start to the last ~24h so the window ALWAYS reaches now
+      // and recent signals are fully covered. (A pending signal older than that is already past its
+      // 180m fill deadline → correctly resolved as 'İptal (Süre Doldu)'.)
       const fetchEndTime = Date.now();
+      const fetchStartTime = Math.max(startMs - (60 * 1000 * 120), fetchEndTime - 1450 * 60 * 1000);
       const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
       const res = await fetch(urlFutures);
       let rawData = await res.json();
