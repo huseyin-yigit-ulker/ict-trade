@@ -109,6 +109,7 @@ const LIVE_STATUS_DISPLAY = {
   'İşlem Aktif (+1R Alındı · Runner)': { label: '+1R·RUN', icon: '●', cls: 'st-active' }, // scale-out: 60% booked, runner rides
   'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
   'İptal (Süre Doldu)':           { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
+  'İptal (Ters Yön)':             { label: 'İPTAL·YÖN', icon: '●', cls: 'st-cancel' }, // dir-confirm: opened toward SL -> skipped
   'Sinyal Bekliyor':              { label: 'BEKLİYOR', icon: '●', cls: 'st-wait' },
 };
 const liveStatusDisplay = (s) => LIVE_STATUS_DISPLAY[s] || LIVE_STATUS_DISPLAY['Sinyal Bekliyor'];

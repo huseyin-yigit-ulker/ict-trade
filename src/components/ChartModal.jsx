@@ -92,6 +92,7 @@ const ChartModal = () => {
     'İşlem Aktif (+1R Alındı · Runner)': { label: '+1R·RUN', cls: 'st-active' }, // scale-out: 60% booked, runner rides
     'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    cls: 'st-cancel' },
     'İptal (Süre Doldu)':           { label: 'İPTAL',    cls: 'st-cancel' },
+    'İptal (Ters Yön)':             { label: 'İPTAL·YÖN', cls: 'st-cancel' }, // dir-confirm: opened toward SL -> skipped
     'Sinyal Bekliyor':              { label: 'BEKLİYOR', cls: 'st-wait' },
   };
   const ctxLiveStatus = (mode === 'live' && activeSignal) ? liveStatuses[activeSignal.id]?.status : null;

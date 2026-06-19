@@ -133,11 +133,45 @@ def _resolve_partial(sig: Signal, df: pd.DataFrame, entry_idx: int) -> TradeResu
     return TradeResult(sig, TradeStatus.ACTIVE, entry_index=entry_idx)
 
 
+def _dir_confirmed(sig: Signal, df: pd.DataFrame, expiry: int, n: int) -> str:
+    """Directional entry confirmation (C.ENTRY_CONFIRM_BUF). Within the fill window, return
+    'fav' if price extends FAVOURABLY (toward TP) by buf*risk before moving adversely (toward
+    SL) by buf*risk, 'adv' if it goes adverse first (ties -> adv, pessimistic), or 'none' if
+    neither happens in the window. buf<=0 -> always 'fav' (gate off)."""
+    buf = getattr(C, "ENTRY_CONFIRM_BUF", 0.0)
+    risk = abs(sig.entry - sig.stop_loss)
+    if buf <= 0 or risk <= 0:
+        return "fav"
+    long = sig.direction == "long"
+    fav_lvl = sig.entry + buf * risk if long else sig.entry - buf * risk
+    adv_lvl = sig.entry - buf * risk if long else sig.entry + buf * risk
+    for i in range(sig.bar_index + 1, min(expiry, n - 1) + 1):
+        bar = df.iloc[i]
+        if long:
+            adv, fav = bar["low"] <= adv_lvl, bar["high"] >= fav_lvl
+        else:
+            adv, fav = bar["high"] >= adv_lvl, bar["low"] <= fav_lvl
+        if adv:
+            return "adv"
+        if fav:
+            return "fav"
+    return "none"
+
+
 def simulate_signal(sig: Signal, df: pd.DataFrame, *,
                     use_tp1_only: bool = True) -> TradeResult:
     """Walk forward from sig.bar_index+1 to fill / TP / SL / expiry."""
     n = len(df)
     expiry = sig.expires_at_index or (sig.bar_index + 12)
+
+    # Directional entry confirmation: only TAKE the trade if the breakout confirms its
+    # direction first (price moves toward TP by buf*risk before toward SL). A reversal back
+    # toward the stop (the AVAX-short case) -> no trade. Off when C.ENTRY_CONFIRM_BUF <= 0.
+    conf = _dir_confirmed(sig, df, expiry, n)
+    if conf == "adv":
+        return TradeResult(sig, TradeStatus.INVALIDATED)
+    if conf == "none":
+        return TradeResult(sig, TradeStatus.EXPIRED)
 
     entry_idx: Optional[int] = None
     for i in range(sig.bar_index + 1, min(expiry, n - 1) + 1):

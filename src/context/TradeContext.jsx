@@ -34,6 +34,12 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 const ENTRY_EXPIRY_MINUTES = 180;
 const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180, dch30_4h6: 180, d30_4h_so: 180 };
 
+// Directional entry confirmation — MIRROR of backtest ict/config.ENTRY_CONFIRM_BUF. A trade is
+// only opened if, within the fill window, price extends favourably (toward TP) by BUF*risk
+// before moving adversely (toward SL) by BUF*risk; a reversal toward the stop -> not opened.
+// Keep this in sync with the Python config so live and backtest agree.
+const ENTRY_CONFIRM_BUF = 0.5;
+
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
 // sync/backfill_v2_year.py). 'karma' = per-symbol best cell of {main,impulse} ×
@@ -792,6 +798,30 @@ export const TradeProvider = ({ children }) => {
     }
 
     if (entryHitTime === null) return { status: 'Sinyal Bekliyor', lastPrice };
+
+    // Directional entry confirmation (mirror of backtest C.ENTRY_CONFIRM_BUF): only OPEN the
+    // trade if the breakout confirms its direction — favourable buf*risk before adverse buf*risk
+    // within the fill window. A reversal toward the stop (AVAX-short case) -> not opened. Until
+    // it confirms, the card stays 'Sinyal Bekliyor'; if it goes adverse first -> 'İptal (Ters Yön)'.
+    if (ENTRY_CONFIRM_BUF > 0) {
+      const risk = Math.abs(sig.entry - sig.sl);
+      if (risk > 0) {
+        const favLvl = sig.dir === 'LONG' ? sig.entry + ENTRY_CONFIRM_BUF * risk : sig.entry - ENTRY_CONFIRM_BUF * risk;
+        const advLvl = sig.dir === 'LONG' ? sig.entry - ENTRY_CONFIRM_BUF * risk : sig.entry + ENTRY_CONFIRM_BUF * risk;
+        let conf = 'none';
+        let scannedPastDeadline = false;
+        for (const c of candles) {
+          if (c.time < entryTs) continue;
+          if (c.time > fillDeadlineSec) { scannedPastDeadline = true; break; }
+          const adv = sig.dir === 'LONG' ? c.low <= advLvl : c.high >= advLvl;
+          const fav = sig.dir === 'LONG' ? c.high >= favLvl : c.low <= favLvl;
+          if (adv) { conf = 'adv'; break; }   // adverse first (ties -> adv) -> never open
+          if (fav) { conf = 'fav'; break; }
+        }
+        if (conf === 'adv') return { status: 'İptal (Ters Yön)', lastPrice };
+        if (conf === 'none') return { status: scannedPastDeadline ? 'İptal (Ters Yön)' : 'Sinyal Bekliyor', lastPrice };
+      }
+    }
 
     // Scale-out (d30_4h_so): after the fill, book 60% at +1R and pull the stop to breakeven;
     // the runner (40%) rides UNCAPPED. Live we can confirm three things: the +1R partial fired,

@@ -71,6 +71,16 @@ PARTIAL_TP_TRIGGER_FRAC = 0.5     # scale out at half the distance entry->TP1
 PARTIAL_TP_CLOSE_FRAC   = 0.5     # close half the position at the trigger
 PARTIAL_TP_BREAKEVEN    = True    # after the partial, move the stop to entry
 
+# --- Directional entry confirmation (Donchian breakout streams) ---
+# When > 0, a filled signal is only TAKEN if, within the entry-fill window, the price first
+# extends FAVOURABLY (toward TP) by ENTRY_CONFIRM_BUF * risk BEFORE moving adversely (toward SL)
+# by the same amount — i.e. enter only when the breakout confirms its direction, never on a
+# reversal back toward the stop. Filters out trades that open straight into the SL region (the
+# AVAX-short case). 2024-2026 sweep: a 0.5R buffer ~halves trades but lifts WR and net R on all
+# four streams (e.g. d30_4h_so 2026 WR 56%->80%, +149R->+606R, PF 1.15->3.84). 0 = off (legacy
+# limit-at-close fill). Honoured by backtester.simulate_signal -> inherited by every resolver.
+ENTRY_CONFIRM_BUF = 0.5
+
 # Higher timeframe used for bias detection. Resampled from the primary df.
 HTF_RULE = "4h"
 
