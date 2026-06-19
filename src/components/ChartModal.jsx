@@ -638,7 +638,10 @@ const ChartModal = () => {
 
         const markers = [];
         if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
-        if (entryFilled && entryFillSec != null && entryFillSec !== signalSec) {
+        // Entry-fill marker — shown whenever the entry fills, INCLUDING on the signal bar itself
+        // (breakouts enter at the bar close, so entryFillSec usually == signalSec). Sinyal is an
+        // aboveBar circle and Giriş is a belowBar arrow (long), so they don't collide on one bar.
+        if (entryFilled && entryFillSec != null) {
           markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: t('Giriş'), size: 1 });
         }
         // Kısmi kâr işareti: ½TP'de fiyat TP/2'ye değdi (%50 kapandı); scale-out'ta +1R'ye
