@@ -110,6 +110,13 @@ const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6
 // d30_4h_so reuses the dch30_4h live signals (only the exit model differs), so its live
 // mode is 'dch30_4h' — same as the parent hybrid.
 const STRATEGY_LIVE_MODE = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6', d30_4h_so: 'dch30_4h' };
+// Backtest rows don't store the signal timeframe; tag it per strategy so the chart shifts
+// signal_time (bar OPEN) to the real fire/fill moment (bar CLOSE) by the CORRECT LTF.
+// donchian = 1h; the hybrids (dch30_4h / dch30_4h6 / d30_4h_so) fire on 30m bars + 4h confirm.
+// (Bug fix 2026-06-19: was hardcoded '1h' for all, so 30m streams' entry-fill scan started
+// 30 min late and missed the fill — the chart looked like "entry never came".)
+const STRATEGY_LTF = { donchian: '1h', dch30_4h: '30m', dch30_4h6: '30m', d30_4h_so: '30m' };
+const STRATEGY_HTF = { donchian: null, dch30_4h: '4h', dch30_4h6: '4h', d30_4h_so: '4h' };
 // No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();
 // karma reads BOTH live modes and filters per-symbol via KARMA_MAP.
@@ -628,14 +635,16 @@ export const TradeProvider = ({ children }) => {
 
       const url = `${supabaseUrl}/rest/v1/${backtestTable}?${params.toString()}`;
       const rows = await fetchAllBacktestRows(url);
-      // Backtest rows don't store the signal timeframe; tag it from the pipeline so
-      // the UI can shift signal_time (bar OPEN) to the real fire moment (bar CLOSE)
-      // by the correct LTF (main = 1h).
-      const ltfTf = '1h';
+      // Backtest rows don't store the signal timeframe; tag it per-strategy so the UI shifts
+      // signal_time (bar OPEN) to the real fire moment (bar CLOSE) by the CORRECT LTF
+      // (donchian 1h; dch30_4h / dch30_4h6 / d30_4h_so are 30m + 4h confirm).
+      const ltfTf = STRATEGY_LTF[strategyRef.current] ?? '1h';
+      const htfTf = STRATEGY_HTF[strategyRef.current] ?? null;
       // Keep cancelled (no-fill) rows — shown as 0R 'no-fill' cards in the day drill.
       const filteredRows = rows
         .filter((row) => isAllowedBacktestHour(row.signal_time))
-        .map((row) => ({ ...row, ltf_timeframe: row.ltf_timeframe ?? ltfTf }));
+        .map((row) => ({ ...row, ltf_timeframe: row.ltf_timeframe ?? ltfTf,
+                                 htf_timeframe: row.htf_timeframe ?? htfTf }));
 
       processData(filteredRows);
 
