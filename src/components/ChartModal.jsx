@@ -896,7 +896,7 @@ const ChartModal = () => {
           {isScaleOut && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
-              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner kapaksız</span></b>
+              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+4R / 3g</span></b>
             </div>
           )}
           {mode === 'live' && Number.isFinite(liveLastPrice) && (
