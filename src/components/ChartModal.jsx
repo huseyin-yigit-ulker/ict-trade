@@ -288,17 +288,16 @@ const ChartModal = () => {
           return { start, end };
         };
         let { start: fetchStartTime, end: fetchEndTime } = computeWindow();
-        // Safety: keep the fetched span <= ~1450 bars (coarsen interval if needed).
-        while (mode !== 'live' && (fetchEndTime - fetchStartTime) / displayMs > 1450) {
+        // Safety: keep the fetched span <= ~1450 bars (coarsen the interval if needed). Applies to
+        // LIVE too: a trade older than ~24h exceeds 1450 1m bars, so it steps up to 5m/15m/… — this
+        // keeps the SIGNAL bar in view (the entry/partial touch-scan + Sinyal/Giriş/TP1 markers need
+        // it) instead of clamping the window start past the signal, which dropped every marker (and
+        // the +4R runner band) on live trades older than ~24h.
+        while ((fetchEndTime - fetchStartTime) / displayMs > 1450) {
           const i = ladder.indexOf(klineInterval);
           if (i < 0 || i === ladder.length - 1) break;
           klineInterval = ladder[i + 1]; displayMs = intervalMs(klineInterval);
           ({ start: fetchStartTime, end: fetchEndTime } = computeWindow());
-        }
-        // Live stays 1m — clamp the start so it never exceeds ~1450 bars.
-        if (mode === 'live') {
-          const liveMaxStart = Date.now() - 1450 * 60000;
-          if (fetchStartTime < liveMaxStart) fetchStartTime = liveMaxStart;
         }
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
