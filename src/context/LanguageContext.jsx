@@ -143,6 +143,8 @@ const EN = {
   '%60 +1R alındı · %40 runner +4R cap': '60% +1R booked · 40% runner +4R cap',
   '%60 +1R alındı · %40 runner mark (3g)': '60% +1R booked · 40% runner mark (3d)',
   '%60 +1R alındı · %40 runner mark (veri sonu, <3g)': '60% +1R booked · 40% runner mark (data end, <3d)',
+  'Runner +4R': 'Runner +4R',
+  'Mark': 'Mark',
   'Durum': 'Status',
   'İşlem': 'Trades',
   'Strateji': 'Strategy',

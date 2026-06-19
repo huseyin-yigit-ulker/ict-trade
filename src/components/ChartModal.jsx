@@ -596,7 +596,16 @@ const ChartModal = () => {
         const isTP = !isBE && ((mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
         const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
         const exitColor = isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
-        const exitText = isTP ? t('TP') : isSL ? t('SL') : isBE ? 'BE' : t('Çıkış');
+        // Scale-out has NO single "TP": the runner exits at its +4R cap, breakeven, or a
+        // mark (3-day / data-edge). Label the exit marker accordingly so it isn't a misleading
+        // "TP" (the real +1R take-profit is the separate partial marker).
+        const soRunnerCap = isScaleOut && isTP && (mode === 'live'
+          ? true   // live 'TP Oldu' == runner reached its +4R cap
+          : (Number.isFinite(activeSignal.exitPrice) && activeSignal.tp
+             && Math.abs(activeSignal.exitPrice - activeSignal.tp) / activeSignal.tp < 1e-4));
+        const exitText = (isScaleOut && isTP)
+          ? (soRunnerCap ? t('Runner +4R') : t('Mark'))
+          : (isTP ? t('TP') : isSL ? t('SL') : isBE ? 'BE' : t('Çıkış'));
         const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(activeSignal.exitTs) ? snapBar(activeSignal.exitTs) : null);
 
         const markers = [];
