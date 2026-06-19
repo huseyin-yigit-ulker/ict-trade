@@ -425,6 +425,21 @@ def main():
                                  rescan=not args.no_active_rescan,
                                  symbols_override=args.symbols)
         all_rows += rows
+
+    # Self-heal the LIVE signals table: physically delete Donchian breakouts that
+    # CONCLUSIVELY failed directional entry confirmation (adverse buf*risk before
+    # favourable, or fill window elapsed without confirming). The emit-time pre-filter
+    # already blocks new unconfirmed signals and the dashboard re-checks at display time;
+    # this is the third leg so a reversed breakout never lingers as a live row. Pending
+    # (still-open-window) signals are kept. Best-effort: never let it break the sync.
+    try:
+        from donchian import prune_live
+        pr = prune_live.prune(live, now=now, apply=not args.dry_run, verbose=False)
+        verb = "would delete" if args.dry_run else "deleted"
+        print(f"  live prune: {verb} {pr['invalid']} invalid "
+              f"(confirmed={pr['confirmed']} pending={pr['pending']} scanned={pr['scanned']})")
+    except Exception as e:  # noqa: BLE001
+        print(f"  live prune skipped: {e}")
     live.close()
 
     if args.dry_run:
