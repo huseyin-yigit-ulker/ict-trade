@@ -102,7 +102,7 @@ const IntroPage = () => {
     { key: 'pf', label: 'PF' },
   ];
   const FAMILY_LABEL = { core: t('ICT Çekirdek'), adaptive: t('Adaptif'), session: t('Seans'), range: 'Range', trend: 'Trend' };
-  const EXIT_LABEL = { full: t('Tam TP'), half: '½TP', mixed: t('Sembol-bazlı çıkış') };
+  const EXIT_LABEL = { full: t('Tam TP'), half: '½TP', mixed: t('Sembol-bazlı çıkış'), scaleout: 'Scale-out' };
 
   const LeaderTile = ({ label, entry, fmt }) => {
     if (!entry) return null;

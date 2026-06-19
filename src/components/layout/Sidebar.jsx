@@ -92,6 +92,9 @@ const GROUPS = [
   { key: 'dch30_4h',     label: 'DONCHIAN 30m+4h',   icon: <IconIntel />,   modes: ['live', 'backtest'] },
   // 2026-06-17: 6R-target twin (wider TP; ~2x R/trade vs 4R, OOS-robust, lower WR).
   { key: 'dch30_4h6',    label: 'DONCHIAN 30m+4h·6R',icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  // 2026-06-19: HIGH-WR scale-out twin (book 60% at +1R + breakeven ride). ~54% WR,
+  // OOS-positive every year. Reuses the dch30_4h live signals (scale-out exit only).
+  { key: 'd30_4h_so',    label: 'DONCHIAN 30m+4h·WR',icon: <IconIntel />,   modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

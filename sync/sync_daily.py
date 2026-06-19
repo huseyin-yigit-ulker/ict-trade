@@ -108,7 +108,11 @@ STREAMS = {
 # 2026-06-16: 'donchian' (trend complement) wired live. Its hourly emitter
 # (sync/donchian/canli.py) writes mode='donchian' live signals; the nightly
 # `--stream all` now resolves them into backtest version='donchian'.
-ACTIVE_STREAMS = ["donchian", "dch30_4h", "dch30_4h6"]
+# 2026-06-19: 'd30_4h_so' (high-WR scale-out twin) wired live. It does NOT have its own
+# emitter — it consumes the SAME dch30_4h live signals and resolves them under the scale-out
+# + breakeven-ride model (sync/donchian/scaleout.py), tagged version='d30_4h_so'. Handled by
+# resolve_scaleout_stream (not resolve_stream, whose tsc.simulate is single-target).
+ACTIVE_STREAMS = ["donchian", "dch30_4h", "dch30_4h6", "d30_4h_so"]
 LIGHT_PARENTS = ("impulse", "karma")
 
 
@@ -284,6 +288,68 @@ def resolve_light(name, live, bt, w_start, w_end, now, *, rescan, symbols_overri
     return rows
 
 
+def resolve_scaleout_stream(live, bt, w_start, w_end, now, *, rescan, symbols_override=None) -> list:
+    """DONCHIAN high-WR scale-out (version='d30_4h_so'): consume the dch30_4h live signals
+    and resolve them under the scale-out + breakeven-ride model (sync/donchian/scaleout.py)
+    rather than the standard single-target tsc.simulate. Same entry/-1R stop as dch30_4h;
+    book 60% at +1R, runner rides to breakeven / a 20-day time exit. A still-riding runner
+    whose 20-day window is not yet covered is left ACTIVE (active_if_incomplete=True) so it
+    is re-resolved on a later run instead of being booked early."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(tsc.__file__).resolve().parent / "donchian"))
+    import scaleout as so
+
+    mode, version, ltf_min, floor = "dch30_4h", so.VERSION, 30, "30min"
+    symbols = symbols_override if symbols_override is not None else so.SO_SYMBOLS
+    work = fetch_live_window(live, mode, symbols, w_start, w_end)
+    print(f"  [{version}] live mode='{mode}' in window: {len(work)}")
+    if rescan:
+        active = fetch_active_rows(bt, version)
+        print(f"  [{version}] active rows to re-check: {len(active)}")
+        work += active
+
+    seen, deduped = set(), []
+    sym_filter = set(symbols) if symbols else None
+    for w in work:
+        if sym_filter and w["symbol"] not in sym_filter:
+            continue
+        st = pd.Timestamp(w["signal_time"]).tz_convert("UTC").floor(floor)
+        key = (w["symbol"], st, (w["direction"] or "").upper())
+        if key in seen:
+            continue
+        seen.add(key)
+        w["_st"] = st
+        deduped.append(w)
+
+    by_sym = defaultdict(list)
+    for w in deduped:
+        by_sym[w["symbol"]].append(w)
+
+    rows, status_counts, skipped = [], {}, 0
+    for sym, items in by_sym.items():
+        earliest = min(w["_st"] for w in items)
+        df1m = tsc.fetch_1m(sym, earliest - pd.Timedelta(minutes=2), now)
+        if df1m.empty:
+            print(f"    [{version}] {sym}: no klines, skipping {len(items)}")
+            skipped += len(items)
+            continue
+        for w in items:
+            st = w["_st"]
+            outcome = so.resolve_scaleout(sym, st, w["direction"], float(w["entry"]),
+                                          float(w["sl"]), float(w["tp"]), df1m=df1m,
+                                          ltf_minutes=ltf_min, expiry_minutes=tsc.EXPIRY_MINUTES,
+                                          active_if_incomplete=True)
+            status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
+            row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
+                                outcome, strategy=w.get("strategy"), quality=w.get("quality"),
+                                confluence_score=w.get("confluence_score"))
+            row["version"] = version
+            rows.append(row)
+    print(f"  [{version}] resolved {len(rows)} rows, status={status_counts}, skipped={skipped}")
+    return rows
+
+
 def resolve_opus(live, bt, w_start, w_end, now, *, rescan, symbols_override=None,
                  half=False, version="opus") -> list:
     """OPUS stream: MAIN ('live') signals, kept only for symbols+sessions in the
@@ -309,7 +375,7 @@ def main():
     # disabled 2026-06-10 — pass their key explicitly to resolve legacy rows.
     # Default is now "all" (a no-op with ACTIVE_STREAMS empty) so a bare run does NOT
     # re-create retired rows. Pass an explicit key to re-resolve a retired stream ad hoc.
-    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "opus", "all"]
+    ap.add_argument("--stream", choices=list(STREAMS) + ["karma", "opus", "all", "d30_4h_so"]
                     + [f"{b}_light" for b in LIGHT_PARENTS], default="all")
     ap.add_argument("--no-active-rescan", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -338,6 +404,11 @@ def main():
             all_rows += resolve_opus(live, bt, w_start, w_end, now,
                                      rescan=not args.no_active_rescan,
                                      symbols_override=args.symbols, version="opus")
+            continue
+        if name == "d30_4h_so":
+            all_rows += resolve_scaleout_stream(live, bt, w_start, w_end, now,
+                                                rescan=not args.no_active_rescan,
+                                                symbols_override=args.symbols)
             continue
         if name.endswith("_light"):
             all_rows += resolve_light(name, live, bt, w_start, w_end, now,

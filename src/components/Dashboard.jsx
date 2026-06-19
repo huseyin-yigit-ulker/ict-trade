@@ -106,6 +106,7 @@ const LIVE_STATUS_DISPLAY = {
   'TP/SL Aynı Mum':               { label: 'TP+SL',    icon: '●', cls: 'st-mixed' },
   'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    icon: '●', cls: 'st-active' },
   'İşlem Aktif (Kısmi ½TP Alındı)': { label: '½TP·BE',  icon: '●', cls: 'st-active' }, // ½TP: 50% out, stop at entry
+  'İşlem Aktif (+1R Alındı · Runner)': { label: '+1R·RUN', icon: '●', cls: 'st-active' }, // scale-out: 60% booked, runner rides
   'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
   'İptal (Süre Doldu)':           { label: 'İPTAL',    icon: '●', cls: 'st-cancel' },
   'Sinyal Bekliyor':              { label: 'BEKLİYOR', icon: '●', cls: 'st-wait' },
@@ -145,11 +146,22 @@ const timeAgo = (date, t) => {
 // entry/tp/sl. Replaces the hard-coded "2R for TP" assumption.
 // ½TP modules (half=true): 50% banked at half distance (¼ RR) + 50% to TP
 // (½ RR) → TP = 0.75×RR; a breakeven close keeps only the banked ¼ RR.
-const liveOutcomeR = (sig, status, half = false) => {
+// Scale-out (so=true): 60% booked at +1R, 40% runner. BE close = 0.60×(+1R) + 0.40×0;
+// a -1R stop before +1R = full -1R. Fees (0.1% round-trip, in R) are subtracted so the
+// live R matches the backtest resolver. The runner's ride-to-horizon upside is unknown
+// live (resolved by the nightly sync) — BE is the floor the live view can prove.
+const liveOutcomeR = (sig, status, half = false, so = false) => {
   if (!sig?.entry || !sig?.tp || !sig?.sl) return 0;
   const risk = Math.abs(sig.entry - sig.sl);
   if (risk === 0) return 0;
   const rr = Math.abs(sig.tp - sig.entry) / risk;
+  if (so) {
+    const fee = 0.0005 * (2 * sig.entry) / risk;   // round-trip fee on full notional, in R
+    if (status === 'BE Oldu') return 0.6 * 1 - fee;                       // 60% @ +1R + 40% @ BE(0)
+    if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return -1 - fee;
+    if (status === 'TP Oldu') return 0.6 * 1 + 0.4 * rr - fee;            // (rare live) runner ran to TP
+    return 0;
+  }
   if (status === 'TP Oldu') return half ? 0.75 * rr : rr;
   if (status === 'BE Oldu') return half ? 0.25 * rr : 0;
   if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') return -1;
@@ -171,6 +183,8 @@ const Dashboard = () => {
   const { t, locale } = useLang();
   // ½TP per signal — *_half modules always; karma decides per SYMBOL (KARMA_MAP).
   const halfFor = (sig) => isHalfFor(strategy, sig?.symbol);
+  // Scale-out stream (d30_4h_so): 60% booked at +1R + breakeven runner — its own live R model.
+  const isSO = strategy === 'd30_4h_so';
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -229,6 +243,7 @@ const Dashboard = () => {
     if (status === 'TP/SL Aynı Mum') return { label: 'TP/SL', cls: 'loss', terminal: true };
     if (status.startsWith('İptal')) return { label: 'İPTAL', cls: 'waiting', terminal: true };
     if (status === 'İşlem Aktif (Kısmi ½TP Alındı)') return { label: '½TP·BE', cls: 'win', terminal: false };
+    if (status === 'İşlem Aktif (+1R Alındı · Runner)') return { label: '+1R·RUN', cls: 'win', terminal: false };
     if (status.startsWith('İşlem Aktif')) return { label: 'AKTIF', cls: 'waiting', terminal: false };
     return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
   };
@@ -245,15 +260,21 @@ const Dashboard = () => {
   const getLiveRLabel = (sig, status) => {
     if (!status) return { label: '--', cls: 'waiting' };
     if (status === 'TP Oldu' || status === 'BE Oldu') {
-      const r = liveOutcomeR(sig, status, halfFor(sig));
-      return { label: `+${r.toFixed(2)}R`, cls: 'win' };
+      const r = liveOutcomeR(sig, status, halfFor(sig), isSO);
+      return { label: `${r >= 0 ? '+' : ''}${r.toFixed(2)}R`, cls: r >= 0 ? 'win' : 'loss' };
     }
     if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') {
+      if (isSO) return { label: `${liveOutcomeR(sig, status, false, true).toFixed(2)}R`, cls: 'loss' };
       return { label: '-1R', cls: 'loss' };
     }
     if (status === 'İşlem Aktif (Kısmi ½TP Alındı)') {
       // partial banked (¼ RR), remainder risk-free at BE — show the floor.
       const banked = liveOutcomeR(sig, 'BE Oldu', true);
+      return { label: `≥+${banked.toFixed(2)}R`, cls: 'win' };
+    }
+    if (status === 'İşlem Aktif (+1R Alındı · Runner)') {
+      // scale-out: 60% booked at +1R, runner risk-free at BE — show the secured floor (runner may add more).
+      const banked = liveOutcomeR(sig, 'BE Oldu', false, true);
       return { label: `≥+${banked.toFixed(2)}R`, cls: 'win' };
     }
     if (status.startsWith('İptal')) return { label: '0', cls: 'waiting' };
@@ -271,10 +292,10 @@ const Dashboard = () => {
       const meta = resolveLiveMeta(status);
       if (meta.label === 'TP' || meta.label === 'BE') {
         tp += 1;
-        rScore += liveOutcomeR(sig, status, halfFor(sig));
+        rScore += liveOutcomeR(sig, status, halfFor(sig), isSO);
       } else if (meta.label === 'SL' || meta.label === 'TP/SL') {
         sl += 1;
-        rScore -= 1;
+        rScore += liveOutcomeR(sig, status, halfFor(sig), isSO);   // -1 (−1−fee for scale-out)
       }
     });
     return { tp, sl, rScore };
@@ -493,7 +514,7 @@ const Dashboard = () => {
       totalTrades = filteredSignals.length;
       closedTrades = denom;
       const asc = [...filteredSignals].sort((a, b) => a.dateObj - b.dateObj);
-      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, halfFor(sig)));
+      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, halfFor(sig), isSO));
       let cc = 0;
       cum = downsample(rs.map((r) => (cc += r)), 80);
       hist = rHistogram(rs);

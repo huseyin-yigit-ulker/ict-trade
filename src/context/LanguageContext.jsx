@@ -132,6 +132,13 @@ const EN = {
   'Risk': 'Risk',
   'Stop': 'Stop',
   'Çıkış': 'Exit',
+  // Scale-out (d30_4h_so) chart panel
+  'Runner (%40)': 'Runner (40%)',
+  'breakeven ride · 20g': 'breakeven ride · 20d',
+  'Pozisyon Durumu': 'Position state',
+  'SL · tüm pozisyon (+1R görülmedi)': 'SL · full position (+1R not reached)',
+  '%60 +1R alındı · %40 runner BE (0R)': '60% +1R booked · 40% runner BE (0R)',
+  '%60 +1R alındı · %40 runner çıktı': '60% +1R booked · 40% runner exited',
   'Durum': 'Status',
   'İşlem': 'Trades',
   'Strateji': 'Strategy',

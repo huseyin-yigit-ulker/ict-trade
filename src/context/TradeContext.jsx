@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180, dch30_4h6: 180 };
+const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180, dch30_4h6: 180, d30_4h_so: 180 };
 
 // Strategy module -> backtest version tag. 'main' = original B/C/D/E set (v1);
 // 'impulse' = refined v2 set (drop E + D disabled on ADA/XAU/ETH — see
@@ -86,7 +86,14 @@ const STRATEGY_EXPIRY_MINUTES = { donchian: 180, dch30_4h: 180, dch30_4h6: 180 }
 // straight to stop, so a wider target ~doubles R/trade vs 4R in ALL THREE years (OOS-robust)
 // — the only robust improvement found. Trade-off: WR ~15% (vs 23%), lumpier curve; resolves
 // fast (TP median ~1.4d, SL ~6h). Live: canli.py --tf 30m --confirm-htf 4h --rr 6.
-const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6' };
+// 'd30_4h_so' = the HIGH-WIN-RATE scale-out twin (the opposite end of the same edge). SAME
+// 30m+4h entry + −1R stop as dch30_4h, but the exit scales out: book 60% at +1R (this sets
+// the WR), pull the runner's stop to breakeven and let it RIDE (uncapped; exits at breakeven
+// or a 20-day time stop). ~54% WR, OOS-positive every year (2024 +327R, 2025 +234R, 2026
+// +143R). Capping the runner at 6R FAILED 2024 (−157R) — the uncapped ride is what survives
+// trend years. No own emitter: it RESOLVES the dch30_4h live signals under the scale-out
+// model (sync/donchian/scaleout.py), exactly as karma/½TP reuse their parent's live signals.
+const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6', d30_4h_so: 'd30_4h_so' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -94,7 +101,9 @@ const STRATEGY_VERSION = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6
 // 'karma' reads BOTH modes and keeps, per symbol, only the side KARMA_MAP picked.
 // OPUS reads mode='live' (the MAIN hourly emission) + the per-symbol NY-session gate.
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
-const STRATEGY_LIVE_MODE = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6' };
+// d30_4h_so reuses the dch30_4h live signals (only the exit model differs), so its live
+// mode is 'dch30_4h' — same as the parent hybrid.
+const STRATEGY_LIVE_MODE = { donchian: 'donchian', dch30_4h: 'dch30_4h', dch30_4h6: 'dch30_4h6', d30_4h_so: 'dch30_4h' };
 // No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();
 // karma reads BOTH live modes and filters per-symbol via KARMA_MAP.
@@ -306,8 +315,9 @@ export const TradeProvider = ({ children }) => {
   const liveStatusesRef = useRef({});
   // Session cache for backtest data — historical rows + analytics are immutable
   // for a given query, so we fetch once and reuse on every mode toggle back to
-  // BACKTEST instead of re-hitting Supabase. { key, rows, insights }.
-  const backtestCacheRef = useRef(null);
+  // BACKTEST instead of re-hitting Supabase. Multi-slot Map keyed by cacheKey
+  // (table|version|...): switching A→B→A no longer refetches A. { rows, insights } per key.
+  const backtestCacheRef = useRef(new Map());
 
   const toNumber = useCallback((value) => {
     const parsed = parseFloat(value);
@@ -533,8 +543,8 @@ export const TradeProvider = ({ children }) => {
     // Version is keyed off the active strategy module: main -> v1, impulse -> v2.
     const btVersion = STRATEGY_VERSION[strategyRef.current] || 'v1';
     const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2024-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
-    const cached = backtestCacheRef.current;
-    if (!force && cached && cached.key === cacheKey) {
+    const cached = backtestCacheRef.current.get(cacheKey);
+    if (!force && cached) {
       setLiveError('');
       processData(cached.rows);
       setBacktestInsights(cached.insights);
@@ -644,7 +654,10 @@ export const TradeProvider = ({ children }) => {
       setBacktestInsights(nextInsights);
       // Cache the raw rows + analytics so subsequent BACKTEST visits this
       // session reuse them instead of re-querying Supabase.
-      backtestCacheRef.current = { key: cacheKey, rows: filteredRows, insights: nextInsights };
+      backtestCacheRef.current.set(cacheKey, { rows: filteredRows, insights: nextInsights });
+      if (backtestCacheRef.current.size > 16) {   // bounded LRU-ish: drop the oldest key
+        backtestCacheRef.current.delete(backtestCacheRef.current.keys().next().value);
+      }
       setLastUpdated(new Date());
     } catch (err) {
       setLiveError(`Backtest verisi alınamadı: ${err.message}`);
@@ -780,6 +793,30 @@ export const TradeProvider = ({ children }) => {
 
     if (entryHitTime === null) return { status: 'Sinyal Bekliyor', lastPrice };
 
+    // Scale-out (d30_4h_so): after the fill, book 60% at +1R and pull the stop to breakeven;
+    // the runner (40%) rides UNCAPPED. Live we can confirm three things: the +1R partial fired,
+    // a breakeven close (runner back to entry), or a full -1R stop before +1R. The runner's
+    // 20-day time-exit is resolved by the nightly sync (not live) — so a partial trade whose
+    // runner is still riding stays "+1R Alındı · Runner" until it returns to BE or the sync marks it.
+    if (strategyRef.current === 'd30_4h_so') {
+      const risk = Math.abs(sig.entry - sig.sl);
+      const r1 = sig.dir === 'LONG' ? sig.entry + risk : sig.entry - risk;   // +1R first target
+      let partial = false;
+      let stop = sig.sl;
+      for (const c of candles) {
+        if (c.time < entryHitTime) continue;
+        const r1Hit = sig.dir === 'LONG' ? c.high >= r1 : c.low <= r1;
+        const stopHit = sig.dir === 'LONG' ? c.low <= stop : c.high >= stop;
+        if (!partial) {
+          if (stopHit) return { status: 'SL Oldu', lastPrice };          // -1R before +1R (ties → stop)
+          if (r1Hit) { partial = true; stop = sig.entry; continue; }      // +1R booked (60%), arm BE
+        } else if (stopHit) {
+          return { status: 'BE Oldu', lastPrice };                        // runner back to breakeven
+        }
+      }
+      return { status: partial ? 'İşlem Aktif (+1R Alındı · Runner)' : 'İşlem Aktif (Entry Geldi)', lastPrice };
+    }
+
     // ½TP modules: after the fill, run the partial-TP + breakeven lifecycle
     // (mirror of backtest _resolve_partial): at half the distance entry→TP close
     // 50% and pull the stop to entry; the rest rides to TP or stops at BE.
@@ -835,52 +872,60 @@ export const TradeProvider = ({ children }) => {
 
     let stopped = false;
 
-    const fetchCandles = async (sig) => {
-      const baseSymbol = normalizeForBinance(sig.symbol);
-      const entryTime = sig.dateObj.getTime();
-      const fetchStartTime = entryTime - (60 * 1000 * 120);
+    // Fetch 1m klines for ONE symbol covering from the earliest signal on that symbol to now.
+    const fetchCandlesForSymbol = async (symbol, startMs) => {
+      const baseSymbol = normalizeForBinance(symbol);
+      const fetchStartTime = startMs - (60 * 1000 * 120);
       const fetchEndTime = Date.now();
-
       const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
       const res = await fetch(urlFutures);
       let rawData = await res.json();
-
       if (!Array.isArray(rawData)) {
         const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=1m&startTime=${fetchStartTime}&endTime=${fetchEndTime}&limit=1500`;
         const resSpot = await fetch(urlSpot);
         rawData = await resSpot.json();
       }
-
       if (!Array.isArray(rawData) || rawData.length === 0) return [];
-
       return rawData.map((d) => ({
         time: d[0] / 1000,
-        open: parseFloat(d[1]),
-        high: parseFloat(d[2]),
-        low: parseFloat(d[3]),
-        close: parseFloat(d[4])
+        open: parseFloat(d[1]), high: parseFloat(d[2]),
+        low: parseFloat(d[3]), close: parseFloat(d[4])
       }));
     };
 
     const updateStatuses = async () => {
-      for (const sig of pollSet) {
-        const existing = liveStatusesRef.current[sig.id];
-        if (resolveLiveMeta(existing?.status).terminal) continue;
+      // Only the still-open signals need a refresh; terminal ones are fixed.
+      const pending = pollSet.filter((sig) => !resolveLiveMeta(liveStatusesRef.current[sig.id]?.status).terminal);
+      if (pending.length === 0) return;
 
-        try {
-          const candles = await fetchCandles(sig);
-          const result = computeLiveStatusFromCandles(sig, candles);
-          if (stopped) return;
-
-          setLiveStatuses((prev) => {
-            const next = { ...prev, [sig.id]: { status: result.status, lastPrice: result.lastPrice } };
-            liveStatusesRef.current = next;
-            return next;
-          });
-        } catch {
-          // no-op
-        }
+      // ONE 1m fetch per SYMBOL (many signals share a symbol), all symbols in PARALLEL —
+      // instead of a serial fetch per signal. Earliest entry on the symbol sets the window.
+      const bySym = new Map();
+      for (const sig of pending) {
+        const e = sig.dateObj.getTime();
+        bySym.set(sig.symbol, Math.min(bySym.get(sig.symbol) ?? e, e));
       }
+      const candlesBySym = {};
+      await Promise.all([...bySym.entries()].map(async ([sym, startMs]) => {
+        try { candlesBySym[sym] = await fetchCandlesForSymbol(sym, startMs); }
+        catch { candlesBySym[sym] = []; }
+      }));
+      if (stopped) return;
+
+      // Compute every status, then commit ONCE (no per-signal setState render storm).
+      const updates = {};
+      for (const sig of pending) {
+        const candles = candlesBySym[sig.symbol];
+        if (!candles || candles.length === 0) continue;
+        const result = computeLiveStatusFromCandles(sig, candles);
+        updates[sig.id] = { status: result.status, lastPrice: result.lastPrice };
+      }
+      if (Object.keys(updates).length === 0) return;
+      setLiveStatuses((prev) => {
+        const next = { ...prev, ...updates };
+        liveStatusesRef.current = next;
+        return next;
+      });
     };
 
     updateStatuses();

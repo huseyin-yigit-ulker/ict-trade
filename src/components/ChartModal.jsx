@@ -19,6 +19,23 @@ const IconLine = () => (
 // a signal that never fills is cancelled this many minutes after the signal fires.
 const ENTRY_EXPIRY_MINUTES = 180;
 
+// Session kline cache for STATIC chart datasets (backtest trades — their klines never change).
+// Keyed by symbol|interval|start|end (minute-floored). Lets re-opening the same trade, the
+// candle↔line toggle, and StrictMode double-mounts reuse data instead of re-hitting Binance.
+// Live (active) trades skip this — their window grows every tick. Bounded LRU (~80 entries).
+const CHART_KLINE_CACHE = new Map();
+const KLINE_CACHE_MAX = 80;
+const cacheGet = (k) => {
+  if (!CHART_KLINE_CACHE.has(k)) return null;
+  const v = CHART_KLINE_CACHE.get(k);            // refresh LRU order
+  CHART_KLINE_CACHE.delete(k); CHART_KLINE_CACHE.set(k, v);
+  return v;
+};
+const cacheSet = (k, v) => {
+  CHART_KLINE_CACHE.set(k, v);
+  if (CHART_KLINE_CACHE.size > KLINE_CACHE_MAX) CHART_KLINE_CACHE.delete(CHART_KLINE_CACHE.keys().next().value);
+};
+
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses, strategy } = useTradeContext();
   const { t, locale } = useLang();
@@ -26,6 +43,12 @@ const ChartModal = () => {
   // TP/2 dashed line, "%50 kapandı, SL→Entry" marker, BE stop segment.
   // karma: ½TP'lik sembol bazında (KARMA_MAP) — isHalfFor iki durumu da çözer.
   const isHalf = isHalfFor(strategy, activeSignal?.symbol);
+  // Scale-out stream (d30_4h_so): same 30m+4h entry + −1R stop as dch30_4h, but the exit
+  // scales out — book 60% at +1R (first target), pull the runner's stop to breakeven and let
+  // it RIDE uncapped (exits at breakeven or a 20-day time stop). The chart must surface the
+  // +1R partial level, the breakeven runner segment, and how much of the position is still open
+  // — NOT the misleading 4R "TP" line (that target is never used here).
+  const isScaleOut = strategy === 'd30_4h_so';
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
@@ -66,6 +89,7 @@ const ChartModal = () => {
     'TP/SL Aynı Mum':               { label: 'TP+SL',    cls: 'st-mixed' },
     'İşlem Aktif (Entry Geldi)':    { label: 'AKTİF',    cls: 'st-active' },
     'İşlem Aktif (Kısmi ½TP Alındı)': { label: '½TP·BE',  cls: 'st-active' }, // ½TP: 50% banked, stop at entry
+    'İşlem Aktif (+1R Alındı · Runner)': { label: '+1R·RUN', cls: 'st-active' }, // scale-out: 60% booked, runner rides
     'İptal (Entry Gelmeden TP/SL)': { label: 'İPTAL',    cls: 'st-cancel' },
     'İptal (Süre Doldu)':           { label: 'İPTAL',    cls: 'st-cancel' },
     'Sinyal Bekliyor':              { label: 'BEKLİYOR', cls: 'st-wait' },
@@ -73,6 +97,23 @@ const ChartModal = () => {
   const ctxLiveStatus = (mode === 'live' && activeSignal) ? liveStatuses[activeSignal.id]?.status : null;
   const liveDisplay = LIVE_STATUS_DISPLAY[ctxLiveStatus] || (ctxLiveStatus ? null : null);
   const liveTradeStatus = liveDisplay ? liveDisplay.label : (mode === 'live' ? t('Hesaplanıyor...') : '');
+
+  // Scale-out live R (mirror of Dashboard.liveOutcomeR for d30_4h_so): 60% booked at +1R, the
+  // runner (40%) is risk-free at breakeven. A partial-active or BE close secures ~0.6−fee R
+  // (a FLOOR — the runner can add more, resolved by the nightly sync); a pre-+1R stop is −1R.
+  const soLiveR = (() => {
+    if (!isScaleOut || mode !== 'live' || !activeSignal) return null;
+    const { entry, sl } = activeSignal;
+    if (!Number.isFinite(entry) || !Number.isFinite(sl)) return null;
+    const risk = Math.abs(entry - sl);
+    if (!risk) return null;
+    const fee = 0.0005 * (2 * entry) / risk;
+    if (ctxLiveStatus === 'BE Oldu' || ctxLiveStatus === 'İşlem Aktif (+1R Alındı · Runner)') return 0.6 - fee;
+    if (ctxLiveStatus === 'SL Oldu' || ctxLiveStatus === 'TP/SL Aynı Mum') return -1 - fee;
+    return null;
+  })();
+  // Floor (partial still riding) vs realised (BE/SL terminal).
+  const soLiveRFloor = ctxLiveStatus === 'İşlem Aktif (+1R Alındı · Runner)';
 
   // --- Yardımcı Fonksiyonlar ---
   const calculatePnL = (sig) => {
@@ -199,8 +240,6 @@ const ChartModal = () => {
         const signalOpenMs = entryTime;
         const fallbackBacktestEnd = entryTime + (60 * 1000 * 240);
         const backtestExitTsMs = Number.isFinite(activeSignal?.exitTs) ? activeSignal.exitTs : fallbackBacktestEnd;
-        const exitBufferMs = 2 * 60 * 60 * 1000; // headroom so the hit wick is in the dataset
-
         const intervalMs = (tf) => {
           const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
           if (!m) return 60 * 60 * 1000;
@@ -208,60 +247,67 @@ const ChartModal = () => {
           return Number(m[1]) * units[m[2].toLowerCase()];
         };
 
-        // --- Context padding, measured in SIGNAL-timeframe periods ---
-        // Show ~PAD_BARS bars BEFORE the signal (ÖNCE) and AFTER the close (SONRA)
-        // so the trade is never glued to the chart edge.
-        const PAD_BARS = 6;          // 5-10 band
-        const MIN_PAD_DISPLAY = 8;   // floor in display bars so short-TF (1m live) still breathes
+        // --- Context window: PAD_BARS before the signal, POST_CLOSE_BARS after the close ---
+        // Once a trade is resolved we fetch only ~30 more bars past the close and STOP — no
+        // point streaming price action long after the outcome (and live polling halts too).
+        const PAD_BARS = 6;            // context bars BEFORE the signal
+        const POST_CLOSE_BARS = 30;    // context bars AFTER the close, then stop fetching
         const ltfMs = intervalMs(activeSignal.ltfTimeframe);
-        let padMs = PAD_BARS * ltfMs;
+        const tradeSpanMs = Math.max(backtestExitTsMs - signalOpenMs, 60 * 1000);
 
-        // Window extends BACKWARD before the signal in BOTH modes (drop the old
-        // live "+1 bar push-forward" so the run-up into the signal is visible).
-        let fetchStartTime = signalOpenMs - padMs;
-        const fetchEndTime = mode === 'live'
-          ? Date.now()
-          : Math.max(backtestExitTsMs + Math.max(exitBufferMs, padMs), signalOpenMs + 60 * 1000);
-
-        // Display interval chosen over the PADDED span; coarsen so it fits <=1500 bars.
+        // Resolution: LIVE = 1m (intrabar precision while the trade is open). BACKTEST = coarser
+        // by trade duration, starting at 5m — far fewer bars to fetch/parse/render than 1m, and
+        // the outcome (entry/TP/SL/exit) is already known from the DB so 5m visuals suffice.
         const ladder = ['1m', '5m', '15m', '1h', '4h', '1d', '1w'];
         const pickInterval = () => {
           if (mode === 'live') return '1m';
-          const hours = (fetchEndTime - fetchStartTime) / 3600000;
-          if (hours <= 25) return '1m';
-          if (hours <= 125) return '5m';     // ~5 days
-          if (hours <= 375) return '15m';    // ~15 days
-          return '1h';
+          const hours = tradeSpanMs / 3600000;
+          if (hours <= 60)   return '5m';    // <= 2.5 days
+          if (hours <= 250)  return '15m';   // <= ~10 days
+          if (hours <= 1000) return '1h';
+          return '4h';
         };
         let klineInterval = pickInterval();
-        while (mode !== 'live' && (fetchEndTime - fetchStartTime) / intervalMs(klineInterval) > 1450) {
+        let displayMs = intervalMs(klineInterval);
+
+        // Window: PAD_BARS before signal; backtest ends POST_CLOSE_BARS past the exit, live = now.
+        const computeWindow = () => {
+          const start = signalOpenMs - Math.max(PAD_BARS * ltfMs, PAD_BARS * displayMs);
+          const end = mode === 'live' ? Date.now()
+            : Math.max(backtestExitTsMs + POST_CLOSE_BARS * displayMs, signalOpenMs + 60 * 1000);
+          return { start, end };
+        };
+        let { start: fetchStartTime, end: fetchEndTime } = computeWindow();
+        // Safety: keep the fetched span <= ~1450 bars (coarsen interval if needed).
+        while (mode !== 'live' && (fetchEndTime - fetchStartTime) / displayMs > 1450) {
           const i = ladder.indexOf(klineInterval);
           if (i < 0 || i === ladder.length - 1) break;
-          klineInterval = ladder[i + 1];
+          klineInterval = ladder[i + 1]; displayMs = intervalMs(klineInterval);
+          ({ start: fetchStartTime, end: fetchEndTime } = computeWindow());
         }
         // Live stays 1m — clamp the start so it never exceeds ~1450 bars.
         if (mode === 'live') {
           const liveMaxStart = Date.now() - 1450 * 60000;
           if (fetchStartTime < liveMaxStart) fetchStartTime = liveMaxStart;
         }
-        // Pad floor in display bars (visible context even on coarse intervals).
-        const displayMs = intervalMs(klineInterval);
-        padMs = Math.max(PAD_BARS * ltfMs, MIN_PAD_DISPLAY * displayMs);
-        const padBarsDisplay = Math.ceil(padMs / displayMs);
-
         const baseSymbol = normalizeForBinance(activeSignal.symbol);
 
-        // 1. Veriyi Çek
-        let rawData = [];
-        const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${Math.floor(fetchStartTime)}&endTime=${Math.floor(fetchEndTime)}&limit=1500`;
-        const res = await fetch(urlFutures);
-        rawData = await res.json();
-
-        // Futures yoksa Spot dene
+        // 1. Veriyi Çek — backtest datasets are static, so cache them (re-open / style toggle /
+        //    StrictMode reuse without a refetch). Live is never cached (its window grows live).
+        const cacheable = mode === 'backtest';
+        const cacheKey = `${baseSymbol}|${klineInterval}|${Math.floor(fetchStartTime / 60000)}|${Math.floor(fetchEndTime / 60000)}`;
+        let rawData = cacheable ? cacheGet(cacheKey) : null;
         if (!Array.isArray(rawData)) {
+          const urlFutures = `https://fapi.binance.com/fapi/v1/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${Math.floor(fetchStartTime)}&endTime=${Math.floor(fetchEndTime)}&limit=1500`;
+          const res = await fetch(urlFutures);
+          rawData = await res.json();
+          // Futures yoksa Spot dene
+          if (!Array.isArray(rawData)) {
             const urlSpot = `https://api.binance.com/api/v3/klines?symbol=${baseSymbol}&interval=${klineInterval}&startTime=${Math.floor(fetchStartTime)}&endTime=${Math.floor(fetchEndTime)}&limit=1500`;
             const resSpot = await fetch(urlSpot);
             rawData = await resSpot.json();
+          }
+          if (cacheable && Array.isArray(rawData) && rawData.length) cacheSet(cacheKey, rawData);
         }
 
         if (cancelled || !chartRef.current) return;   // modal closed / re-opened while fetching
@@ -292,10 +338,45 @@ const ChartModal = () => {
         // ½TP modules additionally track the partial scale-out: at TP/2 the position
         // halves and the stop moves to entry (BE) — so the close after a partial is
         // detected against ENTRY, not the original SL (mirror of _resolve_partial).
-        const halfLevel = (isHalf && entry && tp) ? entry + (tp - entry) / 2 : null;  // long & short
+        // Partial-take level: ½TP books 50% at HALF the distance to TP1; scale-out books 60%
+        // at +1R (= one risk unit from entry). After the partial the stop moves to breakeven and
+        // the remainder rides — ½TP toward the original TP1, scale-out UNCAPPED (only BE / the
+        // 20-day time exit ends it). The runner geometry is what the chart must surface.
+        const risk = (entry != null && sl != null) ? Math.abs(entry - sl) : null;
+        const partialLevel = isScaleOut && risk
+          ? (isLong ? entry + risk : entry - risk)
+          : (isHalf && entry && tp ? entry + (tp - entry) / 2 : null);
+        const isPartial = isHalf || isScaleOut;
         let entryFilled = false, entryFillSec = null, closeBarSec = null, closeBarIdx = -1;
         let partialBarSec = null, beClose = false;
-        if (entry && tp && sl && signalVisible) {
+
+        if (isScaleOut && entry && sl && partialLevel != null && signalVisible) {
+          // scale-out: entry fill -> +1R partial (60%, SL→BE) -> runner rides with a breakeven
+          // stop. If the runner never returns to entry in-window it falls through to the DB exit
+          // anchor (the 20-day time exit), shown as a neutral "Çıkış".
+          let hit = false, partial = false, stop = sl;
+          for (let idx = 0; idx < candles.length; idx++) {
+            const c = candles[idx];
+            if (c.time < entryTs) continue;
+            const soHit = isLong ? c.high >= partialLevel : c.low <= partialLevel;
+            const stopHit = isLong ? c.low <= stop : c.high >= stop;
+            if (!hit) {
+              const eHit = isLong ? c.low <= entry : c.high >= entry;
+              if (!eHit && stopHit) { closeBarSec = c.time; closeBarIdx = idx; break; }   // pre-entry cancel
+              if (eHit) {
+                hit = true; entryFilled = true; entryFillSec = c.time;
+                if (stopHit && !soHit) { closeBarSec = c.time; closeBarIdx = idx; break; } // immediate -1R
+                if (soHit) { partial = true; partialBarSec = c.time; stop = entry; }       // +1R, arm BE
+              }
+            } else if (!partial) {
+              if (stopHit) { closeBarSec = c.time; closeBarIdx = idx; break; }            // -1R before +1R
+              if (soHit) { partial = true; partialBarSec = c.time; stop = entry; }         // +1R, arm BE
+            } else if (stopHit) {
+              beClose = true; closeBarSec = c.time; closeBarIdx = idx; break;              // runner back to BE
+            }
+          }
+        } else if (entry && tp && sl && signalVisible) {
+          const halfLevel = partialLevel;   // ½TP partial (null for the base full-TP stream)
           let hit = false, partial = false, stop = sl;
           for (let idx = 0; idx < candles.length; idx++) {
             const c = candles[idx];
@@ -324,9 +405,9 @@ const ChartModal = () => {
             }
           }
         }
-        // ½TP backtest rows resolved by the nightly sync close BE trades AT entry —
-        // if the coarse-bar scan missed the touch, recover BE from the DB exit price.
-        if (isHalf && !beClose && mode === 'backtest' && activeSignal.status === 'TP'
+        // Partial backtest rows whose coarse re-fetch missed the BE touch — recover BE from the
+        // DB exit price parked at entry (½TP and the scale-out runner both close BE at entry).
+        if (isPartial && !beClose && mode === 'backtest' && activeSignal.status === 'TP'
             && Number.isFinite(activeSignal.exitPrice) && entry
             && Math.abs(activeSignal.exitPrice - entry) / entry < 1e-6) {
           beClose = true;
@@ -356,11 +437,11 @@ const ChartModal = () => {
           closeBarIdx = candles.findIndex(c => c.time === closeBarSec);
         }
 
-        // Keep ~PAD_BARS of SONRA context past the close, then stop — for backtest AND
-        // any terminal live trade, so a timed-out/closed live trade shows a little more
-        // price action after the exit and then ends, instead of trailing "now".
+        // Once the trade is resolved, keep POST_CLOSE_BARS (~30) of context past the close, then
+        // stop — for backtest AND any terminal live trade. No price action is streamed long
+        // after the outcome; the live 3s poll is also halted below once terminal.
         if (closeBarIdx >= 0 && (mode === 'backtest' || liveTerminal)) {
-          candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + padBarsDisplay));
+          candles = candles.slice(0, Math.min(candles.length, closeBarIdx + 1 + POST_CLOSE_BARS));
         }
 
         // The signal fires at the bar CLOSE (signal_time = bar OPEN). Anchor the
@@ -415,12 +496,15 @@ const ChartModal = () => {
           // the 30m stream, whose :00/:30 closes land exactly on 1m boundaries. Two equal
           // (or descending) points would throw → "Veri alınamadı". Fall back to a single
           // point until the candle window advances past the entry bar (next 3s refresh).
+          // Green zone spans entry → target. Scale-out's real first target is +1R (the booked
+          // 60% band), NOT the 4R tp — so cap the zone at +1R there to read honestly.
+          const zoneTop = (isScaleOut && partialLevel != null) ? partialLevel : tp;
           tpAreaSeries.setData(endTimeForGraph > entryTs
-            ? [ { time: entryTs, value: tp }, { time: endTimeForGraph, value: tp } ]
-            : [ { time: entryTs, value: tp } ]);
-          // ½TP: the original SL dies at the partial (stop → entry) — end its zone there
-          // so the chart reads "risk removed from this bar on".
-          const slZoneEnd = (isHalf && partialBarSec != null) ? Math.min(partialBarSec, endTimeForGraph) : endTimeForGraph;
+            ? [ { time: entryTs, value: zoneTop }, { time: endTimeForGraph, value: zoneTop } ]
+            : [ { time: entryTs, value: zoneTop } ]);
+          // The original SL dies at the partial (stop → entry) for BOTH partial models — end its
+          // zone there so the chart reads "risk removed from this bar on".
+          const slZoneEnd = (isPartial && partialBarSec != null) ? Math.min(partialBarSec, endTimeForGraph) : endTimeForGraph;
           slAreaSeries.setData(slZoneEnd > entryTs
             ? [ { time: entryTs, value: sl }, { time: slZoneEnd, value: sl } ]
             : [ { time: entryTs, value: sl } ]);
@@ -432,7 +516,7 @@ const ChartModal = () => {
         // ½TP: breakeven stop segment — a yellow dashed line AT entry from the partial
         // bar to the close, marking the new risk-free stop. Created once, refreshed
         // every pass (live refresh re-runs this block every 3s).
-        if (isHalf && !chartRef.current._beSeries) {
+        if (isPartial && !chartRef.current._beSeries) {
           chartRef.current._beSeries = chart.addSeries(LineSeries, {
             color: '#F0B90B', lineWidth: 2, lineStyle: 2,
             lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
@@ -452,11 +536,15 @@ const ChartModal = () => {
           const targetPct = entry && tp ? ((tp - entry) / entry) * 100 : null;
           const riskPct = entry && sl ? ((sl - entry) / entry) * 100 : null;
           if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')} ${formatPrice(entry)}`, axisLabelVisible: true });
-          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
-          // ½TP ara hedef — kesik çizgi: burada pozisyonun %50'si kapanır, SL entry'ye çekilir.
-          if (halfLevel != null) {
-            const halfPct = entry ? ((halfLevel - entry) / entry) * 100 : null;
-            mainSeries.createPriceLine({ price: halfLevel, color: '#F5B942', lineWidth: 1, lineStyle: 2, title: `½TP %50${halfPct != null ? ' ' + (halfPct >= 0 ? '+' : '') + halfPct.toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // Full 4R TP line — drawn for every stream EXCEPT scale-out, whose runner is uncapped
+          // (no 4R target), so a 4R line there would be misleading.
+          if (tp && !isScaleOut) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
+          // +1R and the runner then rides with a breakeven stop.
+          if (partialLevel != null) {
+            const partialPct = entry ? ((partialLevel - entry) / entry) * 100 : null;
+            const partialTitle = isScaleOut ? 'TP1 +1R · %60' : '½TP %50';
+            mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' ' + (partialPct >= 0 ? '+' : '') + partialPct.toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           }
           if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
@@ -501,7 +589,7 @@ const ChartModal = () => {
 
         // 5. Zaman-bağlı işaretler: Sinyal / Giriş / ½TP Kısmi / Çıkış (renk sonuca göre).
         // ½TP'de BE kapanışı ayrı etiketlenir (sarı 'BE') — TP/SL ile karışmasın.
-        const isBE = isHalf && (beClose || (mode === 'live' && ctxStatus === 'BE Oldu'));
+        const isBE = isPartial && (beClose || (mode === 'live' && ctxStatus === 'BE Oldu'));
         const isTP = !isBE && ((mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
         const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
         const exitColor = isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
@@ -513,9 +601,11 @@ const ChartModal = () => {
         if (entryFilled && entryFillSec != null && entryFillSec !== signalSec) {
           markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: t('Giriş'), size: 1 });
         }
-        // ½TP kısmi kâr işareti: fiyat TP/2'ye değdi — %50 kapandı, SL→Entry (BE).
-        if (isHalf && partialBarSec != null && (partialBarSec !== exitSec || !isTerminalState)) {
-          markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: '#F5B942', text: '½TP %50 · SL→BE', size: 1 });
+        // Kısmi kâr işareti: ½TP'de fiyat TP/2'ye değdi (%50 kapandı); scale-out'ta +1R'ye
+        // değdi (%60 kapandı). Her ikisinde de SL → Entry (breakeven).
+        if (isPartial && partialBarSec != null && (partialBarSec !== exitSec || !isTerminalState)) {
+          const partialText = isScaleOut ? 'TP1 +1R · %60 → BE' : '½TP %50 · SL→BE';
+          markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: '#F5B942', text: partialText, size: 1 });
         }
         if (isTerminalState && exitSec != null) {
           markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar', shape: isLong ? 'arrowDown' : 'arrowUp', color: exitColor, text: exitText, size: 1 });
@@ -533,7 +623,7 @@ const ChartModal = () => {
           const tsApi = chart.timeScale();
           let toTime = candles.length ? candles[candles.length - 1].time : endTimeForGraph;
           if (isTerminalState && closeBarSec != null) {
-            toTime = Math.min(toTime, closeBarSec + padBarsDisplay * (displayMs / 1000));
+            toTime = Math.min(toTime, closeBarSec + POST_CLOSE_BARS * (displayMs / 1000));
           }
           try {
             tsApi.setVisibleRange({ from: candles[0].time, to: toTime });
@@ -585,7 +675,7 @@ const ChartModal = () => {
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeSignal, showTv, mode, chartStyle, isHalf]);
+  }, [activeSignal, showTv, mode, chartStyle, isHalf, isScaleOut]);
 
   // UI Formatters
   // Signal/hover times in UTC (the data's native zone), labelled so it's unambiguous
@@ -689,6 +779,29 @@ const ChartModal = () => {
           : null;
         const exitPrice = mode === 'backtest' ? activeSignal.exitPrice : null;
 
+        // Scale-out (d30_4h_so): first target +1R (60% booked), runner (40%) rides to breakeven
+        // / a 20-day time exit. Compute the +1R level and a plain-language runner state so the
+        // panel shows what the 4R "Hedef" row can't: where the partial is and how much is open.
+        const soRisk = isScaleOut && Number.isFinite(activeSignal.entry) && Number.isFinite(activeSignal.sl)
+          ? Math.abs(activeSignal.entry - activeSignal.sl) : null;
+        const so1R = soRisk ? (activeSignal.dir === 'LONG' ? activeSignal.entry + soRisk : activeSignal.entry - soRisk) : null;
+        const so1Rpct = so1R ? pctDist(activeSignal.entry, so1R) : null;
+        let soState = null, soStateColor = '#EAECEF';
+        if (isScaleOut) {
+          if (mode === 'backtest') {
+            if (activeSignal.status === 'SL') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
+            else if (activeSignal.status === 'TP') {
+              const beRunner = Number.isFinite(exitPrice) && activeSignal.entry
+                && Math.abs(exitPrice - activeSignal.entry) / activeSignal.entry < 1e-6;
+              soState = beRunner ? t('%60 +1R alındı · %40 runner BE (0R)') : t('%60 +1R alındı · %40 runner çıktı');
+              soStateColor = '#0ECB81';
+            } else { soState = t('Açık'); soStateColor = '#F5B942'; }
+          } else {
+            // live: AKTİF means the runner is still riding (or +1R not yet hit); terminal via status
+            soState = liveTradeStatus; soStateColor = '#F5B942';
+          }
+        }
+
         return (
         <div
           ref={panelRef}
@@ -716,12 +829,31 @@ const ChartModal = () => {
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
           </div>
           <div className="position-row"><span>{t('Giriş')}</span><b>{formatPrice(activeSignal.entry)}</b></div>
-          <div className="position-row">
-             <span>{t('Hedef')}</span>
-             <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span>
-               {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
-             </b>
-          </div>
+          {!isScaleOut ? (
+            <div className="position-row">
+               <span>{t('Hedef')}</span>
+               <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span>
+                 {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
+               </b>
+            </div>
+          ) : (<>
+            <div className="position-row">
+               <span>TP1 (+1R · %60)</span>
+               <b><span style={{color:'#0ECB81'}}>{formatPrice(so1R)}</span>
+                 {so1Rpct != null && <span style={{color:'#848E9C', fontWeight:400}}> · {so1Rpct >= 0 ? '+' : ''}{so1Rpct.toFixed(2)}%</span>}
+               </b>
+            </div>
+            <div className="position-row">
+               <span>{t('Runner (%40)')}</span>
+               <b style={{color:'#F5B942', fontWeight:500}}>{t('breakeven ride · 20g')}</b>
+            </div>
+            {soState && (
+              <div className="position-row">
+                <span>{t('Pozisyon Durumu')}</span>
+                <b style={{color: soStateColor, fontWeight:500, textAlign:'right'}}>{soState}</b>
+              </div>
+            )}
+          </>)}
           {isHalf && Number.isFinite(activeSignal.entry) && Number.isFinite(activeSignal.tp) && (() => {
             const halfLevelP = activeSignal.entry + (activeSignal.tp - activeSignal.entry) / 2;
             const halfPctP = pctDist(activeSignal.entry, halfLevelP);
@@ -740,12 +872,18 @@ const ChartModal = () => {
                {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · {riskPct.toFixed(2)}%</span>}
              </b>
           </div>
-          {rr != null && (
+          {rr != null && !isScaleOut && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
               <b style={{ color: '#F5B942' }}>1:{rr.toFixed(2)}
                 {isHalf && <span style={{color:'#848E9C', fontWeight:400}}> · ½TP maks +{(0.75 * rr).toFixed(2)}R</span>}
               </b>
+            </div>
+          )}
+          {isScaleOut && (
+            <div className="position-row">
+              <span>{t('Risk-Reward')}</span>
+              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner kapaksız</span></b>
             </div>
           )}
           {mode === 'live' && Number.isFinite(liveLastPrice) && (
@@ -772,9 +910,17 @@ const ChartModal = () => {
           )}
           <div className="position-row">
             <span>{t('PnL')}</span>
-            <b style={{color: activePnL === null || activePnL >= 0 ? '#0ECB81' : '#F6465D'}}>
-              {activePnL !== null ? formatPnL(activeSignal, activePnL) : '--'}
-            </b>
+            {Number.isFinite(soLiveR) ? (
+              // scale-out LIVE R: +0.6−fee secured at the +1R partial / BE (floor while the
+              // runner rides), −1R for a pre-+1R stop. Realised R comes from the nightly sync.
+              <b style={{color: soLiveR >= 0 ? '#0ECB81' : '#F6465D'}}>
+                {soLiveRFloor ? '≥' : ''}{soLiveR >= 0 ? '+' : ''}{soLiveR.toFixed(2)}R
+              </b>
+            ) : (
+              <b style={{color: activePnL === null || activePnL >= 0 ? '#0ECB81' : '#F6465D'}}>
+                {activePnL !== null ? formatPnL(activeSignal, activePnL) : '--'}
+              </b>
+            )}
           </div>
           {mode === 'live' && (
             <div className="position-row">
