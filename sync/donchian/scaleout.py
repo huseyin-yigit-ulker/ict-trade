@@ -96,7 +96,14 @@ def resolve_scaleout(symbol: str, ts, direction: str, entry: float, sl: float, t
     window is not yet fully covered by `df1m` (and which has neither stopped nor returned to
     breakeven) is left ACTIVE instead of marked-to-market — so a still-riding runner is not
     booked early; it resolves on a later run once the horizon completes. The backfill passes
-    False (sim-faithful: mark-to-market / -1R at the data end), reproducing the OOS numbers."""
+    False (sim-faithful: mark-to-market / -1R at the data end), reproducing the OOS numbers.
+
+    Returns None when the breakout FAILS directional confirmation (ict.config.ENTRY_CONFIRM_BUF)
+    — the caller skips it so no DB row is written for an unconfirmed signal."""
+    cts = pd.Timestamp(ts)
+    cts = (cts.tz_localize("UTC") if cts.tz is None else cts.tz_convert("UTC")) + pd.Timedelta(minutes=ltf_minutes)
+    if not tsc.entry_confirmed(df1m, cts, direction, entry, sl, expiry_minutes=expiry_minutes):
+        return None
     base = tsc.simulate(symbol, ts, direction, entry, sl, tp, df1m=df1m,
                         ltf_minutes=ltf_minutes, expiry_minutes=expiry_minutes)
     ft = base["real_entry_time"]
@@ -190,6 +197,8 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp):
         res = resolve_scaleout(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                                s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
                                expiry_minutes=s.expiry_minutes)
+        if res is None:                       # failed directional confirmation -> no row
+            continue
         row = tsc.build_row(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                             s.take_profit_1, res, strategy=s.strategy,
                             quality=s.quality, confluence_score=s.confluence_score)

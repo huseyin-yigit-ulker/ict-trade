@@ -31,6 +31,7 @@ sys.path.insert(0, str(BT))
 
 from ict.data import fetch_klines          # noqa: E402  (futures+spot fallback)
 from backtester import simulate_signal     # noqa: E402
+from ict import config as C                # noqa: E402  (ENTRY_CONFIRM_BUF)
 
 ENV_PATH = REPO / ".env"
 INTERVAL = "1h"             # signal-generation / engine timeframe (fetch_1h feeds run_engine)
@@ -134,6 +135,43 @@ class _StubSignal:
 def _pending() -> dict:
     return {"status": STATUS_MAP["pending"], "real_entry_time": None, "exit_time": None,
             "exit_price": None, "pnl_r": None, "raw_status": "pending"}
+
+
+def entry_confirmed(df1m: pd.DataFrame, close_ts, direction: str, entry: float, sl: float,
+                    *, expiry_minutes: int = EXPIRY_MINUTES, buf: float | None = None) -> bool:
+    """Directional entry confirmation on 1m. True if, within the fill window from `close_ts`,
+    price extends FAVOURABLY (toward TP) by buf*risk BEFORE moving adversely (toward SL) by
+    buf*risk; ties -> adverse (False). buf defaults to ict.config.ENTRY_CONFIRM_BUF; buf<=0 -> True.
+
+    Used as a PRE-FILTER: a breakout that fails confirmation produces NO row at all (not even a
+    'cancelled' one) — so the DB holds only trades that confirmed their direction."""
+    b = (getattr(C, "ENTRY_CONFIRM_BUF", 0.0) if buf is None else buf)
+    risk = abs(float(entry) - float(sl))
+    if b <= 0 or risk <= 0:
+        return True
+    idx = df1m.index
+    if idx.tz is None:
+        df1m = df1m.copy(); df1m.index = idx = idx.tz_localize("UTC")
+    cts = pd.Timestamp(close_ts)
+    cts = cts.tz_localize("UTC") if cts.tz is None else cts.tz_convert("UTC")
+    p0 = int(idx.searchsorted(cts))
+    p1 = int(idx.searchsorted(cts + pd.Timedelta(minutes=expiry_minutes)))
+    if p1 <= p0:
+        return False
+    H = df1m["high"].values; L = df1m["low"].values
+    long = str(direction).lower() == "long"
+    fav_lvl = entry + b * risk if long else entry - b * risk
+    adv_lvl = entry - b * risk if long else entry + b * risk
+    for i in range(p0, p1):
+        if long:
+            adv, fav = L[i] <= adv_lvl, H[i] >= fav_lvl
+        else:
+            adv, fav = H[i] >= adv_lvl, L[i] <= fav_lvl
+        if adv:
+            return False        # adverse buffer first -> not taken
+        if fav:
+            return True          # favourable buffer first -> confirmed
+    return False                 # never confirmed within the window -> not taken
 
 
 def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,

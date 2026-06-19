@@ -201,10 +201,14 @@ def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
                 continue
             for w in items:
                 st = w["_st"]
+                exp = stream.get("expiry_min", tsc.EXPIRY_MINUTES)
+                cts = st + pd.Timedelta(minutes=stream["ltf_min"])
+                if not tsc.entry_confirmed(df1m, cts, w["direction"], float(w["entry"]),
+                                           float(w["sl"]), expiry_minutes=exp):
+                    continue                  # failed directional confirmation -> no row
                 outcome = tsc.simulate(sym, st, w["direction"], float(w["entry"]),
                                        float(w["sl"]), float(w["tp"]), df1m=df1m,
-                                       ltf_minutes=stream["ltf_min"],
-                                       expiry_minutes=stream.get("expiry_min", tsc.EXPIRY_MINUTES))
+                                       ltf_minutes=stream["ltf_min"], expiry_minutes=exp)
                 status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
                 row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
                                     outcome, strategy=w.get("strategy"), quality=w.get("quality"),
@@ -340,6 +344,8 @@ def resolve_scaleout_stream(live, bt, w_start, w_end, now, *, rescan, symbols_ov
                                           float(w["sl"]), float(w["tp"]), df1m=df1m,
                                           ltf_minutes=ltf_min, expiry_minutes=tsc.EXPIRY_MINUTES,
                                           active_if_incomplete=True)
+            if outcome is None:               # failed directional confirmation -> no row
+                continue
             status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
             row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
                                 outcome, strategy=w.get("strategy"), quality=w.get("quality"),

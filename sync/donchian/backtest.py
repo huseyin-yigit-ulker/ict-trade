@@ -90,6 +90,11 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
     rows, resolved, tot = [], 0, 0.0
     try:
         for s in sigs:
+            cts = (s.timestamp.tz_convert("UTC") if s.timestamp.tz else s.timestamp.tz_localize("UTC")) \
+                + pd.Timedelta(minutes=ltf_min)
+            if not tsc.entry_confirmed(df1m, cts, s.direction, s.entry, s.stop_loss,
+                                       expiry_minutes=s.expiry_minutes):
+                continue                      # failed directional confirmation -> no row
             res = tsc.simulate(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                                s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
                                expiry_minutes=s.expiry_minutes)

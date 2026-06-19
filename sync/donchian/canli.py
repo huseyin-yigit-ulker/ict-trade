@@ -162,6 +162,27 @@ def main():
         except Exception as e:  # noqa: BLE001
             print(f"  ! {sym}: {e}", flush=True)
 
+    # Directional entry confirmation (ict.config.ENTRY_CONFIRM_BUF): only EMIT a breakout that
+    # has confirmed its direction by now (favourable buf*risk before adverse buf*risk on the 1m
+    # path since the bar close). A reversal toward the stop / not-yet-confirmed is skipped — so
+    # no unconfirmed signal is ever written to ict_trade.signals. (Late confirmers are caught on
+    # a subsequent run while still inside the lookback window.)
+    if found:
+        confirmed: list[strat.DonSignal] = []
+        for s in found:
+            cts = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
+            try:
+                d1 = tsc.fetch_1m(s.symbol, cts - pd.Timedelta(minutes=2), now)
+            except Exception:  # noqa: BLE001
+                d1 = None
+            ok = (d1 is not None and not d1.empty and tsc.entry_confirmed(
+                d1, cts, s.direction, s.entry, s.stop_loss, expiry_minutes=s.expiry_minutes))
+            if ok:
+                confirmed.append(s)
+            else:
+                print(f"  {s.symbol:<10} {s.direction.upper():<5} — yön teyidi yok, atlandı", flush=True)
+        found = confirmed
+
     print(f"\n{len(found)} fresh signal(s).")
     if args.dry_run or not found:
         if args.dry_run:
