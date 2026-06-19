@@ -314,16 +314,18 @@ const Dashboard = () => {
 
   const getTotalR = (list) => list.reduce((sum, s) => sum + (Number.isFinite(s?.pnlR) ? s.pnlR : calculatePnL(s)), 0);
 
+  // All dashboard dates/times are in UTC (the data's native zone — same as the chart), so the
+  // cards never disagree with the chart's "Sinyal (UTC)". Day/month/year buckets use UTC too.
   const formatLocalIso = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   };
 
   const parseIsoDate = (isoString) => {
     const [year, month, day] = isoString.split('-').map(Number);
-    return new Date(year, month - 1, day);
+    return new Date(Date.UTC(year, month - 1, day));
   };
 
   // Live görünümü için mevcut günlük grup. Gruplama, kartta gösterilen gerçek
@@ -334,7 +336,7 @@ const Dashboard = () => {
     return filteredSignals.reduce((acc, sig) => {
       const effDate = effectiveSignalTime(sig) || sig.dateObj;
       const dateKey = effDate.toLocaleDateString(locale, {
-        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+        timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
       });
       if (!acc[dateKey]) acc[dateKey] = [];
       acc[dateKey].push(sig);
@@ -350,7 +352,7 @@ const Dashboard = () => {
 
   const yearBuckets = useMemo(() => {
     const byYear = backtestSignals.reduce((acc, sig) => {
-      const year = sig.dateObj.getFullYear();
+      const year = sig.dateObj.getUTCFullYear();
       if (!acc[year]) acc[year] = [];
       acc[year].push(sig);
       return acc;
@@ -396,7 +398,7 @@ const Dashboard = () => {
     const list = yearData?.list || [];
 
     const byMonth = list.reduce((acc, sig) => {
-      const monthKey = `${sig.dateObj.getFullYear()}-${String(sig.dateObj.getMonth() + 1).padStart(2, '0')}`;
+      const monthKey = `${sig.dateObj.getUTCFullYear()}-${String(sig.dateObj.getUTCMonth() + 1).padStart(2, '0')}`;
       if (!acc[monthKey]) acc[monthKey] = [];
       acc[monthKey].push(sig);
       return acc;
@@ -406,7 +408,7 @@ const Dashboard = () => {
       .map(([monthKey, monthList]) => {
         const counts = summarizeBacktestCounts(monthList);
         const totalR = getTotalR(monthList);
-        const label = parseIsoDate(`${monthKey}-01`).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+        const label = parseIsoDate(`${monthKey}-01`).toLocaleDateString(locale, { timeZone: 'UTC', month: 'long', year: 'numeric' });
         return {
           monthKey,
           label,
@@ -444,7 +446,7 @@ const Dashboard = () => {
       .map(([dayKey, dayList]) => {
         const counts = summarizeBacktestCounts(dayList);
         const totalR = getTotalR(dayList);
-        const label = parseIsoDate(dayKey).toLocaleDateString(locale, { weekday: 'short', day: '2-digit', month: 'short' });
+        const label = parseIsoDate(dayKey).toLocaleDateString(locale, { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short' });
         return {
           dayKey,
           label,
@@ -477,7 +479,7 @@ const Dashboard = () => {
   const selectedDayLabel = useMemo(() => {
     if (!selectedDay) return '';
     return parseIsoDate(selectedDay).toLocaleDateString(locale, {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
   }, [selectedDay, locale]);
 
@@ -622,7 +624,7 @@ const Dashboard = () => {
             : (pnl > 0 ? 'win' : (pnl < 0 ? 'loss' : 'waiting')));
 
         const effDate = effectiveSignalTime(sig) || sig.dateObj;
-        const timeLabel = effDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+        const timeLabel = effDate.toLocaleTimeString(locale, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' }) + ' UTC';
         const rr = computeRR(sig);
         const targetPct = pctDist(sig.entry, sig.tp);
         const riskPct = pctDist(sig.entry, sig.sl);
@@ -798,7 +800,7 @@ const Dashboard = () => {
             <div className="drill-path">
               {!selectedYear && t('Yıllar')}
               {selectedYear && !selectedMonth && `${selectedYear} / ${t('Aylar')}`}
-              {selectedYear && selectedMonth && `${selectedYear} / ${parseIsoDate(`${selectedMonth}-01`).toLocaleDateString(locale, { month: 'long' })} / ${t('Günler')}`}
+              {selectedYear && selectedMonth && `${selectedYear} / ${parseIsoDate(`${selectedMonth}-01`).toLocaleDateString(locale, { timeZone: 'UTC', month: 'long' })} / ${t('Günler')}`}
             </div>
             <div className="drill-actions">
               {selectedMonth && (
