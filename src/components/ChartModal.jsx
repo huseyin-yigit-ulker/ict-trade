@@ -440,6 +440,27 @@ const ChartModal = () => {
           ? (activeSignal.status === 'TP' || activeSignal.status === 'SL')
           : liveTerminal;
 
+        // CANCELLED live signal (directional confirm failed = 'İptal (Ters Yön)', or fill timed
+        // out = 'İptal (Süre Doldu)'): the trade was NEVER taken. The touch-scan above ignores the
+        // confirm gate, so it would draw a PHANTOM Giriş/TP1/Çıkış on a trade that didn't open.
+        // Suppress those + the zones, and anchor the close at the cancel point (the adverse-0.5R
+        // touch that vetoed it, else the fill deadline).
+        const isCancelled = mode === 'live' && !!ctxStatus && ctxStatus.startsWith('İptal');
+        if (isCancelled) {
+          entryFilled = false; entryFillSec = null; partialBarSec = null; beClose = false;
+          const risk0 = (Number.isFinite(entry) && Number.isFinite(sl)) ? Math.abs(entry - sl) : 0;
+          const advLvl = isLong ? entry - 0.5 * risk0 : entry + 0.5 * risk0;   // mirror ENTRY_CONFIRM_BUF=0.5
+          let cb = null;
+          if (risk0 > 0) {
+            for (const c of candles) {
+              if (c.time < entryTs) continue;
+              if (isLong ? c.low <= advLvl : c.high >= advLvl) { cb = c.time; break; }
+            }
+          }
+          closeBarSec = cb != null ? cb : snapBar(signalOpenMs + ENTRY_EXPIRY_MINUTES * 60 * 1000);
+          closeBarIdx = candles.findIndex(c => c.time === closeBarSec);
+        }
+
         // Live entry-fill timeout ('İptal (Süre Doldu)'): never filled, no TP/SL touch.
         // The trade ends at the fill deadline — anchor the close there so the zone,
         // dimming and exit marker all stop at the timeout, not at the latest candle.
@@ -500,7 +521,7 @@ const ChartModal = () => {
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
         }
-        if (entry && tp && sl) {
+        if (entry && tp && sl && !isCancelled) {
           // Guard the zone span: lightweight-charts setData requires strictly-ascending
           // unique times. For a freshly-emitted signal the entry-bar close (entryTs) can
           // equal or exceed the latest loaded 1m candle (endTimeForGraph) — most often on
@@ -623,16 +644,17 @@ const ChartModal = () => {
         const isBE = isPartial && (beClose || (mode === 'live' && ctxStatus === 'BE Oldu'));
         const isTP = !isBE && ((mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
         const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
-        const exitColor = isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
+        const exitColor = isCancelled ? '#848E9C' : isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
         // Scale-out has NO single "TP": the runner exits at its +4R cap, breakeven, or a
         // mark (3-day / data-edge). Label the exit marker accordingly so it isn't a misleading
-        // "TP" (the real +1R take-profit is the separate partial marker).
+        // "TP" (the real +1R take-profit is the separate partial marker). A cancelled signal
+        // gets a neutral "İptal" marker (no trade was taken).
         const soRunnerCap = isScaleOut && isTP && (mode === 'live'
           ? true   // live 'TP Oldu' == runner reached its +4R cap
           : (Number.isFinite(activeSignal.exitPrice) && activeSignal.tp
              && Math.abs(activeSignal.exitPrice - activeSignal.tp) / activeSignal.tp < 1e-4));
-        const exitText = (isScaleOut && isTP)
-          ? (soRunnerCap ? t('Runner +4R') : t('Mark'))
+        const exitText = isCancelled ? t('İptal')
+          : (isScaleOut && isTP) ? (soRunnerCap ? t('Runner +4R') : t('Mark'))
           : (isTP ? t('TP') : isSL ? t('SL') : isBE ? 'BE' : t('Çıkış'));
         const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(activeSignal.exitTs) ? snapBar(activeSignal.exitTs) : null);
 
@@ -651,7 +673,9 @@ const ChartModal = () => {
           markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: '#F5B942', text: partialText, size: 1 });
         }
         if (isTerminalState && exitSec != null) {
-          markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar', shape: isLong ? 'arrowDown' : 'arrowUp', color: exitColor, text: exitText, size: 1 });
+          markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar',
+            shape: isCancelled ? 'circle' : (isLong ? 'arrowDown' : 'arrowUp'),
+            color: exitColor, text: exitText, size: 1 });
         }
         markers.sort((a, b) => a.time - b.time);   // v5 requires ascending time
         if (!chartRef.current._markersApi) {
