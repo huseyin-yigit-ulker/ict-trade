@@ -845,22 +845,32 @@ export const TradeProvider = ({ children }) => {
     // own TP, since RUNNER_CAP 4R == dch30_4h RR=4), or a breakeven close (runner back to entry).
     // The rare 3-day mark-to-market tail is resolved by the nightly sync — until then a still-riding
     // runner stays "+1R Alındı · Runner".
-    if (strategyRef.current === 'd30_4h_so') {
-      const risk = Math.abs(sig.entry - sig.sl);
-      const r1 = sig.dir === 'LONG' ? sig.entry + risk : sig.entry - risk;   // +1R first target
+    // Matches d30_4h_so AND the realistic ·0.5R twins (d30_4h_soc / d30so{N}c). The ·0.5R twins enter
+    // at the +0.5R confirmation level, so +1R / BE are measured from that realistic entry (risk =
+    // 1.5×raw); the runner cap sits at the STRUCTURAL +N*raw_risk from the breakout (== signal TP for
+    // 4R, higher for 6R/8R). Single source: both the live LIST and the chart read this status.
+    if (/^(d30_4h_so|d30so\d+)c?$/.test(strategyRef.current)) {
+      const conf = strategyRef.current.endsWith('c');                       // realistic +0.5R entry twin
+      const rawRisk = Math.abs(sig.entry - sig.sl);
+      const entryEff = conf ? (sig.dir === 'LONG' ? sig.entry + 0.5 * rawRisk : sig.entry - 0.5 * rawRisk) : sig.entry;
+      const riskEff = Math.abs(entryEff - sig.sl);                          // 1.5×raw for the ·0.5R twin
+      const r1 = sig.dir === 'LONG' ? entryEff + riskEff : entryEff - riskEff;   // +1R first target
+      const capM = strategyRef.current.match(/^d30so(\d+)/);
+      const capR = capM ? Number(capM[1]) : 4;                              // d30so6c→6, d30so8c→8, else 4
+      const cap = sig.dir === 'LONG' ? sig.entry + capR * rawRisk : sig.entry - capR * rawRisk;
       let partial = false;
       let stop = sig.sl;
       for (const c of candles) {
         if (c.time < entryHitTime) continue;
         const r1Hit = sig.dir === 'LONG' ? c.high >= r1 : c.low <= r1;
-        const capHit = sig.dir === 'LONG' ? c.high >= sig.tp : c.low <= sig.tp;  // runner +4R cap (==signal TP)
+        const capHit = sig.dir === 'LONG' ? c.high >= cap : c.low <= cap;  // runner +NR cap
         const stopHit = sig.dir === 'LONG' ? c.low <= stop : c.high >= stop;
         if (!partial) {
           if (stopHit) return { status: 'SL Oldu', lastPrice };          // -1R before +1R (ties → stop)
-          if (r1Hit) { partial = true; stop = sig.entry; continue; }      // +1R booked (60%), arm BE
+          if (r1Hit) { partial = true; stop = entryEff; continue; }       // +1R booked (60%), arm BE at the real entry
         } else {
           if (stopHit) return { status: 'BE Oldu', lastPrice };          // runner back to breakeven (0R)
-          if (capHit) return { status: 'TP Oldu', lastPrice };           // runner hit +4R cap (2.2R)
+          if (capHit) return { status: 'TP Oldu', lastPrice };           // runner hit its +NR cap
         }
       }
       return { status: partial ? 'İşlem Aktif (+1R Alındı · Runner)' : 'İşlem Aktif (Entry Geldi)', lastPrice };
