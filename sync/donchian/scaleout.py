@@ -178,6 +178,9 @@ def resolve_scaleout(symbol: str, ts, direction: str, entry: float, sl: float, t
                     raw_status="active")
         return base
     lng = direction.lower() == "long"
+    # The runner's STRUCTURAL cap price (entry + runner_cap*risk) — what the row's tp_price should
+    # record, NOT the signal's RR=4 TP. They coincide for the 4R variant but diverge for 6R+.
+    base["cap_price"] = float(entry + runner_cap * risk * (1 if lng else -1))
     H = df1m["high"].values; L = df1m["low"].values; Cl = df1m["close"].values
     hi = H[p0:p1]; lo = L[p0:p1]
     fav = ((hi - entry) if lng else (entry - lo)) / risk     # per-bar favourable extreme (R)
@@ -277,7 +280,7 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp):
         if res is None:                       # failed directional confirmation -> no row
             continue
         row = tsc.build_row(sym, s.timestamp, s.direction, res.get("entry_eff", s.entry),
-                            s.stop_loss, s.take_profit_1, res, strategy=s.strategy,
+                            s.stop_loss, res.get("cap_price", s.take_profit_1), res, strategy=s.strategy,
                             quality=s.quality, confluence_score=s.confluence_score)
         row["version"] = VERSION
         rows.append(row)

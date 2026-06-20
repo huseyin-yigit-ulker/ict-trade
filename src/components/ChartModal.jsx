@@ -49,9 +49,55 @@ const ChartModal = () => {
   // surfaces the +1R partial level, the +4R runner cap, the breakeven runner segment, and how much
   // of the position is still open.
   const isScaleOut = !!strategy && (strategy.startsWith('d30_4h_so') || strategy.startsWith('d30so'));
+  // Runner cap in R, by version: d30_4h_so(c) = 4R, d30so6c = 6R, d30so8c = 8R, ...
+  const soCapR = (() => {
+    const m = strategy && strategy.match(/^d30so(\d+)/);
+    return m ? Number(m[1]) : 4;
+  })();
   // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
   // fill is a STOP — price must RISE (long) / FALL (short) TO the entry, not pull back to it.
   const isConfirmEntry = !!strategy && strategy.endsWith('c');
+
+  // Use the CURRENT DB row for this trade (pnl_r / exit / status) rather than the possibly-stale
+  // bulk-loaded backtest set — so a re-backfill is reflected the moment the chart opens, without a
+  // full dashboard reload. Keyed on (version=strategy, symbol, direction, signal_time).
+  const [dbFresh, setDbFresh] = useState(null);
+  useEffect(() => {
+    setDbFresh(null);
+    if (mode !== 'backtest' || !activeSignal?.symbol || !activeSignal?.dateObj || !strategy) return undefined;
+    const url = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
+    const key = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    if (!url || !key) return undefined;
+    const raw = (import.meta.env.BACKTESTING_DB_TABLE || 'ict_trade.trading_signals').toString().trim().replace(/^["']|["']$/g, '');
+    const [schema, table] = raw.includes('.') ? raw.split('.') : ['ict_trade', raw];
+    let alive = true;
+    const p = new URLSearchParams({ select: 'pnl_r,exit_price,exit_time,real_entry_time,status' });
+    p.append('version', `eq.${strategy}`);
+    p.append('symbol', `eq.${activeSignal.symbol}`);
+    p.append('direction', `eq.${activeSignal.dir}`);
+    p.append('signal_time', `eq.${activeSignal.dateObj.toISOString()}`);
+    fetch(`${url}/rest/v1/${table}?${p.toString()}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Accept-Profile': schema },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows) => { if (alive && Array.isArray(rows) && rows[0]) setDbFresh(rows[0]); })
+      .catch(() => { /* keep the loaded values on failure */ });
+    return () => { alive = false; };
+  }, [activeSignal?.symbol, activeSignal?.dir, activeSignal?.dateObj, mode, strategy]);
+
+  // The signal the chart/panel actually renders: the loaded row with its outcome (pnl_r / exit /
+  // status) overridden by the fresh DB read when available.
+  const sig = (activeSignal && dbFresh) ? {
+    ...activeSignal,
+    pnlR: Number.isFinite(Number(dbFresh.pnl_r)) ? Number(dbFresh.pnl_r) : activeSignal.pnlR,
+    exitPrice: Number.isFinite(Number(dbFresh.exit_price)) ? Number(dbFresh.exit_price) : activeSignal.exitPrice,
+    exitTs: dbFresh.exit_time ? new Date(dbFresh.exit_time).getTime() : activeSignal.exitTs,
+    entryFillTs: dbFresh.real_entry_time ? new Date(dbFresh.real_entry_time).getTime() : null,
+    status: (() => {
+      const s = (dbFresh.status || '').toLowerCase();
+      return s.includes('cancel') ? 'NOFILL' : s.includes('tp') ? 'TP' : s.includes('sl') ? 'SL' : activeSignal.status;
+    })(),
+  } : activeSignal;
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
@@ -252,7 +298,7 @@ const ChartModal = () => {
         const entryTime = activeSignal.dateObj.getTime();   // signal bar OPEN
         const signalOpenMs = entryTime;
         const fallbackBacktestEnd = entryTime + (60 * 1000 * 240);
-        const backtestExitTsMs = Number.isFinite(activeSignal?.exitTs) ? activeSignal.exitTs : fallbackBacktestEnd;
+        const backtestExitTsMs = Number.isFinite(sig?.exitTs) ? sig.exitTs : fallbackBacktestEnd;
         const intervalMs = (tf) => {
           const m = String(tf || '1h').match(/^(\d+)([smhd])$/i);
           if (!m) return 60 * 60 * 1000;
@@ -427,18 +473,24 @@ const ChartModal = () => {
         }
         // Partial backtest rows whose coarse re-fetch missed the BE touch — recover BE from the
         // DB exit price parked at entry (½TP and the scale-out runner both close BE at entry).
-        if (isPartial && !beClose && mode === 'backtest' && activeSignal.status === 'TP'
-            && Number.isFinite(activeSignal.exitPrice) && entry
-            && Math.abs(activeSignal.exitPrice - entry) / entry < 1e-6) {
+        if (isPartial && !beClose && mode === 'backtest' && sig.status === 'TP'
+            && Number.isFinite(sig.exitPrice) && entry
+            && Math.abs(sig.exitPrice - entry) / entry < 1e-6) {
           beClose = true;
         }
 
         // Fallback: a closed backtest trade whose coarse re-fetch missed the exact touch —
         // anchor the close to the DB exit_time so zone/trim/dimming/marker all agree.
-        const backtestClosed = mode === 'backtest' && (activeSignal.status === 'TP' || activeSignal.status === 'SL');
-        if (closeBarSec == null && backtestClosed && Number.isFinite(activeSignal.exitTs)) {
-          closeBarSec = snapBar(activeSignal.exitTs);
+        const backtestClosed = mode === 'backtest' && (sig.status === 'TP' || sig.status === 'SL');
+        if (backtestClosed && Number.isFinite(sig.exitTs)) {
+          closeBarSec = snapBar(sig.exitTs);   // anchor the exit to the DB (1m-resolved), not the coarse-candle scan
           closeBarIdx = candles.findIndex(c => c.time === closeBarSec);
+        }
+        // Anchor the ENTRY marker to the DB real_entry_time too (backtest) — visualize the DB's
+        // entry/exit timestamps, don't re-derive the fill from coarse candles.
+        if (mode === 'backtest' && Number.isFinite(sig.entryFillTs)) {
+          entryFilled = true;
+          entryFillSec = snapBar(sig.entryFillTs);
         }
 
         // Live terminal state — computed early so the close anchor + trim can use it.
@@ -446,7 +498,7 @@ const ChartModal = () => {
         const liveTerminalSet = new Set(['TP Oldu', 'SL Oldu', 'BE Oldu', 'TP/SL Aynı Mum']);
         const liveTerminal = !!ctxStatus && (liveTerminalSet.has(ctxStatus) || ctxStatus.startsWith('İptal'));
         const isTerminalState = mode === 'backtest'
-          ? (activeSignal.status === 'TP' || activeSignal.status === 'SL')
+          ? (sig.status === 'TP' || sig.status === 'SL')
           : liveTerminal;
 
         // CANCELLED live signal (directional confirm failed = 'İptal (Ters Yön)', or fill timed
@@ -599,7 +651,7 @@ const ChartModal = () => {
           if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')} ${formatPrice(entry)}`, axisLabelVisible: true });
           // 4R line: for scale-out it is the RUNNER CAP (runner takes profit at +4R == the
           // signal's own TP); for every other stream it is the full take-profit. Drawn for both.
-          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +4R') : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
           // +1R and the runner then rides with a breakeven stop.
           if (partialLevel != null) {
@@ -609,7 +661,7 @@ const ChartModal = () => {
           }
           if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           if (mode === 'backtest' && activeSignal?.exitPrice) {
-            mainSeries.createPriceLine({ price: activeSignal.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(activeSignal.exitPrice)}`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: sig.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(sig.exitPrice)}`, axisLabelVisible: true });
           }
           chartRef.current._priceLinesAdded = true;
         }
@@ -651,8 +703,8 @@ const ChartModal = () => {
         // 5. Zaman-bağlı işaretler: Sinyal / Giriş / ½TP Kısmi / Çıkış (renk sonuca göre).
         // ½TP'de BE kapanışı ayrı etiketlenir (sarı 'BE') — TP/SL ile karışmasın.
         const isBE = isPartial && (beClose || (mode === 'live' && ctxStatus === 'BE Oldu'));
-        const isTP = !isBE && ((mode === 'backtest' && activeSignal.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
-        const isSL = (mode === 'backtest' && activeSignal.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
+        const isTP = !isBE && ((mode === 'backtest' && sig.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
+        const isSL = (mode === 'backtest' && sig.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
         const exitColor = isCancelled ? '#848E9C' : isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
         // Scale-out has NO single "TP": the runner exits at its +4R cap, breakeven, or a
         // mark (3-day / data-edge). Label the exit marker accordingly so it isn't a misleading
@@ -660,12 +712,12 @@ const ChartModal = () => {
         // gets a neutral "İptal" marker (no trade was taken).
         const soRunnerCap = isScaleOut && isTP && (mode === 'live'
           ? true   // live 'TP Oldu' == runner reached its +4R cap
-          : (Number.isFinite(activeSignal.exitPrice) && activeSignal.tp
-             && Math.abs(activeSignal.exitPrice - activeSignal.tp) / activeSignal.tp < 1e-4));
+          : (Number.isFinite(sig.exitPrice) && sig.tp
+             && Math.abs(sig.exitPrice - sig.tp) / sig.tp < 1e-4));
         const exitText = isCancelled ? t('İptal')
-          : (isScaleOut && isTP) ? (soRunnerCap ? t('Runner +4R') : t('Mark'))
+          : (isScaleOut && isTP) ? (soRunnerCap ? t('Runner +{cap}R', { cap: soCapR }) : t('Mark'))
           : (isTP ? t('TP') : isSL ? t('SL') : isBE ? 'BE' : t('Çıkış'));
-        const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(activeSignal.exitTs) ? snapBar(activeSignal.exitTs) : null);
+        const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(sig.exitTs) ? snapBar(sig.exitTs) : null);
 
         const markers = [];
         if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
@@ -751,7 +803,7 @@ const ChartModal = () => {
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeSignal, showTv, mode, chartStyle, isHalf, isScaleOut]);
+  }, [activeSignal, dbFresh, showTv, mode, chartStyle, isHalf, isScaleOut]);
 
   // UI Formatters
   // Signal/hover times in UTC (the data's native zone), labelled so it's unambiguous
@@ -769,7 +821,7 @@ const ChartModal = () => {
     if (abs >= 0.0001) return value.toFixed(7);
     return value.toPrecision(4);
   };
-  const activePnL = calculatePnL(activeSignal);
+  const activePnL = calculatePnL(sig);
 
   // signal_time in DB = bar OPEN; the signal actually fires at bar CLOSE.
   // Use this everywhere the UI shows "Tarih" / computes "Süre".
@@ -864,10 +916,10 @@ const ChartModal = () => {
         const effDate = effectiveSignalDate(activeSignal);
         const ageMs = effDate ? (Date.now() - effDate.getTime()) : null;
         // For closed backtest trades, duration is bar-close → exit_time.
-        const closedDurationMs = mode === 'backtest' && activeSignal.exitTs && effDate
-          ? activeSignal.exitTs - effDate.getTime()
+        const closedDurationMs = mode === 'backtest' && sig.exitTs && effDate
+          ? sig.exitTs - effDate.getTime()
           : null;
-        const exitPrice = mode === 'backtest' ? activeSignal.exitPrice : null;
+        const exitPrice = mode === 'backtest' ? sig.exitPrice : null;
 
         // Scale-out (d30_4h_so): first target +1R (60% booked), runner (40%) rides to breakeven
         // / a 20-day time exit. Compute the +1R level and a plain-language runner state so the
@@ -879,18 +931,18 @@ const ChartModal = () => {
         let soState = null, soStateColor = '#EAECEF';
         if (isScaleOut) {
           if (mode === 'backtest') {
-            if (activeSignal.status === 'SL') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
-            else if (activeSignal.status === 'TP') {
+            if (sig.status === 'SL') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
+            else if (sig.status === 'TP') {
               const beRunner = Number.isFinite(exitPrice) && activeSignal.entry
                 && Math.abs(exitPrice - activeSignal.entry) / activeSignal.entry < 1e-6;
               const capRunner = Number.isFinite(exitPrice) && activeSignal.tp
                 && Math.abs(exitPrice - activeSignal.tp) / activeSignal.tp < 1e-6;
               // distinguish a TRUE 3-day mark from a data-edge mark (runner window cut short by
               // the backtest data/window end — e.g. a signal in the last ~3 days of the window).
-              const runnerDays = (effDate && Number.isFinite(activeSignal.exitTs))
-                ? (activeSignal.exitTs - effDate.getTime()) / 86400000 : 99;
+              const runnerDays = (effDate && Number.isFinite(sig.exitTs))
+                ? (sig.exitTs - effDate.getTime()) / 86400000 : 99;
               soState = beRunner ? t('%60 +1R alındı · %40 runner BE (0R)')
-                : capRunner ? t('%60 +1R alındı · %40 runner +4R cap')
+                : capRunner ? t('%60 +1R alındı · %40 runner +{cap}R cap', { cap: soCapR })
                 : runnerDays >= 2.9 ? t('%60 +1R alındı · %40 runner mark (3g)')
                 : t('%60 +1R alındı · %40 runner mark (veri sonu, <3g)');
               soStateColor = '#0ECB81';
@@ -901,8 +953,8 @@ const ChartModal = () => {
             const s = liveTradeStatus;
             if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
             else if (s === 'BE Oldu') { soState = t('%60 +1R alındı · %40 runner BE (0R)'); soStateColor = '#0ECB81'; }
-            else if (s === 'TP Oldu') { soState = t('%60 +1R alındı · %40 runner +4R cap'); soStateColor = '#0ECB81'; }
-            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%60 +1R alındı · %40 runner aktif (≤+4R / 3g)'); soStateColor = '#F5B942'; }
+            else if (s === 'TP Oldu') { soState = t('%60 +1R alındı · %40 runner +{cap}R cap', { cap: soCapR }); soStateColor = '#0ECB81'; }
+            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%60 +1R alındı · %40 runner aktif (≤+{cap}R / 3g)', { cap: soCapR }); soStateColor = '#F5B942'; }
             else { soState = s; soStateColor = '#F5B942'; }   // Entry Geldi / Sinyal Bekliyor / İptal
           }
         }
@@ -949,14 +1001,14 @@ const ChartModal = () => {
                </b>
             </div>
             <div className="position-row">
-               <span>{t('Runner Cap (+4R)')}</span>
+               <span>{t('Runner Cap (+{cap}R)', { cap: soCapR })}</span>
                <b><span style={{color:'#0ECB81'}}>{formatPrice(activeSignal.tp)}</span>
                  {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
                </b>
             </div>
             <div className="position-row">
                <span>{t('Runner (%40)')}</span>
-               <b style={{color:'#F5B942', fontWeight:500}}>{t('+4R cap · breakeven · 3g')}</b>
+               <b style={{color:'#F5B942', fontWeight:500}}>{t('+{cap}R cap · breakeven · 3g', { cap: soCapR })}</b>
             </div>
             {soState && (
               <div className="position-row">
@@ -994,7 +1046,7 @@ const ChartModal = () => {
           {isScaleOut && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
-              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+4R / 3g</span></b>
+              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+{soCapR}R / 3g</span></b>
             </div>
           )}
           {mode === 'live' && Number.isFinite(liveLastPrice) && (

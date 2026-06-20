@@ -367,7 +367,7 @@ def resolve_scaleout_stream(live, bt, w_start, w_end, now, *, rescan, symbols_ov
                 continue
             status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
             row = tsc.build_row(sym, st, w["direction"], outcome.get("entry_eff", w["entry"]),
-                                w["sl"], w["tp"], outcome, strategy=w.get("strategy"),
+                                w["sl"], outcome.get("cap_price", w["tp"]), outcome, strategy=w.get("strategy"),
                                 quality=w.get("quality"), confluence_score=w.get("confluence_score"))
             row["version"] = version
             rows.append(row)
