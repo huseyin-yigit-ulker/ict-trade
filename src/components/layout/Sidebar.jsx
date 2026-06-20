@@ -91,6 +91,7 @@ const GROUPS = [
   { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
   { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
   { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

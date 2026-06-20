@@ -23,6 +23,7 @@ export const STREAMS = [
   { key: 'dch30_4h6c',   version: 'dch30_4h6c',   exit: 'full', family: 'trend', tf: '30m+4h·6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h 6R ·0.5R' },
   { key: 'd30_4h_soc',   version: 'd30_4h_soc',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·0.5R' },
   { key: 'd30so6c',      version: 'd30so6c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·0.5R' },
+  { key: 'd30so8c',      version: 'd30so8c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·0.5R' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.
