@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, usingDefaultCreds, consumeAuthNote } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { STRATEGY_INFO } from '../utils/strategyInfo';
+import { infoFor } from '../utils/strategyInfo';
 import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct } from '../utils/streamStats';
 import PusuLogo from './PusuLogo';
 
@@ -118,7 +118,7 @@ const TrackRecord = () => {
   const totalSignals = rows.reduce((sum, x) => sum + (Number(x.m.total_trades) || 0), 0);
   const top = rows[0];
   const bestExp = rows.reduce((a, b) => (Number(b.m.avg_r) > Number(a.m.avg_r) ? b : a));
-  const head = (s) => STRATEGY_INFO[s.key]?.[lang] || STRATEGY_INFO[s.key]?.tr;
+  const head = (s) => infoFor(s.key, lang) || {};
 
   return (
     <div className="login-track">
@@ -145,7 +145,7 @@ const TrackRecord = () => {
       <div className="login-track__rows">
         {rows.map(({ s, m }) => {
           const r = Number(m.total_r);
-          const info = STRATEGY_INFO[s.key];
+          const info = infoFor(s.key, lang) || {};
           return (
             <div key={s.key} className="login-track__row" style={{ '--acc': info.accent }}>
               <span className="login-track__icon" aria-hidden="true">{info.icon}</span>
