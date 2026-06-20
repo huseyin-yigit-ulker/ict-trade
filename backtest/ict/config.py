@@ -1,5 +1,7 @@
 """ICT signal layer parameters. Defaults from ICT_Signal_Strategies.md."""
 
+import os
+
 ATR_PERIOD = 14
 
 SWING_N_ITF = 3
@@ -80,6 +82,18 @@ PARTIAL_TP_BREAKEVEN    = True    # after the partial, move the stop to entry
 # four streams (e.g. d30_4h_so 2026 WR 56%->80%, +149R->+606R, PF 1.15->3.84). 0 = off (legacy
 # limit-at-close fill). Honoured by backtester.simulate_signal -> inherited by every resolver.
 ENTRY_CONFIRM_BUF = 0.5
+
+# Realistic confirmation fill. When ENTRY_CONFIRM_BUF>0 you cannot actually fill at the breakout
+# close — you only act ONCE the +buf*risk favourable move prints — so the honest entry is the
+# CONFIRMATION level itself (entry +/- buf*risk), market-filled at the confirm bar. SL/TP prices
+# are unchanged (structural), so R is measured against the real entry->SL distance, (1+buf)*risk:
+# a winner to the 4R target is worth ~2.33R, a loss is -1R. True = the honest model; False = the
+# legacy optimistic entry@close (a free buf*risk head start). Honoured by trade_sync_common via
+# confirm_fill()/resolve_market(); the boolean gate (entry_confirmed) still applies when off.
+# Env-driven (default OFF) so live/daily keep the entry@close model on the ORIGINAL version tags;
+# set DCH_ENTRY_AT_CONFIRM=1 to backfill the realistic-entry twins, which auto-tag with a 'c'
+# suffix (donchian -> donchianc, d30_4h_so -> d30_4h_soc) so they never overwrite the originals.
+ENTRY_AT_CONFIRM = os.environ.get("DCH_ENTRY_AT_CONFIRM", "0") == "1"
 
 # Higher timeframe used for bias detection. Resampled from the primary df.
 HTF_RULE = "4h"

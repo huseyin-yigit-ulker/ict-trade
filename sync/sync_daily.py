@@ -199,21 +199,40 @@ def resolve_stream(name, stream, live, bt, w_start, w_end, now, *,
                 print(f"    [{name}] {sym}: no klines, skipping {len(items)}")
                 skipped += len(items)
                 continue
+            # Confirm-fill model (ict.config.ENTRY_AT_CONFIRM): realistic entry = the +buf*risk
+            # confirmation level (full-TP streams only; ½TP uses its own partial resolver).
+            use_confirm = (getattr(C, "ENTRY_AT_CONFIRM", False)
+                           and getattr(C, "ENTRY_CONFIRM_BUF", 0.0) > 0
+                           and not bool(stream.get("partial", False)))
             for w in items:
                 st = w["_st"]
                 exp = stream.get("expiry_min", tsc.EXPIRY_MINUTES)
                 cts = st + pd.Timedelta(minutes=stream["ltf_min"])
-                if not tsc.entry_confirmed(df1m, cts, w["direction"], float(w["entry"]),
-                                           float(w["sl"]), expiry_minutes=exp):
-                    continue                  # failed directional confirmation -> no row
-                outcome = tsc.simulate(sym, st, w["direction"], float(w["entry"]),
-                                       float(w["sl"]), float(w["tp"]), df1m=df1m,
-                                       ltf_minutes=stream["ltf_min"], expiry_minutes=exp)
+                if use_confirm:
+                    cf = tsc.confirm_fill(df1m, cts, w["direction"], float(w["entry"]),
+                                          float(w["sl"]), expiry_minutes=exp)
+                    if cf is None:
+                        continue              # failed directional confirmation -> no row
+                    fill_ts, entry_eff, risk_eff = cf
+                    outcome = tsc.resolve_market(df1m, fill_ts, w["direction"], entry_eff,
+                                                 float(w["sl"]), float(w["tp"]), risk_eff,
+                                                 max_hold_minutes=3 * 24 * 60)
+                    erow = entry_eff
+                else:
+                    if not tsc.entry_confirmed(df1m, cts, w["direction"], float(w["entry"]),
+                                               float(w["sl"]), expiry_minutes=exp):
+                        continue              # failed directional confirmation -> no row
+                    outcome = tsc.simulate(sym, st, w["direction"], float(w["entry"]),
+                                           float(w["sl"]), float(w["tp"]), df1m=df1m,
+                                           ltf_minutes=stream["ltf_min"], expiry_minutes=exp,
+                                           max_hold_minutes=3 * 24 * 60)   # uniform 3-day time limit
+                    erow = w["entry"]
                 status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
-                row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
+                row = tsc.build_row(sym, st, w["direction"], erow, w["sl"], w["tp"],
                                     outcome, strategy=w.get("strategy"), quality=w.get("quality"),
                                     confluence_score=w.get("confluence_score"))
-                row["version"] = stream["version"]
+                # realistic-entry resolution -> the 'c' twin tag, never the entry@close original
+                row["version"] = stream["version"] + ("c" if use_confirm else "")
                 rows.append(row)
     finally:
         C.PARTIAL_TP_ENABLED = prev_partial
@@ -347,9 +366,9 @@ def resolve_scaleout_stream(live, bt, w_start, w_end, now, *, rescan, symbols_ov
             if outcome is None:               # failed directional confirmation -> no row
                 continue
             status_counts[outcome["status"]] = status_counts.get(outcome["status"], 0) + 1
-            row = tsc.build_row(sym, st, w["direction"], w["entry"], w["sl"], w["tp"],
-                                outcome, strategy=w.get("strategy"), quality=w.get("quality"),
-                                confluence_score=w.get("confluence_score"))
+            row = tsc.build_row(sym, st, w["direction"], outcome.get("entry_eff", w["entry"]),
+                                w["sl"], w["tp"], outcome, strategy=w.get("strategy"),
+                                quality=w.get("quality"), confluence_score=w.get("confluence_score"))
             row["version"] = version
             rows.append(row)
     print(f"  [{version}] resolved {len(rows)} rows, status={status_counts}, skipped={skipped}")

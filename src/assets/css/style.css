@@ -899,16 +899,24 @@ button.chip   { cursor: pointer; }
 
 .chart-actions { display: flex; gap: 8px; align-items: center; }
 
+/* TradingView-style OHLC legend — sits inline next to the symbol, no box/border so it reads as a
+   chart overlay rather than a chip. Values are tinted by bar direction (set inline). */
 .chart-hover-info {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
   color: var(--muted);
-  padding: 4px 8px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
   white-space: nowrap;
   font-family: var(--mono);
+  background: transparent;
+  border: none;
+  padding: 0;
 }
+.chart-hover-info .ohlc-time { color: var(--muted); }
+.chart-hover-info .ohlc-pair { display: inline-flex; gap: 4px; align-items: baseline; }
+.chart-hover-info .ohlc-pair i { font-style: normal; color: var(--muted); opacity: 0.65; }
+.chart-hover-info .ohlc-pair b { font-weight: 600; }
 
 .chart-toggle {
   background: var(--panel-2);

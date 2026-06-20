@@ -14,21 +14,15 @@
 export const STREAMS = [
   // Strategy set = MAIN + RANGE + OPUS. (range_q / v2_light_r / range_1h / range_q_1h
   // DB rows remain but aren't surfaced.)
-  // 2026-06-16: pruned to a SINGLE stream — donchian. MAIN/RANGE/OPUS removed (UI + DB);
-  // see sync/donchian/RETIRED_STREAMS_REPORT.md.
-  { key: 'donchian',     version: 'donchian',     exit: 'full', family: 'trend', tf: '1h' },
-  // 2026-06-17: HYBRID — 30m breakout confirmed by 4h trend direction. The MTF-validation
-  // winner: best stream overall, +1106R across 2024-26 (every year positive, fewest trades
-  // of the 30m family). 2026-06-17: the base donch_30m (dominated by this) and the ½TP twin
-  // dch30_4hh (2024-negative OOS) were removed — see sync/donchian/.
-  { key: 'dch30_4h',     version: 'dch30_4h',     exit: 'full', family: 'trend', tf: '30m+4h' },
-  // 2026-06-17: 6R-target twin — MFE study showed winners run to ~8R median, losers go
-  // straight to stop; a 6R target ~doubles R/trade vs 4R in all 3 years (OOS-robust).
-  { key: 'dch30_4h6',    version: 'dch30_4h6',    exit: 'full', family: 'trend', tf: '30m+4h·6R' },
-  // 2026-06-19: HIGH-WIN-RATE scale-out twin — same 30m+4h entry + −1R stop, but book 60% at
-  // +1R; runner (40%) exits at +4R cap / breakeven / 3-day time exit. WR set by the first target
-  // (gated 76-80%), OOS-positive every year. version='d30_4h_so'.
-  { key: 'd30_4h_so',    version: 'd30_4h_so',    exit: 'scaleout', family: 'trend', tf: '30m+4h·SO' },
+  // 2026-06-20: ONLY the realistic-entry (·0.5R) versions remain. The optimistic entry@close
+  // twins (donchian/dch30_4h/dch30_4h6/d30_4h_so) were removed from UI + DB — their entry was
+  // unrealistic (you can't fill at the breakout close when the trade only confirms +0.5R later).
+  // These enter at the +0.5R confirmation level; R is against the real (1.5×) risk (RR 4→2.33).
+  { key: 'donchianc',    version: 'donchianc',    exit: 'full', family: 'trend', tf: '1h ·0.5R',      realistic: true, label: 'DONCHIAN 1h ·0.5R' },
+  { key: 'dch30_4hc',    version: 'dch30_4hc',    exit: 'full', family: 'trend', tf: '30m+4h ·0.5R',  realistic: true, label: 'DONCHIAN 30m+4h ·0.5R' },
+  { key: 'dch30_4h6c',   version: 'dch30_4h6c',   exit: 'full', family: 'trend', tf: '30m+4h·6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h 6R ·0.5R' },
+  { key: 'd30_4h_soc',   version: 'd30_4h_soc',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·0.5R' },
+  { key: 'd30so6c',      version: 'd30so6c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·0.5R' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

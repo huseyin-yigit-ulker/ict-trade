@@ -37,10 +37,29 @@ def _warmup(tf: str) -> pd.Timedelta:
     return pd.Timedelta(minutes=TF_MINUTES[tf] * (strat.N_ENTRY + strat.ER_N) * 6)
 
 
+# 1m must reach past w_end far enough to resolve the 3-day max-hold of an edge-of-window signal
+# (entry+3d). Tail = max-hold + 1d slack, capped at now in run_symbol.
+M1_TAIL = pd.Timedelta(minutes=strat.MAX_HOLD_MINUTES) + pd.Timedelta(days=1)
+
+
 def _load_1m(sym: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """1m frame covering [start, end]; tail-append missing bars if a cached frame ends short."""
     cf = CACHE / f"{sym}.pkl"
     if cf.exists():
-        return pickle.loads(cf.read_bytes())
+        df = pickle.loads(cf.read_bytes())
+        if df is not None and not df.empty:
+            last = df.index[-1]
+            if last.tz is None:
+                df = df.copy(); df.index = df.index.tz_localize("UTC"); last = df.index[-1]
+            if last < end - pd.Timedelta(minutes=1):
+                tail = tsc.fetch_1m(sym, last + pd.Timedelta(minutes=1), end)
+                if tail is not None and not tail.empty:
+                    if tail.index.tz is None:
+                        tail.index = tail.index.tz_localize("UTC")
+                    df = pd.concat([df, tail[tail.index > last]])
+                    CACHE.mkdir(exist_ok=True)
+                    cf.write_bytes(pickle.dumps(df))
+            return df
     df = tsc.fetch_1m(sym, start - pd.Timedelta(hours=2), end)
     if df is not None and not df.empty:
         CACHE.mkdir(exist_ok=True)
@@ -64,6 +83,8 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
         version += str(int(rr))
     if half:
         version += "h"
+    if getattr(C, "ENTRY_AT_CONFIRM", False) and getattr(C, "ENTRY_CONFIRM_BUF", 0.0) > 0:
+        version += "c"                       # realistic-entry twin -> separate version tag
     fetch_start = w_start - _warmup(tf)
     df = tsc.fetch_klines(sym, tf, int(fetch_start.timestamp() * 1000),
                           int(w_end.timestamp() * 1000))
@@ -88,7 +109,8 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
     if not sigs:
         print(f"  {sym:<10} 0 breakouts", flush=True)
         return [], 0, 0.0
-    df1m = _load_1m(sym, w_start, w_end)
+    m1_end = min(pd.Timestamp.now(tz="UTC"), w_end + M1_TAIL)   # cover entry+3d for edge signals
+    df1m = _load_1m(sym, w_start, m1_end)
     if df1m is None or df1m.empty:
         print(f"  {sym:<10} SKIP (no 1m)", flush=True)
         return [], 0, 0.0
@@ -97,16 +119,32 @@ def run_symbol(sym: str, w_start: pd.Timestamp, w_end: pd.Timestamp, tf: str = "
     C.PARTIAL_TP_ENABLED = half               # full-TP (default) or ½TP+breakeven
     rows, resolved, tot = [], 0, 0.0
     try:
+        # Confirm-fill model (ict.config.ENTRY_AT_CONFIRM): the realistic entry is the +buf*risk
+        # confirmation level (market-filled at the confirm bar), not the breakout close.
+        use_confirm = getattr(C, "ENTRY_AT_CONFIRM", False) and getattr(C, "ENTRY_CONFIRM_BUF", 0.0) > 0
         for s in sigs:
             cts = (s.timestamp.tz_convert("UTC") if s.timestamp.tz else s.timestamp.tz_localize("UTC")) \
                 + pd.Timedelta(minutes=ltf_min)
-            if not tsc.entry_confirmed(df1m, cts, s.direction, s.entry, s.stop_loss,
-                                       expiry_minutes=s.expiry_minutes):
-                continue                      # failed directional confirmation -> no row
-            res = tsc.simulate(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
-                               s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
-                               expiry_minutes=s.expiry_minutes)
-            row = tsc.build_row(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
+            if use_confirm:
+                cf = tsc.confirm_fill(df1m, cts, s.direction, s.entry, s.stop_loss,
+                                      expiry_minutes=s.expiry_minutes)
+                if cf is None:
+                    continue                  # failed directional confirmation -> no row
+                fill_ts, entry_eff, risk_eff = cf
+                res = tsc.resolve_market(df1m, fill_ts, s.direction, entry_eff, s.stop_loss,
+                                         s.take_profit_1, risk_eff,
+                                         max_hold_minutes=strat.MAX_HOLD_MINUTES)
+                erow = entry_eff
+            else:
+                if not tsc.entry_confirmed(df1m, cts, s.direction, s.entry, s.stop_loss,
+                                           expiry_minutes=s.expiry_minutes):
+                    continue                  # failed directional confirmation -> no row
+                res = tsc.simulate(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
+                                   s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
+                                   expiry_minutes=s.expiry_minutes,
+                                   max_hold_minutes=strat.MAX_HOLD_MINUTES)
+                erow = s.entry
+            row = tsc.build_row(sym, s.timestamp, s.direction, erow, s.stop_loss,
                                 s.take_profit_1, res, strategy=s.strategy,
                                 quality=s.quality, confluence_score=s.confluence_score)
             row["version"] = version
@@ -155,6 +193,8 @@ def main():
         version += str(int(args.rr))
     if args.half:
         version += "h"
+    if getattr(C, "ENTRY_AT_CONFIRM", False) and getattr(C, "ENTRY_CONFIRM_BUF", 0.0) > 0:
+        version += "c"                       # realistic-entry twin -> separate version tag
     htf_note = f" +{args.confirm_htf}-dir confirm" if args.confirm_htf else ""
     exit_note = " | ½TP+BE" if args.half else " | full-TP"
     print(f"=== Donchian backtest [{w_start.date()} .. {w_end.date()}) "

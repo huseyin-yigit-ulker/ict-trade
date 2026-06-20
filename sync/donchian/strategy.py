@@ -36,6 +36,8 @@ ATR_N = 14            # ATR window for stop sizing
 ATR_MULT = 2.0        # stop distance = ATR_MULT * ATR
 RR = 4.0              # take-profit = entry +/- RR * risk
 EXPIRY_MINUTES = 180  # entry-fill window on the 1m resolver (breakout fills ~immediately)
+MAX_HOLD_MINUTES = 3 * 24 * 60  # 3-day TIME LIMIT: a position that hasn't hit TP/SL by here is
+                                # closed at MARKET (mark-to-market). Uniform across ALL streams.
 STRATEGY = "DONCHIAN_BO"
 VERSION = "donchian"  # backtest trading_signals.version tag (1h base stream)
 MODE = "donchian"     # live ict_trade.signals.mode tag (1h base stream)

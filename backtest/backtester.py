@@ -134,8 +134,12 @@ def _resolve_partial(sig: Signal, df: pd.DataFrame, entry_idx: int) -> TradeResu
 
 
 def simulate_signal(sig: Signal, df: pd.DataFrame, *,
-                    use_tp1_only: bool = True) -> TradeResult:
+                    use_tp1_only: bool = True, max_hold_minutes: Optional[int] = None) -> TradeResult:
     """Walk forward from sig.bar_index+1 to fill / TP / SL / expiry.
+
+    max_hold_minutes: if set, a position that has reached NEITHER TP nor SL within this many bars
+    AFTER the fill is closed at MARKET (mark-to-market on that bar's close) — the uniform "exit at
+    TP/SL, else flat at the time limit" rule. None = ride to TP/SL (legacy, unlimited).
 
     Directional entry confirmation (ict.config.ENTRY_CONFIRM_BUF) is enforced UPSTREAM as a
     pre-filter (trade_sync_common.entry_confirmed) so an unconfirmed breakout produces NO row
@@ -188,8 +192,9 @@ def simulate_signal(sig: Signal, df: pd.DataFrame, *,
     if entry_idx is None:
         return TradeResult(sig, TradeStatus.EXPIRED)
 
-    # entered but not exited within signal expiry — keep walking until TP/SL or end of data
+    # entered but not exited at fill — walk until TP/SL, the time limit, or end of data
     risk = abs(sig.entry - sig.stop_loss)
+    hold_cap = (entry_idx + max_hold_minutes) if max_hold_minutes else None  # 1m bars after fill
     for j in range(entry_idx + 1, n):
         bar = df.iloc[j]
         if sig.direction == "long":
@@ -216,6 +221,14 @@ def simulate_signal(sig: Signal, df: pd.DataFrame, *,
                                exit_price=sig.stop_loss,
                                    pnl_r=_net_r(sig.entry, sig.stop_loss, risk, sig.direction),
                                pnl_pct=(sig.stop_loss - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
+                               bars_to_exit=j - sig.bar_index)
+        if hold_cap is not None and j >= hold_cap:
+            # time limit reached with neither TP nor SL → close at MARKET (mark-to-market)
+            px = float(bar["close"])
+            pnl = _net_r(sig.entry, px, risk, sig.direction)
+            return TradeResult(sig, TradeStatus.TP_HIT if pnl >= 0 else TradeStatus.SL_HIT,
+                               entry_index=entry_idx, exit_index=j, exit_price=px, pnl_r=pnl,
+                               pnl_pct=(px - sig.entry) / sig.entry * (1 if sig.direction == "long" else -1),
                                bars_to_exit=j - sig.bar_index)
 
     return TradeResult(sig, TradeStatus.ACTIVE, entry_index=entry_idx)

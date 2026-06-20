@@ -48,7 +48,10 @@ const ChartModal = () => {
   // then exits at its +4R cap (== the signal's own TP), breakeven, or a 3-day time exit. The chart
   // surfaces the +1R partial level, the +4R runner cap, the breakeven runner segment, and how much
   // of the position is still open.
-  const isScaleOut = strategy === 'd30_4h_so';
+  const isScaleOut = !!strategy && (strategy.startsWith('d30_4h_so') || strategy.startsWith('d30so'));
+  // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
+  // fill is a STOP — price must RISE (long) / FALL (short) TO the entry, not pull back to it.
+  const isConfirmEntry = !!strategy && strategy.endsWith('c');
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const intervalRef = useRef(null); // Interval'i güvenli yönetmek için Ref
@@ -370,7 +373,9 @@ const ChartModal = () => {
             const soHit = isLong ? c.high >= partialLevel : c.low <= partialLevel;
             const stopHit = isLong ? c.low <= stop : c.high >= stop;
             if (!hit) {
-              const eHit = isLong ? c.low <= entry : c.high >= entry;
+              const eHit = isConfirmEntry
+                ? (isLong ? c.high >= entry : c.low <= entry)   // ·0.5R: STOP entry at the confirm level
+                : (isLong ? c.low <= entry : c.high >= entry);
               if (!eHit && stopHit) { closeBarSec = c.time; closeBarIdx = idx; break; }   // pre-entry cancel
               if (eHit) {
                 hit = true; entryFilled = true; entryFillSec = c.time;
@@ -395,7 +400,11 @@ const ChartModal = () => {
             const tpHit = isLong ? c.high >= tp : c.low <= tp;
             const stopHit = isLong ? c.low <= stop : c.high >= stop;
             if (!hit) {
-              const eHit = isLong ? c.low <= entry : c.high >= entry;
+              // ·0.5R twins: STOP entry at the +0.5R confirm level (price reaches it from below/above);
+              // otherwise the legacy limit/market fill at the breakout close.
+              const eHit = isConfirmEntry
+                ? (isLong ? c.high >= entry : c.low <= entry)
+                : (isLong ? c.low <= entry : c.high >= entry);
               if (!eHit && (tpHit || stopHit)) { closeBarSec = c.time; closeBarIdx = idx; break; } // pre-entry iptal
               if (eHit) {
                 hit = true; entryFilled = true; entryFillSec = c.time;
@@ -664,7 +673,7 @@ const ChartModal = () => {
         // (breakouts enter at the bar close, so entryFillSec usually == signalSec). Sinyal is an
         // aboveBar circle and Giriş is a belowBar arrow (long), so they don't collide on one bar.
         if (entryFilled && entryFillSec != null) {
-          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: t('Giriş'), size: 1 });
+          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: isConfirmEntry ? `${t('Giriş')} ·0.5R` : t('Giriş'), size: 1 });
         }
         // Kısmi kâr işareti: ½TP'de fiyat TP/2'ye değdi (%50 kapandı); scale-out'ta +1R'ye
         // değdi (%60 kapandı). Her ikisinde de SL → Entry (breakeven).
@@ -807,7 +816,7 @@ const ChartModal = () => {
 
   return (
     <div id="modal" style={{ display: 'block', backgroundColor: '#0B0E11', color: '#EAECEF' }}>
-      <div id="chart-header" style={{ borderBottom: '1px solid #2a2e39', padding: '10px' }}>
+      <div id="chart-header" style={{ borderBottom: '1px solid #2a2e39', padding: '10px', paddingRight: '104px' }}>
         <div className="chart-header-top">
           <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
             {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
@@ -818,18 +827,32 @@ const ChartModal = () => {
               <button className={chartStyle === 'line' ? 'active' : ''} onClick={() => setChartStyleP('line')} title={t('Çizgi')} aria-label={t('Çizgi')}><IconLine /></button>
             </div>
           )}
+          {/* TradingView-style OHLC legend: inline next to the symbol (NOT pushed right under the
+              close button, where it used to get clipped), values tinted by the hovered bar's direction. */}
+          {!showTv && hoverInfo && (() => {
+            const up = hoverInfo.open === undefined || hoverInfo.close >= hoverInfo.open;
+            const vc = up ? '#0ECB81' : '#F6465D';
+            return (
+              <div className="chart-hover-info">
+                <span className="ohlc-time">{formatHoverTime(hoverInfo.time)}</span>
+                {hoverInfo.open !== undefined ? (
+                  <>
+                    <span className="ohlc-pair"><i>O</i><b style={{ color: vc }}>{formatPrice(hoverInfo.open)}</b></span>
+                    <span className="ohlc-pair"><i>H</i><b style={{ color: vc }}>{formatPrice(hoverInfo.high)}</b></span>
+                    <span className="ohlc-pair"><i>L</i><b style={{ color: vc }}>{formatPrice(hoverInfo.low)}</b></span>
+                    <span className="ohlc-pair"><i>C</i><b style={{ color: vc }}>{formatPrice(hoverInfo.close)}</b></span>
+                  </>
+                ) : (
+                  <span className="ohlc-pair"><i>C</i><b style={{ color: vc }}>{formatPrice(hoverInfo.close)}</b></span>
+                )}
+              </div>
+            );
+          })()}
         </div>
-        {!showTv && hoverInfo && (
-          <div className="chart-hover-info">
-            {formatHoverTime(hoverInfo.time)} • {hoverInfo.open !== undefined
-              ? `O ${formatPrice(hoverInfo.open)} H ${formatPrice(hoverInfo.high)} L ${formatPrice(hoverInfo.low)} C ${formatPrice(hoverInfo.close)}`
-              : `C ${formatPrice(hoverInfo.close)}`}
-          </div>
-        )}
       </div>
-      
+
       <button id="close-modal" className="close-modern" onClick={() => setActiveSignal(null)}>
-        <span className="close-label">{t('Kapat')}</span><span className="esc-pill neo">ESC</span>
+        <span className="close-label">{t('Kapat')}</span>
       </button>
 
       {!showTv && activeSignal && (() => {

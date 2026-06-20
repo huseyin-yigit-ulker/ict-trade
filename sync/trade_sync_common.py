@@ -30,7 +30,7 @@ BT = REPO / "backtest"
 sys.path.insert(0, str(BT))
 
 from ict.data import fetch_klines          # noqa: E402  (futures+spot fallback)
-from backtester import simulate_signal     # noqa: E402
+from backtester import simulate_signal, _net_r     # noqa: E402
 from ict import config as C                # noqa: E402  (ENTRY_CONFIRM_BUF)
 
 ENV_PATH = REPO / ".env"
@@ -174,9 +174,89 @@ def entry_confirmed(df1m: pd.DataFrame, close_ts, direction: str, entry: float, 
     return False                 # never confirmed within the window -> not taken
 
 
+def confirm_fill(df1m: pd.DataFrame, close_ts, direction: str, entry: float, sl: float,
+                 *, buf: float | None = None, expiry_minutes: int = EXPIRY_MINUTES):
+    """Realistic confirmation fill (ict.config.ENTRY_AT_CONFIRM). Returns (fill_ts, entry_eff,
+    risk_eff): the +buf*risk confirmation level you'd actually market-fill at once it prints, and
+    the resulting entry->SL risk ((1+buf)*risk). Returns None if the breakout never confirms
+    (favourable buffer never reached before the adverse one, within the window).
+
+    buf<=0 OR ENTRY_AT_CONFIRM off -> (close_ts, entry, risk): the legacy entry@close (the boolean
+    gate is still applied, so an unconfirmed breakout still yields None)."""
+    b = (getattr(C, "ENTRY_CONFIRM_BUF", 0.0) if buf is None else buf)
+    risk = abs(float(entry) - float(sl))
+    idx = df1m.index
+    if idx.tz is None:
+        df1m = df1m.copy(); df1m.index = idx = idx.tz_localize("UTC")
+    cts = pd.Timestamp(close_ts)
+    cts = cts.tz_localize("UTC") if cts.tz is None else cts.tz_convert("UTC")
+    if b <= 0 or risk <= 0 or not getattr(C, "ENTRY_AT_CONFIRM", False):
+        # no entry shift: keep entry@close, but still honour the boolean directional gate
+        if b > 0 and risk > 0 and not entry_confirmed(df1m, cts, direction, entry, sl,
+                                                       buf=b, expiry_minutes=expiry_minutes):
+            return None
+        return (cts, float(entry), risk)
+    p0 = int(idx.searchsorted(cts))
+    p1 = int(idx.searchsorted(cts + pd.Timedelta(minutes=expiry_minutes)))
+    if p1 <= p0:
+        return None
+    H = df1m["high"].values; L = df1m["low"].values
+    long = str(direction).lower() == "long"
+    fav_lvl = entry + b * risk if long else entry - b * risk
+    adv_lvl = entry - b * risk if long else entry + b * risk
+    for i in range(p0, p1):
+        adv = (L[i] <= adv_lvl) if long else (H[i] >= adv_lvl)
+        fav = (H[i] >= fav_lvl) if long else (L[i] <= fav_lvl)
+        if adv:
+            return None                          # adverse buffer first -> not taken
+        if fav:
+            return (pd.Timestamp(idx[i]), float(fav_lvl), abs(float(fav_lvl) - float(sl)))
+    return None                                  # never confirmed within the window
+
+
+def resolve_market(df1m: pd.DataFrame, fill_ts, direction: str, entry: float, sl: float,
+                   tp: float, risk: float, *, max_hold_minutes: int | None = None) -> dict:
+    """Position already OPEN at MARKET `entry` from fill_ts (no limit-fill step — used by the
+    confirm-fill model where the entry IS the confirmation print). Walk 1m forward to TP / SL /
+    time-stop; pnl_r is net (round-trip fee via _net_r) against `risk`. Same dict shape as
+    _resolve (status / real_entry_time / exit_time / exit_price / pnl_r / raw_status)."""
+    idx = df1m.index
+    if idx.tz is None:
+        df1m = df1m.copy(); df1m.index = idx = idx.tz_localize("UTC")
+    fts = pd.Timestamp(fill_ts)
+    fts = fts.tz_localize("UTC") if fts.tz is None else fts.tz_convert("UTC")
+    p0 = int(idx.searchsorted(fts))
+    n = len(df1m)
+    if p0 >= n or risk <= 0:
+        return _pending()
+    long = str(direction).lower() == "long"
+    H = df1m["high"].values; L = df1m["low"].values; Cl = df1m["close"].values
+    bar = pd.Timedelta(minutes=1)
+    entry_time = (idx[p0] + bar).to_pydatetime()
+    hold_cap = (p0 + max_hold_minutes) if max_hold_minutes else None
+
+    def done(status, j, px):
+        return {"status": status, "real_entry_time": entry_time,
+                "exit_time": (idx[j] + bar).to_pydatetime(), "exit_price": float(px),
+                "pnl_r": float(_net_r(entry, float(px), risk, direction)), "raw_status": status}
+
+    for j in range(p0, n):
+        tpt = (H[j] >= tp) if long else (L[j] <= tp)
+        slt = (L[j] <= sl) if long else (H[j] >= sl)
+        if (tpt and slt) or slt:                 # same-bar tie -> SL (worst case)
+            return done("closed_sl", j, sl)
+        if tpt:
+            return done("closed_tp", j, tp)
+        if hold_cap is not None and j >= hold_cap:   # time stop -> mark to market
+            r = _net_r(entry, float(Cl[j]), risk, direction)
+            return done("closed_tp" if r >= 0 else "closed_sl", j, Cl[j])
+    return {"status": "active", "real_entry_time": entry_time, "exit_time": None,
+            "exit_price": None, "pnl_r": None, "raw_status": "active"}
+
+
 def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
              entry: float, sl: float, tp: float,
-             expiry_minutes: int = EXPIRY_MINUTES) -> dict:
+             expiry_minutes: int = EXPIRY_MINUTES, max_hold_minutes: int | None = None) -> dict:
     """Resolve one trade on 1m bars from the signal close; return trading_signals fields.
 
     Reuses backtester.simulate_signal: entry must FILL before TP/SL or the trade is
@@ -194,7 +274,7 @@ def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
     bar_index = pos - 1                           # simulate_signal scans from bar_index+1
     sig = _StubSignal(direction.lower(), float(entry), float(sl), float(tp),
                       bar_index, bar_index + expiry_minutes)
-    res = simulate_signal(sig, df1m)
+    res = simulate_signal(sig, df1m, max_hold_minutes=max_hold_minutes)
     bar_dur = pd.Timedelta(minutes=1)
 
     def close_at(i):
@@ -212,7 +292,7 @@ def _resolve(df1m: pd.DataFrame, close_ts: pd.Timestamp, direction: str,
 
 def simulate(symbol: str, signal_ts, direction: str, entry: float, sl: float, tp: float,
              *, df1m: pd.DataFrame | None = None, ltf_minutes: int = 60,
-             expiry_minutes: int = EXPIRY_MINUTES) -> dict:
+             expiry_minutes: int = EXPIRY_MINUTES, max_hold_minutes: int | None = None) -> dict:
     """Resolve a signal's TP/SL outcome on 1m klines (intrabar-accurate).
 
     Signal generation stays on 1h; only the OUTCOME is resolved on 1m. The signal fires
@@ -227,7 +307,8 @@ def simulate(symbol: str, signal_ts, direction: str, entry: float, sl: float, tp
         df1m = fetch_1m(symbol, close_ts, close_ts + RESOLUTION_HORIZON)
     if df1m is None or df1m.empty:
         return _pending()
-    return _resolve(df1m, close_ts, direction, entry, sl, tp, expiry_minutes=expiry_minutes)
+    return _resolve(df1m, close_ts, direction, entry, sl, tp, expiry_minutes=expiry_minutes,
+                    max_hold_minutes=max_hold_minutes)
 
 
 # ---------------------------------------------------------------- row mapping

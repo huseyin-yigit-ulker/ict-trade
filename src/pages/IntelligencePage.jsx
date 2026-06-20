@@ -122,7 +122,7 @@ const IntelligencePage = () => {
   const meta = (version) => {
     const s = STREAMS.find((x) => x.version === version) || { key: version, tf: version };
     const info = STRATEGY_INFO[s.key]?.[lang] || STRATEGY_INFO[s.key]?.tr;
-    return { tf: s.tf || s.key, title: info?.title || s.key };
+    return { tf: s.tf || s.key, title: s.label || info?.title || s.key };
   };
   const metaA = meta(verA);
   const metaB = meta(verB);

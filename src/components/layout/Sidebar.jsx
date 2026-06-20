@@ -84,17 +84,13 @@ const IconTotal = () => (
 const GROUPS = [
   // Strategy set = MAIN + RANGE + OPUS. MAIN = the v1 ICT set (B/C/D/E), all symbols/
   // sessions; RANGE = RANGE_DEV every session; OPUS = MAIN gated to each symbol's NY session.
-  // 2026-06-16: pruned to a SINGLE stream. MAIN/RANGE/OPUS removed (UI + DB) — see
-  // sync/donchian/RETIRED_STREAMS_REPORT.md. donchian is the only OOS-validated stream.
-  { key: 'donchian',     label: 'DONCHIAN',          icon: <IconIntel />,   modes: ['live', 'backtest'] },
-  // 2026-06-17: HYBRID — 30m breakout + 4h trend-direction confirm. Best stream overall
-  // (+1106R / 2024-26). The base donch_30m + the ½TP twin dch30_4hh were removed.
-  { key: 'dch30_4h',     label: 'DONCHIAN 30m+4h',   icon: <IconIntel />,   modes: ['live', 'backtest'] },
-  // 2026-06-17: 6R-target twin (wider TP; ~2x R/trade vs 4R, OOS-robust, lower WR).
-  { key: 'dch30_4h6',    label: 'DONCHIAN 30m+4h·6R',icon: <IconIntel />,   modes: ['live', 'backtest'] },
-  // 2026-06-19: HIGH-WR scale-out twin (book 60% at +1R; runner +4R cap / breakeven / 3-day exit).
-  // WR 76-80% (gated), OOS-positive every year. Reuses the dch30_4h live signals (scale-out exit only).
-  { key: 'd30_4h_so',    label: 'DONCHIAN 30m+4h·WR',icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  // 2026-06-20: ONLY the realistic-entry (·0.5R) versions. The optimistic entry@close twins were
+  // removed (UI + DB) — unrealistic entry. These enter at the +0.5R confirm level (RR 4->2.33).
+  { key: 'donchianc',    label: 'DONCHIAN ·0.5R',       icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',icon: <IconIntel />,   modes: ['live', 'backtest'] },
+  { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

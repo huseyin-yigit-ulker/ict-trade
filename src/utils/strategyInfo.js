@@ -119,7 +119,19 @@ export const STRATEGY_INFO = {
 };
 
 export const infoFor = (strategy, lang) => {
-  const e = STRATEGY_INFO[strategy];
+  // Realistic-entry twins ('c' suffix) + scale-out runner-cap variants (d30so6...) derive from the
+  // base card + a 0.5R-entry note, so they render everywhere without duplicating full cards.
+  const realistic = strategy.endsWith('c') && !STRATEGY_INFO[strategy];
+  let key = realistic ? strategy.slice(0, -1) : strategy;
+  if (/^d30so\d+$/.test(key)) key = 'd30_4h_so';     // 6R/… scale-out cap variant -> base scale-out card
+  const e = STRATEGY_INFO[key];
   if (!e) return null;
-  return { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
+  const base = { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
+  if (realistic) {
+    base.title = `${base.title} ·0.5R`;
+    base.tagline = lang === 'en'
+      ? 'Realistic entry from the +0.5R confirmation zone (RR collapses 4→2.33 — the honest edge)'
+      : 'Gerçekçi giriş: +0.5R onay bölgesinden (RR 4→2.33 düşer — dürüst edge)';
+  }
+  return base;
 };
