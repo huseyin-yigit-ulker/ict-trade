@@ -21,7 +21,14 @@
 # DONCHIAN 30m+4h · 6R live emit (every 10 min) — same hybrid signals, wider 6R target
 #   (mode='dch30_4h6'). MFE-validated: ~2x R/trade vs 4R, OOS-robust across 2024-26.
 */10 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --rr 6 >> $HOME/ict-donchian.log 2>&1
-# Daily resolve: donchian live signals -> backtest trading_signals (version='donchian' +
-#   'dch30_4h' + 'dch30_4h6' + 'd30_4h_so') via sync_daily ACTIVE_STREAMS; also self-heals the
-#   live table (prune_live deletes signals that failed directional confirmation).
-30 0 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream all >> $HOME/ict-sync.log 2>&1
+# Daily resolve -> the REALISTIC ·0.5R UI versions (the only ones the UI shows). The non-
+#   conservative twins (donchian/dch30_4h/dch30_4h6/d30_4h_so) were removed from the UI, so they
+#   are no longer resolved. DCH_ENTRY_AT_CONFIRM=1 shifts the entry to the +0.5R confirm level and
+#   auto-tags rows with a 'c' suffix; DCH_SO_RUNNER_CAP picks the scale-out runner cap.
+# 00:30 — full-TP donchianc / dch30_4hc / dch30_4h6c  +  scale-out d30_4h_soc (cap=4, default).
+#         Also self-heals the live table (prune_live drops signals that failed dir-confirm).
+30 0 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream all >> $HOME/ict-sync.log 2>&1
+# 00:45 — scale-out 6R cap (same dch30_4h signals, wider runner) -> d30so6c.
+45 0 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 DCH_SO_RUNNER_CAP=6 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream d30_4h_so >> $HOME/ict-sync.log 2>&1
+# 01:00 — scale-out 8R cap -> d30so8c.
+0 1 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 DCH_SO_RUNNER_CAP=8 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream d30_4h_so >> $HOME/ict-sync.log 2>&1
