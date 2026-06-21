@@ -34,3 +34,11 @@
 45 0 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 DCH_SO_RUNNER_CAP=6 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream d30_4h_so >> $HOME/ict-sync.log 2>&1
 # 01:00 — scale-out 8R cap -> d30so8c.
 0 1 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 DCH_SO_RUNNER_CAP=8 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream d30_4h_so >> $HOME/ict-sync.log 2>&1
+
+# --- d30so8c LIVE EXECUTION (Binance USDⓈ-M; testnet/mainnet via .env BINANCE_TESTNET) ---
+# Reconciler (cron #1): reads the SAME dch30_4h signals, drives real orders reproducing
+# scaleout (entry +0.5R / SL / TP1 +1R 60% / runner +8R cap·BE·3d). Offset off the :00/:30
+# emitter boundary. Both lines no-op while .env LIVE_TRADING_ENABLED=false. Knobs live in .env.
+*/2 * * * * sleep 25 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/live_exec/executor.py     >> $HOME/ict-exec.log 2>&1
+# Safety sweep (cron #2): independent orphan/protective-stop/clock-skew/risk-cap guard.
+*/5 * * * * sleep 50 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/live_exec/safety_sweep.py  >> $HOME/ict-exec.log 2>&1

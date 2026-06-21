@@ -58,6 +58,13 @@ const IconRegime = () => (
     <path d="M17 3.5 H13.6 M17 3.5 V6.9" />
   </svg>
 );
+// Binance live (testnet): a candlestick — the live execution / open-positions view.
+const IconLive = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="6" y1="2.5" x2="6" y2="17.5" /><rect x="3.6" y="6" width="4.8" height="6.5" rx="1" fill="currentColor" stroke="none" opacity="0.85" />
+    <line x1="13.5" y1="3.5" x2="13.5" y2="16.5" /><rect x="11.1" y="7.5" width="4.8" height="5.5" rx="1" />
+  </svg>
+);
 // TOTAL / market-cap breadth: three stacked layers (TOTAL/TOTAL2/TOTAL3) on a baseline.
 const IconTotal = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -157,6 +164,9 @@ const Sidebar = () => {
         )}
 
         <div className="sidebar__navsep" />
+        <NavLink to="/binance" className="sidebar__link">
+          <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Canlı')}</span>
+        </NavLink>
         <NavLink to="/trend" className="sidebar__link">
           <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
         </NavLink>

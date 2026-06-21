@@ -1,0 +1,226 @@
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useLang } from '../context/LanguageContext';
+import './LivePositionsPage.css';
+
+// Reads the live-execution layer (sync/live_exec) straight from the LIVE Supabase via PostgREST:
+//   ict_trade.live_positions        — the managed d30so8c positions (state machine + plan levels)
+//   ict_trade.live_account_snapshot — the REAL Binance state per symbol (mark / uPnL), refreshed
+//                                     by the executor every ~2 min
+//   ict_trade.live_account          — wallet / available / total uPnL, one row per network
+// Browser never signs a Binance request; it only reads what the executor snapshotted.
+
+const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+const OPEN_STATES = ['PENDING_ENTRY', 'ENTRY_WORKING', 'OPEN_FULL', 'RUNNER', 'CLOSING'];
+const REFRESH_MS = 30000;
+
+const STATE_BADGE = {
+  PENDING_ENTRY: { label: 'GİRİŞ BEKLİYOR', cls: 'st-wait' },
+  ENTRY_WORKING: { label: 'GİRİŞ EMRİ', cls: 'st-wait' },
+  OPEN_FULL: { label: 'AÇIK (TP1 ÖNCESİ)', cls: 'st-active' },
+  RUNNER: { label: 'RUNNER (TP1 SONRASI)', cls: 'st-runner' },
+  CLOSING: { label: 'KAPANIYOR', cls: 'st-active' },
+  CLOSED: { label: 'KAPANDI', cls: 'st-done' },
+  CANCELLED: { label: 'İPTAL', cls: 'st-cancel' },
+};
+const EXIT_LABEL = {
+  sl: 'SL −1R', tp1_be: 'TP1+BE', breakeven: 'Breakeven', cap: 'CAP +8R',
+  time_stop: '3g Zaman', entry_expired: 'Giriş Dolmadı', reversed: 'Ters Döndü', killswitch: 'Killswitch',
+};
+
+async function getJSON(path) {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
+    headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, 'Accept-Profile': 'ict_trade' },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    const err = new Error(`HTTP ${res.status}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return res.json();
+}
+
+const fmtPx = (v) => {
+  if (v == null) return '—';
+  const n = Number(v);
+  return n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+    : n.toLocaleString('en-US', { maximumFractionDigits: n >= 1 ? 4 : 6 });
+};
+const fmtUsd = (v) => (v == null ? '—' : `$${Number(v).toFixed(2)}`);
+const fmtR = (v) => (v == null ? '—' : `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`);
+
+function ago(iso, t) {
+  if (!iso) return '—';
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s} ${t('sn önce')}`;
+  if (s < 3600) return `${Math.floor(s / 60)} ${t('dk önce')}`;
+  return `${Math.floor(s / 3600)} ${t('sa önce')}`;
+}
+function countdown(iso, t) {
+  if (!iso) return null;
+  const s = Math.floor((new Date(iso).getTime() - Date.now()) / 1000);
+  if (s <= 0) return t('doldu');
+  if (s < 3600) return `${Math.floor(s / 60)}dk`;
+  const h = Math.floor(s / 3600);
+  return h < 24 ? `${h}sa ${Math.floor((s % 3600) / 60)}dk` : `${Math.floor(h / 24)}g ${h % 24}sa`;
+}
+
+export default function LivePositionsPage() {
+  const { t } = useLang();
+  const [positions, setPositions] = useState([]);
+  const [snaps, setSnaps] = useState({});
+  const [account, setAccount] = useState(null);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [, forceTick] = useState(0);
+  const timer = useRef(null);
+
+  const load = useCallback(async () => {
+    if (!SUPA_URL || !SUPA_KEY) { setErr(t('Supabase ayarları eksik.')); setLoading(false); return; }
+    try {
+      const [pos, snap, acc] = await Promise.all([
+        getJSON('live_positions?select=*&order=updated_at.desc&limit=60'),
+        getJSON('live_account_snapshot?select=*'),
+        getJSON('live_account?select=*'),
+      ]);
+      setPositions(pos);
+      setSnaps(Object.fromEntries(snap.map((s) => [s.symbol, s])));
+      setAccount(acc[0] || null);
+      setErr('');
+      setUpdatedAt(new Date());
+    } catch (e) {
+      setErr(e.status === 401 || e.status === 403
+        ? t('Canlı tablolara erişim yok — anon SELECT grant uygulanmalı (sync/live_exec/schema.sql).')
+        : `${t('Veri alınamadı')}: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    load();
+    timer.current = setInterval(load, REFRESH_MS);
+    const tick = setInterval(() => forceTick((x) => x + 1), 1000); // live countdowns/ago
+    return () => { clearInterval(timer.current); clearInterval(tick); };
+  }, [load]);
+
+  const open = positions.filter((p) => OPEN_STATES.includes(p.state));
+  const closed = positions.filter((p) => p.state === 'CLOSED' || p.state === 'CANCELLED').slice(0, 12);
+  const net = account?.network || 'testnet';
+  const stale = account && (Date.now() - new Date(account.updated_at).getTime() > 5 * 60 * 1000);
+
+  const liveR = (p) => {
+    const s = snaps[p.symbol];
+    if (!s || s.unrealized_pnl == null || !p.risk0 || !p.qty) return null;
+    const riskUsd = Number(p.risk0) * Number(p.qty);
+    return riskUsd ? Number(s.unrealized_pnl) / riskUsd : null;
+  };
+
+  return (
+    <div className="livex">
+      <div className="livex__head">
+        <h1>{t('Binance Canlı')}</h1>
+        <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
+        <span className="livex__badge">d30so8c · 8R ·0.5R</span>
+        <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(account?.updated_at, t)}` : ''}</span>
+        <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
+      </div>
+
+      {stale && (
+        <div className="livex__warn">{t('Snapshot 5 dk’dan eski — executor cron çalışmıyor olabilir.')}</div>
+      )}
+      {err && <div className="livex__err">{err}</div>}
+
+      {/* account header */}
+      <div className="livex__kpis">
+        <div className="livex__kpi"><span>{t('Cüzdan')}</span><b>{fmtUsd(account?.wallet_balance)}</b></div>
+        <div className="livex__kpi"><span>{t('Kullanılabilir')}</span><b>{fmtUsd(account?.available_balance)}</b></div>
+        <div className="livex__kpi">
+          <span>{t('Açık uPnL')}</span>
+          <b className={Number(account?.total_unrealized) >= 0 ? 'pos' : 'neg'}>{fmtUsd(account?.total_unrealized)}</b>
+        </div>
+        <div className="livex__kpi"><span>{t('Açık Pozisyon')}</span><b>{open.length}</b></div>
+      </div>
+
+      {/* open positions */}
+      <h2 className="livex__h2">{t('Açık Pozisyonlar')}</h2>
+      {loading ? <div className="livex__empty">{t('Yükleniyor…')}</div>
+        : open.length === 0 ? <div className="livex__empty">{t('Açık pozisyon yok — sinyal bekleniyor.')}</div>
+        : (
+        <div className="livex__tablewrap">
+          <table className="livex__table">
+            <thead>
+              <tr>
+                <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Durum')}</th>
+                <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>SL</th><th>TP1</th><th>{t('Cap +8R')}</th>
+                <th>{t('Miktar')}</th><th>{t('Canlı uPnL')}</th><th>R</th><th>{t('Geri Sayım')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {open.map((p) => {
+                const s = snaps[p.symbol];
+                const lng = (p.direction || '').toUpperCase() === 'LONG';
+                const sb = STATE_BADGE[p.state] || { label: p.state, cls: 'st-wait' };
+                const pre = p.state === 'PENDING_ENTRY' || p.state === 'ENTRY_WORKING';
+                const cd = countdown(pre ? p.entry_deadline : p.time_stop_at, t);
+                const r = liveR(p);
+                return (
+                  <tr key={p.id}>
+                    <td className="mono">{p.symbol}</td>
+                    <td><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                    <td><span className={`st ${sb.cls}`}>{sb.label}</span></td>
+                    <td className="mono">{fmtPx(p.eff_entry || p.signal_entry)}</td>
+                    <td className="mono">{fmtPx(s?.mark_price)}</td>
+                    <td className="mono dim">{fmtPx(p.signal_sl)}</td>
+                    <td className="mono dim">{fmtPx(p.eff_tp1)}</td>
+                    <td className="mono dim">{fmtPx(p.signal_cap)}</td>
+                    <td className="mono">{p.qty ?? '—'}</td>
+                    <td className={`mono ${Number(s?.unrealized_pnl) >= 0 ? 'pos' : 'neg'}`}>{fmtUsd(s?.unrealized_pnl)}</td>
+                    <td className={`mono ${r >= 0 ? 'pos' : 'neg'}`}>{fmtR(r)}</td>
+                    <td className="mono dim">{cd || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* recently closed */}
+      {closed.length > 0 && (
+        <>
+          <h2 className="livex__h2">{t('Son Kapananlar')}</h2>
+          <div className="livex__tablewrap">
+            <table className="livex__table">
+              <thead>
+                <tr>
+                  <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Sonuç')}</th>
+                  <th>R</th><th>{t('USD')}</th><th>{t('Çıkış')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {closed.map((p) => {
+                  const lng = (p.direction || '').toUpperCase() === 'LONG';
+                  const win = Number(p.realized_r) >= 0;
+                  return (
+                    <tr key={p.id}>
+                      <td className="mono">{p.symbol}</td>
+                      <td><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                      <td><span className={`st ${win ? 'st-done' : 'st-sl'}`}>{EXIT_LABEL[p.exit_reason] || p.exit_reason || '—'}</span></td>
+                      <td className={`mono ${win ? 'pos' : 'neg'}`}>{fmtR(p.realized_r)}</td>
+                      <td className={`mono ${win ? 'pos' : 'neg'}`}>{fmtUsd(p.realized_usd)}</td>
+                      <td className="mono dim">{ago(p.exit_time, t)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
