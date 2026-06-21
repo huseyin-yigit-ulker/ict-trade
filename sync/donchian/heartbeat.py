@@ -26,7 +26,7 @@ STREAMS = [
     ("dch30_4h6", "DONCHIAN 30m+4h·6R"),
 ]
 EMIT_LOG = Path(os.path.expanduser("~/ict-donchian.log"))
-EMIT_STALE_MIN = 20   # emit runs every 10 min; >20 min since last write = something's wrong
+EMIT_STALE_MIN = 40   # emit runs on bar close (30m streams every :00/:30) — >40 min idle = a problem
 
 
 def _telegram(text: str) -> bool:

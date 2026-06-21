@@ -2,25 +2,23 @@
 # All other streams retired (UI + DB + live): MAIN(:01), IMPULSE(:02), halftp_monitor(*/5)
 # removed — see sync/donchian/RETIRED_STREAMS_REPORT.md.
 #
-# Emit every 10 min (+10s). The emitter writes the RAW breakout SETUP (entry = bar close; the
-# Donchian break + 4h-direction confirm) to the live table the moment a bar closes — there is NO
-# +0.5R directional gate here. That +0.5R confirmation is computed DOWNSTREAM, not at emit time:
-# LIVE by the UI module on live data, and NIGHTLY by the backtest resolver on 1m history (prune_live
-# then drops the setups that failed it). WHY */10 and not just on the boundary (:00/:30): Binance
-# can finalise a just-closed bar a few minutes late, so a boundary-only cron could miss it until the
-# NEXT boundary (up to 30 min). */10 (+10s) with a 1.5h lookback catches every closed bar within
-# ~10 min. Idempotent: canli.py dedups on (symbol, signal_time, direction, mode) — re-scanning a
-# bar never duplicates; the lookback just keeps a late-finalising bar in scope until it's written.
+# Emit ONLY at the BAR CLOSE (+10s) — no more */10 re-scan. The 1h stream runs on the hour (:00),
+# the 30m streams on :00/:30. The signal forms at the bar close so a boundary run catches it; the
+# +10s lets Binance finalise the just-closed bar. The emitter writes the RAW setup (Donchian break
+# + 4h-dir confirm) and Telegram-alerts it AT FORMATION — NO +0.5R gate here. The +0.5R confirmation
+# is DOWNSTREAM: the UI/live module on live data + the nightly backtest on 1m history (prune_live
+# drops the failed ones) — so there's nothing to re-check mid-period. The 1.5h lookback re-catches a
+# bar if a run is late/missed; canli.py dedups on (symbol, signal_time, direction, mode).
 #
-# DONCHIAN live emit (every 10 min) — Donchian(55) 1h breakout, ER>=0.35 strong-trend gate
-#   (mode='donchian'). Telegram alert per new signal.
-*/10 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
-# DONCHIAN 30m+4h HYBRID live emit (every 10 min) — 30m breakout confirmed by 4h trend direction
+# DONCHIAN 1h live emit — on the HOUR (:00:10): Donchian(55) 1h breakout, ER>=0.35 gate
+#   (mode='donchian'). Telegram alert at formation.
+0 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
+# DONCHIAN 30m+4h HYBRID live emit — on :00/:30 (+10s): 30m breakout confirmed by 4h trend
 #   (mode='dch30_4h'). Best stream overall (+1106R / 2024-26).
-*/10 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h >> $HOME/ict-donchian.log 2>&1
-# DONCHIAN 30m+4h · 6R live emit (every 10 min) — same hybrid signals, wider 6R target
+0,30 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h >> $HOME/ict-donchian.log 2>&1
+# DONCHIAN 30m+4h · 6R live emit — on :00/:30 (+10s): same hybrid signals, wider 6R target
 #   (mode='dch30_4h6'). MFE-validated: ~2x R/trade vs 4R, OOS-robust across 2024-26.
-*/10 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --rr 6 >> $HOME/ict-donchian.log 2>&1
+0,30 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --rr 6 >> $HOME/ict-donchian.log 2>&1
 # CRON HEALTH-CHECK — Telegram "I'm alive" every 6h (00/06/12/18 UTC) with per-strategy status
 #   (last signal + 24h count) + how long ago the emit last scanned. So a quiet, no-signal stretch
 #   is never mistaken for a dead cron.
