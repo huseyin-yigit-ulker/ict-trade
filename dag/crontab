@@ -2,15 +2,15 @@
 # All other streams retired (UI + DB + live): MAIN(:01), IMPULSE(:02), halftp_monitor(*/5)
 # removed — see sync/donchian/RETIRED_STREAMS_REPORT.md.
 #
-# Emit every 10 min, +10s (2026-06-19). WHY not just on the bar boundary: the directional
-# entry-confirm gate (ENTRY_CONFIRM_BUF) defers a breakout's emission until price confirms its
-# direction (favourable 0.5R first), which happens MID-period — minutes/tens-of-minutes after the
-# bar close. A boundary-only cron (hourly / :00,:30) therefore only emits the confirmed signal on
-# the NEXT boundary, so a signal that fired at 19:00 and confirmed at 19:09 didn't appear until
-# 20:00. Running */10 (still +10s, so the boundary runs :00:10/:30:10 catch a freshly-closed bar)
-# emits a signal within ~10 min of it confirming, on EVERY stream. Idempotent: canli.py dedups on
-# (symbol, signal_time, direction, mode), so re-checking the same bar every 10 min never duplicates;
-# the 1.5h lookback keeps a still-confirming bar in scope until it's emitted.
+# Emit every 10 min (+10s). The emitter writes the RAW breakout SETUP (entry = bar close; the
+# Donchian break + 4h-direction confirm) to the live table the moment a bar closes — there is NO
+# +0.5R directional gate here. That +0.5R confirmation is computed DOWNSTREAM, not at emit time:
+# LIVE by the UI module on live data, and NIGHTLY by the backtest resolver on 1m history (prune_live
+# then drops the setups that failed it). WHY */10 and not just on the boundary (:00/:30): Binance
+# can finalise a just-closed bar a few minutes late, so a boundary-only cron could miss it until the
+# NEXT boundary (up to 30 min). */10 (+10s) with a 1.5h lookback catches every closed bar within
+# ~10 min. Idempotent: canli.py dedups on (symbol, signal_time, direction, mode) — re-scanning a
+# bar never duplicates; the lookback just keeps a late-finalising bar in scope until it's written.
 #
 # DONCHIAN live emit (every 10 min) — Donchian(55) 1h breakout, ER>=0.35 strong-trend gate
 #   (mode='donchian'). Telegram alert per new signal.
