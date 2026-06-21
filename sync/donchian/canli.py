@@ -36,23 +36,26 @@ TF_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
 FETCH_DAYS = {"15m": 12, "30m": 22, "1h": 40, "4h": 160}
 
 
-def _telegram_send(text_msg: str) -> None:
+def _telegram_send(text_msg: str) -> bool:
     """Push a signal alert to the same Telegram bot the DAG uses (token/chat from .env).
-    Best-effort: never let a notification failure break the emit."""
+    Best-effort: never let a notification failure break the emit. Returns True if Telegram
+    accepted the message (so the caller can mark tg_sent and not retry)."""
     env = tsc._read_env()
     token = env.get("TELEGRAM_BOT_TOKEN")
     chat = env.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
         print("  telegram skipped (TELEGRAM_BOT_TOKEN/CHAT_ID not set)")
-        return
+        return False
     try:
         r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
                           json={"chat_id": chat, "text": text_msg, "parse_mode": "HTML"},
                           timeout=15)
         if not r.ok:
             print(f"  telegram error: {r.text[:150]}")
+        return bool(r.ok)
     except Exception as e:  # noqa: BLE001
         print(f"  telegram exception: {e}")
+        return False
 
 
 def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None = None) -> str:
@@ -176,23 +179,15 @@ def main():
     # confirmation (favourable buf*risk before adverse buf*risk = "price didn't reverse into the
     # entry→SL zone toward the stop") is then tracked LIVE by the UI (Sinyal Bekliyor → Aktif /
     # İptal Ters Yön), re-checked by the nightly prune (deletes reversed/expired rows), and the
-    # daily resolve writes ONLY confirmed breakouts to the backtest version. The TELEGRAM alert,
-    # however, is sent only ONCE the breakout has confirmed — so no alert ever fires for a signal
-    # that later cancels (tracked via context.tg_sent).
+    # daily resolve writes ONLY confirmed breakouts to the backtest version. The TELEGRAM alert is
+    # sent AT FORMATION (bar close) too — NOT gated on the +0.5R confirmation — so every setup is
+    # alerted the moment its 30m+4h / 1h bar closes; the 0.5R direction check is the UI/live module's
+    # job. tg_sent guards against duplicate alerts on re-scan (a failed send retries next run).
     print(f"\n{len(found)} fresh signal(s).")
     if args.dry_run or not found:
         if args.dry_run:
             print("[dry-run] no DB write.")
         return
-
-    def _confirmed(s) -> bool:
-        cts = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
-        try:
-            d1 = tsc.fetch_1m(s.symbol, cts - pd.Timedelta(minutes=2), now)
-        except Exception:  # noqa: BLE001
-            return False
-        return bool(d1 is not None and not d1.empty and tsc.entry_confirmed(
-            d1, cts, s.direction, s.entry, s.stop_loss, expiry_minutes=s.expiry_minutes))
 
     conn = tsc.live_conn()
     cur = conn.cursor()
@@ -209,19 +204,20 @@ def main():
                                   s.strategy, s.quality, int(s.confluence_score), json.dumps(ctx)))
             conn.commit()
             inserted += 1
-            print(f"  + {s.symbol:<10} {d:<5} @ {st:%m-%d %H:%M} yazıldı (canlı teyit bekleniyor)", flush=True)
+            print(f"  + {s.symbol:<10} {d:<5} @ {st:%m-%d %H:%M} yazıldı", flush=True)
         else:
             raw = existing[0]
             ctx = raw if isinstance(raw, dict) else (json.loads(raw) if raw else {})
-        # Telegram: once, only after the breakout has confirmed its direction
-        if not ctx.get("tg_sent") and _confirmed(s):
-            if not args.no_telegram:
-                _telegram_send(_telegram_text(s, tf, confirm_htf))
-            ctx["tg_sent"] = True
-            cur.execute(_UPDATE_CTX, (json.dumps(ctx), s.symbol, st, d, mode))
-            conn.commit()
-            alerted += 1
-            print(f"  📣 {s.symbol:<10} {d:<5} teyit oldu → Telegram", flush=True)
+        # Telegram alert at FORMATION (bar close) — no +0.5R gate (the UI/live module does that).
+        # tg_sent prevents duplicate alerts on re-scan; a failed send stays False to retry next run.
+        if not ctx.get("tg_sent"):
+            ok = True if args.no_telegram else _telegram_send(_telegram_text(s, tf, confirm_htf))
+            if ok:
+                ctx["tg_sent"] = True
+                cur.execute(_UPDATE_CTX, (json.dumps(ctx), s.symbol, st, d, mode))
+                conn.commit()
+                alerted += 1
+                print(f"  📣 {s.symbol:<10} {d:<5} → Telegram", flush=True)
     cur.close()
     conn.close()
     print(f"  {inserted} new row(s), {alerted} Telegram alert(s) (mode='{mode}')")
