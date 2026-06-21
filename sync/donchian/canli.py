@@ -16,6 +16,7 @@ save_signal_to_db, so re-running within the lookback window never duplicates.
 """
 from __future__ import annotations
 
+import os
 import sys
 import json
 import argparse
@@ -184,6 +185,12 @@ def main():
     # alerted the moment its 30m+4h / 1h bar closes; the 0.5R direction check is the UI/live module's
     # job. tg_sent guards against duplicate alerts on re-scan (a failed send retries next run).
     print(f"\n{len(found)} fresh signal(s).")
+    # Per-run "this strategy ran" Telegram ping — fires on EVERY emit run (bar close), signal or
+    # not. Distinct from the new-signal alert below (which only fires on a real setup). Toggle off
+    # with EMIT_RUN_PING=0. NOTE: this is ~120 msgs/day (1h on :00, 30m on :00/:30, 3 streams).
+    if args.emit and not args.no_telegram and os.environ.get("EMIT_RUN_PING", "1") == "1":
+        _RUN_LABELS = {"donchian": "DONCHIAN 1h", "dch30_4h": "DONCHIAN 30m+4h", "dch30_4h6": "DONCHIAN 30m+4h·6R"}
+        _telegram_send(f"⚙️ <b>{_RUN_LABELS.get(mode, mode)}</b> çalıştı · {now:%H:%M} UTC · {len(found)} sinyal")
     if args.dry_run or not found:
         if args.dry_run:
             print("[dry-run] no DB write.")
