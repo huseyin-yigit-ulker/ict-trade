@@ -96,9 +96,10 @@ const GROUPS = [
   { key: 'donchianc',    label: 'DONCHIAN ·0.5R',       icon: <IconIntel />,   modes: ['live', 'backtest'] },
   { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',icon: <IconIntel />,   modes: ['live', 'backtest'] },
   { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
+  // The scale-out streams (4R/6R/8R) also carry a 'demo' mode = the demo-faithful portfolio backtest.
+  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
+  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
+  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
 ];
 
 const Sidebar = () => {
@@ -106,7 +107,7 @@ const Sidebar = () => {
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
 
-  const leafLabel = { live: t('Live'), backtest: t('Backtest') };
+  const leafLabel = { live: t('Live'), backtest: t('Backtest'), demo: t('Demo') };
 
   // The 8 strategy streams are collected under a collapsible "Stratejiler" header
   // so the rail stays calm now that "Genel Bakış" is the home. Default open;

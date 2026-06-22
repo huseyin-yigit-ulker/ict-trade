@@ -145,70 +145,130 @@ def _exit_side(direction: str) -> str:
     return "SELL" if str(direction).lower() == "long" else "BUY"
 
 
-def _place_entry(cfg, client, conn, xi, pos: dict, lv: lvl.Levels) -> None:
+# NOTE on execution model: Binance Futures TESTNET rejects every conditional order type
+# (STOP_MARKET / TAKE_PROFIT_MARKET / STOP / TRAILING) with -4120 ("use the Algo Order API"),
+# so resting exchange-side brackets are impossible there. We therefore run a SYNTHETIC bracket:
+# the reconciler walks 1m bars each tick (the SAME path scaleout.resolve_scaleout uses) and fires
+# plain MARKET orders at the detected entry/SL/TP1/BE/cap/time-stop events. Portable to mainnet.
+# Trade-off vs resting stops: protection depends on the cron running (mitigated by safety_sweep)
+# and exits lag up to one reconcile interval + MARKET slippage — acceptable for testnet validation;
+# revisit resting conditional orders for mainnet (where they ARE supported) if tighter stops matter.
+
+def _market(client, conn, pos, qty, *, leg, reduce_only=True) -> dict | None:
+    """Fire a MARKET order on `qty` (exit side for reduce-only closes; entry side otherwise).
+    qty<=0 is a no-op (the position is already flat) — never send a -4003."""
+    qty = float(qty or 0)
+    if qty <= 0:
+        return None
     sym = pos["symbol"]
-    coid = st.coid(pos["id"], "entry")
-    params = dict(symbol=sym, side=_side(pos["direction"]), quantity=pos["qty"],
-                  newClientOrderId=coid, workingType="CONTRACT_PRICE")
-    if cfg.entry_mode == "B":
-        params.update(type="STOP_MARKET", stopPrice=xi.round_price(sym, lv.entry_stop))
-    else:
-        params.update(type="LIMIT", price=xi.round_price(sym, lv.entry_stop), timeInForce="GTC")
+    side = _exit_side(pos["direction"]) if reduce_only else _side(pos["direction"])
+    coid = st.coid(pos["id"], leg)
+    params = dict(symbol=sym, side=side, type="MARKET", quantity=qty, newClientOrderId=coid)
+    if reduce_only:
+        params["reduceOnly"] = "true"
     resp = client.new_order(**params)
-    st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="place",
+    st.log_order(conn, position_id=pos["id"], symbol=sym, leg=leg, action="fill",
                  client_order_id=coid, order_id=resp.get("orderId"), payload=resp)
-    st.patch(conn, pos["id"], state=st.ENTRY_WORKING, entry_coid=coid,
-             entry_order_id=resp.get("orderId"))
+    return resp
 
 
-def _place_protective(cfg, client, conn, xi, pos: dict, lv: lvl.Levels) -> None:
-    """OPEN_FULL legs: full SL (closePosition) + TP1 (reduceOnly, 60%)."""
+def _avg_fill(client, sym, resp) -> float:
+    """avgPrice from the order response, else look it up (MARKET resp can omit it pre-fill)."""
+    a = float(resp.get("avgPrice") or 0)
+    if a:
+        return a
+    try:
+        o = client.get_order(sym, order_id=resp.get("orderId"))
+        return float(o.get("avgPrice") or o.get("price") or 0)
+    except BinanceError:
+        return 0.0
+
+
+def _scan(df1m, since, direction: str, protect: float, target: float):
+    """First-touch on 1m bars from `since`: returns ('protect'|'target'|None, ts, price).
+    LONG: protect = a LOW breach (low<=protect), target = a HIGH breach (high>=target).
+    SHORT mirrors. Same-bar tie -> protect (pessimistic), matching resolve_scaleout."""
+    if df1m is None or df1m.empty:
+        return None, None, None
+    idx = df1m.index
+    s = pd.Timestamp(since)
+    s = s.tz_localize("UTC") if s.tz is None else s.tz_convert("UTC")
+    lng = str(direction).lower() == "long"
+    H = df1m["high"].values; L = df1m["low"].values
+    p0 = int(idx.searchsorted(s))
+    for i in range(p0, len(idx)):
+        prot = (L[i] <= protect) if lng else (H[i] >= protect)
+        tgt = (H[i] >= target) if lng else (L[i] <= target)
+        if prot:
+            return "protect", idx[i], protect
+        if tgt:
+            return "target", idx[i], target
+    return None, None, None
+
+
+def _realized_since(client, sym, since) -> float:
+    """Sum realizedPnl (USDT) from userTrades since `since` — the true $ result of a position."""
+    if not since:
+        return 0.0
+    try:
+        start_ms = int(pd.Timestamp(since).timestamp() * 1000)
+        return sum(float(t.get("realizedPnl", 0) or 0)
+                   for t in client.user_trades(sym, limit=200, start_ms=start_ms))
+    except BinanceError:
+        return 0.0
+
+
+def _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now) -> None:
+    """Binance is flat but DB still shows the position open — finalize from exchange truth
+    (realizedPnl since entry), so the reconciler stops looping and the record is accurate."""
     sym = pos["symbol"]
-    sl_coid, tp1_coid = st.coid(pos["id"], "sl"), st.coid(pos["id"], "tp1")
-    sl = client.new_order(symbol=sym, side=_exit_side(pos["direction"]), type="STOP_MARKET",
-                          closePosition="true", stopPrice=xi.round_price(sym, lv.sl),
-                          workingType="MARK_PRICE", newClientOrderId=sl_coid)
-    st.log_order(conn, position_id=pos["id"], symbol=sym, leg="sl", action="place",
-                 client_order_id=sl_coid, order_id=sl.get("orderId"), payload=sl)
-    tp1 = client.new_order(symbol=sym, side=_exit_side(pos["direction"]), type="TAKE_PROFIT_MARKET",
-                           reduceOnly="true", quantity=pos["tp1_qty"],
-                           stopPrice=xi.round_price(sym, lv.tp1), workingType="MARK_PRICE",
-                           newClientOrderId=tp1_coid)
-    st.log_order(conn, position_id=pos["id"], symbol=sym, leg="tp1", action="place",
-                 client_order_id=tp1_coid, order_id=tp1.get("orderId"), payload=tp1)
-    st.patch(conn, pos["id"], sl_coid=sl_coid, sl_order_id=sl.get("orderId"),
-             tp1_coid=tp1_coid, tp1_order_id=tp1.get("orderId"))
+    realized_usd = _realized_since(client, sym, pos.get("entry_fill_time"))
+    risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
+    denom = risk_eff * float(pos.get("qty") or 0)
+    realized_r = (realized_usd / denom) if denom else None
+    st.patch(conn, pos["id"], state=st.CLOSED, exit_reason="closed_externally",
+             exit_time=now, realized_r=realized_r, realized_usd=realized_usd)
+    if bt_conn is not None:
+        st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+    notify.alert(f"⚠️ <b>{sym}</b> borsada kapanmış (DB senkronlandı) — "
+                 f"realized {realized_usd:+.2f}$ ({realized_r:+.2f}R) — d30so8c" if realized_r is not None
+                 else f"⚠️ <b>{sym}</b> borsada kapanmış (DB senkronlandı) — d30so8c",
+                 chat_id=cfg.telegram_chat_id)
 
 
-def _place_runner(cfg, client, conn, xi, pos: dict, runner_qty: float) -> None:
-    """RUNNER legs after TP1: cancel full SL, place BE-stop + cap on the real residual."""
+def _reverse_close(cfg, client, conn, bt_conn, pos, now) -> None:
+    """An OPPOSITE-direction signal arrived for a held symbol — MARKET-close the position so the
+    caller can open the flip (Binance one-way nets per symbol, so we must close before reversing).
+    A not-yet-entered position is just cancelled. reason='reversed'."""
     sym = pos["symbol"]
-    client.cancel_order(sym, client_order_id=pos.get("sl_coid"))
-    be_coid, cap_coid = st.coid(pos["id"], "be"), st.coid(pos["id"], "cap")
-    be = client.new_order(symbol=sym, side=_exit_side(pos["direction"]), type="STOP_MARKET",
-                          reduceOnly="true", quantity=runner_qty,
-                          stopPrice=xi.round_price(sym, float(pos["eff_be"])),
-                          workingType="MARK_PRICE", newClientOrderId=be_coid)
-    st.log_order(conn, position_id=pos["id"], symbol=sym, leg="be", action="place",
-                 client_order_id=be_coid, order_id=be.get("orderId"), payload=be)
-    cap = client.new_order(symbol=sym, side=_exit_side(pos["direction"]), type="TAKE_PROFIT_MARKET",
-                           reduceOnly="true", quantity=runner_qty,
-                           stopPrice=xi.round_price(sym, float(pos["eff_cap"])),
-                           workingType="MARK_PRICE", newClientOrderId=cap_coid)
-    st.log_order(conn, position_id=pos["id"], symbol=sym, leg="cap", action="place",
-                 client_order_id=cap_coid, order_id=cap.get("orderId"), payload=cap)
-    st.patch(conn, pos["id"], state=st.RUNNER, runner_qty=runner_qty,
-             be_coid=be_coid, be_order_id=be.get("orderId"),
-             cap_coid=cap_coid, cap_order_id=cap.get("orderId"))
+    if not pos.get("entry_fill_time"):                      # never entered -> nothing on the exchange
+        st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason="reversed", exit_time=now)
+        return
+    amt = _position_amt(client, sym)
+    if amt:
+        _market(client, conn, pos, abs(amt), leg="reverse")
+    realized_usd = _realized_since(client, sym, pos.get("entry_fill_time"))
+    risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
+    denom = risk_eff * float(pos.get("qty") or 0)
+    realized_r = (realized_usd / denom) if denom else None
+    st.patch(conn, pos["id"], state=st.CLOSED, exit_reason="reversed", exit_time=now,
+             exit_px=_last_price(sym, now), realized_r=realized_r, realized_usd=realized_usd)
+    if bt_conn is not None:
+        st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+    notify.alert(f"🔄 <b>{sym}</b> ters sinyal → {pos['direction']} kapatıldı "
+                 f"({realized_usd:+.2f}$" + (f", {realized_r:+.2f}R" if realized_r is not None else "") + ") — d30so8c",
+                 chat_id=cfg.telegram_chat_id)
 
 
-def _flatten_and_close(client, conn, sym, pos, *, reason, exit_px, realized_r):
-    """Cancel all open orders, market-close any residual, mark CLOSED."""
-    client.cancel_all_open_orders(sym)
-    risk = abs(float(pos["eff_entry"] or pos["signal_entry"]) - float(pos["signal_sl"]))
+def _close(conn, bt_conn, pos, *, reason, exit_px, realized_r):
+    """Finalize a position in the DB (the MARKET close was already fired by the caller) and
+    upsert the result to trading_signals. realized_usd = R × the position's $ risk (risk_eff×qty)."""
+    risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
+    realized_usd = (realized_r * risk_eff * float(pos.get("qty") or 0)) if realized_r is not None else None
     st.patch(conn, pos["id"], state=st.CLOSED, exit_reason=reason, exit_px=exit_px,
-             exit_time=pd.Timestamp.now(tz="UTC"), realized_r=realized_r,
-             realized_usd=(realized_r * (risk and pos.get("qty", 0))) if realized_r is not None else None)
+             exit_time=pd.Timestamp.now(tz="UTC"), realized_r=realized_r, realized_usd=realized_usd)
+    if bt_conn is not None:
+        st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
 
 
 # ------------------------------------------------------------------ reconcile
@@ -237,90 +297,88 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
                             first_r=cfg.first_r, close_frac=cfg.close_frac,
                             runner_cap_r=cfg.runner_cap_r)
 
-    if state == st.PENDING_ENTRY:
-        _place_entry(cfg, client, conn, xi, pos, lv)
+    # Exchange truth wins: if we believe we're holding but Binance is flat, the position was closed
+    # outside our path (manual, liquidation, or a stale flatten) — finalize from userTrades instead
+    # of looping on -4003 trying to close 0 qty.
+    if state in (st.OPEN_FULL, st.RUNNER) and _position_amt(client, sym) == 0:
+        _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now)
         return
 
-    if state == st.ENTRY_WORKING:
-        filled = _order_filled(client, sym, pos.get("entry_coid"))
-        if filled:
-            avg = float(filled.get("avgPrice") or filled.get("price") or lv.eff_entry)
-            rl = lvl.reanchor(lv, avg, first_r=cfg.first_r)
-            time_stop = now + pd.Timedelta(days=cfg.horizon_days)   # horizon from fill
-            st.patch(conn, pos["id"], state=st.OPEN_FULL, entry_fill_time=now, entry_fill_px=avg,
-                     eff_entry=avg, eff_tp1=rl.tp1, eff_be=rl.be, time_stop_at=time_stop)
-            pos = {**pos, "eff_entry": avg, "eff_tp1": rl.tp1, "eff_be": rl.be}
-            _place_protective(cfg, client, conn, xi, pos, rl)
-            notify.alert(f"✅ <b>{sym}</b> entry filled @ {avg:g} ({pos['direction']}) — d30so8c",
-                         chat_id=cfg.telegram_chat_id)
-            return
-        # not filled: cancel if reversed (adverse −0.5R first) or entry window expired
-        deadline = pd.Timestamp(pos["entry_deadline"]).tz_convert("UTC")
-        adverse = _adverse_hit(cfg, pos, now)
-        if adverse or now >= deadline:
-            client.cancel_order(sym, client_order_id=pos.get("entry_coid"))
-            st.patch(conn, pos["id"], state=st.CANCELLED,
-                     exit_reason="reversed" if adverse else "entry_expired")
-            st.writeback_trading_signals(bt_conn, {**pos, "state": st.CANCELLED,
-                                                   "exit_reason": "entry_expired"})
+    if state in (st.PENDING_ENTRY, st.ENTRY_WORKING):
+        # Position is created ONLY after the breakout confirmed (favourable +0.5R before adverse),
+        # so the entry trigger is already satisfied -> MARKET in now. Guard against chasing: if price
+        # has already run to/over the +1R TP1 level, skip (a 2-min-late confirm shouldn't buy the top).
+        last = _last_price(sym, now)
+        if last is not None:
+            lngd = lv.sign
+            if (last - lv.eff_entry) * lngd >= lv.risk_eff:      # already at/over +1R from entry
+                st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason="slipped")
+                notify.alert(f"⏭️ <b>{sym}</b> entry atlandı (fiyat +1R'yi geçti) — d30so8c",
+                             chat_id=cfg.telegram_chat_id)
+                return
+        resp = _market(client, conn, pos, pos["qty"], leg="entry", reduce_only=False)
+        avg = _avg_fill(client, sym, resp) or float(lv.eff_entry)
+        rl = lvl.reanchor(lv, avg, first_r=cfg.first_r)
+        st.patch(conn, pos["id"], state=st.OPEN_FULL, entry_fill_time=now, entry_fill_px=avg,
+                 eff_entry=avg, eff_tp1=rl.tp1, eff_be=rl.be, entry_coid=st.coid(pos["id"], "entry"),
+                 entry_order_id=resp.get("orderId"), time_stop_at=now + pd.Timedelta(days=cfg.horizon_days))
+        notify.alert(f"✅ <b>{sym}</b> {pos['direction']} entry @ {avg:g} (qty {pos['qty']}) — "
+                     f"SL {rl.sl:g} TP1 {rl.tp1:g} cap {rl.cap:g} — d30so8c", chat_id=cfg.telegram_chat_id)
         return
 
     if state == st.OPEN_FULL:
-        # SL hit?
-        if _order_filled(client, sym, pos.get("sl_coid")) or _position_amt(client, sym) == 0:
-            _flatten_and_close(client, conn, sym, pos, reason="sl",
-                               exit_px=float(pos["signal_sl"]), realized_r=-1.0 - _fee_r(cfg, pos))
-            st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+        rl = lvl.reanchor(lv, float(pos["eff_entry"]), first_r=cfg.first_r)
+        df1m = tsc.fetch_1m(sym, pd.Timestamp(pos["entry_fill_time"]) - pd.Timedelta(minutes=2), now)
+        hit, _ts, _px = _scan(df1m, pos["entry_fill_time"], pos["direction"], rl.sl, rl.tp1)
+        if hit == "protect":                                    # −1R full stop
+            _market(client, conn, pos, abs(_position_amt(client, sym)), leg="sl")
+            _close(conn, bt_conn, pos, reason="sl", exit_px=rl.sl, realized_r=-1.0 - _fee_r(cfg, pos))
             notify.alert(f"🛑 <b>{sym}</b> stopped −1R — d30so8c", chat_id=cfg.telegram_chat_id)
             return
-        # TP1 hit? -> book 60%, transition to runner
-        if _order_filled(client, sym, pos.get("tp1_coid")):
-            runner_qty = abs(_position_amt(client, sym))
-            runner_qty = xi.floor_qty(sym, runner_qty)
+        if hit == "target":                                     # +1R -> book 60%, ride runner
+            _market(client, conn, pos, pos["tp1_qty"], leg="tp1")
+            runner_qty = xi.floor_qty(sym, abs(_position_amt(client, sym)))
             if runner_qty <= 0:
-                _flatten_and_close(client, conn, sym, pos, reason="tp1_be",
-                                   exit_px=float(pos["eff_tp1"]),
-                                   realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
-                st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+                _close(conn, bt_conn, pos, reason="tp1_be", exit_px=rl.tp1,
+                       realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
                 return
-            st.patch(conn, pos["id"], tp1_fill_time=now, tp1_fill_px=float(pos["eff_tp1"]))
-            _place_runner(cfg, client, conn, xi, {**pos}, runner_qty)
-            notify.alert(f"🎯 <b>{sym}</b> TP1 +1R, booked {int(cfg.close_frac*100)}% — runner to +{cfg.runner_cap_r:g}R/BE",
+            st.patch(conn, pos["id"], state=st.RUNNER, runner_qty=runner_qty,
+                     tp1_fill_time=now, tp1_fill_px=rl.tp1)
+            notify.alert(f"🎯 <b>{sym}</b> TP1 +1R, booked {int(cfg.close_frac*100)}% "
+                         f"({pos['tp1_qty']}) — runner {runner_qty} to +{cfg.runner_cap_r:g}R/BE",
                          chat_id=cfg.telegram_chat_id)
             return
         _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now)
         return
 
     if state == st.RUNNER:
-        amt = _position_amt(client, sym)
-        if amt == 0 or _order_filled(client, sym, pos.get("cap_coid")) or _order_filled(client, sym, pos.get("be_coid")):
-            cap_hit = bool(_order_filled(client, sym, pos.get("cap_coid")))
-            if cap_hit:
-                r = cfg.close_frac * cfg.first_r + (1 - cfg.close_frac) * cfg.runner_cap_r - _fee_r(cfg, pos)
-                reason, px = "cap", float(pos["eff_cap"])
-            else:
-                r = cfg.close_frac * cfg.first_r - _fee_r(cfg, pos)     # BE: runner 0R
-                reason, px = "breakeven", float(pos["eff_be"])
-            _flatten_and_close(client, conn, sym, pos, reason=reason, exit_px=px, realized_r=r)
-            st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
-            notify.alert(f"🏁 <b>{sym}</b> runner {reason} ({r:+.2f}R) — d30so8c", chat_id=cfg.telegram_chat_id)
+        be, cap = float(pos["eff_be"]), float(pos["eff_cap"])
+        df1m = tsc.fetch_1m(sym, pd.Timestamp(pos["tp1_fill_time"]) - pd.Timedelta(minutes=2), now)
+        hit, _ts, _px = _scan(df1m, pos["tp1_fill_time"], pos["direction"], be, cap)
+        if hit == "protect":                                    # back to breakeven -> runner 0R
+            _market(client, conn, pos, abs(_position_amt(client, sym)), leg="be")
+            _close(conn, bt_conn, pos, reason="breakeven", exit_px=be,
+                   realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
+            notify.alert(f"🏁 <b>{sym}</b> runner breakeven (+{cfg.close_frac*cfg.first_r:.1f}R) — d30so8c",
+                         chat_id=cfg.telegram_chat_id)
+            return
+        if hit == "target":                                     # runner ran to +cap
+            _market(client, conn, pos, abs(_position_amt(client, sym)), leg="cap")
+            r = cfg.close_frac * cfg.first_r + (1 - cfg.close_frac) * cfg.runner_cap_r - _fee_r(cfg, pos)
+            _close(conn, bt_conn, pos, reason="cap", exit_px=cap, realized_r=r)
+            notify.alert(f"🏁 <b>{sym}</b> runner CAP +{cfg.runner_cap_r:g}R ({r:+.2f}R) — d30so8c",
+                         chat_id=cfg.telegram_chat_id)
             return
         _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now)
         return
 
 
-def _adverse_hit(cfg, pos: dict, now: pd.Timestamp) -> bool:
-    """True if the adverse −buf*risk level printed on 1m since the bar close (Mode B gate:
-    a breakout that moved against us by 0.5R before confirming is NOT taken)."""
-    if pos["entry_mode"] != "B":
-        return False
-    fire = pd.Timestamp(pos["signal_time"]).tz_convert("UTC") + pd.Timedelta(minutes=LTF_MIN)
-    df1m = tsc.fetch_1m(pos["symbol"], fire - pd.Timedelta(minutes=2), now)
-    if df1m is None or df1m.empty:
-        return False
-    cf = tsc.confirm_fill(df1m, fire, pos["direction"], float(pos["signal_entry"]),
-                          float(pos["signal_sl"]), expiry_minutes=cfg.expiry_min)
-    return cf is None and now < fire + pd.Timedelta(minutes=cfg.expiry_min + 1)
+def _last_price(sym, now) -> float | None:
+    try:
+        d = tsc.fetch_1m(sym, now - pd.Timedelta(minutes=5), now)
+        return float(d["close"].iloc[-1]) if d is not None and not d.empty else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now: pd.Timestamp) -> None:
@@ -329,22 +387,18 @@ def _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now: pd.Timestamp) ->
         return
     if now < pd.Timestamp(ts_at).tz_convert("UTC"):
         return
-    # 3-day limit: market-close residual (mark-to-market)
+    # 3-day limit: MARKET-close the residual (mark-to-market), same R math as resolve_scaleout.
     amt = _position_amt(client, sym)
-    last = None
-    try:
-        d = tsc.fetch_1m(sym, now - pd.Timedelta(minutes=5), now)
-        last = float(d["close"].iloc[-1]) if d is not None and not d.empty else None
-    except Exception:  # noqa: BLE001
-        pass
+    if amt:
+        _market(client, conn, pos, abs(amt), leg="time")
+    last = _last_price(sym, now)
     risk = abs(float(pos["eff_entry"] or pos["signal_entry"]) - float(pos["signal_sl"]))
     sign = 1 if str(pos["direction"]).lower() == "long" else -1
     booked = cfg.close_frac * cfg.first_r if pos["state"] == st.RUNNER else 0.0
     runner_r = ((last - float(pos["eff_entry"])) * sign / risk) if (last and risk) else 0.0
     frac = (1 - cfg.close_frac) if pos["state"] == st.RUNNER else 1.0
     r = booked + frac * max(runner_r, 0.0) - _fee_r(cfg, pos)
-    _flatten_and_close(client, conn, sym, pos, reason="time_stop", exit_px=last, realized_r=r)
-    st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+    _close(conn, bt_conn, pos, reason="time_stop", exit_px=last, realized_r=r)
     notify.alert(f"⏱️ <b>{sym}</b> 3-day mark-to-market ({r:+.2f}R) — d30so8c", chat_id=cfg.telegram_chat_id)
 
 
@@ -440,25 +494,42 @@ def main():
 
     # 1) NEW signals -> intents (dry) / positions (armed)
     sigs = _read_recent_signals(cfg, live, now)
-    managed = st.open_symbols(live) if armed else set()
+    # One position per symbol (Binance one-way mode NETS all orders for a symbol into ONE position,
+    # so independent same-symbol pyramiding is impossible). open_by_sym = the currently-open row per
+    # symbol; a SAME-direction new signal is ignored, an OPPOSITE one REVERSES (close + flip).
+    open_by_sym = {p["symbol"]: p for p in st.fetch_open(live, cfg.symbols)} if armed else {}
+    managed = set(open_by_sym)
     print(f"  {len(sigs)} recent dch30_4h signal(s) in window")
     for sig in sigs:
+        sym = sig["symbol"]
         lv = _levels_for(cfg, sig)
         qty, tp1q, skip = _size_and_screen(cfg, xi, sig, lv)
         gate, _ = _confirm_status(cfg, sig, now)
         intent = _intent_dict(cfg, sig, lv, qty, tp1q, gate, xi)
         if skip:
-            print(f"  · {sig['symbol']:<9} SKIP: {skip}")
+            print(f"  · {sym:<9} SKIP: {skip}")
             continue
         if not armed:
-            print(f"  · {sig['symbol']:<9} {sig['direction'].upper():<5} gate={gate}  INTENT:")
+            print(f"  · {sym:<9} {sig['direction'].upper():<5} gate={gate}  INTENT:")
             print("    " + json.dumps(intent, default=str))
             continue
         # armed: only act on a CONFIRMED breakout (matches the backtest's confirmed-only rows)
         if gate != "confirmed":
             continue
-        if sig["symbol"] in managed:
-            continue
+        existing = open_by_sym.get(sym)
+        if existing is not None:
+            if (existing["direction"] or "").upper() == sig["direction"].upper():
+                continue                                    # same direction -> no pyramiding
+            try:                                            # opposite -> reverse (close, then open new)
+                _reverse_close(cfg, client, live, bt, existing, now)
+            except BinanceError as e:
+                print(f"  ! {sym} reverse-close error: {e}")
+                continue
+            open_by_sym.pop(sym, None)
+            managed.discard(sym)
+            print(f"  ↺ {sym:<9} ters sinyal -> mevcut {existing['direction']} kapatıldı (reversed)")
+        elif sym in managed:
+            continue                                        # created earlier this run
         if len(managed) >= cfg.max_concurrent:
             print(f"  · {sig['symbol']:<9} SKIP: MAX_CONCURRENT {cfg.max_concurrent} reached")
             continue

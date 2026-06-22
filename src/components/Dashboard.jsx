@@ -83,11 +83,12 @@ const formatPrice = (value) => {
   return value.toPrecision(4);
 };
 
-// Risk-reward ratio from entry/SL/TP (pre-trade, what the engine targeted).
-const computeRR = (sig) => {
-  if (!sig?.entry || !sig?.sl || !sig?.tp) return null;
-  const risk = Math.abs(sig.entry - sig.sl);
-  const reward = Math.abs(sig.tp - sig.entry);
+// Risk-reward ratio from entry/SL/TP (pre-trade, what the engine targeted). `entry` defaults to the
+// signal entry but the card passes the realistic +0.5R entry in live (TP/SL fixed → R:R collapses).
+const computeRR = (sig, entry = sig?.entry) => {
+  if (!entry || !sig?.sl || !sig?.tp) return null;
+  const risk = Math.abs(entry - sig.sl);
+  const reward = Math.abs(sig.tp - entry);
   if (risk === 0) return null;
   return reward / risk;
 };
@@ -250,10 +251,10 @@ const Dashboard = () => {
     return { label: 'BEKLEMEDE', cls: 'waiting', terminal: false };
   };
 
-  const formatLiveDelta = (sig, lastPrice) => {
-    if (!sig?.entry || typeof lastPrice !== 'number') return '--';
-    const diff = sig.dir === 'LONG' ? (lastPrice - sig.entry) : (sig.entry - lastPrice);
-    const pct = (diff / sig.entry) * 100;
+  const formatLiveDelta = (sig, lastPrice, entry = sig?.entry) => {
+    if (!entry || typeof lastPrice !== 'number') return '--';
+    const diff = sig.dir === 'LONG' ? (lastPrice - entry) : (entry - lastPrice);
+    const pct = (diff / entry) * 100;
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
   };
 
@@ -626,9 +627,18 @@ const Dashboard = () => {
 
         const effDate = effectiveSignalTime(sig) || sig.dateObj;
         const timeLabel = effDate.toLocaleTimeString(locale, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' }) + ' UTC';
-        const rr = computeRR(sig);
-        const targetPct = pctDist(sig.entry, sig.tp);
-        const riskPct = pctDist(sig.entry, sig.sl);
+        // Realistic +0.5R entry for the ·0.5R streams in LIVE (backtest rows already store it).
+        // TP/SL stay at the signal levels — only the entry moves, so R:R collapses (4 → ~2.33),
+        // matching the chart. The breakout/signal price is shown separately on the card.
+        const liveConfirm = mode === 'live' && isConfirmStrategy(strategy)
+          && Number.isFinite(sig.entry) && Number.isFinite(sig.sl);
+        const cardEntry = liveConfirm
+          ? (sig.dir === 'LONG' ? sig.entry + 0.5 * Math.abs(sig.entry - sig.sl)
+                                : sig.entry - 0.5 * Math.abs(sig.entry - sig.sl))
+          : sig.entry;
+        const rr = computeRR(sig, cardEntry);
+        const targetPct = pctDist(cardEntry, sig.tp);
+        const riskPct = pctDist(cardEntry, sig.sl);
 
         return (
           <div
@@ -680,8 +690,8 @@ const Dashboard = () => {
                   liveMeta.label === 'AKTIF' ? (
                     <span className="pnl-text live-pnl-stack">
                       <span className="live-price">{formatLivePrice(liveLastPrice)}</span>
-                      <span className={formatLiveDelta(sig, liveLastPrice).startsWith('-') ? 'loss' : 'win'}>
-                        {formatLiveDelta(sig, liveLastPrice)}
+                      <span className={formatLiveDelta(sig, liveLastPrice, cardEntry).startsWith('-') ? 'loss' : 'win'}>
+                        {formatLiveDelta(sig, liveLastPrice, cardEntry)}
                       </span>
                     </span>
                   ) : (
@@ -696,9 +706,12 @@ const Dashboard = () => {
                 )}
               </div>
               <div className="trade-metric">
-                <span className="metric-label">{t('Entry')}</span>
+                <span className="metric-label">{t('Entry')}{liveConfirm ? ' ·0.5R' : ''}</span>
                 <span className="metric-value">
-                  <CopyVal value={sig.entry} title={t('Kopyala')}>{formatPrice(sig.entry)}</CopyVal>
+                  <CopyVal value={cardEntry} title={t('Kopyala')}>{formatPrice(cardEntry)}</CopyVal>
+                  {liveConfirm && (
+                    <span className="intel-pct" style={{ color: '#848E9C', fontWeight: 400 }}> · {t('Sinyal')} {formatPrice(sig.entry)}</span>
+                  )}
                 </span>
               </div>
               <div className="trade-metric intel-exec__tpsl">

@@ -50,32 +50,37 @@ def main():
     live = tsc.live_conn()
     managed = {p["symbol"]: p for p in st.fetch_open(live, None)}
 
+    # NOTE: the executor runs a SYNTHETIC bracket (MARKET-on-trigger, no resting stop orders —
+    # testnet rejects conditional orders). So "no resting stop" is EXPECTED and must NOT be flattened.
+    # The protection in this model is the reconciler running; the real safety checks are therefore:
+    #   (1) ORPHAN — a Binance position with NO managed DB row (a true leak) -> flatten;
+    #   (2) STALE reconciler — the executor snapshot is old, so positions aren't being watched -> alert;
+    #   (3) total open risk over the cap.
     breaches = 0
     for p in client.position_risk():
         sym = p.get("symbol")
         amt = float(p.get("positionAmt", 0) or 0)
         if amt == 0 or not (sym or "").endswith("USDT"):
             continue
-        pos = managed.get(sym)
-        open_orders = client.open_orders(sym)
-        has_stop = any(o.get("type") in ("STOP_MARKET", "STOP") for o in open_orders)
-        if pos is None:
+        if managed.get(sym) is None:                       # ORPHAN — no DB row owns this position
             breaches += 1
-            msg = f"🚨 ORPHAN {sym} amt={amt} (no live_positions row)"
-            print(f"  {msg}")
+            print(f"  🚨 ORPHAN {sym} amt={amt} (no live_positions row)")
             if cfg.armed:
                 client.cancel_all_open_orders(sym)
                 _market_flatten(client, sym, amt)
             notify.alert(f"🚨 <b>{sym}</b> ORPHAN flattened ({amt})" if cfg.armed
                          else f"🚨 <b>{sym}</b> ORPHAN (report-only)", chat_id=cfg.telegram_chat_id)
-        elif not has_stop:
-            breaches += 1
-            print(f"  ⚠️ {sym} OPEN with NO protective stop")
-            if cfg.armed:
-                client.cancel_all_open_orders(sym)
-                _market_flatten(client, sym, amt)
-            notify.alert(f"⚠️ <b>{sym}</b> had no stop — flattened" if cfg.armed
-                         else f"⚠️ <b>{sym}</b> no stop (report-only)", chat_id=cfg.telegram_chat_id)
+
+    # (2) reconciler-freshness: in the no-resting-stop model a dead executor = unwatched positions.
+    cur = live.cursor()
+    cur.execute("SELECT extract(epoch FROM now() - max(updated_at)) FROM ict_trade.live_account")
+    row = cur.fetchone(); cur.close()
+    stale_s = float(row[0]) if row and row[0] is not None else None
+    if managed and stale_s is not None and stale_s > 360:   # >6 min since last executor run
+        breaches += 1
+        print(f"  ⚠️ reconciler stale {stale_s:.0f}s with {len(managed)} open position(s)")
+        notify.alert(f"⚠️ d30so8c executor {stale_s/60:.0f}dk’dır çalışmıyor, {len(managed)} açık pozisyon korumasız!",
+                     chat_id=cfg.telegram_chat_id)
 
     open_risk = st.total_open_risk_usd(live, cfg.risk_usd)
     if open_risk > cfg.max_total_risk_usd:

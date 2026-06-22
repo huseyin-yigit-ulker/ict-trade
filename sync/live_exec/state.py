@@ -147,9 +147,16 @@ def writeback_trading_signals(bt_conn, pos: dict) -> None:
     """On close, upsert the live result into ict_trade.trading_signals (version='d30so8c') so it
     joins the dashboard track-record. Maps live_positions -> the tsc.build_row contract."""
     direction = pos["direction"]
-    status = {"sl": "closed_sl"}.get(pos.get("exit_reason"), "closed_tp") if pos.get("exit_reason") else pos.get("state")
-    if pos.get("exit_reason") == "entry_expired":
-        status = "cancelled"
+    reason = pos.get("exit_reason")
+    pnl = pos.get("realized_r")
+    if reason in ("entry_expired", "reversed") and not pos.get("entry_fill_time"):
+        status = "cancelled"                                # never entered
+    elif reason == "sl":
+        status = "closed_sl"
+    elif reason:                                            # tp1_be/cap/breakeven/time_stop/reversed/closed_externally
+        status = "closed_sl" if (pnl is not None and float(pnl) < 0) else "closed_tp"
+    else:
+        status = pos.get("state")
     outcome = {
         "status": status,
         "real_entry_time": pos.get("entry_fill_time"),

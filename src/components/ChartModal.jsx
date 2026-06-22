@@ -678,15 +678,28 @@ const ChartModal = () => {
           }
           // 4R line: for scale-out it is the RUNNER CAP (runner takes profit at +4R == the
           // signal's own TP); for every other stream it is the full take-profit. Drawn for both.
-          if (tp) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // The green TP / green ½TP / red SL lines are TRADE levels — drawn only for a trade that
+          // was actually taken. A CANCELLED signal (directional veto / timeout) never opened, so
+          // suppress them (no phantom green/red); only the entry/signal + the -0.5R veto show.
+          if (tp && !isCancelled) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
           // +1R and the runner then rides with a breakeven stop.
-          if (partialLevel != null) {
+          if (partialLevel != null && !isCancelled) {
             const partialPct = entry ? ((partialLevel - entry) / entry) * 100 : null;
             const partialTitle = isScaleOut ? 'TP1 +1R · %60' : '½TP %50';
             mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' ' + (partialPct >= 0 ? '+' : '') + partialPct.toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           }
-          if (sl) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (sl && !isCancelled) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // Adverse-0.5R confirmation level (SL side): the directional gate (ENTRY_CONFIRM_BUF=0.5)
+          // line. Drawn on EVERY live signal — for 'İptal (Ters Yön)' it marks WHERE the breakout
+          // went adverse first and got vetoed; for trades that DID open (SL/TP/active) it shows the
+          // threshold the breakout confirmed PAST. Measured from the SIGNAL (breakout close) + raw
+          // risk, mirroring the backtest gate. (mode-keyed, not status-keyed, so it draws on the
+          // first render before the live status has polled.)
+          if (mode === 'live' && Number.isFinite(sigRisk) && sigRisk > 0) {
+            const advLvl = isLong ? sigEntry - 0.5 * sigRisk : sigEntry + 0.5 * sigRisk;
+            mainSeries.createPriceLine({ price: advLvl, color: '#F0B90B', lineWidth: 1, lineStyle: 2, title: `${t('Ters Onay')} −0.5R`, axisLabelVisible: true });
+          }
           if (mode === 'backtest' && activeSignal?.exitPrice) {
             mainSeries.createPriceLine({ price: sig.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(sig.exitPrice)}`, axisLabelVisible: true });
           }
@@ -780,8 +793,13 @@ const ChartModal = () => {
           if (isTerminalState && closeBarSec != null) {
             toTime = Math.min(toTime, closeBarSec + POST_CLOSE_BARS * (displayMs / 1000));
           }
+          // LIVE: start the view AT the signal (no pre-signal context) — the live chart opens
+          // from the moment the signal fired. BACKTEST keeps the pre-signal run-up (violet) for
+          // context. Guard from < to (a freshly-fired signal can sit at the latest bar).
+          const liveFrom = Math.max(candles[0].time, signalSec);
+          const fromTime = (mode === 'live' && liveFrom < toTime) ? liveFrom : candles[0].time;
           try {
-            tsApi.setVisibleRange({ from: candles[0].time, to: toTime });
+            tsApi.setVisibleRange({ from: fromTime, to: toTime });
           } catch {
             tsApi.fitContent();
           }
