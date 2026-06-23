@@ -20,10 +20,17 @@ import pandas as pd
 from psycopg2.extras import Json
 
 _HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[1]))   # sync/ -> trade_sync_common
+sys.path.insert(0, str(_HERE.parent))                    # live_exec -> _bootenv
+sys.path.insert(0, str(_HERE.parents[1]))                # sync/     -> trade_sync_common
+sys.path.insert(0, str(_HERE.parents[1] / "donchian"))   # donchian  -> scaleout
+import _bootenv                              # noqa: E402,F401  -- sets DCH_SO_RUNNER_CAP before scaleout
 import trade_sync_common as tsc              # noqa: E402
+import scaleout as _so                       # noqa: E402
 
-VERSION = "d30so8c"
+# VERSION follows the configured runner cap (DCH_SO_RUNNER_CAP via .env/_bootenv): cap8 -> d30so8c,
+# cap6 -> d30so6c, cap4 -> d30_4h_so. NEW positions are tagged with this; on CLOSE a position's OWN
+# stored version is used (so switching the cap mid-stream never re-tags still-open older positions).
+VERSION = _so.VERSION
 
 # lifecycle states (also referenced by the partial-unique open-symbol index in schema.sql)
 PENDING_ENTRY = "PENDING_ENTRY"      # signal accepted, entry order to be / is placed
@@ -170,5 +177,5 @@ def writeback_trading_signals(bt_conn, pos: dict) -> None:
         float(pos["signal_sl"]), float(pos["signal_cap"]), outcome,
         strategy=(pos.get("context") or {}).get("strategy") if isinstance(pos.get("context"), dict) else None,
     )
-    row["version"] = VERSION
+    row["version"] = pos.get("version") or VERSION   # the position's OWN cap, not the current one
     tsc.upsert_rows(bt_conn, [row])
