@@ -184,16 +184,17 @@ def _place_protective_stop(cfg, client, conn, xi: ExchangeInfo, pos: dict, stop_
     if cfg.testnet:
         return
     sym = pos["symbol"]
-    coid = st.coid(pos["id"], leg)
     try:
-        resp = client.new_order(
+        # Conditional orders go to the Algo Service (POST /fapi/v1/algoOrder, triggerPrice) — the
+        # legacy /fapi/v1/order rejects STOP_MARKET with -4120 since the 2025-12-09 migration.
+        resp = client.new_algo_order(
             symbol=sym, side=_exit_side(pos["direction"]), type="STOP_MARKET",
-            closePosition="true", stopPrice=xi.round_price(sym, stop_px, mode="nearest"),
-            workingType="MARK_PRICE", newClientOrderId=coid)
+            triggerPrice=xi.round_price(sym, stop_px, mode="nearest"),
+            closePosition="true", workingType="MARK_PRICE")
         st.log_order(conn, position_id=pos["id"], symbol=sym, leg=leg, action="place",
-                     client_order_id=coid, order_id=resp.get("orderId"), payload=resp)
+                     client_order_id=resp.get("clientAlgoId"), order_id=resp.get("algoId"), payload=resp)
     except BinanceError as e:
-        print(f"  ! {sym} protective {leg} place failed: {e} (safety_sweep will backstop)")
+        print(f"  ! {sym} protective {leg} algo place failed: {e} (safety_sweep will backstop)")
 
 
 def _cancel_resting(cfg, client, sym: str) -> None:
@@ -202,9 +203,37 @@ def _cancel_resting(cfg, client, sym: str) -> None:
     if cfg.testnet:
         return
     try:
-        client.cancel_all_open_orders(sym)
+        client.cancel_all_open_orders(sym)      # regular LIMIT legs (e.g. exch_tp TP1/cap)
     except BinanceError:
         pass
+    try:
+        client.cancel_all_algo_orders(sym)      # conditional STOP/TP algo orders (SL / BE)
+    except BinanceError:
+        pass
+
+
+def _place_tp_algos(cfg, client, conn, xi: ExchangeInfo, pos: dict, rl) -> None:
+    """Exchange-side scale-out TPs as CONDITIONAL TAKE_PROFIT_MARKET algo orders (MAINNET) so they show
+    as proper TP orders in the UI (separate from the SL): TP1 = tp1_qty @ +1R, cap = the runner
+    remainder @ +capR. reduceOnly + quantity (partial). Triggers a MARKET book when price reaches the
+    level. Best-effort — a failure never breaks the entry (the SL still protects)."""
+    if cfg.testnet:
+        return
+    sym = pos["symbol"]
+    tp1_q = xi.floor_qty(sym, float(pos["tp1_qty"]))
+    cap_q = xi.floor_qty(sym, float(pos["qty"]) - tp1_q)
+    for leg, q, px in (("tp1_tp", tp1_q, rl.tp1), ("cap_tp", cap_q, rl.cap)):
+        if q <= 0:
+            continue
+        try:
+            r = client.new_algo_order(
+                symbol=sym, side=_exit_side(pos["direction"]), type="TAKE_PROFIT_MARKET",
+                triggerPrice=xi.round_price(sym, px, mode="nearest"), quantity=q,
+                reduceOnly="true", workingType="MARK_PRICE")
+            st.log_order(conn, position_id=pos["id"], symbol=sym, leg=leg, action="place",
+                         client_order_id=r.get("clientAlgoId"), order_id=r.get("algoId"), payload=r)
+        except BinanceError as e:
+            print(f"  ! {sym} {leg} TP algo place failed: {e}")
 
 
 def _avg_fill(client, sym, resp) -> float:
@@ -266,9 +295,16 @@ def _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now) -> None:
              exit_time=now, realized_r=realized_r, realized_usd=realized_usd)
     if bt_conn is not None:
         st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
-    notify.alert(f"⚠️ <b>{sym}</b> borsada kapanmış (DB senkronlandı) — "
-                 f"realized {realized_usd:+.2f}$ ({realized_r:+.2f}R) — {st.VERSION}" if realized_r is not None
-                 else f"⚠️ <b>{sym}</b> borsada kapanmış (DB senkronlandı) — {st.VERSION}",
+    dirn = str(pos["direction"]).upper()
+    if realized_r is None:
+        head, tail = "🏁 KAPANDI", "borsada kapandı (R bilinmiyor)"
+    else:
+        head = ("🛑 STOP −1R" if realized_r <= -0.5 else
+                "🏁 KÂR (runner/cap)" if realized_r >= 1.0 else
+                "🏁 TP1+BE")
+        tail = f"realized {realized_usd:+.2f}$ ({realized_r:+.2f}R)"
+    notify.alert(f"{head} · <b>{sym}</b> {dirn} #{pos['id']}\n"
+                 f"borsa-emri kapanışı (SL/TP/cap tetiklendi) · {tail} — {st.VERSION}",
                  chat_id=cfg.telegram_chat_id)
 
 
@@ -292,8 +328,10 @@ def _reverse_close(cfg, client, conn, bt_conn, pos, now) -> None:
              exit_px=_last_price(sym, now), realized_r=realized_r, realized_usd=realized_usd)
     if bt_conn is not None:
         st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
-    notify.alert(f"🔄 <b>{sym}</b> ters sinyal → {pos['direction']} kapatıldı "
-                 f"({realized_usd:+.2f}$" + (f", {realized_r:+.2f}R" if realized_r is not None else "") + ") — {st.VERSION}",
+    notify.alert(f"🔄 <b>TERS SİNYAL</b> · <b>{sym}</b> #{pos['id']}\n"
+                 f"{str(pos['direction']).upper()} kapatıldı ({realized_usd:+.2f}$"
+                 + (f", {realized_r:+.2f}R" if realized_r is not None else "")
+                 + ") → ters yön açılıyor" + f" — {st.VERSION}",
                  chat_id=cfg.telegram_chat_id)
 
 
@@ -333,6 +371,13 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
                             entry_mode=pos["entry_mode"], confirm_buf=cfg.confirm_buf,
                             first_r=cfg.first_r, close_frac=cfg.close_frac,
                             runner_cap_r=cfg.runner_cap_r)
+    _ctx = pos.get("context")
+    if isinstance(_ctx, str):
+        try:
+            _ctx = json.loads(_ctx)
+        except (ValueError, TypeError):
+            _ctx = {}
+    exch_tp = bool((_ctx or {}).get("exch_tp"))   # hybrid: TP1+cap rest as exchange LIMIT orders
 
     # Exchange truth wins: if we believe we're holding but Binance is flat, the position was closed
     # outside our path (manual, liquidation, or a stale flatten) — finalize from userTrades instead
@@ -350,7 +395,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
             lngd = lv.sign
             if (last - lv.eff_entry) * lngd >= lv.risk_eff:      # already at/over +1R from entry
                 st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason="slipped")
-                notify.alert(f"⏭️ <b>{sym}</b> entry atlandı (fiyat +1R'yi geçti) — {st.VERSION}",
+                notify.alert(f"⏭️ <b>ATLANDI</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                             f"fiyat +1R'yi geçti (geç onay) — giriş yapılmadı — {st.VERSION}",
                              chat_id=cfg.telegram_chat_id)
                 return
         resp = _market(client, conn, pos, pos["qty"], leg="entry", reduce_only=False)
@@ -359,9 +405,68 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
         st.patch(conn, pos["id"], state=st.OPEN_FULL, entry_fill_time=now, entry_fill_px=avg,
                  eff_entry=avg, eff_tp1=rl.tp1, eff_be=rl.be, entry_coid=st.coid(pos["id"], "entry"),
                  entry_order_id=resp.get("orderId"), time_stop_at=now + pd.Timedelta(days=cfg.horizon_days))
-        _place_protective_stop(cfg, client, conn, xi, pos, rl.sl, leg="sl_rest")   # mainnet: real −1R stop on the book
-        notify.alert(f"✅ <b>{sym}</b> {pos['direction']} entry @ {avg:g} (qty {pos['qty']}) — "
-                     f"SL {rl.sl:g} TP1 {rl.tp1:g} cap {rl.cap:g} — {st.VERSION}", chat_id=cfg.telegram_chat_id)
+        # Full exchange-side bracket at entry (mainnet): algo SL (real conditional) + resting LIMIT
+        # TP1/cap. Marking exch_tp makes the reconciler run the SL-backstop branch (no synthetic TP
+        # double-book — the LIMITs book the profit). All no-ops on testnet (keeps the synthetic model).
+        _place_protective_stop(cfg, client, conn, xi, pos, rl.sl, leg="sl_rest")   # algo STOP_MARKET @ −1R
+        _place_tp_algos(cfg, client, conn, xi, pos, rl)                             # algo TAKE_PROFIT_MARKET TP1 60% + cap 40%
+        if not cfg.testnet:
+            _ctx = pos.get("context") or {}
+            if isinstance(_ctx, str):
+                try:
+                    _ctx = json.loads(_ctx)
+                except (ValueError, TypeError):
+                    _ctx = {}
+            st.patch(conn, pos["id"], context={**_ctx, "exch_tp": True})
+        notify.alert(f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                     f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g} · {cfg.leverage}x\n"
+                     f"SL {rl.sl:g} (−1R) · TP1 {rl.tp1:g} (%60) · cap {rl.cap:g} (+{cfg.runner_cap_r:g}R %40) — borsa bracket — {st.VERSION}",
+                     chat_id=cfg.telegram_chat_id)
+        return
+
+    if state == st.OPEN_FULL and exch_tp:
+        # Exchange-side bracket: SL + TP1 + cap rest as algo orders on the book. The reconciler:
+        #   (1) when TP1 books (position drops toward the runner) -> trail the SL to BREAKEVEN once
+        #       (cancel the −1R algo SL, leave the TPs, place a BE algo SL), so the runner can't lose;
+        #   (2) runs a SYNTHETIC SL as a pure backstop (the algo SL is primary). A full close (both
+        #       TPs, or the SL) is caught by the flat guard above -> _reconcile_to_closed (real R).
+        rl = lvl.reanchor(lv, float(pos["eff_entry"]), first_r=cfg.first_r)
+        short = str(pos["direction"]).lower() == "short"
+        e = float(pos["eff_entry"])
+        be_done = bool((_ctx or {}).get("be_done"))
+        cur = abs(_position_amt(client, sym))
+        if cur > 0 and not be_done and cur < float(pos["qty"]) * 0.9:    # TP1 filled -> SL -> breakeven
+            for o in client.open_algo_orders(sym):              # cancel the −1R SL (adverse side); keep the TPs
+                trig = float(o.get("triggerPrice") or 0)
+                if ((trig > e) if short else (trig < e)) and o.get("algoId") is not None:
+                    try:
+                        client.cancel_algo_order(algo_id=o["algoId"])
+                    except BinanceError:
+                        pass
+            _place_protective_stop(cfg, client, conn, xi, pos, e, leg="be_rest")   # algo BE stop @ entry
+            # stay OPEN_FULL (the exch_tp branch handles both pre/post-BE via the be_done flag);
+            # tp1_fill_time anchors the post-BE backstop scan so the entry bar can't false-trigger it.
+            st.patch(conn, pos["id"], tp1_fill_time=now, context={**(_ctx or {}), "be_done": True})
+            notify.alert(f"🎯 <b>TP1 DOLDU</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                         f"%60 alındı @ {rl.tp1:g} (+1R · +0.6R kilitli)\n"
+                         f"SL → breakeven {e:g} · runner %40 → +{cfg.runner_cap_r:g}R / BE / 3g — {st.VERSION}",
+                         chat_id=cfg.telegram_chat_id)
+            return
+        sl_level = e if be_done else rl.sl                       # backstop fires at BE once trailed
+        since = (pd.Timestamp(pos["tp1_fill_time"]) if be_done and pos.get("tp1_fill_time")
+                 else pd.Timestamp(pos["entry_fill_time"]))
+        df1m = tsc.fetch_1m(sym, since - pd.Timedelta(minutes=2), now)
+        sl_hit = (df1m is not None and not df1m.empty
+                  and bool((df1m["high"] >= sl_level).any() if short else (df1m["low"] <= sl_level).any()))
+        if sl_hit:                                               # backstop close (algo SL should have fired first)
+            _cancel_resting(cfg, client, sym)
+            _market(client, conn, pos, abs(_position_amt(client, sym)), leg="sl")
+            _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now)
+            notify.alert(f"🛑 <b>{'BREAKEVEN STOP' if be_done else 'STOP −1R'}</b> · <b>{sym}</b> "
+                         f"{str(pos['direction']).upper()} #{pos['id']}\n"
+                         f"sentetik backstop kapanışı @ {sl_level:g} — {st.VERSION}", chat_id=cfg.telegram_chat_id)
+            return
+        _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now)
         return
 
     if state == st.OPEN_FULL:
@@ -443,7 +548,9 @@ def _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now: pd.Timestamp) ->
     frac = (1 - cfg.close_frac) if pos["state"] == st.RUNNER else 1.0
     r = booked + frac * max(runner_r, 0.0) - _fee_r(cfg, pos)
     _close(conn, bt_conn, pos, reason="time_stop", exit_px=last, realized_r=r)
-    notify.alert(f"⏱️ <b>{sym}</b> 3-day mark-to-market ({r:+.2f}R) — {st.VERSION}", chat_id=cfg.telegram_chat_id)
+    notify.alert(f"⏱️ <b>3 GÜN DOLDU</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                 f"süre limiti — market kapandı @ {last:g} · realized {r:+.2f}R — {st.VERSION}",
+                 chat_id=cfg.telegram_chat_id)
 
 
 def _fee_r(cfg, pos: dict) -> float:

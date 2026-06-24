@@ -175,3 +175,39 @@ class BinanceFutures:
             if e.code in (-2011, -2013):
                 return {"code": e.code, "msg": "none"}
             raise
+
+    # ---- Algo (CONDITIONAL) orders ----------------------------------------------------------------
+    # Binance migrated conditional orders (STOP_MARKET/TAKE_PROFIT_MARKET/STOP/TAKE_PROFIT/TRAILING)
+    # to the Algo Service on 2025-12-09: the legacy /fapi/v1/order rejects them with -4120, they must
+    # go to /fapi/v1/algoOrder (algoType=CONDITIONAL, triggerPrice instead of stopPrice).
+    def new_algo_order(self, **params) -> dict:
+        params.setdefault("algoType", "CONDITIONAL")
+        return self._request("POST", "/fapi/v1/algoOrder", params, signed=True)
+
+    def open_algo_orders(self, symbol: str | None = None) -> list[dict]:
+        r = self._request("GET", "/fapi/v1/openAlgoOrders", {"symbol": symbol} if symbol else {}, signed=True)
+        orders = r.get("orders", r) if isinstance(r, dict) else r
+        return [o for o in orders if not symbol or o.get("symbol") == symbol] if isinstance(orders, list) else []
+
+    def cancel_algo_order(self, *, algo_id=None, client_algo_id=None) -> dict:
+        p: dict = {}
+        if algo_id is not None:
+            p["algoId"] = algo_id
+        if client_algo_id is not None:
+            p["clientAlgoId"] = client_algo_id
+        try:
+            return self._request("DELETE", "/fapi/v1/algoOrder", p, signed=True)
+        except BinanceError as e:
+            if e.code in (-2011, -2013):
+                return {"code": e.code, "msg": "already gone"}
+            raise
+
+    def cancel_all_algo_orders(self, symbol: str) -> None:
+        """No bulk endpoint — cancel each open CONDITIONAL order on the symbol (best-effort)."""
+        for o in self.open_algo_orders(symbol):
+            aid = o.get("algoId")
+            if aid is not None:
+                try:
+                    self.cancel_algo_order(algo_id=aid)
+                except BinanceError:
+                    pass
