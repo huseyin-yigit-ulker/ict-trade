@@ -16,7 +16,6 @@ save_signal_to_db, so re-running within the lookback window never duplicates.
 """
 from __future__ import annotations
 
-import os
 import sys
 import json
 import argparse
@@ -146,10 +145,16 @@ def main():
                     help="emit signals whose bar closed within this many hours (default 1.5)")
     ap.add_argument("--no-telegram", action="store_true",
                     help="skip Telegram alerts (for back-filling past signals into the live table)")
+    ap.add_argument("--telegram-symbols", default=None,
+                    help="comma-separated symbols; if set, ONLY these symbols' formations send a "
+                         "Telegram alert (all signals still write to the DB). Limits pings to the "
+                         "live-traded set, e.g. FETUSDT,SUSDT,SOLUSDT.")
     ap.add_argument("--rr", type=float, default=strat.RR,
                     help=f"reward/risk target (default {strat.RR}); non-4 appends its int to "
                          f"the mode tag, e.g. --rr 6 -> 'dch30_4h6'")
     args = ap.parse_args()
+    tg_syms = ({s.strip().upper() for s in args.telegram_symbols.split(",") if s.strip()}
+               if args.telegram_symbols else None)
 
     tf = args.tf
     confirm_htf = args.confirm_htf
@@ -185,12 +190,9 @@ def main():
     # alerted the moment its 30m+4h / 1h bar closes; the 0.5R direction check is the UI/live module's
     # job. tg_sent guards against duplicate alerts on re-scan (a failed send retries next run).
     print(f"\n{len(found)} fresh signal(s).")
-    # Per-run "this strategy ran" Telegram ping — fires on EVERY emit run (bar close), signal or
-    # not. Distinct from the new-signal alert below (which only fires on a real setup). Toggle off
-    # with EMIT_RUN_PING=0. NOTE: this is ~120 msgs/day (1h on :00, 30m on :00/:30, 3 streams).
-    if args.emit and not args.no_telegram and os.environ.get("EMIT_RUN_PING", "1") == "1":
-        _RUN_LABELS = {"donchian": "DONCHIAN 1h", "dch30_4h": "DONCHIAN 30m+4h", "dch30_4h6": "DONCHIAN 30m+4h·6R"}
-        _telegram_send(f"⚙️ <b>{_RUN_LABELS.get(mode, mode)}</b> çalıştı · {now:%H:%M} UTC · {len(found)} sinyal")
+    # (Removed) the per-run "⚙️ <stream> çalıştı · HH:MM UTC · N sinyal" Telegram ping that fired on
+    # EVERY emit run (signal or not, ~120 msgs/day) — pure run-status noise. Only the actual
+    # new-signal alert below (a real setup at bar close) is sent now.
     if args.dry_run or not found:
         if args.dry_run:
             print("[dry-run] no DB write.")
@@ -218,13 +220,17 @@ def main():
         # Telegram alert at FORMATION (bar close) — no +0.5R gate (the UI/live module does that).
         # tg_sent prevents duplicate alerts on re-scan; a failed send stays False to retry next run.
         if not ctx.get("tg_sent"):
-            ok = True if args.no_telegram else _telegram_send(_telegram_text(s, tf, confirm_htf))
+            # gated symbols (not in --telegram-symbols) are marked sent WITHOUT pinging, so they
+            # don't spam and don't retry every run — only the live-traded set actually alerts.
+            gated = args.no_telegram or (tg_syms is not None and s.symbol.upper() not in tg_syms)
+            ok = True if gated else _telegram_send(_telegram_text(s, tf, confirm_htf))
             if ok:
                 ctx["tg_sent"] = True
                 cur.execute(_UPDATE_CTX, (json.dumps(ctx), s.symbol, st, d, mode))
                 conn.commit()
-                alerted += 1
-                print(f"  📣 {s.symbol:<10} {d:<5} → Telegram", flush=True)
+                if not gated:
+                    alerted += 1
+                    print(f"  📣 {s.symbol:<10} {d:<5} → Telegram", flush=True)
     cur.close()
     conn.close()
     print(f"  {inserted} new row(s), {alerted} Telegram alert(s) (mode='{mode}')")

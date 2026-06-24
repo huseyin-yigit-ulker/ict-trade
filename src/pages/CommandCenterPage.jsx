@@ -19,8 +19,10 @@ const CommandCenterPage = () => {
   const validM = (pMode === 'backtest' || pMode === 'live') ? pMode : (isDemo ? 'demo' : null);
 
   useEffect(() => {
-    // 'demo' is self-contained (static JSON) — don't drive the live/backtest data load.
-    if (validS && validM && validM !== 'demo' && (validS !== strategy || validM !== mode)) {
+    // Sync the route into context for every mode, demo included — the chart (ChartModal) reads
+    // `strategy`/`mode` from context, so demo must set them too (mode='demo' makes TradeContext
+    // skip all fetching, so this stays I/O-free while still wiring the cap into the chart).
+    if (validS && validM && (validS !== strategy || validM !== mode)) {
       setView(validS, validM);
     }
   }, [validS, validM, strategy, mode, setView]);

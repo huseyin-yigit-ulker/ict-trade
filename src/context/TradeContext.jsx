@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { donchianc: 180, dch30_4hc: 180, dch30_4h6c: 180, d30_4h_soc: 180, d30so6c: 180, d30so8c: 180 };
+const STRATEGY_EXPIRY_MINUTES = { donchianc: 180, dch30_4hc: 180, dch30_4h6c: 180, d30_4h_soc: 180, d30so6c: 180, d30so8c: 180, d1h_so4c: 180, d1h_so6c: 180, d1h_so8c: 180 };
 
 // Directional entry confirmation — MIRROR of backtest ict/config.ENTRY_CONFIRM_BUF. A trade is
 // only opened if, within the fill window, price extends favourably (toward TP) by BUF*risk
@@ -99,7 +99,9 @@ const ENTRY_CONFIRM_BUF = 0.5;
 // caps runner duration ≤3d and per-trade R ≤2.2R). ~76-80% WR (gated), OOS-positive every year.
 // No own emitter: it RESOLVES the dch30_4h live signals under the scale-out model
 // (sync/donchian/scaleout.py), exactly as karma/½TP reuse their parent's live signals.
-const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30_4h6c: 'dch30_4h6c', d30_4h_soc: 'd30_4h_soc', d30so6c: 'd30so6c', d30so8c: 'd30so8c' };
+// d1h_so{4,6,8}c = the 1h scale-out family (backtest-only): the 1h donchian base entry
+// (ER-gated, no 4h confirm) resolved under the SAME +1R-then-runner-cap exit as d30so*.
+const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30_4h6c: 'dch30_4h6c', d30_4h_soc: 'd30_4h_soc', d30so6c: 'd30so6c', d30so8c: 'd30so8c', d1h_so4c: 'd1h_so4c', d1h_so6c: 'd1h_so6c', d1h_so8c: 'd1h_so8c' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -109,13 +111,13 @@ const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
 // d30_4h_so reuses the dch30_4h live signals (only the exit model differs), so its live
 // mode is 'dch30_4h' — same as the parent hybrid.
-const STRATEGY_LIVE_MODE = { donchianc: 'donchian', dch30_4hc: 'dch30_4h', dch30_4h6c: 'dch30_4h6', d30_4h_soc: 'dch30_4h', d30so6c: 'dch30_4h', d30so8c: 'dch30_4h' };
+const STRATEGY_LIVE_MODE = { donchianc: 'donchian', dch30_4hc: 'dch30_4h', dch30_4h6c: 'dch30_4h6', d30_4h_soc: 'dch30_4h', d30so6c: 'dch30_4h', d30so8c: 'dch30_4h', d1h_so4c: 'donchian', d1h_so6c: 'donchian', d1h_so8c: 'donchian' };
 // Backtest rows don't store the signal timeframe; tag it per strategy so the chart shifts
 // signal_time (bar OPEN) to the real fire/fill moment (bar CLOSE) by the CORRECT LTF.
 // donchian = 1h; the hybrids (dch30_4h / dch30_4h6 / d30_4h_so) fire on 30m bars + 4h confirm.
 // (Bug fix 2026-06-19: was hardcoded '1h' for all, so 30m streams' entry-fill scan started
 // 30 min late and missed the fill — the chart looked like "entry never came".)
-const STRATEGY_LTF = { donchianc: '1h', dch30_4hc: '30m', dch30_4h6c: '30m', d30_4h_soc: '30m', d30so6c: '30m', d30so8c: '30m' };
+const STRATEGY_LTF = { donchianc: '1h', dch30_4hc: '30m', dch30_4h6c: '30m', d30_4h_soc: '30m', d30so6c: '30m', d30so8c: '30m', d1h_so4c: '1h', d1h_so6c: '1h', d1h_so8c: '1h' };
 const STRATEGY_HTF = { donchian: null, dch30_4h: '4h', dch30_4h6: '4h', d30_4h_so: '4h' };
 // No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();
@@ -731,6 +733,11 @@ export const TradeProvider = ({ children }) => {
     setLiveStatuses({});
     liveStatusesRef.current = {};
 
+    // 'demo' is self-contained (precomputed static JSON in DemoView) — it drives neither the
+    // backtest nor the live fetch. The chart still opens (ChartModal reads strategy from context
+    // + pulls klines straight from Binance), so we keep strategy/mode set but skip all I/O here.
+    if (mode === 'demo') return () => {};
+
     if (mode === 'backtest') {
       // Insights restored-or-fetched inside loadBacktest (cache-aware); don't blank here.
       loadBacktest();
@@ -845,18 +852,19 @@ export const TradeProvider = ({ children }) => {
     // own TP, since RUNNER_CAP 4R == dch30_4h RR=4), or a breakeven close (runner back to entry).
     // The rare 3-day mark-to-market tail is resolved by the nightly sync — until then a still-riding
     // runner stays "+1R Alındı · Runner".
-    // Matches d30_4h_so AND the realistic ·0.5R twins (d30_4h_soc / d30so{N}c). The ·0.5R twins enter
-    // at the +0.5R confirmation level, so +1R / BE are measured from that realistic entry (risk =
-    // 1.5×raw); the runner cap sits at the STRUCTURAL +N*raw_risk from the breakout (== signal TP for
-    // 4R, higher for 6R/8R). Single source: both the live LIST and the chart read this status.
-    if (/^(d30_4h_so|d30so\d+)c?$/.test(strategyRef.current)) {
+    // Matches the 30m+4h scale-out (d30_4h_so / d30so{N}c) AND the 1h scale-out (d1h_so{N}c), incl.
+    // the realistic ·0.5R twins. The ·0.5R twins enter at the +0.5R confirmation level, so +1R / BE are
+    // measured from that realistic entry (risk = 1.5×raw); the runner cap sits at the STRUCTURAL
+    // +N*raw_risk from the breakout (== signal TP for 4R, higher for 6R/8R). Single source: both the
+    // live LIST and the chart read this status.
+    if (/^(d30_4h_so|d30so\d+|d1h_so\d+)c?$/.test(strategyRef.current)) {
       const conf = strategyRef.current.endsWith('c');                       // realistic +0.5R entry twin
       const rawRisk = Math.abs(sig.entry - sig.sl);
       const entryEff = conf ? (sig.dir === 'LONG' ? sig.entry + 0.5 * rawRisk : sig.entry - 0.5 * rawRisk) : sig.entry;
       const riskEff = Math.abs(entryEff - sig.sl);                          // 1.5×raw for the ·0.5R twin
       const r1 = sig.dir === 'LONG' ? entryEff + riskEff : entryEff - riskEff;   // +1R first target
-      const capM = strategyRef.current.match(/^d30so(\d+)/);
-      const capR = capM ? Number(capM[1]) : 4;                              // d30so6c→6, d30so8c→8, else 4
+      const capM = strategyRef.current.match(/so(\d+)c?$/);                 // d30so6c/d1h_so6c→6, d30so8c→8…
+      const capR = capM ? Number(capM[1]) : 4;                              // bare d30_4h_so(c) → 4
       const cap = sig.dir === 'LONG' ? sig.entry + capR * rawRisk : sig.entry - capR * rawRisk;
       let partial = false;
       let stop = sig.sl;

@@ -31,6 +31,11 @@
 .livex__table .dim { color: var(--muted); }
 .livex__table .pos { color: var(--win); }
 .livex__table .neg { color: var(--loss); }
+/* secondary line under a cell value: the $/R breakdown (booked TP1, profit-at-level) */
+.livex__sub { display: block; font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+.livex__sub.pos { color: var(--win); opacity: .85; }
+.livex__sub.neg { color: var(--loss); opacity: .85; }
+.livex__lock { color: var(--accent); }
 
 .dir { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; }
 .dir--long { background: rgba(14,203,129,.14); color: var(--win); }

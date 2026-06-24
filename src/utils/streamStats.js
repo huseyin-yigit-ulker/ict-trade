@@ -18,7 +18,21 @@ export const STREAMS = [
   // twins (donchian/dch30_4h/dch30_4h6/d30_4h_so) were removed from UI + DB — their entry was
   // unrealistic (you can't fill at the breakout close when the trade only confirms +0.5R later).
   // These enter at the +0.5R confirmation level; R is against the real (1.5×) risk (RR 4→2.33).
+  //
+  // ORDER = by timeframe family, each family's full-TP base first, then its scale-out caps:
+  //   1h family   : donchianc (full-TP) -> d1h_so4c / d1h_so6c / d1h_so8c (scale-out 4/6/8R)
+  //   30m+4h family: dch30_4hc / dch30_4h6c (full-TP) -> d30_4h_soc / d30so6c / d30so8c (scale-out)
+  // 2026-06-23: added the 1h scale-out family (d1h_so{4,6,8}c) — the 1h base entry (ER-gated, no
+  // 4h confirm) resolved under the same +1R-then-runner-cap exit as the 30m+4h scale-out trio.
+  // Names are deliberately explicit (d1h_so… vs d30so…) so the two families never collide.
+
+  // ── 1h family ──
   { key: 'donchianc',    version: 'donchianc',    exit: 'full', family: 'trend', tf: '1h ·0.5R',      realistic: true, label: 'DONCHIAN 1h ·0.5R' },
+  { key: 'd1h_so4c',     version: 'd1h_so4c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 4R ·0.5R' },
+  { key: 'd1h_so6c',     version: 'd1h_so6c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 6R ·0.5R' },
+  { key: 'd1h_so8c',     version: 'd1h_so8c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 8R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 8R ·0.5R' },
+
+  // ── 30m + 4h family ──
   { key: 'dch30_4hc',    version: 'dch30_4hc',    exit: 'full', family: 'trend', tf: '30m+4h ·0.5R',  realistic: true, label: 'DONCHIAN 30m+4h ·0.5R' },
   { key: 'dch30_4h6c',   version: 'dch30_4h6c',   exit: 'full', family: 'trend', tf: '30m+4h·6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h 6R ·0.5R' },
   { key: 'd30_4h_soc',   version: 'd30_4h_soc',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·0.5R' },

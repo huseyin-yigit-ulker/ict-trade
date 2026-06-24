@@ -116,6 +116,33 @@ export const STRATEGY_INFO = {
       caveat: 'Shipped backtest-first (live signals come from the dch30_4h emit, resolved as scale-out). Crypto+XAU universe (no stock-perps/XAG). Slippage not modelled → live R below backtest.',
     },
   },
+  d1h_so: {
+    icon: '⛰️', accent: '#2ECC71',
+    tr: {
+      title: 'DONCHIAN 1h · WR', tagline: '1h kırılım + kademeli çıkış (4R/6R/8R) + breakeven runner',
+      summary: 'Donchian 1h base sürümüyle (donchian ·0.5R) BİREBİR AYNI giriş — saf 1h Donchian(55) kırılımı, kendi-TF ER≥0.35 kapısı, 4h onayı YOK — ama full-TP yerine yüksek-WR kademeli çıkış modeliyle çözülür. 30m+4h scale-out ailesinin (d30so) 1h kardeşi: aynı mekanik, farklı zaman dilimi. Win-rate’i ilk hedef belirler; runner sadece R ekler.',
+      sections: [
+        { h: 'Giriş (1h, 4h onayı yok)', t: '1h kapanış 55-bar ekstremini kırar (LONG/SHORT), ER(24)≥0.35 güçlü-trend kapısı. 30m+4h ailesinden farkı: orada 4h yön onayı vardı; burada 1h kendi ER kapısını kullanır (donchian base ile aynı entry). Gerçekçi giriş: +0.5R onay seviyesinden doldurulur (risk = 1.5×ham).' },
+        { h: 'Kademeli çıkış', t: 'Pozisyonun %60’ı +1R’de kapanır (WR’yi bu belirler, ~%53). Kalan %40 RUNNER: stop breakeven’a çekilir; runner şunlardan İLK olanında kapanır — +cap R (4/6/8), breakeven (girişe dönüş, 0R), veya 3-günlük zaman-çıkışı (mark-to-market).' },
+        { h: 'Cap seçenekleri (4R / 6R / 8R)', t: 'Tek fark runner cap’i — üç sürüm AYNI 1h sinyali + AYNI +0.5R fill’i paylaşır, sadece runner tavanı değişir. Cap büyüdükçe toplam R artar, WR sabit kalır (%53). İsimler kasıtlı olarak açık: d1h_so4c / d1h_so6c / d1h_so8c — 30m+4h ailesinin d30so* etiketleriyle asla karışmaz.' },
+        { h: 'Sonuçlar (OOS, +0.5R gerçekçi giriş, 3 yıl)', t: '19 kripto + XAU, tam 1m veriyle çözüldü, WR ~%53. 4R: 2024 −9.2R · 2025 +90.5R · 2026 +43.4R (top +124.4R). 6R: +12.7 / +106.4 / +29.9 (top +149.0R). 8R: +19.5 / +101.4 / +34.3 (top +155.1R). 6R ve 8R üç yılda da pozitif; 4R yalnız 2024’te hafif negatif (30m ailesindeki desenle aynı). Backtest-only.' },
+        { h: 'Çıkış & risk', t: 'Stop = ATR(14)×2 (−1R, ham). İlk hedef +1R’de %60; runner: +cap R / breakeven / 3g zaman-çıkışı. %0.1 round-trip ücret. Aynı edge’in düşük-R/yüksek-WR ucu — 1h full-TP (donchian) ise düşük-WR/büyük-kazanan ucu.' },
+      ],
+      caveat: 'Backtest-only (canlı scanner yok; istenirse 1h donchian canlı sinyallerinden scale-out olarak çözülebilir). 30m+4h scale-out’a göre daha az ama daha uzun-soluklu sinyal (1h bar). Crypto+XAU evreni. Slippage modellenmiyor → canlı R backtest’in altında olur.',
+    },
+    en: {
+      title: 'DONCHIAN 1h · WR', tagline: '1h breakout + scale-out (4R/6R/8R) + breakeven runner',
+      summary: 'Identical entry to the Donchian 1h base (donchian ·0.5R) — plain 1h Donchian(55) breakout, own-TF ER≥0.35 gate, NO 4h confirm — but resolved under the high-WR scale-out exit instead of full-TP. The 1h sibling of the 30m+4h scale-out family (d30so): same mechanic, different timeframe. The first target sets the win rate; the runner only adds R.',
+      sections: [
+        { h: 'Entry (1h, no 4h confirm)', t: '1h close breaks the 55-bar extreme (LONG/SHORT), ER(24)≥0.35 strong-trend gate. Unlike the 30m+4h family (which adds a 4h-direction confirm), the 1h stream uses its own ER gate (same entry as the donchian base). Realistic entry: filled from the +0.5R confirmation level (risk = 1.5×raw).' },
+        { h: 'Scale-out', t: '60% of the position closes at +1R (sets the WR, ~53%). The remaining 40% is the RUNNER: stop moves to breakeven, then it exits at the FIRST of — a +cap R (4/6/8) take-profit, breakeven (0R, back to entry), or a 3-day time-exit (mark-to-market).' },
+        { h: 'Cap options (4R / 6R / 8R)', t: 'The only difference is the runner cap — the three versions share the SAME 1h signals + SAME +0.5R fill; only the runner ceiling changes. A higher cap lifts total R while WR stays fixed (53%). Names are deliberately explicit: d1h_so4c / d1h_so6c / d1h_so8c — never colliding with the 30m+4h family’s d30so* tags.' },
+        { h: 'Results (OOS, +0.5R realistic entry, 3 years)', t: '19 crypto + XAU, resolved on full 1m data, WR ~53%. 4R: 2024 −9.2R · 2025 +90.5R · 2026 +43.4R (total +124.4R). 6R: +12.7 / +106.4 / +29.9 (total +149.0R). 8R: +19.5 / +101.4 / +34.3 (total +155.1R). 6R and 8R are positive all three years; only 4R dips slightly in 2024 (same pattern as the 30m family). Backtest-only.' },
+        { h: 'Exit & risk', t: 'Stop = ATR(14)×2 (−1R, raw). First target 60% at +1R; runner: +cap R / breakeven / 3-day time exit. 0.1% round-trip fee. The low-R/high-WR end of the same edge — the 1h full-TP (donchian) is its low-WR/big-winner end.' },
+      ],
+      caveat: 'Backtest-only (no live scanner; could be resolved as scale-out off the 1h donchian live signals if wanted). Fewer but longer-horizon signals than the 30m+4h scale-out (1h bars). Crypto+XAU universe. Slippage not modelled → live R below backtest.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {
@@ -124,6 +151,7 @@ export const infoFor = (strategy, lang) => {
   const realistic = strategy.endsWith('c') && !STRATEGY_INFO[strategy];
   let key = realistic ? strategy.slice(0, -1) : strategy;
   if (/^d30so\d+$/.test(key)) key = 'd30_4h_so';     // 6R/… scale-out cap variant -> base scale-out card
+  if (/^d1h_so\d+$/.test(key)) key = 'd1h_so';       // 1h scale-out 4/6/8R cap variant -> 1h scale-out card
   const e = STRATEGY_INFO[key];
   if (!e) return null;
   const base = { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };

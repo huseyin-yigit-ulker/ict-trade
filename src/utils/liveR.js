@@ -7,12 +7,13 @@
 // level, so a +N*raw_risk cap from the breakout is +(N-0.5)/1.5 R of the realistic (1.5×) risk.
 // fee = 0.1% round-trip on full notional, expressed in R.
 
-// All scale-out versions (the live d30_4h_so + its realistic twins d30_4h_soc / d30so6c / d30so8c …).
-export const isScaleOutStrategy = (s) => /^(d30_4h_so|d30so\d+)c?$/.test(s || '');
+// All scale-out versions: the 30m+4h family (live d30_4h_so + realistic twins d30_4h_soc /
+// d30so6c / d30so8c) AND the 1h family (d1h_so4c / d1h_so6c / d1h_so8c — backtest-only).
+export const isScaleOutStrategy = (s) => /^(d30_4h_so|d30so\d+|d1h_so\d+)c?$/.test(s || '');
 
-// Runner cap in R from the version tag: d30so6c → 6, d30so8c → 8, else 4.
+// Runner cap in R from the version tag: d30so6c / d1h_so6c → 6, d30so8c → 8, bare d30_4h_so → 4.
 export const soCapFromStrategy = (s) => {
-  const m = (s || '').match(/^d30so(\d+)/);
+  const m = (s || '').match(/so(\d+)c?$/);
   return m ? Number(m[1]) : 4;
 };
 

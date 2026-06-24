@@ -49,10 +49,11 @@ const ChartModal = () => {
   // then exits at its +4R cap (== the signal's own TP), breakeven, or a 3-day time exit. The chart
   // surfaces the +1R partial level, the +4R runner cap, the breakeven runner segment, and how much
   // of the position is still open.
-  const isScaleOut = !!strategy && (strategy.startsWith('d30_4h_so') || strategy.startsWith('d30so'));
-  // Runner cap in R, by version: d30_4h_so(c) = 4R, d30so6c = 6R, d30so8c = 8R, ...
+  // 30m+4h scale-out (d30_4h_so / d30so{N}c) AND 1h scale-out (d1h_so{N}c) — same exit geometry.
+  const isScaleOut = !!strategy && (strategy.startsWith('d30_4h_so') || strategy.startsWith('d30so') || strategy.startsWith('d1h_so'));
+  // Runner cap in R, by version: d30_4h_so(c)/4R, d30so6c/d1h_so6c = 6R, d30so8c/d1h_so8c = 8R, ...
   const soCapR = (() => {
-    const m = strategy && strategy.match(/^d30so(\d+)/);
+    const m = strategy && strategy.match(/so(\d+)c?$/);
     return m ? Number(m[1]) : 4;
   })();
   // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
@@ -687,7 +688,7 @@ const ChartModal = () => {
           if (partialLevel != null && !isCancelled) {
             const partialPct = entry ? ((partialLevel - entry) / entry) * 100 : null;
             const partialTitle = isScaleOut ? 'TP1 +1R · %60' : '½TP %50';
-            mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' ' + (partialPct >= 0 ? '+' : '') + partialPct.toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' +' + Math.abs(partialPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           }
           if (sl && !isCancelled) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Adverse-0.5R confirmation level (SL side): the directional gate (ENTRY_CONFIRM_BUF=0.5)
@@ -1044,7 +1045,7 @@ const ChartModal = () => {
             <div className="position-row">
                <span>TP1 (+1R · %60)</span>
                <b><span style={{color:'#0ECB81'}}>{formatPrice(so1R)}</span>
-                 {so1Rpct != null && <span style={{color:'#848E9C', fontWeight:400}}> · {so1Rpct >= 0 ? '+' : ''}{so1Rpct.toFixed(2)}%</span>}
+                 {so1Rpct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{Math.abs(so1Rpct).toFixed(2)}%</span>}
                </b>
             </div>
             <div className="position-row">
@@ -1071,7 +1072,7 @@ const ChartModal = () => {
               <div className="position-row">
                 <span>½TP ({t('Kısmi')})</span>
                 <b><span style={{color:'#F5B942'}}>{formatPrice(halfLevelP)}</span>
-                  {halfPctP != null && <span style={{color:'#848E9C', fontWeight:400}}> · {halfPctP >= 0 ? '+' : ''}{halfPctP.toFixed(2)}%</span>}
+                  {halfPctP != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{Math.abs(halfPctP).toFixed(2)}%</span>}
                 </b>
               </div>
             );
@@ -1079,7 +1080,7 @@ const ChartModal = () => {
           <div className="position-row">
              <span>{t('Stop')}</span>
              <b><span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span>
-               {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · {riskPct.toFixed(2)}%</span>}
+               {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · -{Math.abs(riskPct).toFixed(2)}%</span>}
              </b>
           </div>
           {rr != null && !isScaleOut && (

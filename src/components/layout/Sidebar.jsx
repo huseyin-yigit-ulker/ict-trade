@@ -93,10 +93,16 @@ const GROUPS = [
   // sessions; RANGE = RANGE_DEV every session; OPUS = MAIN gated to each symbol's NY session.
   // 2026-06-20: ONLY the realistic-entry (·0.5R) versions. The optimistic entry@close twins were
   // removed (UI + DB) — unrealistic entry. These enter at the +0.5R confirm level (RR 4->2.33).
-  { key: 'donchianc',    label: 'DONCHIAN ·0.5R',       icon: <IconIntel />,   modes: ['live', 'backtest'] },
-  { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',icon: <IconIntel />,   modes: ['live', 'backtest'] },
-  { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  // The scale-out streams (4R/6R/8R) also carry a 'demo' mode = the demo-faithful portfolio backtest.
+  // Order = by timeframe family; within each, the full-TP base first, then its scale-out caps (4/6/8R).
+  // ── 1h family ── (base 1h donchian + its scale-out trio; scale-out is backtest-only)
+  { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'd1h_so4c',     label: 'DONCHIAN 1h·WR 4R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd1h_so6c',     label: 'DONCHIAN 1h·WR 6R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd1h_so8c',     label: 'DONCHIAN 1h·WR 8R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
+  // ── 30m + 4h family ──
+  { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',      icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R',   icon: <IconIntel />, modes: ['live', 'backtest'] },
+  // The 30m+4h scale-out streams (4R/6R/8R) also carry a 'demo' mode = the demo-faithful portfolio backtest.
   { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
   { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
   { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },

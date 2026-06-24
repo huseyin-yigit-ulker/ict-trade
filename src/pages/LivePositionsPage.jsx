@@ -3,7 +3,7 @@ import { useLang } from '../context/LanguageContext';
 import './LivePositionsPage.css';
 
 // Reads the live-execution layer (sync/live_exec) straight from the LIVE Supabase via PostgREST:
-//   ict_trade.live_positions        — the managed d30so8c positions (state machine + plan levels)
+//   ict_trade.live_positions        — the managed scale-out positions (d30so{CAP_R}c; state machine + plan levels)
 //   ict_trade.live_account_snapshot — the REAL Binance state per symbol (mark / uPnL), refreshed
 //                                     by the executor every ~2 min
 //   ict_trade.live_account          — wallet / available / total uPnL, one row per network
@@ -13,6 +13,8 @@ const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 const OPEN_STATES = ['PENDING_ENTRY', 'ENTRY_WORKING', 'OPEN_FULL', 'RUNNER', 'CLOSING'];
 const REFRESH_MS = 30000;
+// Live runner cap (R) — mirrors .env DCH_SO_RUNNER_CAP. Flip both together to switch 6R↔8R.
+const CAP_R = 6;
 
 const STATE_BADGE = {
   PENDING_ENTRY: { label: 'GİRİŞ BEKLİYOR', cls: 'st-wait' },
@@ -24,7 +26,7 @@ const STATE_BADGE = {
   CANCELLED: { label: 'İPTAL', cls: 'st-cancel' },
 };
 const EXIT_LABEL = {
-  sl: 'SL −1R', tp1_be: 'TP1+BE', breakeven: 'Breakeven', cap: 'CAP +8R',
+  sl: 'SL −1R', tp1_be: 'TP1+BE', breakeven: 'Breakeven', cap: `CAP +${CAP_R}R`,
   time_stop: '3g Zaman', entry_expired: 'Giriş Dolmadı', reversed: 'Ters Döndü', killswitch: 'Killswitch',
 };
 
@@ -49,7 +51,14 @@ const fmtPx = (v) => {
     : n.toLocaleString('en-US', { maximumFractionDigits: n >= 1 ? 4 : 6 });
 };
 const fmtUsd = (v) => (v == null ? '—' : `$${Number(v).toFixed(2)}`);
+const fmtUsdSigned = (v) => (v == null ? '—' : `${Number(v) >= 0 ? '+' : '−'}$${Math.abs(Number(v)).toFixed(2)}`);
 const fmtR = (v) => (v == null ? '—' : `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`);
+
+// Scale-out plan (d30so{CAP_R}c): book CLOSE_FRAC at +FIRST_R (locks a floor), runner rides to +CAP_R.
+// ·0.5R confirmed entry => R is measured against risk_eff = (1+buf)*risk0 (executor's denom),
+// so the structural +CAP_R from the breakout is +(CAP_R-buf)/(1+buf) R of the realistic risk.
+const SO = { closeFrac: 0.6, firstR: 1.0, confirmBuf: 0.5, capR: CAP_R };
+const CAP_R_TOTAL = SO.closeFrac * SO.firstR + (1 - SO.closeFrac) * ((SO.capR - SO.confirmBuf) / (1 + SO.confirmBuf));
 
 function ago(iso, t) {
   if (!iso) return '—';
@@ -112,11 +121,31 @@ export default function LivePositionsPage() {
   const net = account?.network || 'testnet';
   const stale = account && (Date.now() - new Date(account.updated_at).getTime() > 5 * 60 * 1000);
 
-  const liveR = (p) => {
+  // Per-trade live R/USD breakdown, matching the executor's R convention (realized_r =
+  // realized_usd / (risk_eff × qty), risk_eff = |eff_entry − sl|). For a RUNNER (post-TP1) the
+  // live snapshot uPnL is ONLY the open runner leg, so the +1R-booked floor (close_frac×first_r,
+  // already realized into the wallet) is added back here to show the TOTAL trade R, not just the
+  // runner's. Also derives the $ value at each profit-taking level (TP1 / cap) for the columns.
+  const liveCalc = (p) => {
+    const sl = Number(p.signal_sl);
+    const qty = Number(p.qty) || 0;
+    const risk0 = Math.abs(Number(p.signal_entry) - sl);
+    // effective per-unit risk: from the real fill once known, else the intended (1+buf)*risk0
+    const riskEff = p.eff_entry != null ? Math.abs(Number(p.eff_entry) - sl) : (1 + SO.confirmBuf) * risk0;
+    const oneRusd = riskEff * qty;                                  // 1R in $ (executor denom)
+    if (!oneRusd) return null;
+    const isRunner = p.state === 'RUNNER';
+    const bookedR = isRunner ? SO.closeFrac * SO.firstR : 0;        // locked TP1 floor (+0.6R)
+    const bookedUsd = bookedR * oneRusd;
     const s = snaps[p.symbol];
-    if (!s || s.unrealized_pnl == null || !p.risk0 || !p.qty) return null;
-    const riskUsd = Number(p.risk0) * Number(p.qty);
-    return riskUsd ? Number(s.unrealized_pnl) / riskUsd : null;
+    const runnerUsd = s && s.unrealized_pnl != null ? Number(s.unrealized_pnl) : null;  // open-leg MTM
+    const totalUsd = runnerUsd == null ? null : bookedUsd + runnerUsd;
+    const totalR = totalUsd == null ? (isRunner ? bookedR : null) : totalUsd / oneRusd;
+    return {
+      oneRusd, isRunner, bookedR, bookedUsd, runnerUsd, totalUsd, totalR,
+      tp1Usd: SO.closeFrac * SO.firstR * oneRusd,                   // $ booked when 60% closes at +1R
+      capUsd: CAP_R_TOTAL * oneRusd,                                // total $ if the runner reaches +cap
+    };
   };
 
   return (
@@ -124,7 +153,7 @@ export default function LivePositionsPage() {
       <div className="livex__head">
         <h1>{t('Binance Canlı')}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
-        <span className="livex__badge">d30so8c · 8R ·0.5R</span>
+        <span className="livex__badge">{`d30so${CAP_R}c · ${CAP_R}R ·0.5R`}</span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(account?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>
@@ -155,8 +184,8 @@ export default function LivePositionsPage() {
             <thead>
               <tr>
                 <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Durum')}</th>
-                <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>SL</th><th>TP1</th><th>{t('Cap +8R')}</th>
-                <th>{t('Miktar')}</th><th>{t('Canlı uPnL')}</th><th>R</th><th>{t('Geri Sayım')}</th>
+                <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>SL</th><th>TP1</th><th>{`Cap +${CAP_R}R`}</th>
+                <th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>{t('Geri Sayım')}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,7 +195,7 @@ export default function LivePositionsPage() {
                 const sb = STATE_BADGE[p.state] || { label: p.state, cls: 'st-wait' };
                 const pre = p.state === 'PENDING_ENTRY' || p.state === 'ENTRY_WORKING';
                 const cd = countdown(pre ? p.entry_deadline : p.time_stop_at, t);
-                const r = liveR(p);
+                const lc = liveCalc(p);
                 return (
                   <tr key={p.id}>
                     <td className="mono">{p.symbol}</td>
@@ -175,11 +204,27 @@ export default function LivePositionsPage() {
                     <td className="mono">{fmtPx(p.eff_entry || p.signal_entry)}</td>
                     <td className="mono">{fmtPx(s?.mark_price)}</td>
                     <td className="mono dim">{fmtPx(p.signal_sl)}</td>
-                    <td className="mono dim">{fmtPx(p.eff_tp1)}</td>
-                    <td className="mono dim">{fmtPx(p.signal_cap)}</td>
+                    <td className="mono dim">
+                      {fmtPx(p.eff_tp1)}
+                      {lc && <span className="livex__sub pos">{fmtUsdSigned(lc.tp1Usd)} {t('al')}</span>}
+                    </td>
+                    <td className="mono dim">
+                      {fmtPx(p.signal_cap)}
+                      {lc && <span className="livex__sub pos">{fmtUsdSigned(lc.capUsd)} {t('toplam')}</span>}
+                    </td>
                     <td className="mono">{p.qty ?? '—'}</td>
-                    <td className={`mono ${Number(s?.unrealized_pnl) >= 0 ? 'pos' : 'neg'}`}>{fmtUsd(s?.unrealized_pnl)}</td>
-                    <td className={`mono ${r >= 0 ? 'pos' : 'neg'}`}>{fmtR(r)}</td>
+                    <td className={`mono ${Number(lc?.totalUsd) >= 0 ? 'pos' : 'neg'}`}>
+                      {fmtUsd(lc?.totalUsd)}
+                      {lc?.isRunner && (
+                        <span className="livex__sub livex__lock">🔒 {fmtUsdSigned(lc.bookedUsd)} {t('alındı')}</span>
+                      )}
+                    </td>
+                    <td className={`mono ${Number(lc?.totalR) >= 0 ? 'pos' : 'neg'}`}>
+                      {fmtR(lc?.totalR)}
+                      {lc?.isRunner && (
+                        <span className="livex__sub livex__lock">🔒 {fmtR(lc.bookedR)} {t('kilitli')}</span>
+                      )}
+                    </td>
                     <td className="mono dim">{cd || '—'}</td>
                   </tr>
                 );

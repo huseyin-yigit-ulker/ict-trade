@@ -260,7 +260,26 @@ const Dashboard = () => {
 
   const formatLivePrice = (value) => formatPrice(value);
 
-  const getLiveRLabel = (sig, status) => {
+  // Live INSTANTANEOUS R for a scale-out trade that has booked TP1 and is riding the runner:
+  // the +0.6R secured floor PLUS the runner's current unrealised contribution (40% of its gain in
+  // R, clamped to [0, cap] — stop is at breakeven, ceiling at the +cap). lastPrice is the latest
+  // live mark; without it (or pre-TP1) we fall back to the secured floor. R is in the same risk_eff
+  // convention as scaleOutLiveR (the +1R first target and the cap are of the effective/·0.5R risk).
+  const liveRunnerR = (sig, lastPrice) => {
+    const floor = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative);  // 0.6 − fee
+    if (!isSO || !Number.isFinite(lastPrice) || !sig?.entry || !sig?.sl) return floor;
+    const risk0 = Math.abs(sig.entry - sig.sl);
+    if (!risk0) return floor;
+    const buf = soConservative ? 0.5 : 0;
+    const effEntry = sig.dir === 'LONG' ? sig.entry + buf * risk0 : sig.entry - buf * risk0;
+    const riskEff = (1 + buf) * risk0;
+    const capRunnerR = soConservative ? (soCapR - 0.5) / 1.5 : soCapR;               // runner cap, in R
+    const cur = (sig.dir === 'LONG' ? lastPrice - effEntry : effEntry - lastPrice) / riskEff;
+    const runnerNow = Math.min(capRunnerR, Math.max(0, cur));                         // BE floor ↔ cap ceiling
+    return floor + 0.4 * runnerNow;                                                   // 0.6 + 0.4×runner − fee
+  };
+
+  const getLiveRLabel = (sig, status, lastPrice = null) => {
     if (!status) return { label: '--', cls: 'waiting' };
     if (status === 'TP Oldu' || status === 'BE Oldu') {
       const r = liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative);
@@ -276,9 +295,13 @@ const Dashboard = () => {
       return { label: `≥+${banked.toFixed(2)}R`, cls: 'win' };
     }
     if (status === 'İşlem Aktif (+1R Alındı · Runner)') {
-      // scale-out: 60% booked at +1R, runner risk-free at BE — show the secured floor (runner may add more).
-      const banked = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative);
-      return { label: `≥+${banked.toFixed(2)}R`, cls: 'win' };
+      // scale-out TP1 booked: show the LIVE total R (floor +0.6R + the runner's current gain). When
+      // the runner hasn't moved past breakeven yet, fall back to the secured floor with a ≥.
+      const floor = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative);
+      const r = liveRunnerR(sig, lastPrice);
+      return r > floor + 1e-9
+        ? { label: `+${r.toFixed(2)}R`, cls: 'win' }
+        : { label: `≥+${floor.toFixed(2)}R`, cls: 'win' };
     }
     if (status.startsWith('İptal')) return { label: '0', cls: 'waiting' };
     return { label: '--', cls: 'waiting' };
@@ -302,6 +325,25 @@ const Dashboard = () => {
       }
     });
     return { tp, sl, rScore };
+  };
+
+  // Scale-out only: aggregate the trades that REACHED TP1 (booked 60% at +1R) — every active
+  // runner plus the terminal TP/BE closes; an SL before +1R is excluded. Returns the count and
+  // the summed live R (instantaneous floor+runner for actives, realised R for terminals).
+  const summarizeTp1 = (list) => {
+    let count = 0;
+    let sumR = 0;
+    list.forEach((sig) => {
+      const st = liveStatuses[sig.id]?.status;
+      if (st === 'İşlem Aktif (+1R Alındı · Runner)') {
+        count += 1;
+        sumR += liveRunnerR(sig, liveStatuses[sig.id]?.lastPrice);
+      } else if (st === 'TP Oldu' || st === 'BE Oldu') {
+        count += 1;
+        sumR += liveOutcomeR(sig, st, halfFor(sig), isSO, soCapR, soConservative);
+      }
+    });
+    return { count, sumR };
   };
 
   const summarizeBacktestCounts = (list) => {
@@ -491,6 +533,7 @@ const Dashboard = () => {
   // healthy +428R book; the rising Toplam-R spark carries the real story.
   const renderKpiHero = () => {
     let winRate, totalR, pf, exp, totalTrades, closedTrades, cum, hist;
+    let tp1Agg = null;   // scale-out live: { count, sumR } of TP1-reached trades (set in the live branch)
     if (mode === 'backtest') {
       // Derive everything from the SAME filtered, in-view set as the spark/histogram,
       // so headline + curve + bins stay consistent and react to symbol/date filters.
@@ -511,6 +554,7 @@ const Dashboard = () => {
     } else {
       if (!filteredSignals.length) return null;
       const c = summarizeLiveCounts(filteredSignals);
+      if (isSO) tp1Agg = summarizeTp1(filteredSignals);   // TP1-reached count + summed live R
       const denom = c.tp + c.sl;
       winRate = denom ? (c.tp / denom) * 100 : 0;
       totalR = c.rScore;
@@ -565,6 +609,15 @@ const Dashboard = () => {
           <div className="kpi-cell__value">{totalTrades}</div>
           <div className="kpi-cell__sub">{mode === 'backtest' ? t('sinyal') : t('canlı')}</div>
         </div>
+        {tp1Agg && (
+          <div className="kpi-cell">
+            <div className="kpi-cell__label">{t('TP1 Gelen')}</div>
+            <div className="kpi-cell__value">{tp1Agg.count}</div>
+            <div className={`kpi-cell__sub ${tp1Agg.sumR >= 0 ? 'win' : 'loss'}`}>
+              {t('toplam')} {tp1Agg.sumR >= 0 ? '+' : ''}{tp1Agg.sumR.toFixed(2)}R
+            </div>
+          </div>
+        )}
         <div className="kpi-cell kpi-cell--hist">
           <div className="kpi-cell__label">{t('R Dağılımı')}</div>
           <div className="r-hist">
@@ -695,8 +748,8 @@ const Dashboard = () => {
                       </span>
                     </span>
                   ) : (
-                    <span className={`pnl-text ${getLiveRLabel(sig, liveStatus).cls}`}>
-                      {getLiveRLabel(sig, liveStatus).label}
+                    <span className={`pnl-text ${getLiveRLabel(sig, liveStatus, liveLastPrice).cls}`}>
+                      {getLiveRLabel(sig, liveStatus, liveLastPrice).label}
                     </span>
                   )
                 ) : (

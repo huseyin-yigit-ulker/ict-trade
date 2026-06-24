@@ -172,6 +172,41 @@ def _market(client, conn, pos, qty, *, leg, reduce_only=True) -> dict | None:
     return resp
 
 
+# ---- exchange-side protective stop (MAINNET only) -----------------------------------------------
+# Testnet rejects every conditional order (-4120), so resting brackets are MAINNET-only; testnet keeps
+# the synthetic reconciler exactly as before. On mainnet we lay a REAL STOP_MARKET(closePosition) at
+# the SL (and, after TP1, at breakeven) so the −1R / breakeven cap is enforced by Binance the instant
+# price hits it — no 2-min reconcile lag, and it survives the cron/VM dying (the whole reason this
+# matters at high leverage). It runs ALONGSIDE the synthetic exit: whichever fires first wins; the
+# loser is a no-op (closePosition on a flat position) and gets cancelled at finalize. Best-effort —
+# a placement failure never breaks the reconcile (safety_sweep is the backstop for a missing stop).
+def _place_protective_stop(cfg, client, conn, xi: ExchangeInfo, pos: dict, stop_px: float, *, leg: str) -> None:
+    if cfg.testnet:
+        return
+    sym = pos["symbol"]
+    coid = st.coid(pos["id"], leg)
+    try:
+        resp = client.new_order(
+            symbol=sym, side=_exit_side(pos["direction"]), type="STOP_MARKET",
+            closePosition="true", stopPrice=xi.round_price(sym, stop_px, mode="nearest"),
+            workingType="MARK_PRICE", newClientOrderId=coid)
+        st.log_order(conn, position_id=pos["id"], symbol=sym, leg=leg, action="place",
+                     client_order_id=coid, order_id=resp.get("orderId"), payload=resp)
+    except BinanceError as e:
+        print(f"  ! {sym} protective {leg} place failed: {e} (safety_sweep will backstop)")
+
+
+def _cancel_resting(cfg, client, sym: str) -> None:
+    """Drop any resting protective order on the symbol (MAINNET) — called on every exit/transition so
+    a filled/MARKET-closed leg never leaves a dangling closePosition order on the book."""
+    if cfg.testnet:
+        return
+    try:
+        client.cancel_all_open_orders(sym)
+    except BinanceError:
+        pass
+
+
 def _avg_fill(client, sym, resp) -> float:
     """avgPrice from the order response, else look it up (MARKET resp can omit it pre-fill)."""
     a = float(resp.get("avgPrice") or 0)
@@ -222,6 +257,7 @@ def _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now) -> None:
     """Binance is flat but DB still shows the position open — finalize from exchange truth
     (realizedPnl since entry), so the reconciler stops looping and the record is accurate."""
     sym = pos["symbol"]
+    _cancel_resting(cfg, client, sym)               # drop any dangling protective stop on the book
     realized_usd = _realized_since(client, sym, pos.get("entry_fill_time"))
     risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
     denom = risk_eff * float(pos.get("qty") or 0)
@@ -247,6 +283,7 @@ def _reverse_close(cfg, client, conn, bt_conn, pos, now) -> None:
     amt = _position_amt(client, sym)
     if amt:
         _market(client, conn, pos, abs(amt), leg="reverse")
+    _cancel_resting(cfg, client, sym)
     realized_usd = _realized_since(client, sym, pos.get("entry_fill_time"))
     risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
     denom = risk_eff * float(pos.get("qty") or 0)
@@ -322,6 +359,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
         st.patch(conn, pos["id"], state=st.OPEN_FULL, entry_fill_time=now, entry_fill_px=avg,
                  eff_entry=avg, eff_tp1=rl.tp1, eff_be=rl.be, entry_coid=st.coid(pos["id"], "entry"),
                  entry_order_id=resp.get("orderId"), time_stop_at=now + pd.Timedelta(days=cfg.horizon_days))
+        _place_protective_stop(cfg, client, conn, xi, pos, rl.sl, leg="sl_rest")   # mainnet: real −1R stop on the book
         notify.alert(f"✅ <b>{sym}</b> {pos['direction']} entry @ {avg:g} (qty {pos['qty']}) — "
                      f"SL {rl.sl:g} TP1 {rl.tp1:g} cap {rl.cap:g} — {st.VERSION}", chat_id=cfg.telegram_chat_id)
         return
@@ -332,11 +370,13 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
         hit, _ts, _px = _scan(df1m, pos["entry_fill_time"], pos["direction"], rl.sl, rl.tp1)
         if hit == "protect":                                    # −1R full stop
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="sl")
+            _cancel_resting(cfg, client, sym)
             _close(conn, bt_conn, pos, reason="sl", exit_px=rl.sl, realized_r=-1.0 - _fee_r(cfg, pos))
             notify.alert(f"🛑 <b>{sym}</b> stopped −1R — {st.VERSION}", chat_id=cfg.telegram_chat_id)
             return
         if hit == "target":                                     # +1R -> book 60%, ride runner
             _market(client, conn, pos, pos["tp1_qty"], leg="tp1")
+            _cancel_resting(cfg, client, sym)                   # full-position −1R stop no longer valid (40% left)
             runner_qty = xi.floor_qty(sym, abs(_position_amt(client, sym)))
             if runner_qty <= 0:
                 _close(conn, bt_conn, pos, reason="tp1_be", exit_px=rl.tp1,
@@ -344,6 +384,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
                 return
             st.patch(conn, pos["id"], state=st.RUNNER, runner_qty=runner_qty,
                      tp1_fill_time=now, tp1_fill_px=rl.tp1)
+            _place_protective_stop(cfg, client, conn, xi, pos, rl.be, leg="be_rest")   # runner protected at breakeven
             notify.alert(f"🎯 <b>{sym}</b> TP1 +1R, booked {int(cfg.close_frac*100)}% "
                          f"({pos['tp1_qty']}) — runner {runner_qty} to +{cfg.runner_cap_r:g}R/BE",
                          chat_id=cfg.telegram_chat_id)
@@ -357,6 +398,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
         hit, _ts, _px = _scan(df1m, pos["tp1_fill_time"], pos["direction"], be, cap)
         if hit == "protect":                                    # back to breakeven -> runner 0R
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="be")
+            _cancel_resting(cfg, client, sym)
             _close(conn, bt_conn, pos, reason="breakeven", exit_px=be,
                    realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
             notify.alert(f"🏁 <b>{sym}</b> runner breakeven (+{cfg.close_frac*cfg.first_r:.1f}R) — {st.VERSION}",
@@ -364,6 +406,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
             return
         if hit == "target":                                     # runner ran to +cap
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="cap")
+            _cancel_resting(cfg, client, sym)
             r = cfg.close_frac * cfg.first_r + (1 - cfg.close_frac) * cfg.runner_cap_r - _fee_r(cfg, pos)
             _close(conn, bt_conn, pos, reason="cap", exit_px=cap, realized_r=r)
             notify.alert(f"🏁 <b>{sym}</b> runner CAP +{cfg.runner_cap_r:g}R ({r:+.2f}R) — {st.VERSION}",
@@ -391,6 +434,7 @@ def _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now: pd.Timestamp) ->
     amt = _position_amt(client, sym)
     if amt:
         _market(client, conn, pos, abs(amt), leg="time")
+    _cancel_resting(cfg, client, sym)
     last = _last_price(sym, now)
     risk = abs(float(pos["eff_entry"] or pos["signal_entry"]) - float(pos["signal_sl"]))
     sign = 1 if str(pos["direction"]).lower() == "long" else -1
