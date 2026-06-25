@@ -31,7 +31,7 @@ const PASS_PBKDF2 = import.meta.env.VITE_LOGIN_PBKDF2 || null;
 const USER_SHA = import.meta.env.VITE_LOGIN_USER_SHA256
   || 'd4822ddc3221d33dc53dab8616f2bd4d6039786ce432123a99a7571c50162b6c';
 const PASS_SHA = import.meta.env.VITE_LOGIN_PASS_SHA256
-  || '2c952f0aa8976a7baa29154936aec55d7f25b14c827622d6e5aebdf8877d5f06';
+  || '5e31e4ceb5a3c2ff647ec9e32fc8ec935d158da4d19ffd1f56be669ff47a9c26';   // sha256('pusu2001')
 
 export const usingDefaultCreds = !(
   USER_PLAIN || PASS_PLAIN || PASS_PBKDF2
