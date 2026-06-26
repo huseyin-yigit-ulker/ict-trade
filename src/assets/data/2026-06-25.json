@@ -1,0 +1,136 @@
+{
+    "ict_signal": [
+        {
+            "id": 3330,
+            "symbol": "AMATUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-06-25T16:00:00+00:00",
+            "entry_price": 648.77,
+            "sl_price": 627.4240532627036,
+            "tp_price": 734.1537869491852,
+            "created_at": "2026-06-25T17:00:34.636016+00:00",
+            "status": "OPEN",
+            "signal_price": 648.77
+        },
+        {
+            "id": 3326,
+            "symbol": "MSFTUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T16:00:00+00:00",
+            "entry_price": 352.83,
+            "sl_price": 356.85440386561606,
+            "tp_price": 328.6835768063036,
+            "created_at": "2026-06-25T16:30:31.430355+00:00",
+            "status": "OPEN",
+            "signal_price": 352.83
+        },
+        {
+            "id": 3325,
+            "symbol": "MSFTUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T16:00:00+00:00",
+            "entry_price": 352.83,
+            "sl_price": 356.85440386561606,
+            "tp_price": 336.7323845375357,
+            "created_at": "2026-06-25T16:30:30.581662+00:00",
+            "status": "OPEN",
+            "signal_price": 352.83
+        },
+        {
+            "id": 3322,
+            "symbol": "MSFTUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T14:30:00+00:00",
+            "entry_price": 355.68,
+            "sl_price": 359.46591907476125,
+            "tp_price": 340.536323700955,
+            "created_at": "2026-06-25T15:00:44.422780+00:00",
+            "status": "OPEN",
+            "signal_price": 355.68
+        },
+        {
+            "id": 3323,
+            "symbol": "MSFTUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T14:30:00+00:00",
+            "entry_price": 355.68,
+            "sl_price": 359.46591907476125,
+            "tp_price": 332.9644855514325,
+            "created_at": "2026-06-25T15:00:48.122221+00:00",
+            "status": "OPEN",
+            "signal_price": 355.68
+        },
+        {
+            "id": 3264,
+            "symbol": "METAUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T12:30:00+00:00",
+            "entry_price": 555.49,
+            "sl_price": 558.2823192768681,
+            "tp_price": 544.3207228925279,
+            "created_at": "2026-06-25T13:00:34.600726+00:00",
+            "status": "OPEN",
+            "signal_price": 555.49
+        },
+        {
+            "id": 3265,
+            "symbol": "METAUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T12:30:00+00:00",
+            "entry_price": 555.49,
+            "sl_price": 558.2823192768681,
+            "tp_price": 538.7360843387918,
+            "created_at": "2026-06-25T13:00:35.765720+00:00",
+            "status": "OPEN",
+            "signal_price": 555.49
+        },
+        {
+            "id": 3263,
+            "symbol": "PLTRUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T12:00:00+00:00",
+            "entry_price": 111.69,
+            "sl_price": 112.62860990903317,
+            "tp_price": 107.93556036386728,
+            "created_at": "2026-06-25T12:30:32.950481+00:00",
+            "status": "OPEN",
+            "signal_price": 111.69
+        },
+        {
+            "id": 3262,
+            "symbol": "PLTRUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-06-25T12:00:00+00:00",
+            "entry_price": 111.69,
+            "sl_price": 112.62860990903317,
+            "tp_price": 106.05834054580092,
+            "created_at": "2026-06-25T12:30:31.060694+00:00",
+            "status": "OPEN",
+            "signal_price": 111.69
+        },
+        {
+            "id": 3261,
+            "symbol": "INTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-06-25T07:30:00+00:00",
+            "entry_price": 139.35,
+            "sl_price": 137.28833327799063,
+            "tp_price": 151.7200003320562,
+            "created_at": "2026-06-25T08:00:34.643629+00:00",
+            "status": "OPEN",
+            "signal_price": 139.35
+        },
+        {
+            "id": 3260,
+            "symbol": "INTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-06-25T07:30:00+00:00",
+            "entry_price": 139.35,
+            "sl_price": 137.28833327799063,
+            "tp_price": 147.59666688803745,
+            "created_at": "2026-06-25T08:00:34.391832+00:00",
+            "status": "OPEN",
+            "signal_price": 139.35
+        }
+    ]
+}
