@@ -53,9 +53,12 @@ const ChartModal = () => {
   const isScaleOut = !!strategy && (strategy.startsWith('d30_4h_so') || strategy.startsWith('d30so') || strategy.startsWith('d1h_so'));
   // Runner cap in R, by version: d30_4h_so(c)/4R, d30so6c/d1h_so6c = 6R, d30so8c/d1h_so8c = 8R, ...
   const soCapR = (() => {
-    const m = strategy && strategy.match(/so(\d+)c?$/);
+    const m = strategy && strategy.match(/so(\d+)/);   // d30so8c / d30so8cm / d30so8f3 -> 8; d30_4h_soc -> 4
     return m ? Number(m[1]) : 4;
   })();
+  // Booked fraction at TP1: the 'f3' variants book 30% (ride 70% on the runner); the rest book 60%.
+  const soBookPct = (strategy && /f3$/.test(strategy)) ? 30 : 60;
+  const soRunPct = 100 - soBookPct;
   // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
   // fill is a STOP — price must RISE (long) / FALL (short) TO the entry, not pull back to it.
   const isConfirmEntry = !!strategy && strategy.endsWith('c');
@@ -687,7 +690,7 @@ const ChartModal = () => {
           // +1R and the runner then rides with a breakeven stop.
           if (partialLevel != null && !isCancelled) {
             const partialPct = entry ? ((partialLevel - entry) / entry) * 100 : null;
-            const partialTitle = isScaleOut ? 'TP1 +1R · %60' : '½TP %50';
+            const partialTitle = isScaleOut ? `TP1 +1R · %${soBookPct}` : '½TP %50';
             mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' +' + Math.abs(partialPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           }
           if (sl && !isCancelled) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
@@ -771,7 +774,7 @@ const ChartModal = () => {
         // Kısmi kâr işareti: ½TP'de fiyat TP/2'ye değdi (%50 kapandı); scale-out'ta +1R'ye
         // değdi (%60 kapandı). Her ikisinde de SL → Entry (breakeven).
         if (isPartial && partialBarSec != null && (partialBarSec !== exitSec || !isTerminalState)) {
-          const partialText = isScaleOut ? 'TP1 +1R · %60 → BE' : '½TP %50 · SL→BE';
+          const partialText = isScaleOut ? `TP1 +1R · %${soBookPct} → BE` : '½TP %50 · SL→BE';
           markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: '#F5B942', text: partialText, size: 1 });
         }
         if (isTerminalState && exitSec != null) {
@@ -989,10 +992,10 @@ const ChartModal = () => {
               // the backtest data/window end — e.g. a signal in the last ~3 days of the window).
               const runnerDays = (effDate && Number.isFinite(sig.exitTs))
                 ? (sig.exitTs - effDate.getTime()) / 86400000 : 99;
-              soState = beRunner ? t('%60 +1R alındı · %40 runner BE (0R)')
-                : capRunner ? t('%60 +1R alındı · %40 runner +{cap}R cap', { cap: soCapR })
-                : runnerDays >= 2.9 ? t('%60 +1R alındı · %40 runner mark (3g)')
-                : t('%60 +1R alındı · %40 runner mark (veri sonu, <3g)');
+              soState = beRunner ? t('%{book} +1R alındı · %{run} runner BE (0R)', { book: soBookPct, run: soRunPct })
+                : capRunner ? t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR })
+                : runnerDays >= 2.9 ? t('%{book} +1R alındı · %{run} runner mark (3g)', { book: soBookPct, run: soRunPct })
+                : t('%{book} +1R alındı · %{run} runner mark (veri sonu, <3g)', { book: soBookPct, run: soRunPct });
               soStateColor = '#0ECB81';
             } else { soState = t('Açık'); soStateColor = '#F5B942'; }
           } else {
@@ -1000,9 +1003,9 @@ const ChartModal = () => {
             // reads as richly as backtest (not just a bare status string).
             const s = liveTradeStatus;
             if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
-            else if (s === 'BE Oldu') { soState = t('%60 +1R alındı · %40 runner BE (0R)'); soStateColor = '#0ECB81'; }
-            else if (s === 'TP Oldu') { soState = t('%60 +1R alındı · %40 runner +{cap}R cap', { cap: soCapR }); soStateColor = '#0ECB81'; }
-            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%60 +1R alındı · %40 runner aktif (≤+{cap}R / 3g)', { cap: soCapR }); soStateColor = '#F5B942'; }
+            else if (s === 'BE Oldu') { soState = t('%{book} +1R alındı · %{run} runner BE (0R)', { book: soBookPct, run: soRunPct }); soStateColor = '#0ECB81'; }
+            else if (s === 'TP Oldu') { soState = t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR }); soStateColor = '#0ECB81'; }
+            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%{book} +1R alındı · %{run} runner aktif (≤+{cap}R / 3g)', { book: soBookPct, run: soRunPct, cap: soCapR }); soStateColor = '#F5B942'; }
             else { soState = s; soStateColor = '#F5B942'; }   // Entry Geldi / Sinyal Bekliyor / İptal
           }
         }
@@ -1043,7 +1046,7 @@ const ChartModal = () => {
             </div>
           ) : (<>
             <div className="position-row">
-               <span>TP1 (+1R · %60)</span>
+               <span>{`TP1 (+1R · %${soBookPct})`}</span>
                <b><span style={{color:'#0ECB81'}}>{formatPrice(so1R)}</span>
                  {so1Rpct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{Math.abs(so1Rpct).toFixed(2)}%</span>}
                </b>
@@ -1055,7 +1058,7 @@ const ChartModal = () => {
                </b>
             </div>
             <div className="position-row">
-               <span>{t('Runner (%40)')}</span>
+               <span>{`Runner (%${soRunPct})`}</span>
                <b style={{color:'#F5B942', fontWeight:500}}>{t('+{cap}R cap · breakeven · 3g', { cap: soCapR })}</b>
             </div>
             {soState && (
