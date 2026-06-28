@@ -61,7 +61,9 @@ class LiveCfg:
     proxy: str                     # BINANCE_PROXY — optional egress proxy (geo-blocked runners)
     # ---- sizing / risk ----
     risk_usd: float                # RISK_PER_TRADE_USD — USD lost if the full position hits SL
-    leverage: int                  # LEVERAGE
+    leverage: int                  # LEVERAGE — fixed fallback when auto_leverage is off
+    auto_leverage: bool            # AUTO_LEVERAGE — per-trade leverage from the SL distance (risk-safe)
+    leverage_max: int              # LEVERAGE_MAX — hard cap on the auto leverage
     margin_type: str               # MARGIN_TYPE — ISOLATED | CROSSED
     max_concurrent: int            # MAX_CONCURRENT_POSITIONS
     max_total_risk_usd: float      # MAX_TOTAL_RISK_USD — cap on summed open risk
@@ -118,15 +120,19 @@ def load_cfg() -> LiveCfg:
         proxy=str(env.get("BINANCE_PROXY", "")).strip(),
         risk_usd=_f(env, "RISK_PER_TRADE_USD", 5.0),
         leverage=_i(env, "LEVERAGE", 3),
+        auto_leverage=_b(env, "AUTO_LEVERAGE", False),
+        leverage_max=_i(env, "LEVERAGE_MAX", 25),
         margin_type=str(env.get("MARGIN_TYPE", "ISOLATED")).strip().upper(),
         max_concurrent=_i(env, "MAX_CONCURRENT_POSITIONS", 3),
         max_total_risk_usd=_f(env, "MAX_TOTAL_RISK_USD", 15.0),
         symbols=tuple(syms),
         confirm_buf=float(getattr(C, "ENTRY_CONFIRM_BUF", 0.5)),
         first_r=float(so.FIRST_R),
-        close_frac=float(so.CLOSE_FRAC),
-        runner_cap_r=float(so.RUNNER_CAP),
-        horizon_days=int(so.HORIZON.days),
+        # EXEC-specific economics overrides (default to scaleout.py globals) — let the live bridge
+        # run the d30so8f3h7 candidate (close_frac 0.3, cap8, 7d) WITHOUT touching any backtest global.
+        close_frac=_f(env, "CLOSE_FRAC", float(so.CLOSE_FRAC)),
+        runner_cap_r=_f(env, "RUNNER_CAP_R", float(so.RUNNER_CAP)),
+        horizon_days=_i(env, "HORIZON_DAYS", int(so.HORIZON.days)),
         expiry_min=int(tsc.EXPIRY_MINUTES),
         telegram_chat_id=str(env.get("TELEGRAM_EXEC_CHAT_ID") or env.get("TELEGRAM_CHAT_ID") or "").strip(),
     )

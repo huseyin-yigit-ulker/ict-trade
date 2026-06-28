@@ -399,10 +399,25 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
                              f"fiyat +1R'yi geçti (geç onay) — giriş yapılmadı — {st.VERSION}",
                              chat_id=cfg.telegram_chat_id)
                 return
+        # Auto-leverage (risk-safe): set the per-trade leverage from the SL distance so the
+        # liquidation sits ~2x the SL distance beyond entry (1/L ≈ 2*SL%) — liquidation can NEVER
+        # precede the −1R stop, so the loss stays $risk_usd. Capped at leverage_max. Risk is fixed
+        # by the qty (risk_usd/|entry−sl|); leverage only sets the margin + liquidation distance.
+        lev = cfg.leverage
+        if cfg.armed and cfg.auto_leverage:
+            slpct = (abs(lv.eff_entry - lv.sl) / lv.eff_entry) if lv.eff_entry else 0.0
+            if slpct > 0:
+                lev = max(1, min(cfg.leverage_max, int(0.5 / slpct)))
+            try:
+                client.set_leverage(sym, lev)
+            except Exception as e:  # noqa: BLE001
+                notify.alert(f"⚠️ <b>{sym}</b> set_leverage({lev}) hata: {e} — {cfg.leverage}x'e düşüldü",
+                             chat_id=cfg.telegram_chat_id)
+                lev = cfg.leverage
         resp = _market(client, conn, pos, pos["qty"], leg="entry", reduce_only=False)
         avg = _avg_fill(client, sym, resp) or float(lv.eff_entry)
         rl = lvl.reanchor(lv, avg, first_r=cfg.first_r)
-        st.patch(conn, pos["id"], state=st.OPEN_FULL, entry_fill_time=now, entry_fill_px=avg,
+        st.patch(conn, pos["id"], state=st.OPEN_FULL, entry_fill_time=now, entry_fill_px=avg, leverage=lev,
                  eff_entry=avg, eff_tp1=rl.tp1, eff_be=rl.be, entry_coid=st.coid(pos["id"], "entry"),
                  entry_order_id=resp.get("orderId"), time_stop_at=now + pd.Timedelta(days=cfg.horizon_days))
         # Full exchange-side bracket at entry (mainnet): algo SL (real conditional) + resting LIMIT
@@ -419,12 +434,12 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
                     _ctx = {}
             st.patch(conn, pos["id"], context={**_ctx, "exch_tp": True})
         notify.alert(f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                     f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g} · {cfg.leverage}x\n"
-                     f"SL {rl.sl:g} (−1R) · TP1 {rl.tp1:g} (%60) · cap {rl.cap:g} (+{cfg.runner_cap_r:g}R %40) — borsa bracket — {st.VERSION}",
+                     f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g} · {lev}x{' (oto)' if cfg.auto_leverage else ''}\n"
+                     f"SL {rl.sl:g} (−1R) · TP1 {rl.tp1:g} (%{int(cfg.close_frac*100)}) · cap {rl.cap:g} (+{cfg.runner_cap_r:g}R %{int((1-cfg.close_frac)*100)}) — borsa bracket — {st.VERSION}",
                      chat_id=cfg.telegram_chat_id)
         return
 
-    if state == st.OPEN_FULL and exch_tp:
+    if state in (st.OPEN_FULL, st.RUNNER) and exch_tp:
         # Exchange-side bracket: SL + TP1 + cap rest as algo orders on the book. The reconciler:
         #   (1) when TP1 books (position drops toward the runner) -> trail the SL to BREAKEVEN once
         #       (cancel the −1R algo SL, leave the TPs, place a BE algo SL), so the runner can't lose;
@@ -444,12 +459,13 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp) -> 
                     except BinanceError:
                         pass
             _place_protective_stop(cfg, client, conn, xi, pos, e, leg="be_rest")   # algo BE stop @ entry
-            # stay OPEN_FULL (the exch_tp branch handles both pre/post-BE via the be_done flag);
-            # tp1_fill_time anchors the post-BE backstop scan so the entry bar can't false-trigger it.
-            st.patch(conn, pos["id"], tp1_fill_time=now, context={**(_ctx or {}), "be_done": True})
+            # -> RUNNER so the dashboard badge reads "TP1 sonrası" (the exch_tp branch now also matches
+            # RUNNER); tp1_fill_time anchors the post-BE backstop scan so the entry bar can't false-trigger.
+            st.patch(conn, pos["id"], state=st.RUNNER, tp1_fill_time=now,
+                     context={**(_ctx or {}), "be_done": True})
             notify.alert(f"🎯 <b>TP1 DOLDU</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                         f"%60 alındı @ {rl.tp1:g} (+1R · +0.6R kilitli)\n"
-                         f"SL → breakeven {e:g} · runner %40 → +{cfg.runner_cap_r:g}R / BE / 3g — {st.VERSION}",
+                         f"%{int(cfg.close_frac*100)} alındı @ {rl.tp1:g} (+1R · +{cfg.close_frac*cfg.first_r:.1f}R kilitli)\n"
+                         f"SL → breakeven {e:g} · runner %{int((1-cfg.close_frac)*100)} → +{cfg.runner_cap_r:g}R / BE / {cfg.horizon_days}g — {st.VERSION}",
                          chat_id=cfg.telegram_chat_id)
             return
         sl_level = e if be_done else rl.sl                       # backstop fires at BE once trailed
