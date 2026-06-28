@@ -148,9 +148,12 @@ export const STRATEGY_INFO = {
 export const infoFor = (strategy, lang) => {
   // Realistic-entry twins ('c' suffix) + scale-out runner-cap variants (d30so6...) derive from the
   // base card + a 0.5R-entry note, so they render everywhere without duplicating full cards.
-  // margin≥0.25 variants ('m' suffix, e.g. d30so8cm / d1hso8cm) derive from the same base card.
-  const margin = strategy.endsWith('m') && !STRATEGY_INFO[strategy];
-  const k0 = margin ? strategy.slice(0, -1) : strategy;
+  // Variant suffixes derive from the same base card: 'm' = margin≥0.25 (d30so8cm),
+  // 'f3' = close_frac 0.3 / book 30% at TP1 (d30so8f3).
+  const lowFrac = /f3$/.test(strategy) && !STRATEGY_INFO[strategy];
+  const s0 = lowFrac ? strategy.slice(0, -2) : strategy;
+  const margin = s0.endsWith('m') && !STRATEGY_INFO[s0];
+  const k0 = margin ? s0.slice(0, -1) : s0;
   const realistic = k0.endsWith('c') && !STRATEGY_INFO[k0];
   let key = realistic ? k0.slice(0, -1) : k0;
   if (/^d30so\d+$/.test(key)) key = 'd30_4h_so';     // 6R/… scale-out cap variant -> base scale-out card
@@ -169,6 +172,12 @@ export const infoFor = (strategy, lang) => {
     base.tagline = lang === 'en'
       ? 'Breakout must clear the channel by ≥0.25 ATR (OOS-robust false-breakout filter)'
       : 'Kırılım kanalı ≥0.25 ATR aşmalı (OOS-robust sahte-kırılım filtresi)';
+  }
+  if (lowFrac) {
+    base.title = `${base.title} ·b30`;
+    base.tagline = lang === 'en'
+      ? 'Book only 30% at TP1, ride 70% on the runner — lets winners run (+15-30% R OOS, WR held)'
+      : 'TP1’de yalnızca %30 bankla, %70’i runner’da koştur — kazananları bırakır (+15-30% R OOS, WR sabit)';
   }
   return base;
 };

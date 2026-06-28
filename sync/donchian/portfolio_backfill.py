@@ -71,6 +71,7 @@ class Stream:
     rr: float = 4.0         # structural RR (full-TP) / signal geometry (scale-out)
     cap: Optional[float] = None  # runner cap for scale-out
     margin: bool = False    # require margin >= MARGIN_MIN
+    close_frac: Optional[float] = None  # scale-out: fraction booked at TP1 (None -> so.CLOSE_FRAC=0.6)
 
 
 STREAMS = {
@@ -92,6 +93,10 @@ STREAMS = {
     "d30so4cm": Stream("d30so4cm", "30m", "4h", "scaleout", cap=4.0, margin=True),
     "d30so6cm": Stream("d30so6cm", "30m", "4h", "scaleout", cap=6.0, margin=True),
     "d30so8cm": Stream("d30so8cm", "30m", "4h", "scaleout", cap=8.0, margin=True),
+    # ── close_frac=0.3 variants (book LESS at TP1, ride more on the runner) — new tags ──
+    "d30so4f3": Stream("d30so4f3", "30m", "4h", "scaleout", cap=4.0, close_frac=0.3),
+    "d30so6f3": Stream("d30so6f3", "30m", "4h", "scaleout", cap=6.0, close_frac=0.3),
+    "d30so8f3": Stream("d30so8f3", "30m", "4h", "scaleout", cap=8.0, close_frac=0.3),
 }
 
 
@@ -143,7 +148,8 @@ def build_events(sym, st: Stream, w_start, w_end):
         if st.exit == "scaleout":
             res = so.resolve_scaleout(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                                       s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
-                                      expiry_minutes=s.expiry_minutes, runner_cap=float(st.cap))
+                                      expiry_minutes=s.expiry_minutes, runner_cap=float(st.cap),
+                                      close_frac=(st.close_frac if st.close_frac is not None else so.CLOSE_FRAC))
             if res is None or res.get("real_entry_time") is None:
                 continue
             disp_entry = float(res.get("entry_eff", s.entry))
@@ -197,6 +203,7 @@ def _reverse_r(p, t, st: Stream, w_start, w_end):
         res = so.resolve_scaleout(p["symbol"], p["signal_ts"], p["direction"], p["raw_entry"],
                                   p["sl"], p["raw_tp"], df1m=df1m, ltf_minutes=p["ltf_min"],
                                   expiry_minutes=180, runner_cap=float(st.cap),
+                                  close_frac=(st.close_frac if st.close_frac is not None else so.CLOSE_FRAC),
                                   horizon=horizon, active_if_incomplete=False)
         r = float(res["pnl_r"]) if res and res.get("pnl_r") is not None else 0.0
         ep = float(res["exit_price"]) if res and res.get("exit_price") is not None else None
@@ -307,7 +314,8 @@ def run_stream(name, w_start, w_end, apply):
 # default run order: existing streams first (replace), then margin variants (new)
 ALL_ORDER = ["donchianc", "d1h_so4c", "d1h_so6c", "d1h_so8c",
              "dch30_4hc", "dch30_4h6c", "d30_4h_soc", "d30so6c", "d30so8c",
-             "d30so4cm", "d30so6cm", "d30so8cm", "d1hso4cm", "d1hso6cm", "d1hso8cm"]
+             "d30so4cm", "d30so6cm", "d30so8cm", "d1hso4cm", "d1hso6cm", "d1hso8cm",
+             "d30so4f3", "d30so6f3", "d30so8f3"]
 
 
 def main():

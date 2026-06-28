@@ -114,6 +114,10 @@ const GROUPS = [
   { key: 'd30so4cm',     label: 'DONCHIAN 30m+4h·WR 4R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so6cm',     label: 'DONCHIAN 30m+4h·WR 6R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so8cm',     label: 'DONCHIAN 30m+4h·WR 8R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
+  // close_frac=0.3: book only 30% at TP1, ride 70% on the runner (+15-30% R OOS, WR held). Backtest-only.
+  { key: 'd30so4f3',     label: 'DONCHIAN 30m+4h·WR 4R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so6f3',     label: 'DONCHIAN 30m+4h·WR 6R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so8f3',     label: 'DONCHIAN 30m+4h·WR 8R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
 ];
 
 const Sidebar = () => {
