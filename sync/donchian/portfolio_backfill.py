@@ -72,6 +72,7 @@ class Stream:
     cap: Optional[float] = None  # runner cap for scale-out
     margin: bool = False    # require margin >= MARGIN_MIN
     close_frac: Optional[float] = None  # scale-out: fraction booked at TP1 (None -> so.CLOSE_FRAC=0.6)
+    horizon_days: Optional[int] = None  # scale-out: runner/whole-trade time limit (None -> so.HORIZON=3d)
 
 
 STREAMS = {
@@ -97,6 +98,8 @@ STREAMS = {
     "d30so4f3": Stream("d30so4f3", "30m", "4h", "scaleout", cap=4.0, close_frac=0.3),
     "d30so6f3": Stream("d30so6f3", "30m", "4h", "scaleout", cap=6.0, close_frac=0.3),
     "d30so8f3": Stream("d30so8f3", "30m", "4h", "scaleout", cap=8.0, close_frac=0.3),
+    # ── d30so8f3 + 7-day time-stop (runner gets more room before the mark-to-market exit) ──
+    "d30so8f3h7": Stream("d30so8f3h7", "30m", "4h", "scaleout", cap=8.0, close_frac=0.3, horizon_days=7),
 }
 
 
@@ -149,7 +152,8 @@ def build_events(sym, st: Stream, w_start, w_end):
             res = so.resolve_scaleout(sym, s.timestamp, s.direction, s.entry, s.stop_loss,
                                       s.take_profit_1, df1m=df1m, ltf_minutes=ltf_min,
                                       expiry_minutes=s.expiry_minutes, runner_cap=float(st.cap),
-                                      close_frac=(st.close_frac if st.close_frac is not None else so.CLOSE_FRAC))
+                                      close_frac=(st.close_frac if st.close_frac is not None else so.CLOSE_FRAC),
+                                      horizon=(pd.Timedelta(days=st.horizon_days) if st.horizon_days else so.HORIZON))
             if res is None or res.get("real_entry_time") is None:
                 continue
             disp_entry = float(res.get("entry_eff", s.entry))
@@ -315,7 +319,7 @@ def run_stream(name, w_start, w_end, apply):
 ALL_ORDER = ["donchianc", "d1h_so4c", "d1h_so6c", "d1h_so8c",
              "dch30_4hc", "dch30_4h6c", "d30_4h_soc", "d30so6c", "d30so8c",
              "d30so4cm", "d30so6cm", "d30so8cm", "d1hso4cm", "d1hso6cm", "d1hso8cm",
-             "d30so4f3", "d30so6f3", "d30so8f3"]
+             "d30so4f3", "d30so6f3", "d30so8f3", "d30so8f3h7"]
 
 
 def main():

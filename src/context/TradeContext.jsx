@@ -32,7 +32,7 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.
 const ENTRY_EXPIRY_MINUTES = 180;
-const STRATEGY_EXPIRY_MINUTES = { donchianc: 180, dch30_4hc: 180, dch30_4h6c: 180, d30_4h_soc: 180, d30so6c: 180, d30so8c: 180, d1h_so4c: 180, d1h_so6c: 180, d1h_so8c: 180, d30so4cm: 180, d30so6cm: 180, d30so8cm: 180, d1hso4cm: 180, d1hso6cm: 180, d1hso8cm: 180, d30so4f3: 180, d30so6f3: 180, d30so8f3: 180 };
+const STRATEGY_EXPIRY_MINUTES = { donchianc: 180, dch30_4hc: 180, dch30_4h6c: 180, d30_4h_soc: 180, d30so6c: 180, d30so8c: 180, d1h_so4c: 180, d1h_so6c: 180, d1h_so8c: 180, d30so4cm: 180, d30so6cm: 180, d30so8cm: 180, d1hso4cm: 180, d1hso6cm: 180, d1hso8cm: 180, d30so4f3: 180, d30so6f3: 180, d30so8f3: 180, d30so8f3h7: 180 };
 
 // Directional entry confirmation — MIRROR of backtest ict/config.ENTRY_CONFIRM_BUF. A trade is
 // only opened if, within the fill window, price extends favourably (toward TP) by BUF*risk
@@ -101,7 +101,7 @@ const ENTRY_CONFIRM_BUF = 0.5;
 // (sync/donchian/scaleout.py), exactly as karma/½TP reuse their parent's live signals.
 // d1h_so{4,6,8}c = the 1h scale-out family (backtest-only): the 1h donchian base entry
 // (ER-gated, no 4h confirm) resolved under the SAME +1R-then-runner-cap exit as d30so*.
-const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30_4h6c: 'dch30_4h6c', d30_4h_soc: 'd30_4h_soc', d30so6c: 'd30so6c', d30so8c: 'd30so8c', d1h_so4c: 'd1h_so4c', d1h_so6c: 'd1h_so6c', d1h_so8c: 'd1h_so8c', d30so4cm: 'd30so4cm', d30so6cm: 'd30so6cm', d30so8cm: 'd30so8cm', d1hso4cm: 'd1hso4cm', d1hso6cm: 'd1hso6cm', d1hso8cm: 'd1hso8cm', d30so4f3: 'd30so4f3', d30so6f3: 'd30so6f3', d30so8f3: 'd30so8f3' };
+const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30_4h6c: 'dch30_4h6c', d30_4h_soc: 'd30_4h_soc', d30so6c: 'd30so6c', d30so8c: 'd30so8c', d1h_so4c: 'd1h_so4c', d1h_so6c: 'd1h_so6c', d1h_so8c: 'd1h_so8c', d30so4cm: 'd30so4cm', d30so6cm: 'd30so6cm', d30so8cm: 'd30so8cm', d1hso4cm: 'd1hso4cm', d1hso6cm: 'd1hso6cm', d1hso8cm: 'd1hso8cm', d30so4f3: 'd30so4f3', d30so6f3: 'd30so6f3', d30so8f3: 'd30so8f3', d30so8f3h7: 'd30so8f3h7' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -111,13 +111,13 @@ const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
 // d30_4h_so reuses the dch30_4h live signals (only the exit model differs), so its live
 // mode is 'dch30_4h' — same as the parent hybrid.
-const STRATEGY_LIVE_MODE = { donchianc: 'donchian', dch30_4hc: 'dch30_4h', dch30_4h6c: 'dch30_4h6', d30_4h_soc: 'dch30_4h', d30so6c: 'dch30_4h', d30so8c: 'dch30_4h', d1h_so4c: 'donchian', d1h_so6c: 'donchian', d1h_so8c: 'donchian', d30so4cm: 'dch30_4h', d30so6cm: 'dch30_4h', d30so8cm: 'dch30_4h', d1hso4cm: 'donchian', d1hso6cm: 'donchian', d1hso8cm: 'donchian', d30so4f3: 'dch30_4h', d30so6f3: 'dch30_4h', d30so8f3: 'dch30_4h' };
+const STRATEGY_LIVE_MODE = { donchianc: 'donchian', dch30_4hc: 'dch30_4h', dch30_4h6c: 'dch30_4h6', d30_4h_soc: 'dch30_4h', d30so6c: 'dch30_4h', d30so8c: 'dch30_4h', d1h_so4c: 'donchian', d1h_so6c: 'donchian', d1h_so8c: 'donchian', d30so4cm: 'dch30_4h', d30so6cm: 'dch30_4h', d30so8cm: 'dch30_4h', d1hso4cm: 'donchian', d1hso6cm: 'donchian', d1hso8cm: 'donchian', d30so4f3: 'dch30_4h', d30so6f3: 'dch30_4h', d30so8f3: 'dch30_4h', d30so8f3h7: 'dch30_4h' };
 // Backtest rows don't store the signal timeframe; tag it per strategy so the chart shifts
 // signal_time (bar OPEN) to the real fire/fill moment (bar CLOSE) by the CORRECT LTF.
 // donchian = 1h; the hybrids (dch30_4h / dch30_4h6 / d30_4h_so) fire on 30m bars + 4h confirm.
 // (Bug fix 2026-06-19: was hardcoded '1h' for all, so 30m streams' entry-fill scan started
 // 30 min late and missed the fill — the chart looked like "entry never came".)
-const STRATEGY_LTF = { donchianc: '1h', dch30_4hc: '30m', dch30_4h6c: '30m', d30_4h_soc: '30m', d30so6c: '30m', d30so8c: '30m', d1h_so4c: '1h', d1h_so6c: '1h', d1h_so8c: '1h', d30so4cm: '30m', d30so6cm: '30m', d30so8cm: '30m', d1hso4cm: '1h', d1hso6cm: '1h', d1hso8cm: '1h', d30so4f3: '30m', d30so6f3: '30m', d30so8f3: '30m' };
+const STRATEGY_LTF = { donchianc: '1h', dch30_4hc: '30m', dch30_4h6c: '30m', d30_4h_soc: '30m', d30so6c: '30m', d30so8c: '30m', d1h_so4c: '1h', d1h_so6c: '1h', d1h_so8c: '1h', d30so4cm: '30m', d30so6cm: '30m', d30so8cm: '30m', d1hso4cm: '1h', d1hso6cm: '1h', d1hso8cm: '1h', d30so4f3: '30m', d30so6f3: '30m', d30so8f3: '30m', d30so8f3h7: '30m' };
 const STRATEGY_HTF = { donchian: null, dch30_4h: '4h', dch30_4h6: '4h', d30_4h_so: '4h' };
 // No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();

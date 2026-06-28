@@ -57,8 +57,10 @@ const ChartModal = () => {
     return m ? Number(m[1]) : 4;
   })();
   // Booked fraction at TP1: the 'f3' variants book 30% (ride 70% on the runner); the rest book 60%.
-  const soBookPct = (strategy && /f3$/.test(strategy)) ? 30 : 60;
+  const soBookPct = (strategy && /f3/.test(strategy)) ? 30 : 60;
   const soRunPct = 100 - soBookPct;
+  // Whole-trade time-stop in days (mark-to-market exit if neither cap/BE/SL): 'h7' variants = 7d, else 3d.
+  const soHorizD = (strategy && /h7/.test(strategy)) ? 7 : 3;
   // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
   // fill is a STOP — price must RISE (long) / FALL (short) TO the entry, not pull back to it.
   const isConfirmEntry = !!strategy && strategy.endsWith('c');
@@ -994,8 +996,8 @@ const ChartModal = () => {
                 ? (sig.exitTs - effDate.getTime()) / 86400000 : 99;
               soState = beRunner ? t('%{book} +1R alındı · %{run} runner BE (0R)', { book: soBookPct, run: soRunPct })
                 : capRunner ? t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR })
-                : runnerDays >= 2.9 ? t('%{book} +1R alındı · %{run} runner mark (3g)', { book: soBookPct, run: soRunPct })
-                : t('%{book} +1R alındı · %{run} runner mark (veri sonu, <3g)', { book: soBookPct, run: soRunPct });
+                : runnerDays >= (soHorizD - 0.1) ? t('%{book} +1R alındı · %{run} runner mark ({hor}g)', { book: soBookPct, run: soRunPct, hor: soHorizD })
+                : t('%{book} +1R alındı · %{run} runner mark (veri sonu, <{hor}g)', { book: soBookPct, run: soRunPct, hor: soHorizD });
               soStateColor = '#0ECB81';
             } else { soState = t('Açık'); soStateColor = '#F5B942'; }
           } else {
@@ -1005,7 +1007,7 @@ const ChartModal = () => {
             if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
             else if (s === 'BE Oldu') { soState = t('%{book} +1R alındı · %{run} runner BE (0R)', { book: soBookPct, run: soRunPct }); soStateColor = '#0ECB81'; }
             else if (s === 'TP Oldu') { soState = t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR }); soStateColor = '#0ECB81'; }
-            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%{book} +1R alındı · %{run} runner aktif (≤+{cap}R / 3g)', { book: soBookPct, run: soRunPct, cap: soCapR }); soStateColor = '#F5B942'; }
+            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%{book} +1R alındı · %{run} runner aktif (≤+{cap}R / {hor}g)', { book: soBookPct, run: soRunPct, cap: soCapR, hor: soHorizD }); soStateColor = '#F5B942'; }
             else { soState = s; soStateColor = '#F5B942'; }   // Entry Geldi / Sinyal Bekliyor / İptal
           }
         }
@@ -1059,7 +1061,7 @@ const ChartModal = () => {
             </div>
             <div className="position-row">
                <span>{`Runner (%${soRunPct})`}</span>
-               <b style={{color:'#F5B942', fontWeight:500}}>{t('+{cap}R cap · breakeven · 3g', { cap: soCapR })}</b>
+               <b style={{color:'#F5B942', fontWeight:500}}>{t('+{cap}R cap · breakeven · {hor}g', { cap: soCapR, hor: soHorizD })}</b>
             </div>
             {soState && (
               <div className="position-row">
@@ -1097,7 +1099,7 @@ const ChartModal = () => {
           {isScaleOut && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
-              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+{soCapR}R / 3g</span></b>
+              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+{soCapR}R / {soHorizD}g</span></b>
             </div>
           )}
           {mode === 'live' && Number.isFinite(liveLastPrice) && (

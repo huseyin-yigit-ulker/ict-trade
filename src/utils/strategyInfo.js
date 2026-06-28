@@ -150,8 +150,8 @@ export const infoFor = (strategy, lang) => {
   // base card + a 0.5R-entry note, so they render everywhere without duplicating full cards.
   // Variant suffixes derive from the same base card: 'm' = margin≥0.25 (d30so8cm),
   // 'f3' = close_frac 0.3 / book 30% at TP1 (d30so8f3).
-  const lowFrac = /f3$/.test(strategy) && !STRATEGY_INFO[strategy];
-  const s0 = lowFrac ? strategy.slice(0, -2) : strategy;
+  const lowFrac = /f3/.test(strategy) && !STRATEGY_INFO[strategy];   // f3 = close_frac 0.3 (may carry an h7 suffix)
+  const s0 = lowFrac ? strategy.replace(/f3.*$/, '') : strategy;
   const margin = s0.endsWith('m') && !STRATEGY_INFO[s0];
   const k0 = margin ? s0.slice(0, -1) : s0;
   const realistic = k0.endsWith('c') && !STRATEGY_INFO[k0];
@@ -174,10 +174,11 @@ export const infoFor = (strategy, lang) => {
       : 'Kırılım kanalı ≥0.25 ATR aşmalı (OOS-robust sahte-kırılım filtresi)';
   }
   if (lowFrac) {
-    base.title = `${base.title} ·b30`;
+    const h7 = /h7/.test(strategy);
+    base.title = `${base.title} ·b30${h7 ? '·7g' : ''}`;
     base.tagline = lang === 'en'
-      ? 'Book only 30% at TP1, ride 70% on the runner — lets winners run (+15-30% R OOS, WR held)'
-      : 'TP1’de yalnızca %30 bankla, %70’i runner’da koştur — kazananları bırakır (+15-30% R OOS, WR sabit)';
+      ? `Book only 30% at TP1, ride 70% on the runner — lets winners run${h7 ? '; 7-day time-stop (vs 3) gives the runner more room' : ''} (+R OOS, WR held)`
+      : `TP1’de yalnızca %30 bankla, %70’i runner’da koştur — kazananları bırakır${h7 ? '; 7 günlük time-stop (3 yerine) runner’a daha çok alan verir' : ''} (+R OOS, WR sabit)`;
   }
   return base;
 };
