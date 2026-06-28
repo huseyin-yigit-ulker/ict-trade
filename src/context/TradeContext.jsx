@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useContext, useRef, useCallback, useMemo } from 'react';
 import { opusAllows } from '../utils/symbolMeta';
+import { isScaleOutStrategy, soCapFromStrategy, isConfirmStrategy } from '../utils/liveR';
 
 const TradeContext = createContext();
 
@@ -852,14 +853,13 @@ export const TradeProvider = ({ children }) => {
     // measured from that realistic entry (risk = 1.5×raw); the runner cap sits at the STRUCTURAL
     // +N*raw_risk from the breakout (== signal TP for 4R, higher for 6R/8R). Single source: both the
     // live LIST and the chart read this status.
-    if (/^(d30_4h_so|d30so\d+|d1h_so\d+)c?$/.test(strategyRef.current)) {
-      const conf = strategyRef.current.endsWith('c');                       // realistic +0.5R entry twin
+    if (isScaleOutStrategy(strategyRef.current)) {
+      const conf = isConfirmStrategy(strategyRef.current);                  // realistic +0.5R entry twin (incl. f3/cm)
       const rawRisk = Math.abs(sig.entry - sig.sl);
       const entryEff = conf ? (sig.dir === 'LONG' ? sig.entry + 0.5 * rawRisk : sig.entry - 0.5 * rawRisk) : sig.entry;
       const riskEff = Math.abs(entryEff - sig.sl);                          // 1.5×raw for the ·0.5R twin
       const r1 = sig.dir === 'LONG' ? entryEff + riskEff : entryEff - riskEff;   // +1R first target
-      const capM = strategyRef.current.match(/so(\d+)c?$/);                 // d30so6c/d1h_so6c→6, d30so8c→8…
-      const capR = capM ? Number(capM[1]) : 4;                              // bare d30_4h_so(c) → 4
+      const capR = soCapFromStrategy(strategyRef.current);                  // d30so6c→6, d30so8c/d30so8f3h7→8, bare→4
       const cap = sig.dir === 'LONG' ? sig.entry + capR * rawRisk : sig.entry - capR * rawRisk;
       let partial = false;
       let stop = sig.sl;

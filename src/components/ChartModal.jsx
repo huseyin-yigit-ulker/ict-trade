@@ -63,7 +63,9 @@ const ChartModal = () => {
   const soHorizD = (strategy && /h7/.test(strategy)) ? 7 : 3;
   // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
   // fill is a STOP — price must RISE (long) / FALL (short) TO the entry, not pull back to it.
-  const isConfirmEntry = !!strategy && strategy.endsWith('c');
+  // Realistic-entry (·0.5R confirm) twins: a trailing 'c', OR the cm/f3 variants (all confirm-entry).
+  // Without this, d30so8f3h7 (ends '7') was drawn with RAW breakout levels — wrong entry/TP1.
+  const isConfirmEntry = !!strategy && (strategy.endsWith('c') || /(cm|f3)/.test(strategy));
 
   // Use the CURRENT DB row for this trade (pnl_r / exit / status) rather than the possibly-stale
   // bulk-loaded backtest set — so a re-backfill is reflected the moment the chart opens, without a
