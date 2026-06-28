@@ -99,6 +99,10 @@ const GROUPS = [
   { key: 'd1h_so4c',     label: 'DONCHIAN 1h·WR 4R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1h_so6c',     label: 'DONCHIAN 1h·WR 6R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1h_so8c',     label: 'DONCHIAN 1h·WR 8R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
+  // margin≥0.25 ATR false-breakout filter (OOS-robust). Backtest = live-faithful portfolio walk.
+  { key: 'd1hso4cm',     label: 'DONCHIAN 1h·WR 4R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd1hso6cm',     label: 'DONCHIAN 1h·WR 6R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd1hso8cm',     label: 'DONCHIAN 1h·WR 8R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
   // ── 30m + 4h family ──
   { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',      icon: <IconIntel />, modes: ['live', 'backtest'] },
   { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R',   icon: <IconIntel />, modes: ['live', 'backtest'] },
@@ -106,6 +110,10 @@ const GROUPS = [
   { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
   { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
   { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
+  // margin≥0.25 ATR false-breakout filter (OOS-robust). Backtest = live-faithful portfolio walk.
+  { key: 'd30so4cm',     label: 'DONCHIAN 30m+4h·WR 4R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so6cm',     label: 'DONCHIAN 30m+4h·WR 6R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so8cm',     label: 'DONCHIAN 30m+4h·WR 8R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
 ];
 
 const Sidebar = () => {

@@ -31,6 +31,9 @@ export const STREAMS = [
   { key: 'd1h_so4c',     version: 'd1h_so4c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 4R ·0.5R' },
   { key: 'd1h_so6c',     version: 'd1h_so6c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 6R ·0.5R' },
   { key: 'd1h_so8c',     version: 'd1h_so8c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 8R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 8R ·0.5R' },
+  { key: 'd1hso4cm',     version: 'd1hso4cm',     exit: 'scaleout', family: 'trend', tf: '1h·WR 4R ·M0.25', realistic: true, label: 'DONCHIAN 1h·WR 4R ·M0.25' },
+  { key: 'd1hso6cm',     version: 'd1hso6cm',     exit: 'scaleout', family: 'trend', tf: '1h·WR 6R ·M0.25', realistic: true, label: 'DONCHIAN 1h·WR 6R ·M0.25' },
+  { key: 'd1hso8cm',     version: 'd1hso8cm',     exit: 'scaleout', family: 'trend', tf: '1h·WR 8R ·M0.25', realistic: true, label: 'DONCHIAN 1h·WR 8R ·M0.25' },
 
   // ── 30m + 4h family ──
   { key: 'dch30_4hc',    version: 'dch30_4hc',    exit: 'full', family: 'trend', tf: '30m+4h ·0.5R',  realistic: true, label: 'DONCHIAN 30m+4h ·0.5R' },
@@ -38,6 +41,9 @@ export const STREAMS = [
   { key: 'd30_4h_soc',   version: 'd30_4h_soc',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·0.5R' },
   { key: 'd30so6c',      version: 'd30so6c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·0.5R' },
   { key: 'd30so8c',      version: 'd30so8c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·0.5R' },
+  { key: 'd30so4cm',     version: 'd30so4cm',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·M0.25', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·M0.25' },
+  { key: 'd30so6cm',     version: 'd30so6cm',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·M0.25', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·M0.25' },
+  { key: 'd30so8cm',     version: 'd30so8cm',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·M0.25', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·M0.25' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

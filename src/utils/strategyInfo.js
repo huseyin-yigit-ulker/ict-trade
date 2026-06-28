@@ -148,10 +148,13 @@ export const STRATEGY_INFO = {
 export const infoFor = (strategy, lang) => {
   // Realistic-entry twins ('c' suffix) + scale-out runner-cap variants (d30so6...) derive from the
   // base card + a 0.5R-entry note, so they render everywhere without duplicating full cards.
-  const realistic = strategy.endsWith('c') && !STRATEGY_INFO[strategy];
-  let key = realistic ? strategy.slice(0, -1) : strategy;
+  // margin≥0.25 variants ('m' suffix, e.g. d30so8cm / d1hso8cm) derive from the same base card.
+  const margin = strategy.endsWith('m') && !STRATEGY_INFO[strategy];
+  const k0 = margin ? strategy.slice(0, -1) : strategy;
+  const realistic = k0.endsWith('c') && !STRATEGY_INFO[k0];
+  let key = realistic ? k0.slice(0, -1) : k0;
   if (/^d30so\d+$/.test(key)) key = 'd30_4h_so';     // 6R/… scale-out cap variant -> base scale-out card
-  if (/^d1h_so\d+$/.test(key)) key = 'd1h_so';       // 1h scale-out 4/6/8R cap variant -> 1h scale-out card
+  if (/^d1h_?so\d+$/.test(key)) key = 'd1h_so';      // 1h scale-out 4/6/8R cap variant (margin tag has no '_')
   const e = STRATEGY_INFO[key];
   if (!e) return null;
   const base = { icon: e.icon, accent: e.accent, ...(e[lang] || e.tr) };
@@ -160,6 +163,12 @@ export const infoFor = (strategy, lang) => {
     base.tagline = lang === 'en'
       ? 'Realistic entry from the +0.5R confirmation zone (RR collapses 4→2.33 — the honest edge)'
       : 'Gerçekçi giriş: +0.5R onay bölgesinden (RR 4→2.33 düşer — dürüst edge)';
+  }
+  if (margin) {
+    base.title = `${base.title} ·M0.25`;
+    base.tagline = lang === 'en'
+      ? 'Breakout must clear the channel by ≥0.25 ATR (OOS-robust false-breakout filter)'
+      : 'Kırılım kanalı ≥0.25 ATR aşmalı (OOS-robust sahte-kırılım filtresi)';
   }
   return base;
 };
