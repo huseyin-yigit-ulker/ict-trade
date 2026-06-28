@@ -139,6 +139,7 @@ const EN = {
   'CANLI': 'LIVE',
   'Pozisyon Durumu': 'Position state',
   'SL · tüm pozisyon (+1R görülmedi)': 'SL · full position (+1R not reached)',
+  'Ters sinyal · erken kapanış (+1R yok)': 'Reverse signal · early close (no +1R)',
   '%{book} +1R alındı · %{run} runner BE (0R)': '{book}% +1R booked · {run}% runner BE (0R)',
   '%{book} +1R alındı · %{run} runner +{cap}R cap': '{book}% +1R booked · {run}% runner +{cap}R cap',
   '%{book} +1R alındı · %{run} runner aktif (≤+{cap}R / {hor}g)': '{book}% +1R booked · {run}% runner active (≤+{cap}R / {hor}d)',

@@ -986,7 +986,16 @@ const ChartModal = () => {
         let soState = null, soStateColor = '#EAECEF';
         if (isScaleOut) {
           if (mode === 'backtest') {
-            if (sig.status === 'SL') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
+            if (sig.status === 'SL') {
+              // A reverse/early close (opposite signal closed the position before it reached +1R or
+              // −1R) is stored as closed_sl too (status = R-sign), but it exits at the reverse PRICE,
+              // not the SL. Only a TRUE full stop exits AT the SL — distinguish them so a −0.2R
+              // reverse isn't shown as a −1R "full SL".
+              const fullSL = Number.isFinite(exitPrice) && Number.isFinite(activeSignal.sl)
+                && Math.abs(exitPrice - activeSignal.sl) / activeSignal.sl < 1e-4;
+              soState = fullSL ? t('SL · tüm pozisyon (+1R görülmedi)') : t('Ters sinyal · erken kapanış (+1R yok)');
+              soStateColor = '#F6465D';
+            }
             else if (sig.status === 'TP') {
               const beRunner = Number.isFinite(exitPrice) && dispEntry
                 && Math.abs(exitPrice - dispEntry) / dispEntry < 1e-6;
