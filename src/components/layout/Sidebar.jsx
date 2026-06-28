@@ -89,37 +89,32 @@ const IconTotal = () => (
 // period-fit. Only the OOS-positive "range book" remains (range +9.2R, range_q +26.2R,
 // v2_light_r +15.5R in 2025). All three are backtest-only (no live scanner).
 const GROUPS = [
-  // Strategy set = MAIN + RANGE + OPUS. MAIN = the v1 ICT set (B/C/D/E), all symbols/
-  // sessions; RANGE = RANGE_DEV every session; OPUS = MAIN gated to each symbol's NY session.
-  // 2026-06-20: ONLY the realistic-entry (·0.5R) versions. The optimistic entry@close twins were
-  // removed (UI + DB) — unrealistic entry. These enter at the +0.5R confirm level (RR 4->2.33).
-  // Order = by timeframe family; within each, the full-TP base first, then its scale-out caps (4/6/8R).
-  // ── 1h family ── (base 1h donchian + its scale-out trio; scale-out is backtest-only)
-  { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['live', 'backtest'] },
+  // ⭐ THE LIVE STRATEGY — d30so8f3h7 is the ONLY stream running on Binance (real money):
+  // 30m+4h breakout, ·0.5R confirm entry, book 30% at TP1, runner to +8R cap / BE / 7-day stop,
+  // BTC/ETH/SOL/FET/ARB, one-per-symbol, $5 risk, risk-safe auto-leverage. Pinned to the top +
+  // highlighted. Every OTHER stream below is BACKTEST-ONLY (research; not traded live).
+  { key: 'd30so8f3h7',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
+
+  // ── 1h family (backtest-only) ──
+  { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1h_so4c',     label: 'DONCHIAN 1h·WR 4R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1h_so6c',     label: 'DONCHIAN 1h·WR 6R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1h_so8c',     label: 'DONCHIAN 1h·WR 8R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
-  // margin≥0.25 ATR false-breakout filter (OOS-robust). Backtest = live-faithful portfolio walk.
   { key: 'd1hso4cm',     label: 'DONCHIAN 1h·WR 4R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1hso6cm',     label: 'DONCHIAN 1h·WR 6R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1hso8cm',     label: 'DONCHIAN 1h·WR 8R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
-  // ── 30m + 4h family ──
-  { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',      icon: <IconIntel />, modes: ['live', 'backtest'] },
-  { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R',   icon: <IconIntel />, modes: ['live', 'backtest'] },
-  // 2026-06-28: 'demo' mode retired — the Backtest tab now IS the live-faithful portfolio walk.
-  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
-  // margin≥0.25 ATR false-breakout filter (OOS-robust). Backtest = live-faithful portfolio walk.
+  // ── 30m + 4h family (backtest-only) ──
+  { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',      icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R',   icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so4cm',     label: 'DONCHIAN 30m+4h·WR 4R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so6cm',     label: 'DONCHIAN 30m+4h·WR 6R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so8cm',     label: 'DONCHIAN 30m+4h·WR 8R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
-  // close_frac=0.3: book only 30% at TP1, ride 70% on the runner (+15-30% R OOS, WR held). Backtest-only.
   { key: 'd30so4f3',     label: 'DONCHIAN 30m+4h·WR 4R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so6f3',     label: 'DONCHIAN 30m+4h·WR 6R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so8f3',     label: 'DONCHIAN 30m+4h·WR 8R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
-  // b30 + 7-day time-stop (runner held up to 7d vs 3d before the mark-to-market exit). Backtest-only.
-  { key: 'd30so8f3h7',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {
@@ -169,9 +164,10 @@ const Sidebar = () => {
         {stratOpen && (
           <div className="sidebar__strategies">
             {GROUPS.map((g) => (
-              <div key={g.key} className={`sidebar__group sidebar__group--${g.key}`}>
+              <div key={g.key} className={`sidebar__group sidebar__group--${g.key}${g.live ? ' sidebar__group--live' : ''}`}>
                 <div className="sidebar__group-label">
                   <span className="sidebar__icon">{g.icon}</span>{g.label}
+                  {g.live && <span className="sidebar__live-badge">● {t('CANLI')}</span>}
                 </div>
                 {g.modes.map((m) => (
                   <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">

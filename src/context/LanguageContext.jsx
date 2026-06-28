@@ -136,6 +136,7 @@ const EN = {
   'Runner Cap (+{cap}R)': 'Runner Cap (+{cap}R)',
   'Runner Cap +{cap}R': 'Runner Cap +{cap}R',
   '+{cap}R cap · breakeven · {hor}g': '+{cap}R cap · breakeven · {hor}d',
+  'CANLI': 'LIVE',
   'Pozisyon Durumu': 'Position state',
   'SL · tüm pozisyon (+1R görülmedi)': 'SL · full position (+1R not reached)',
   '%{book} +1R alındı · %{run} runner BE (0R)': '{book}% +1R booked · {run}% runner BE (0R)',

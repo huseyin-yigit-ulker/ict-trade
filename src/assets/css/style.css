@@ -2005,6 +2005,16 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
 /* --- Strategy × Mode nested sidebar + empty state --- */
 .sidebar__group { margin-bottom: 2px; }
 .sidebar__group-label { display: flex; align-items: center; gap: 9px; padding: 7px 12px 2px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+/* The one live (Binance) strategy — pinned at the top + highlighted so it never gets lost among
+   the backtest-only research streams. Green accent rail + glow + a pulsing CANLI badge. */
+.sidebar__group--live { margin: 2px 6px 10px; padding: 4px 0 6px; border-left: 2px solid var(--win);
+  border-radius: 8px; background: linear-gradient(90deg, rgba(14,203,129,0.12), rgba(14,203,129,0.02)); }
+.sidebar__group--live .sidebar__group-label { color: var(--win); font-weight: 600; flex-wrap: wrap; }
+.sidebar__live-badge { margin-left: auto; font-size: 8.5px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--win); background: rgba(14,203,129,0.16); border: 1px solid rgba(14,203,129,0.4);
+  border-radius: 6px; padding: 1px 6px; animation: livePulse 2s ease-in-out infinite; }
+@keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+.sidebar__group--live .sidebar__leaf-dot--live { background: var(--win); box-shadow: 0 0 6px var(--win); }
 .sidebar__leaf { padding-left: 38px; }
 .sidebar__leaf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); flex: 0 0 auto; }
 .sidebar__leaf.active .sidebar__leaf-dot--live { background: var(--win); }
