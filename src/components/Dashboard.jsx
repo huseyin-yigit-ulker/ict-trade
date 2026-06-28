@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext, isHalfFor } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
-import { scaleOutLiveR, isScaleOutStrategy, soCapFromStrategy, isConfirmStrategy } from '../utils/liveR';
+import { scaleOutLiveR, isScaleOutStrategy, soCapFromStrategy, isConfirmStrategy, soBookFromStrategy } from '../utils/liveR';
 import Sparkline from './viz/Sparkline';
 import PusuLogo from './PusuLogo';
 import StrategyIntro from './StrategyIntro';
@@ -153,10 +153,10 @@ const timeAgo = (date, t) => {
 // time-exit. BE close = 0.60×(+1R) + 0.40×0; runner to +4R cap = 0.60×1 + 0.40×4 = 2.2R; a -1R
 // stop before +1R = full -1R. Fees (0.1% round-trip, in R) are subtracted so the live R matches
 // the backtest resolver. The rare 3-day mark-to-market tail is resolved by the nightly sync.
-const liveOutcomeR = (sig, status, half = false, so = false, capR = 4, conservative = true) => {
+const liveOutcomeR = (sig, status, half = false, so = false, capR = 4, conservative = true, bookFrac = 0.6) => {
   if (!sig?.entry || !sig?.tp || !sig?.sl) return 0;
   if (so) {   // scale-out: delegate to the shared model so the list matches the chart panel exactly
-    const r = scaleOutLiveR(sig.entry, sig.sl, status, capR, conservative);
+    const r = scaleOutLiveR(sig.entry, sig.sl, status, capR, conservative, bookFrac);
     return r == null ? 0 : r;
   }
   const risk = Math.abs(sig.entry - sig.sl);
@@ -188,6 +188,7 @@ const Dashboard = () => {
   const isSO = isScaleOutStrategy(strategy);
   const soCapR = soCapFromStrategy(strategy);
   const soConservative = isConfirmStrategy(strategy);
+  const soBookFrac = soBookFromStrategy(strategy);
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -266,7 +267,7 @@ const Dashboard = () => {
   // live mark; without it (or pre-TP1) we fall back to the secured floor. R is in the same risk_eff
   // convention as scaleOutLiveR (the +1R first target and the cap are of the effective/·0.5R risk).
   const liveRunnerR = (sig, lastPrice) => {
-    const floor = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative);  // 0.6 − fee
+    const floor = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative, soBookFrac);  // 0.6 − fee
     if (!isSO || !Number.isFinite(lastPrice) || !sig?.entry || !sig?.sl) return floor;
     const risk0 = Math.abs(sig.entry - sig.sl);
     if (!risk0) return floor;
@@ -282,11 +283,11 @@ const Dashboard = () => {
   const getLiveRLabel = (sig, status, lastPrice = null) => {
     if (!status) return { label: '--', cls: 'waiting' };
     if (status === 'TP Oldu' || status === 'BE Oldu') {
-      const r = liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative);
+      const r = liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative, soBookFrac);
       return { label: `${r >= 0 ? '+' : ''}${r.toFixed(2)}R`, cls: r >= 0 ? 'win' : 'loss' };
     }
     if (status === 'SL Oldu' || status === 'TP/SL Aynı Mum') {
-      if (isSO) return { label: `${liveOutcomeR(sig, status, false, true, soCapR, soConservative).toFixed(2)}R`, cls: 'loss' };
+      if (isSO) return { label: `${liveOutcomeR(sig, status, false, true, soCapR, soConservative, soBookFrac).toFixed(2)}R`, cls: 'loss' };
       return { label: '-1R', cls: 'loss' };
     }
     if (status === 'İşlem Aktif (Kısmi ½TP Alındı)') {
@@ -297,7 +298,7 @@ const Dashboard = () => {
     if (status === 'İşlem Aktif (+1R Alındı · Runner)') {
       // scale-out TP1 booked: show the LIVE total R (floor +0.6R + the runner's current gain). When
       // the runner hasn't moved past breakeven yet, fall back to the secured floor with a ≥.
-      const floor = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative);
+      const floor = liveOutcomeR(sig, 'BE Oldu', false, true, soCapR, soConservative, soBookFrac);
       const r = liveRunnerR(sig, lastPrice);
       return r > floor + 1e-9
         ? { label: `+${r.toFixed(2)}R`, cls: 'win' }
@@ -318,10 +319,10 @@ const Dashboard = () => {
       const meta = resolveLiveMeta(status);
       if (meta.label === 'TP' || meta.label === 'BE') {
         tp += 1;
-        rScore += liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative);
+        rScore += liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative, soBookFrac);
       } else if (meta.label === 'SL' || meta.label === 'TP/SL') {
         sl += 1;
-        rScore += liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative);   // -1 (−1−fee for scale-out)
+        rScore += liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative, soBookFrac);   // -1 (−1−fee for scale-out)
       }
     });
     return { tp, sl, rScore };
@@ -340,7 +341,7 @@ const Dashboard = () => {
         sumR += liveRunnerR(sig, liveStatuses[sig.id]?.lastPrice);
       } else if (st === 'TP Oldu' || st === 'BE Oldu') {
         count += 1;
-        sumR += liveOutcomeR(sig, st, halfFor(sig), isSO, soCapR, soConservative);
+        sumR += liveOutcomeR(sig, st, halfFor(sig), isSO, soCapR, soConservative, soBookFrac);
       }
     });
     return { count, sumR };
@@ -563,7 +564,7 @@ const Dashboard = () => {
       totalTrades = filteredSignals.length;
       closedTrades = denom;
       const asc = [...filteredSignals].sort((a, b) => a.dateObj - b.dateObj);
-      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, halfFor(sig), isSO, soCapR, soConservative));
+      const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, halfFor(sig), isSO, soCapR, soConservative, soBookFrac));
       let cc = 0;
       cum = downsample(rs.map((r) => (cc += r)), 80);
       hist = rHistogram(rs);

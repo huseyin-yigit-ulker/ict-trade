@@ -169,7 +169,7 @@ const ChartModal = () => {
   // runner (40%) is risk-free at breakeven. A partial-active or BE close secures ~0.6−fee R
   // (a FLOOR — the runner can add more, resolved by the nightly sync); a pre-+1R stop is −1R.
   const soLiveR = (isScaleOut && mode === 'live' && activeSignal)
-    ? scaleOutLiveR(activeSignal.entry, activeSignal.sl, ctxLiveStatus, soCapR, isConfirmEntry)
+    ? scaleOutLiveR(activeSignal.entry, activeSignal.sl, ctxLiveStatus, soCapR, isConfirmEntry, soBookPct / 100)
     : null;
   // Floor (partial still riding) vs realised (BE/SL terminal).
   const soLiveRFloor = ctxLiveStatus === 'İşlem Aktif (+1R Alındı · Runner)';

@@ -119,7 +119,7 @@ const GROUPS = [
   { key: 'd30so6f3',     label: 'DONCHIAN 30m+4h·WR 6R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so8f3',     label: 'DONCHIAN 30m+4h·WR 8R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
   // b30 + 7-day time-stop (runner held up to 7d vs 3d before the mark-to-market exit). Backtest-only.
-  { key: 'd30so8f3h7',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['backtest'] },
+  { key: 'd30so8f3h7',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'] },
 ];
 
 const Sidebar = () => {

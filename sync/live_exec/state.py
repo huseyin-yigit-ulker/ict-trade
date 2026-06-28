@@ -23,14 +23,17 @@ _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parent))                    # live_exec -> _bootenv
 sys.path.insert(0, str(_HERE.parents[1]))                # sync/     -> trade_sync_common
 sys.path.insert(0, str(_HERE.parents[1] / "donchian"))   # donchian  -> scaleout
+import os                                    # noqa: E402
 import _bootenv                              # noqa: E402,F401  -- sets DCH_SO_RUNNER_CAP before scaleout
 import trade_sync_common as tsc              # noqa: E402
 import scaleout as _so                       # noqa: E402
 
-# VERSION follows the configured runner cap (DCH_SO_RUNNER_CAP via .env/_bootenv): cap8 -> d30so8c,
-# cap6 -> d30so6c, cap4 -> d30_4h_so. NEW positions are tagged with this; on CLOSE a position's OWN
-# stored version is used (so switching the cap mid-stream never re-tags still-open older positions).
-VERSION = _so.VERSION
+# Version tag for live result writeback to trading_signals. EXEC_VERSION (.env) overrides so the live
+# bridge records under the strategy it ACTUALLY runs (e.g. 'd30so8f3h7' = close_frac 0.3 + 7d), which
+# the so.VERSION cap-derived tag can't express (it only encodes the runner cap). Default = so.VERSION
+# (cap8 -> d30so8c, cap6 -> d30so6c). NEW positions tag with this; on CLOSE a position's OWN stored
+# version is used (so changing it mid-stream never re-tags still-open older positions).
+VERSION = (tsc._read_env().get("EXEC_VERSION") or os.environ.get("EXEC_VERSION") or _so.VERSION)
 
 # lifecycle states (also referenced by the partial-unique open-symbol index in schema.sql)
 PENDING_ENTRY = "PENDING_ENTRY"      # signal accepted, entry order to be / is placed
