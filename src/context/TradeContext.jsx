@@ -733,11 +733,6 @@ export const TradeProvider = ({ children }) => {
     setLiveStatuses({});
     liveStatusesRef.current = {};
 
-    // 'demo' is self-contained (precomputed static JSON in DemoView) — it drives neither the
-    // backtest nor the live fetch. The chart still opens (ChartModal reads strategy from context
-    // + pulls klines straight from Binance), so we keep strategy/mode set but skip all I/O here.
-    if (mode === 'demo') return () => {};
-
     if (mode === 'backtest') {
       // Insights restored-or-fetched inside loadBacktest (cache-aware); don't blank here.
       loadBacktest();

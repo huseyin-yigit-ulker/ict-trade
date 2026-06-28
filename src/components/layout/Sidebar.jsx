@@ -106,10 +106,10 @@ const GROUPS = [
   // ── 30m + 4h family ──
   { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',      icon: <IconIntel />, modes: ['live', 'backtest'] },
   { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R',   icon: <IconIntel />, modes: ['live', 'backtest'] },
-  // The 30m+4h scale-out streams (4R/6R/8R) also carry a 'demo' mode = the demo-faithful portfolio backtest.
-  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
-  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
-  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest', 'demo'] },
+  // 2026-06-28: 'demo' mode retired — the Backtest tab now IS the live-faithful portfolio walk.
+  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
+  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['live', 'backtest'] },
   // margin≥0.25 ATR false-breakout filter (OOS-robust). Backtest = live-faithful portfolio walk.
   { key: 'd30so4cm',     label: 'DONCHIAN 30m+4h·WR 4R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd30so6cm',     label: 'DONCHIAN 30m+4h·WR 6R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
@@ -121,7 +121,7 @@ const Sidebar = () => {
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
 
-  const leafLabel = { live: t('Live'), backtest: t('Backtest'), demo: t('Demo') };
+  const leafLabel = { live: t('Live'), backtest: t('Backtest') };
 
   // The 8 strategy streams are collected under a collapsible "Stratejiler" header
   // so the rail stays calm now that "Genel Bakış" is the home. Default open;
