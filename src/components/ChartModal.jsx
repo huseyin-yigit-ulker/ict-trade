@@ -60,7 +60,7 @@ const ChartModal = () => {
   const soBookPct = (strategy && /f3/.test(strategy)) ? 30 : 60;
   const soRunPct = 100 - soBookPct;
   // Whole-trade time-stop in days (mark-to-market exit if neither cap/BE/SL): 'h7' variants = 7d, else 3d.
-  const soHorizD = (strategy && /h7/.test(strategy)) ? 7 : 3;
+  const soHorizD = (strategy && /(h7|vg)/.test(strategy)) ? 7 : 3;   // 'vg' twin is h7-based
   // Realistic-entry twins (·0.5R, version *c): the entry IS the +0.5R confirmation level, so the
   // fill is a STOP — price must RISE (long) / FALL (short) TO the entry, not pull back to it.
   // Realistic-entry (·0.5R confirm) twins: a trailing 'c', OR the cm/f3 variants (all confirm-entry).

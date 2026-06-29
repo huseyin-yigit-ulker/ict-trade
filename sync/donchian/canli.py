@@ -130,6 +130,31 @@ def fresh_signals(sym: str, now: pd.Timestamp, lookback: pd.Timedelta,
     return strat.us_hours_gate(fresh, sym, tf)   # US perps: only during US market hours
 
 
+_VOLD: dict = {}
+def _vol_change(sym: str, ts, k: int) -> float | None:
+    """Daily volume change at signal time: mean(vol[d-k:d]) / mean(vol[d-2k:d-k]), both windows
+    ending strictly BEFORE the signal day (no lookahead). >1 = expanding, <1 = contracting."""
+    import numpy as _np
+    if sym not in _VOLD:
+        d = tsc.fetch_klines(sym, "1d",
+                             int((pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=400)).timestamp() * 1000),
+                             int(pd.Timestamp.now(tz="UTC").timestamp() * 1000))
+        v = None
+        if d is not None and not d.empty:
+            v = d["volume"].astype(float); v.index = pd.to_datetime(v.index, utc=True).normalize()
+        _VOLD[sym] = v
+    v = _VOLD[sym]
+    if v is None:
+        return None
+    day = pd.Timestamp(ts)
+    day = (day.tz_localize("UTC") if day.tz is None else day.tz_convert("UTC")).normalize()
+    prior = v.loc[v.index < day]
+    if len(prior) < 2 * k:
+        return None
+    older = prior.iloc[-2 * k:-k].mean()
+    return float(prior.iloc[-k:].mean() / older) if older > 0 else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group(required=True)
@@ -152,6 +177,12 @@ def main():
     ap.add_argument("--rr", type=float, default=strat.RR,
                     help=f"reward/risk target (default {strat.RR}); non-4 appends its int to "
                          f"the mode tag, e.g. --rr 6 -> 'dch30_4h6'")
+    ap.add_argument("--volume-gate", type=float, default=None,
+                    help="VOLUME-CONTRACTION gate: only emit signals whose symbol's daily volume is "
+                         "contracting at signal time (vol[d-K:d]/vol[d-2K:d-K] < THR, no lookahead). "
+                         "Appends 'vg' to the mode tag, e.g. dch30_4h -> 'dch30_4hvg'. Lower SL-rate "
+                         "twin of d30so8f3h7 (version='d30so8f3vg').")
+    ap.add_argument("--volume-gate-k", type=int, default=10, help="vol-change window in days (default 10)")
     args = ap.parse_args()
     tg_syms = ({s.strip().upper() for s in args.telegram_symbols.split(",") if s.strip()}
                if args.telegram_symbols else None)
@@ -161,6 +192,8 @@ def main():
     mode = strat.hybrid_tag(tf, confirm_htf) if confirm_htf else strat.mode_for(tf)
     if int(args.rr) != int(strat.RR):
         mode += str(int(args.rr))
+    if args.volume_gate is not None:
+        mode += "vg"
     now = pd.Timestamp.now(tz="UTC")
     lookback = pd.Timedelta(hours=args.lookback_hours)
     htf_note = f" +{confirm_htf}-dir" if confirm_htf else ""
@@ -189,6 +222,16 @@ def main():
     # sent AT FORMATION (bar close) too — NOT gated on the +0.5R confirmation — so every setup is
     # alerted the moment its 30m+4h / 1h bar closes; the 0.5R direction check is the UI/live module's
     # job. tg_sent guards against duplicate alerts on re-scan (a failed send retries next run).
+    if args.volume_gate is not None:
+        kept = []
+        for s in found:
+            vc = _vol_change(s.symbol, s.timestamp, args.volume_gate_k)
+            if vc is not None and vc < args.volume_gate:
+                kept.append(s)
+        print(f"  volume-gate <{args.volume_gate:g} (K={args.volume_gate_k}d): "
+              f"kept {len(kept)}/{len(found)}", flush=True)
+        found = kept
+
     print(f"\n{len(found)} fresh signal(s).")
     # (Removed) the per-run "⚙️ <stream> çalıştı · HH:MM UTC · N sinyal" Telegram ping that fired on
     # EVERY emit run (signal or not, ~120 msgs/day) — pure run-status noise. Only the actual

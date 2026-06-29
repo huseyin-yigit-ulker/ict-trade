@@ -89,11 +89,17 @@ const IconTotal = () => (
 // period-fit. Only the OOS-positive "range book" remains (range +9.2R, range_q +26.2R,
 // v2_light_r +15.5R in 2025). All three are backtest-only (no live scanner).
 const GROUPS = [
-  // ⭐ THE LIVE STRATEGY — d30so8f3h7 is the ONLY stream running on Binance (real money):
+  // ⭐ THE REAL-MONEY STRATEGY — d30so8f3h7 is the ONLY stream running on Binance (real money):
   // 30m+4h breakout, ·0.5R confirm entry, book 30% at TP1, runner to +8R cap / BE / 7-day stop,
   // BTC/ETH/SOL/FET/ARB, one-per-symbol, $5 risk, risk-safe auto-leverage. Pinned to the top +
-  // highlighted. Every OTHER stream below is BACKTEST-ONLY (research; not traded live).
+  // highlighted. Every OTHER stream below is BACKTEST-ONLY (research; not traded live)…
   { key: 'd30so8f3h7',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
+
+  // …EXCEPT this volume-gated twin: same d30so8f3h7 signals/exit, but only TAKEN when daily volume
+  // is CONTRACTING at signal time (vch<0.9). Robustly fewer SL + smaller worst-month, higher WR/PF
+  // (fewer trades). LIVE-MONITORED (paper) via mode='dch30_4hvg' — CANLI in the dashboard but NOT
+  // on Binance (the executor still trades only the ungated d30so8f3h7). Backfill: volgate_backfill.py.
+  { key: 'd30so8f3vg',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g ·VG0.9', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
 
   // ── 1h family (backtest-only) ──
   { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['backtest'] },

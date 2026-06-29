@@ -48,6 +48,9 @@ export const STREAMS = [
   { key: 'd30so6f3',     version: 'd30so6f3',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·b30', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·b30' },
   { key: 'd30so8f3',     version: 'd30so8f3',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·b30' },
   { key: 'd30so8f3h7',   version: 'd30so8f3h7',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30·7g', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g' },
+  // volume-contraction-gated twin of d30so8f3h7: same signals/exit, only TAKEN when daily volume
+  // is contracting at signal time (vch<0.9) — robustly lower SL-rate + worst-month, higher WR/PF.
+  { key: 'd30so8f3vg',   version: 'd30so8f3vg',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30·7g ·VG', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.
