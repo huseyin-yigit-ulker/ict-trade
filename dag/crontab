@@ -41,11 +41,12 @@
 45 0 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 DCH_SO_RUNNER_CAP=6 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream d30_4h_so >> $HOME/ict-sync.log 2>&1
 # 01:00 — scale-out 8R cap -> d30so8c.
 0 1 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 DCH_SO_RUNNER_CAP=8 $HOME/ict-trade/.venv/bin/python sync/sync_daily.py --stream d30_4h_so >> $HOME/ict-sync.log 2>&1
-# 01:20 — demo-faithful backtest (portfolio walk: 1 pos/symbol · reverse-flip · max-concurrent).
-#         Upserts the realized trades into the backtest table (ict_trade.trading_signals) tagged
-#         version='<cap>_demo' for all caps (4R/6R/8R), so the Demo view refreshes end-of-day from
-#         the SAME DB the backtest reads — no JSON.
-20 1 * * * cd $HOME/ict-trade && DCH_ENTRY_AT_CONFIRM=1 $HOME/ict-trade/.venv/bin/python sync/live_exec/demo_backtest.py >> $HOME/ict-sync.log 2>&1
+# 01:20 — VOLUME-GATE backtest refresh: rebuild version='d30so8f3vg' (the vch<0.9-gated d30so8f3h7
+#         twin) from the full universe 2024-now each night (DELETE + re-upsert, idempotent), so the
+#         d30so8f3vg BACKTEST view stays current. The live dch30_4hvg emit feeds the CANLI view; this
+#         keeps the backtest view fresh. (Replaced the retired demo_backtest cron — demo was removed
+#         2026-06-28; demo_backtest.py is kept only as a template.)
+20 1 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/volgate_backfill.py --apply >> $HOME/ict-sync.log 2>&1
 
 # --- d30so8c LIVE EXECUTION (Binance USDⓈ-M; testnet/mainnet via .env BINANCE_TESTNET) ---
 # Reconciler (cron #1): reads the SAME dch30_4h signals, drives real orders reproducing
