@@ -84,7 +84,10 @@ const compute = (candles) => {
   return { vwapData, bandU, bandL, markers, last };
 };
 
-export default function MidasLiveChart() {
+// Live (default): anchor→now, polls every 30s. Static (startMs+endMs given): a fixed historical day
+// window (e.g. a backtest day), no polling — same VWAP/band/markers, fit to the whole window.
+export default function MidasLiveChart({ startMs = null, endMs = null }) {
+  const isStatic = Number.isFinite(startMs) && Number.isFinite(endMs);
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
@@ -95,6 +98,7 @@ export default function MidasLiveChart() {
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
+    framedRef.current = false; markersRef.current = null;   // fresh per (re)mount / window change
     const chart = createChart(containerRef.current, {
       layout: { background: { type: 'solid', color: '#0B0E11' }, textColor: '#EAECEF',
         fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace" },
@@ -124,9 +128,10 @@ export default function MidasLiveChart() {
     let cancelled = false;
     const load = async () => {
       try {
-        const now = Date.now();
-        const start = fxAnchorMs(now);
-        const base = `symbol=${SYMBOL}&interval=1m&startTime=${start}&endTime=${now}&limit=1500`;
+        const end = isStatic ? endMs : Date.now();
+        // anchor the VWAP at the FX session that contains the window start, bounded to ~1450 1m bars
+        const start = Math.max(fxAnchorMs(isStatic ? startMs : end), end - 1450 * 60000);
+        const base = `symbol=${SYMBOL}&interval=1m&startTime=${start}&endTime=${end}&limit=1500`;
         let raw = await (await fetch(`https://fapi.binance.com/fapi/v1/klines?${base}`)).json();
         if (!Array.isArray(raw)) raw = await (await fetch(`https://api.binance.com/api/v3/klines?${base}`)).json();
         if (!Array.isArray(raw) || !raw.length) { if (!cancelled) setStatus('Veri yok'); return; }
@@ -139,20 +144,23 @@ export default function MidasLiveChart() {
         else markersRef.current.setMarkers(markers);
         if (!framedRef.current && candles.length) {
           const n = candles.length;
-          try { chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 240), to: n + 3 }); } catch { chart.timeScale().fitContent(); }
+          try {
+            if (isStatic) chart.timeScale().fitContent();                                  // whole day
+            else chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 240), to: n + 3 });  // live: last ~4h
+          } catch { chart.timeScale().fitContent(); }
           framedRef.current = true;
         }
         setLast(lm); setStatus('');
       } catch { if (!cancelled) setStatus('Veri alınamadı (tekrar denenecek)'); }
     };
     load();
-    const id = setInterval(load, 30000);
+    const id = isStatic ? null : setInterval(load, 30000);
     const ro = new ResizeObserver(() => {
       if (chartRef.current && containerRef.current) chartRef.current.applyOptions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
     });
     ro.observe(containerRef.current);
-    return () => { cancelled = true; clearInterval(id); ro.disconnect(); chart.remove(); chartRef.current = null; };
-  }, []);
+    return () => { cancelled = true; if (id) clearInterval(id); ro.disconnect(); chart.remove(); chartRef.current = null; };
+  }, [startMs, endMs]);
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
   const c = last?.cond;
@@ -178,7 +186,9 @@ export default function MidasLiveChart() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0B0E11', color: '#EAECEF' }}>
       <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', flexWrap: 'wrap', padding: '10px 14px',
         borderBottom: '1px solid #1E2329', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
-        <strong style={{ color: '#F0B90B' }}>MIDAS · XAUUSDT 1m · CANLI</strong>
+        <strong style={{ color: '#F0B90B' }}>MIDAS · XAUUSDT 1m · {isStatic
+          ? new Date(endMs).toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
+          : 'CANLI'}</strong>
         <span>Fiyat <b>{fmt(last?.price)}</b></span>
         <span style={{ color: '#3B82F6' }}>VWAP <b>{fmt(last?.vwap)}</b></span>
         <span>fiyat−VWAP <b>{last ? fmt(last.price - last.vwap) : '—'}</b></span>
@@ -186,7 +196,7 @@ export default function MidasLiveChart() {
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
       </div>
-      {c && (
+      {!isStatic && c && (
         <div style={{ padding: '8px 14px', borderBottom: '1px solid #1E2329', display: 'flex', flexDirection: 'column',
           gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
           <span style={{ color: '#848E9C', fontSize: 10, letterSpacing: '0.04em' }}>SİNYAL KOŞULLARI (anlık · hepsi ✓ olunca sinyal oluşur)</span>

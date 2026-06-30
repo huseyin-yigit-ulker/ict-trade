@@ -1023,6 +1023,20 @@ const Dashboard = () => {
                         </span>
                       </div>
                     </div>
+                    {isTrailing && (() => {
+                      // MIDAS backtest: that day's XAU 1m price + anchored VWAP + signal-formation
+                      // markers ON TOP, the day's trade cards below. Window = the day's trades' span.
+                      const dts = selectedDayTrades.map((s) => s.dateObj?.getTime()).filter(Number.isFinite);
+                      if (!dts.length) return null;
+                      const exs = selectedDayTrades.map((s) => s.exitTs).filter(Number.isFinite);
+                      const startMs = Math.min(...dts);
+                      const endMs = Math.max(Math.max(...dts), exs.length ? Math.max(...exs) : 0) + 2 * 60 * 60 * 1000;
+                      return (
+                        <div style={{ height: 460, marginBottom: 16, border: '1px solid #1E2329', borderRadius: 10, overflow: 'hidden' }}>
+                          <MidasLiveChart startMs={startMs} endMs={endMs} />
+                        </div>
+                      );
+                    })()}
                     {renderTradeCards(selectedDayTrades)}
                   </div>
                 );

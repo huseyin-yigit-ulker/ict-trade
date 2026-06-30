@@ -217,6 +217,18 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
   reverted (metrics live on this chart, not the trade chart); the early standalone /midas/chart route
   was folded into the live-view embed.
 
+### 2026-06-30 (2) — closed-trade cards + per-day backtest chart (commits d2468a8, …)
+- **Cards show realised R + status, closed trades stop fetching:** `getLiveRLabel` reads the trailing
+  trade's stored `context.pnl_r` (e.g. +2.11R / −1.04R) and the `Çıkış` field shows `context.exit_px`;
+  a MIDAS row with `context.pos='closed'` is excluded from the live candle poll (TradeContext
+  updateStatuses) so closed trades stop pulling price ("kapanan işlem veri almayı kessin"). Surfaces
+  once the 30s/visibility loadLive refetch sees pos=closed.
+- **Per-day BACKTEST chart (`MidasLiveChart` static mode):** the component now takes optional
+  `startMs`/`endMs` props → a fixed historical-day window (no polling, VWAP anchored at that session,
+  fit-to-window, no live conditions panel). Embedded in the MIDAS backtest day-notebook ABOVE the
+  day's cards: that day's XAU 1m price + anchored VWAP + ±0.25·ATR band + signal-formation AL/SAT
+  markers, with the day's trade cards below.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

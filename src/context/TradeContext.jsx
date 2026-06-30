@@ -993,8 +993,12 @@ export const TradeProvider = ({ children }) => {
     };
 
     const updateStatuses = async () => {
-      // Only the still-open signals need a refresh; terminal ones are fixed.
-      const pending = pollSet.filter((sig) => !resolveLiveMeta(liveStatusesRef.current[sig.id]?.status).terminal);
+      // Only the still-open signals need a refresh; terminal ones are fixed. A closed MIDAS trade
+      // (context.pos='closed', set by canli) is terminal too — stop fetching its live candles
+      // immediately, even before its status string recomputes ("kapanan işlem veri almayı kessin").
+      const pending = pollSet.filter((sig) =>
+        sig?.context?.pos !== 'closed'
+        && !resolveLiveMeta(liveStatusesRef.current[sig.id]?.status).terminal);
       if (pending.length === 0) return;
 
       // ONE 1m fetch per SYMBOL (many signals share a symbol), all symbols in PARALLEL —
