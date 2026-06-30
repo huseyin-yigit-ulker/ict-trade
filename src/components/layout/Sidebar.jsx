@@ -101,6 +101,12 @@ const GROUPS = [
   // on Binance (the executor still trades only the ungated d30so8f3h7). Backfill: volgate_backfill.py.
   { key: 'd30so8f3vg',   name: 'FABLE', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g ·VG0.9', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true },
 
+  // 🥇 MIDAS — GOLD-ONLY (XAUUSDT) intraday VWAP-trend, INDEPENDENT from the Donchian book.
+  // 1m pullback-to-VWAP continuation, 3.5×ATR trailing, intraday-only ("anlik ac-kapa"), 2026.
+  // LIVE = PAPER signal feed (mode='midas', sync/midas/canli.py); nightly backtest sync/midas/backfill.py.
+  // FX/ECN cost model ($0.50/oz) — paper-only, the real-money executor is NOT touched.
+  { key: 'midas',        name: 'MIDAS', label: 'ALTIN VWAP-Trend (XAU 1m·trailing)', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true },
+
   // ── 1h family (backtest-only) ──
   { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['backtest'] },
   { key: 'd1h_so4c',     label: 'DONCHIAN 1h·WR 4R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },

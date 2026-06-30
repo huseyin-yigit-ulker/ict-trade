@@ -6,7 +6,7 @@ import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 import { usSignalsActive } from '../../utils/sessions';
 import SessionInfo from '../SessionInfo';
 
-const STRAT_BASE_LABEL = { main: 'Main', range: 'Range', opus: 'Opus' };
+const STRAT_BASE_LABEL = { main: 'Main', range: 'Range', opus: 'Opus', midas: 'Midas' };
 // light twins reuse the parent label + " · Light"
 const STRAT_LABEL = { ...STRAT_BASE_LABEL };
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };

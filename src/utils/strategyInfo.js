@@ -143,6 +143,33 @@ export const STRATEGY_INFO = {
       caveat: 'Backtest-only (no live scanner; could be resolved as scale-out off the 1h donchian live signals if wanted). Fewer but longer-horizon signals than the 30m+4h scale-out (1h bars). Crypto+XAU universe. Slippage not modelled → live R below backtest.',
     },
   },
+
+  // 🥇 MIDAS — gold-only intraday VWAP-trend (INDEPENDENT from the Donchian book).
+  midas: {
+    icon: '🥇', accent: '#D4AF37',
+    tr: {
+      title: 'MIDAS · ALTIN VWAP-Trend', tagline: 'Sadece XAUUSDT · 1m · trend yönünde VWAP’a geri çekilmeyi al, 3.5×ATR trailing ile koştur',
+      summary: 'Donchian/ICT kitabından BAĞIMSIZ, sıfırdan araştırılmış altına-özel intraday strateji. Bir FX enstrümanı olarak altının trendleyen yapısını kullanır: günlük anchored-VWAP eğimiyle belirlenen trend yönünde, fiyat VWAP’a geri çekilince girer; SABİT HEDEF KOYMAZ, 3.5×ATR trailing stop ile gün-içi koşturup seans-sonu kapatır ("anlık aç-kapa", gecelik pozisyon yok). Sadece gerçek FX-altın piyasa saatlerinde işlem açar.',
+      sections: [
+        { h: 'Giriş (LONG)', t: 'close > VWAP (trend yukarı) + VWAP eğimi 60-bar yukarı + bu bar VWAP’a geri çekilip dokundu (low ≤ VWAP+0.25·ATR) + boğa geri-alış barı (close>open). SHORT simetrik. Karar bar KAPANIŞINDA, giriş bir SONRAKİ bar açılışında (lookahead yok).' },
+        { h: 'Çıkış & risk', t: 'Başlangıç stop = 1.5×ATR(15m) (1R). SABİT KÂR HEDEFİ YOK — çıkış = 3.5×ATR trailing stop VEYA 8 saat zaman-stop VEYA seans-sonu zorunlu düz (Cuma 17:00 ET / günlük rollover / hafta sonu). Tek pozisyon. Kazançları bırakır (ort. kazanç +2.25R / kayıp −0.90R).' },
+        { h: 'Sonuçlar (2026-H1, piyasa-açık saatler, $0.50/oz maliyet)', t: '528 işlem · +145R · PF 1.48 · WR %37 · maxDD ~−34R. In-Sample (Oca-Nis) +83 / Out-of-Sample (May-Haz) +61. Londra seansı (07-13 UTC) elendi — tek net-negatif seans (hem IS hem OOS), atınca +118R→+145R. Doğrulama: parametre platosu + dürüst IS→OOS + random-null (p<0.005) + seans IS/OOS analizi + bağımsız tekrar-kodlama virgülüne kadar aynı.' },
+        { h: 'Evren & saat', t: 'Sadece XAUUSDT (altın). FX-altın saatleri Paz 18:00 ET → Cuma 16:00 ET (hafta sonu için 1 saat erken flat), günlük 17:00-18:00 ET molası + Londra 07-13 UTC penceresi hariç. Hafta sonu/kapalıda açık pozisyon kalmaz. 2026.' },
+      ],
+      caveat: 'MALİYET KRİTİK: bu bir FX modeli ($0.50/oz ≈ ECN spread). Binance taker komisyonunda (~10 bps ≈ $4/oz) STRATEJİ NEGATİFE DÖNER → dar-spread ECN FX/CFD veya maker emir şart. Canlı = PAPER sinyal akışı (gerçek-para executor’a dokunulmaz; 1m trailing’i sinyal-tabanlı canlı model birebir takip edemez — backtest otoritedir). Sadece 6 ay veri; beklentiyi bootstrap alt sınırı ~+20-25R olarak boyutlandır.',
+    },
+    en: {
+      title: 'MIDAS · GOLD VWAP-Trend', tagline: 'XAUUSDT only · 1m · buy the pullback to VWAP in the trend, ride a 3.5×ATR trailing stop',
+      summary: 'A gold-specific intraday strategy researched from scratch, INDEPENDENT from the Donchian/ICT book. It exploits gold’s trending character as an FX instrument: in the direction of the anchored-VWAP slope, enter when price pulls back to VWAP; take NO fixed target and ride a 3.5×ATR trailing stop, flat by session close ("instant open/close", no overnight). Trades only during real FX-gold market hours.',
+      sections: [
+        { h: 'Entry (LONG)', t: 'close > VWAP (uptrend) + VWAP rising over 60 bars + this bar pulled back to VWAP (low ≤ VWAP+0.25·ATR) + bullish reclaim (close>open). SHORT symmetric. Decided at bar CLOSE, filled at the NEXT bar open (no lookahead).' },
+        { h: 'Exit & risk', t: 'Initial stop = 1.5×ATR(15m) (1R). NO fixed target — exit = 3.5×ATR trailing stop OR 8h time-stop OR forced session-close flat (Fri 17:00 ET / daily rollover / weekend). One position. Lets winners run (avg win +2.25R / loss −0.90R).' },
+        { h: 'Results (2026-H1, market hours, $0.50/oz cost)', t: '528 trades · +145R · PF 1.48 · WR 37% · maxDD ~−34R. In-Sample (Jan-Apr) +83 / Out-of-Sample (May-Jun) +61. The London session (07-13 UTC) is dropped — the only net-negative session in BOTH halves; dropping it lifts +118R→+145R. Validation: parameter plateau + honest IS→OOS + random-null (p<0.005) + per-session IS/OOS + an independent reimplementation reproduced it to the decimal.' },
+        { h: 'Universe & hours', t: 'XAUUSDT only. FX-gold hours Sun 18:00 ET → Fri 16:00 ET (flat 1h early for the weekend), excluding the daily 17:00-18:00 ET break + the London 07-13 UTC window. No position is held over the weekend / closed market. 2026.' },
+      ],
+      caveat: 'COST IS CRITICAL: this is an FX model ($0.50/oz ≈ ECN spread). On Binance taker fees (~10 bps ≈ $4/oz) the strategy turns NEGATIVE → a tight-spread ECN FX/CFD account or maker fills is required. Live = PAPER signal feed (the real-money executor is untouched; a 1m trailing stop can’t be tracked faithfully by the signal-based live model — the backtest is authoritative). Only 6 months of data; size for the bootstrap lower bound ~+20-25R.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {

@@ -132,6 +132,12 @@ const EN = {
   'Risk': 'Risk',
   'Stop': 'Stop',
   'Çıkış': 'Exit',
+  'İz Süren Stop': 'Trailing Stop',
+  'İşlem Seansları (UTC)': 'Trading Sessions (UTC)',
+  'Londra açılış-öncesi (07-13 UTC) atlanır · Cuma 16:00 ET düz · hafta sonu pozisyon yok':
+    'London pre-NY (07-13 UTC) skipped · flat Fri 16:00 ET · no weekend positions',
+  'işlem': 'trades',
+  'alınmaz': 'not taken',
   // Scale-out (d30_4h_so) chart panel
   'Runner Cap (+{cap}R)': 'Runner Cap (+{cap}R)',
   'Runner Cap +{cap}R': 'Runner Cap +{cap}R',

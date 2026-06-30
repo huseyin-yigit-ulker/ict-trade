@@ -51,6 +51,13 @@ export const STREAMS = [
   // volume-contraction-gated twin of d30so8f3h7: same signals/exit, only TAKEN when daily volume
   // is contracting at signal time (vch<0.9) — robustly lower SL-rate + worst-month, higher WR/PF.
   { key: 'd30so8f3vg',   version: 'd30so8f3vg',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30·7g ·VG', realistic: true, label: 'FABLE · DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9' },
+
+  // ── MIDAS — gold-only intraday VWAP-trend (INDEPENDENT from the Donchian book) ──
+  // XAUUSDT 1m: trend-continuation — buy the pullback to anchored daily VWAP (sell the rally),
+  // risk 1.5×ATR, NO fixed target, ride a 3.5×ATR trailing stop to a session/8h exit, intraday-only.
+  // FX (ECN) cost model ($0.50/oz round-trip) — NOT crypto-taker (it dies at 10 bps). 2026, gold-only.
+  // Live = PAPER signal feed (mode='midas', sync/midas/canli.py); nightly backtest sync/midas/backfill.py.
+  { key: 'midas',        version: 'midas',        exit: 'full', family: 'trend', tf: 'XAU 1m·VWAP-trend·trail', realistic: true, label: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing)' },
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

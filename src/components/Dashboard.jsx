@@ -189,6 +189,9 @@ const Dashboard = () => {
   const soCapR = soCapFromStrategy(strategy);
   const soConservative = isConfirmStrategy(strategy);
   const soBookFrac = soBookFromStrategy(strategy);
+  // MIDAS (trailing-stop, no fixed TP/SL R:R): cards show Entry + Exit + the realised result only —
+  // no R:R pill, no Hedef/Risk row, no risk/reward bar (those imply a fixed target that doesn't exist).
+  const isTrailing = strategy === 'midas';
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -639,6 +642,51 @@ const Dashboard = () => {
     );
   };
 
+  // MIDAS-only: which intraday SESSIONS (UTC) the strategy takes trades in + the live distribution
+  // of the loaded trades. Mirrors the strategy filter exactly (London 07-13 UTC skipped).
+  const MIDAS_SESSIONS = [
+    { key: 'asia',    label: 'Asya',            range: '22:00–07:00', on: true,  test: (h) => h >= 22 || h < 7 },
+    { key: 'london',  label: 'Londra (açılış-öncesi)', range: '07:00–13:00', on: false, test: (h) => h >= 7 && h < 13 },
+    { key: 'overlap', label: 'Londra–NY Overlap', range: '13:00–17:00', on: true,  test: (h) => h >= 13 && h < 17 },
+    { key: 'ny',      label: 'NY öğleden sonra', range: '17:00–21:00', on: true,  test: (h) => h >= 17 && h < 21 },
+  ];
+  const renderMidasSessions = () => {
+    if (!isTrailing) return null;
+    const agg = {};
+    filteredSignals.forEach((s) => {
+      const h = new Date(s.dateObj).getUTCHours();
+      const sess = MIDAS_SESSIONS.find((x) => x.test(h));
+      if (!sess) return;
+      const r = Number.isFinite(s.pnlR) ? s.pnlR : 0;
+      agg[sess.key] = agg[sess.key] || { n: 0, R: 0 };
+      agg[sess.key].n += 1; agg[sess.key].R += r;
+    });
+    return (
+      <div className="session-card">
+        <div className="session-card__head">
+          <span className="session-card__title">🕐 {t('İşlem Seansları (UTC)')}</span>
+          <span className="session-card__note">{t('Londra açılış-öncesi (07-13 UTC) atlanır · Cuma 16:00 ET düz · hafta sonu pozisyon yok')}</span>
+        </div>
+        <div className="session-card__grid">
+          {MIDAS_SESSIONS.map((s) => {
+            const a = agg[s.key] || { n: 0, R: 0 };
+            return (
+              <div key={s.key} className={`session-pill ${s.on ? 'session-pill--on' : 'session-pill--off'}`}>
+                <div className="session-pill__name">{s.on ? '✅' : '⛔'} {s.label}</div>
+                <div className="session-pill__range">{s.range} UTC</div>
+                <div className="session-pill__stat">
+                  {s.on
+                    ? <>{a.n} {t('işlem')} · <b className={a.R >= 0 ? 'win' : 'loss'}>{a.R >= 0 ? '+' : ''}{a.R.toFixed(1)}R</b></>
+                    : <span className="loss">{t('alınmaz')}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   // Per-period R-bar (scaled to the level's max |R|) + a downsampled cumulative
   // spark, so the Years→Months→Days drill is instantly comparable at a glance.
   const drillExtra = (bucket, maxAbs) => (
@@ -715,7 +763,7 @@ const Dashboard = () => {
                   <span className="time-ago"> · {timeAgo(effDate, t)}</span>
                 )}
               </span>
-              {rr != null && (
+              {rr != null && !isTrailing && (
                 <span className="rr-pill" title={`Risk-Reward · 1:${rr.toFixed(2)}`}>1:{rr.toFixed(2)}</span>
               )}
             </div>
@@ -768,6 +816,16 @@ const Dashboard = () => {
                   )}
                 </span>
               </div>
+              {isTrailing ? (
+              <div className="trade-metric intel-exec__tpsl">
+                <span className="metric-label">{t('Çıkış')}</span>
+                <span className="metric-value">
+                  {Number.isFinite(sig.exitPrice)
+                    ? <CopyVal value={sig.exitPrice} title={t('Kopyala')}>{formatPrice(sig.exitPrice)}</CopyVal>
+                    : '--'}
+                </span>
+              </div>
+              ) : (
               <div className="trade-metric intel-exec__tpsl">
                 <span className="metric-label">{t('Hedef')} / {t('Risk')}</span>
                 <span className="metric-value">
@@ -778,9 +836,11 @@ const Dashboard = () => {
                   {riskPct != null && <span className="intel-pct loss"> {riskPct.toFixed(2)}%</span>}
                 </span>
               </div>
+              )}
               </div>
 
               {(() => {
+                if (isTrailing) return null;   // no fixed risk/reward to chart for a trailing exit
                 const rk = Math.abs(riskPct ?? 0);
                 const rw = Math.abs(targetPct ?? 0);
                 if (!(rk > 0 && rw > 0)) return null;
@@ -972,6 +1032,7 @@ const Dashboard = () => {
       {renderError()}
       <StrategyIntro />
       {renderKpiHero()}
+      {renderMidasSessions()}
       {filteredSignals.length === 0 && (
         <div className="dash-empty">
           <PusuLogo size={46} className="dash-empty__logo" animated />

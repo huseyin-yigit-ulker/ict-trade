@@ -102,7 +102,7 @@ const ENTRY_CONFIRM_BUF = 0.5;
 // (sync/donchian/scaleout.py), exactly as karma/½TP reuse their parent's live signals.
 // d1h_so{4,6,8}c = the 1h scale-out family (backtest-only): the 1h donchian base entry
 // (ER-gated, no 4h confirm) resolved under the SAME +1R-then-runner-cap exit as d30so*.
-const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30_4h6c: 'dch30_4h6c', d30_4h_soc: 'd30_4h_soc', d30so6c: 'd30so6c', d30so8c: 'd30so8c', d1h_so4c: 'd1h_so4c', d1h_so6c: 'd1h_so6c', d1h_so8c: 'd1h_so8c', d30so4cm: 'd30so4cm', d30so6cm: 'd30so6cm', d30so8cm: 'd30so8cm', d1hso4cm: 'd1hso4cm', d1hso6cm: 'd1hso6cm', d1hso8cm: 'd1hso8cm', d30so4f3: 'd30so4f3', d30so6f3: 'd30so6f3', d30so8f3: 'd30so8f3', d30so8f3h7: 'd30so8f3h7', d30so8f3vg: 'd30so8f3vg' };
+const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30_4h6c: 'dch30_4h6c', d30_4h_soc: 'd30_4h_soc', d30so6c: 'd30so6c', d30so8c: 'd30so8c', d1h_so4c: 'd1h_so4c', d1h_so6c: 'd1h_so6c', d1h_so8c: 'd1h_so8c', d30so4cm: 'd30so4cm', d30so6cm: 'd30so6cm', d30so8cm: 'd30so8cm', d1hso4cm: 'd1hso4cm', d1hso6cm: 'd1hso6cm', d1hso8cm: 'd1hso8cm', d30so4f3: 'd30so4f3', d30so6f3: 'd30so6f3', d30so8f3: 'd30so8f3', d30so8f3h7: 'd30so8f3h7', d30so8f3vg: 'd30so8f3vg', midas: 'midas' };
 // Live signals table (ict_trade.signals) tag per module: main -> mode='live',
 // impulse -> mode='impulse' (dag.py emits each hourly). The *_half streams read the
 // SAME live signals as their parent (the ½TP exit model only changes what happens
@@ -112,13 +112,13 @@ const STRATEGY_VERSION = { donchianc: 'donchianc', dch30_4hc: 'dch30_4hc', dch30
 // RANGE reads mode='range' (a dedicated RANGE_DEV scanner, all sessions/symbols).
 // d30_4h_so reuses the dch30_4h live signals (only the exit model differs), so its live
 // mode is 'dch30_4h' — same as the parent hybrid.
-const STRATEGY_LIVE_MODE = { donchianc: 'donchian', dch30_4hc: 'dch30_4h', dch30_4h6c: 'dch30_4h6', d30_4h_soc: 'dch30_4h', d30so6c: 'dch30_4h', d30so8c: 'dch30_4h', d1h_so4c: 'donchian', d1h_so6c: 'donchian', d1h_so8c: 'donchian', d30so4cm: 'dch30_4h', d30so6cm: 'dch30_4h', d30so8cm: 'dch30_4h', d1hso4cm: 'donchian', d1hso6cm: 'donchian', d1hso8cm: 'donchian', d30so4f3: 'dch30_4h', d30so6f3: 'dch30_4h', d30so8f3: 'dch30_4h', d30so8f3h7: 'dch30_4h', d30so8f3vg: 'dch30_4hvg' };
+const STRATEGY_LIVE_MODE = { donchianc: 'donchian', dch30_4hc: 'dch30_4h', dch30_4h6c: 'dch30_4h6', d30_4h_soc: 'dch30_4h', d30so6c: 'dch30_4h', d30so8c: 'dch30_4h', d1h_so4c: 'donchian', d1h_so6c: 'donchian', d1h_so8c: 'donchian', d30so4cm: 'dch30_4h', d30so6cm: 'dch30_4h', d30so8cm: 'dch30_4h', d1hso4cm: 'donchian', d1hso6cm: 'donchian', d1hso8cm: 'donchian', d30so4f3: 'dch30_4h', d30so6f3: 'dch30_4h', d30so8f3: 'dch30_4h', d30so8f3h7: 'dch30_4h', d30so8f3vg: 'dch30_4hvg', midas: 'midas' };
 // Backtest rows don't store the signal timeframe; tag it per strategy so the chart shifts
 // signal_time (bar OPEN) to the real fire/fill moment (bar CLOSE) by the CORRECT LTF.
 // donchian = 1h; the hybrids (dch30_4h / dch30_4h6 / d30_4h_so) fire on 30m bars + 4h confirm.
 // (Bug fix 2026-06-19: was hardcoded '1h' for all, so 30m streams' entry-fill scan started
 // 30 min late and missed the fill — the chart looked like "entry never came".)
-const STRATEGY_LTF = { donchianc: '1h', dch30_4hc: '30m', dch30_4h6c: '30m', d30_4h_soc: '30m', d30so6c: '30m', d30so8c: '30m', d1h_so4c: '1h', d1h_so6c: '1h', d1h_so8c: '1h', d30so4cm: '30m', d30so6cm: '30m', d30so8cm: '30m', d1hso4cm: '1h', d1hso6cm: '1h', d1hso8cm: '1h', d30so4f3: '30m', d30so6f3: '30m', d30so8f3: '30m', d30so8f3h7: '30m', d30so8f3vg: '30m' };
+const STRATEGY_LTF = { donchianc: '1h', dch30_4hc: '30m', dch30_4h6c: '30m', d30_4h_soc: '30m', d30so6c: '30m', d30so8c: '30m', d1h_so4c: '1h', d1h_so6c: '1h', d1h_so8c: '1h', d30so4cm: '30m', d30so6cm: '30m', d30so8cm: '30m', d1hso4cm: '1h', d1hso6cm: '1h', d1hso8cm: '1h', d30so4f3: '30m', d30so6f3: '30m', d30so8f3: '30m', d30so8f3h7: '30m', d30so8f3vg: '30m', midas: '1m' };
 const STRATEGY_HTF = { donchian: null, dch30_4h: '4h', dch30_4h6: '4h', d30_4h_so: '4h' };
 // No standalone ½TP stream remains (dch30_4hh removed — 2024-negative OOS).
 const HALF_STRATEGIES = new Set();
@@ -427,6 +427,9 @@ export const TradeProvider = ({ children }) => {
           ltfTimeframe: item.ltf_timeframe ?? null,
           htfTimeframe: item.htf_timeframe ?? null,
           geometry: (item.context && item.context.geometry) || item.geometry || null,
+          // MIDAS trailing-stop path: [[unix_sec, stop_price], …] + the fixed initial SL (1R).
+          trail: (item.context && item.context.trail) || null,
+          initSl: (item.context && Number.isFinite(item.context.init_sl)) ? item.context.init_sl : null,
         };
       })
       .filter(Boolean)
@@ -532,6 +535,10 @@ export const TradeProvider = ({ children }) => {
         quality: r.quality,
         confluence_score: r.confluence_score,
         context: r.context,
+        // MIDAS live: trailing-stop path (canli.track_open writes it into context each run) so the
+        // live chart draws the SAME stepped trailing-stop line as the backtest.
+        trail: (r.context && r.context.trail) || null,
+        initSl: (r.context && Number.isFinite(r.context.init_sl)) ? r.context.init_sl : null,
       }));
 
       // LIGHT modules: keep ONLY signals fired in the light band [0.20,0.35) (the
@@ -778,6 +785,17 @@ export const TradeProvider = ({ children }) => {
   const normalizeForBinance = useCallback((sym) => (sym ? sym.replace(/[^A-Za-z0-9]/g, '') : ''), []);
 
   const computeLiveStatusFromCandles = useCallback((sig, candles) => {
+    // MIDAS (trailing): the real exit is a trailing stop the nominal-tp/sl fill-scan CANNOT see, so
+    // status is AUTHORITATIVE from canli (context.pos) — open -> Active (never falsely 'TP Oldu' at
+    // the nominal target), closed -> terminal (green if locked profit, red if loss) from stored pnl_r.
+    if (strategyRef.current === 'midas') {
+      const lastPrice = candles?.length ? candles[candles.length - 1].close : null;
+      if (sig?.context?.pos === 'closed') {
+        const r = Number(sig?.context?.pnl_r);
+        return { status: (Number.isFinite(r) && r < 0) ? 'SL Oldu' : 'TP Oldu', lastPrice };
+      }
+      return { status: 'İşlem Aktif (Entry Geldi)', lastPrice };
+    }
     if (!sig || !sig.entry || !sig.tp || !sig.sl || !sig.dir || !candles?.length) {
       return { status: 'Sinyal Bekliyor', lastPrice: null };
     }

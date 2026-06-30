@@ -66,6 +66,10 @@ const ChartModal = () => {
   // Realistic-entry (·0.5R confirm) twins: a trailing 'c', OR the cm/f3 variants (all confirm-entry).
   // Without this, d30so8f3h7 (ends '7') was drawn with RAW breakout levels — wrong entry/TP1.
   const isConfirmEntry = !!strategy && (strategy.endsWith('c') || /(cm|f3)/.test(strategy));
+  // MIDAS (trailing-stop, NO fixed TP/SL R:R): the exit is a 3.5×ATR trailing stop, not a planned
+  // target. Render ENTRY + EXIT + the realised result only — no phantom green-TP / red-SL target
+  // lines, no Hedef / Stop / Risk-Reward rows, no Sinyal marker. The zone spans entry→actual exit.
+  const isTrailing = strategy === 'midas';
 
   // Use the CURRENT DB row for this trade (pnl_r / exit / status) rather than the possibly-stale
   // bulk-loaded backtest set — so a re-backfill is reflected the moment the chart opens, without a
@@ -93,6 +97,34 @@ const ChartModal = () => {
       .catch(() => { /* keep the loaded values on failure */ });
     return () => { alive = false; };
   }, [activeSignal?.symbol, activeSignal?.dir, activeSignal?.dateObj, mode, strategy]);
+
+  // MIDAS LIVE: poll the live row's context every 15s so the trailing-stop line keeps GROWING on the
+  // chart as canli (cron, every 1 min) ratchets it — without reopening the modal. Held in a ref so the
+  // 3s render loop reads the freshest trail without re-subscribing.
+  const liveTrailRef = useRef(null);
+  useEffect(() => {
+    liveTrailRef.current = null;
+    if (mode !== 'live' || strategy !== 'midas' || !activeSignal?.id) return undefined;
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    if (!url || !key) return undefined;
+    let alive = true;
+    const pull = () => {
+      fetch(`${url}/rest/v1/signals?id=eq.${activeSignal.id}&select=context`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, 'Accept-Profile': 'ict_trade' },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((rows) => {
+          if (!alive || !Array.isArray(rows) || !rows[0]?.context) return;
+          const tr = rows[0].context.trail;
+          if (Array.isArray(tr) && tr.length) liveTrailRef.current = tr;
+        })
+        .catch(() => {});
+    };
+    pull();
+    const id = setInterval(pull, 15000);
+    return () => { alive = false; clearInterval(id); };
+  }, [mode, strategy, activeSignal?.id]);
 
   // The signal the chart/panel actually renders: the loaded row with its outcome (pnl_r / exit /
   // status) overridden by the fresh DB read when available.
@@ -459,7 +491,7 @@ const ChartModal = () => {
               if (capHit) { closeBarSec = c.time; closeBarIdx = idx; break; }                    // runner +4R cap (win)
             }
           }
-        } else if (entry && tp && sl && signalVisible) {
+        } else if (entry && tp && sl && signalVisible && !isTrailing) {
           const halfLevel = partialLevel;   // ½TP partial (null for the base full-TP stream)
           let hit = false, partial = false, stop = sl;
           for (let idx = 0; idx < candles.length; idx++) {
@@ -513,6 +545,18 @@ const ChartModal = () => {
         if (mode === 'backtest' && Number.isFinite(sig.entryFillTs)) {
           entryFilled = true;
           entryFillSec = snapBar(sig.entryFillTs);
+        }
+        // MIDAS LIVE (trailing): no nominal-tp/sl scan ran — the entry fills at the signal bar and the
+        // position stays OPEN (closeBarSec=null -> nothing ghosted, candles keep their green/red). Only
+        // when canli marks it closed (context.pos) do we anchor the close at the last trailing-stop point.
+        if (mode === 'live' && isTrailing) {
+          entryFilled = true;
+          entryFillSec = entryFillSec ?? snapBar(entryTs);
+          if (activeSignal?.context?.pos === 'closed'
+              && Array.isArray(activeSignal.trail) && activeSignal.trail.length) {
+            closeBarSec = snapBar(activeSignal.trail[activeSignal.trail.length - 1][0]);
+            closeBarIdx = candles.findIndex((c) => c.time === closeBarSec);
+          }
         }
 
         // Live terminal state — computed early so the close anchor + trim can use it.
@@ -621,16 +665,30 @@ const ChartModal = () => {
           // The trade visualisation (zones) begins at the ENTRY FILL, not the signal bar — for the
           // ·0.5R streams the position opens only once price reaches the +0.5R confirmation level.
           const tradeStartSec = (entryFilled && entryFillSec != null) ? entryFillSec : entryTs;
-          const zoneTop = (isScaleOut && partialLevel != null) ? partialLevel : tp;
+          // MIDAS (trailing): the zone spans entry → the ACTUAL exit (closed) or → the CURRENT
+          // trailing-stop level (live open = the locked-in zone). Everyone else: entry → tp / +1R band.
+          const trailLast = (Array.isArray(activeSignal.trail) && activeSignal.trail.length)
+            ? activeSignal.trail[activeSignal.trail.length - 1][1] : null;
+          const lastClose = candles.length ? candles[candles.length - 1].close : null;
+          const zoneTop = isTrailing
+            ? (Number.isFinite(sig.exitPrice) ? sig.exitPrice                 // closed -> realised exit
+               : (mode === 'live' && Number.isFinite(lastClose)) ? lastClose  // live open -> current price (grows)
+               : (Number.isFinite(trailLast) ? trailLast : tp))
+            : (isScaleOut && partialLevel != null) ? partialLevel : tp;
           tpAreaSeries.setData(endTimeForGraph > tradeStartSec
             ? [ { time: tradeStartSec, value: zoneTop }, { time: endTimeForGraph, value: zoneTop } ]
             : [ { time: tradeStartSec, value: zoneTop } ]);
           // The original SL dies at the partial (stop → entry) for BOTH partial models — end its
-          // zone there so the chart reads "risk removed from this bar on".
+          // zone there so the chart reads "risk removed from this bar on". MIDAS has no fixed-SL
+          // zone (the stop trails) — draw none.
           const slZoneEnd = (isPartial && partialBarSec != null) ? Math.min(partialBarSec, endTimeForGraph) : endTimeForGraph;
-          slAreaSeries.setData(slZoneEnd > tradeStartSec
-            ? [ { time: tradeStartSec, value: sl }, { time: slZoneEnd, value: sl } ]
-            : [ { time: tradeStartSec, value: sl } ]);
+          if (isTrailing) {
+            slAreaSeries.setData([]);
+          } else {
+            slAreaSeries.setData(slZoneEnd > tradeStartSec
+              ? [ { time: tradeStartSec, value: sl }, { time: slZoneEnd, value: sl } ]
+              : [ { time: tradeStartSec, value: sl } ]);
+          }
         } else {
           tpAreaSeries.setData([]);
           slAreaSeries.setData([]);
@@ -689,22 +747,26 @@ const ChartModal = () => {
           // The green TP / green ½TP / red SL lines are TRADE levels — drawn only for a trade that
           // was actually taken. A CANCELLED signal (directional veto / timeout) never opened, so
           // suppress them (no phantom green/red); only the entry/signal + the -0.5R veto show.
-          if (tp && !isCancelled) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (tp && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
           // +1R and the runner then rides with a breakeven stop.
-          if (partialLevel != null && !isCancelled) {
+          if (partialLevel != null && !isCancelled && !isTrailing) {
             const partialPct = entry ? ((partialLevel - entry) / entry) * 100 : null;
             const partialTitle = isScaleOut ? `TP1 +1R · %${soBookPct}` : '½TP %50';
             mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' +' + Math.abs(partialPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           }
-          if (sl && !isCancelled) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (sl && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          // MIDAS: the FIXED initial stop = 1R risk, set at entry, NEVER changes (dashed). The
+          // variable trailing stop is drawn as a stepped LINE below (its path to the exit).
+          if (sl && !isCancelled && isTrailing) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 3, title: `${t('SL')} (1R) ${formatPrice(sl)}`, axisLabelVisible: true });
           // Adverse-0.5R confirmation level (SL side): the directional gate (ENTRY_CONFIRM_BUF=0.5)
           // line. Drawn on EVERY live signal — for 'İptal (Ters Yön)' it marks WHERE the breakout
           // went adverse first and got vetoed; for trades that DID open (SL/TP/active) it shows the
           // threshold the breakout confirmed PAST. Measured from the SIGNAL (breakout close) + raw
           // risk, mirroring the backtest gate. (mode-keyed, not status-keyed, so it draws on the
           // first render before the live status has polled.)
-          if (mode === 'live' && Number.isFinite(sigRisk) && sigRisk > 0) {
+          // MIDAS has no +0.5R directional-confirm gate (not a confirm-entry stream) -> no adverse line.
+          if (mode === 'live' && !isTrailing && Number.isFinite(sigRisk) && sigRisk > 0) {
             const advLvl = isLong ? sigEntry - 0.5 * sigRisk : sigEntry + 0.5 * sigRisk;
             mainSeries.createPriceLine({ price: advLvl, color: '#F0B90B', lineWidth: 1, lineStyle: 2, title: `${t('Ters Onay')} −0.5R`, axisLabelVisible: true });
           }
@@ -712,6 +774,38 @@ const ChartModal = () => {
             mainSeries.createPriceLine({ price: sig.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(sig.exitPrice)}`, axisLabelVisible: true });
           }
           chartRef.current._priceLinesAdded = true;
+        }
+
+        // 4a. MIDAS — TRAILING-STOP PATH (the VARIABLE "TP"): a stepped line that starts at the
+        // fixed initial SL and ratchets toward price (down for a short, up for a long), ending where
+        // it got hit (= the exit). Visualises that the stop is dynamic while the 1R risk is fixed.
+        // LIVE: prefer the freshly-polled trail (liveTrailRef, updated every 15s) so the line GROWS
+        // as canli ratchets the stop each minute; backtest uses the loaded row's trail.
+        const trailSrc = (mode === 'live' && Array.isArray(liveTrailRef.current) && liveTrailRef.current.length > 1)
+          ? liveTrailRef.current : activeSignal.trail;
+        if (isTrailing && Array.isArray(trailSrc) && trailSrc.length > 1) {
+          if (!chartRef.current._trailSeries) {
+            chartRef.current._trailSeries = chart.addSeries(LineSeries, {
+              color: '#F0B90B', lineWidth: 2, lineStyle: 0, lineType: 1,   // lineType 1 = stepped
+              lastValueVisible: true, priceLineVisible: false, crosshairMarkerVisible: false,
+              title: t('İz Süren Stop'),
+              priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+            });
+          }
+          const seen = new Set();
+          const trailData = trailSrc
+            .map((pt) => ({ time: Math.floor(Number(pt[0])), value: Number(pt[1]) }))
+            .filter((p) => Number.isFinite(p.time) && Number.isFinite(p.value))
+            .sort((a, b) => a.time - b.time)
+            .filter((p) => (seen.has(p.time) ? false : (seen.add(p.time), true)));
+          // LIVE open: extend the stop FLAT to the current bar so the line reaches the right edge (it
+          // only changes on new highs/lows; between canli updates it holds its level — not "behind").
+          const lastBar = candles.length ? candles[candles.length - 1] : null;
+          if (!Number.isFinite(sig.exitPrice) && trailData.length && lastBar
+              && lastBar.time > trailData[trailData.length - 1].time) {
+            trailData.push({ time: lastBar.time, value: trailData[trailData.length - 1].value });
+          }
+          if (trailData.length > 1) chartRef.current._trailSeries.setData(trailData);
         }
 
         // 4b. ICT KARAR GEOMETRİSİ — motorun işlemi tetikleyen FVG/OB/sweep/BOS'u.
@@ -763,12 +857,13 @@ const ChartModal = () => {
           : (Number.isFinite(sig.exitPrice) && sig.tp
              && Math.abs(sig.exitPrice - sig.tp) / sig.tp < 1e-4));
         const exitText = isCancelled ? t('İptal')
+          : isTrailing ? t('Çıkış')   // trailing exit — not a fixed TP/SL
           : (isScaleOut && isTP) ? (soRunnerCap ? t('Runner +{cap}R', { cap: soCapR }) : t('Mark'))
           : (isTP ? t('TP') : isSL ? t('SL') : isBE ? 'BE' : t('Çıkış'));
         const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(sig.exitTs) ? snapBar(sig.exitTs) : null);
 
         const markers = [];
-        if (signalVisible) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
+        if (signalVisible && !isTrailing) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
         // Entry-fill marker — shown whenever the entry fills, INCLUDING on the signal bar itself
         // (breakouts enter at the bar close, so entryFillSec usually == signalSec). Sinyal is an
         // aboveBar circle and Giriş is a belowBar arrow (long), so they don't collide on one bar.
@@ -804,8 +899,10 @@ const ChartModal = () => {
           // LIVE: start the view AT the signal (no pre-signal context) — the live chart opens
           // from the moment the signal fired. BACKTEST keeps the pre-signal run-up (violet) for
           // context. Guard from < to (a freshly-fired signal can sit at the latest bar).
+          // MIDAS (isTrailing): keep the pre-entry context (like backtest) so the run-up into the
+          // VWAP-pullback entry is visible; other live streams open AT the signal.
           const liveFrom = Math.max(candles[0].time, signalSec);
-          const fromTime = (mode === 'live' && liveFrom < toTime) ? liveFrom : candles[0].time;
+          const fromTime = (mode === 'live' && !isTrailing && liveFrom < toTime) ? liveFrom : candles[0].time;
           try {
             tsApi.setVisibleRange({ from: fromTime, to: toTime });
           } catch {
@@ -1050,7 +1147,7 @@ const ChartModal = () => {
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
           </div>
           <div className="position-row"><span>{t('Giriş')}{isConfirmEntry ? ' ·0.5R' : ''}</span><b>{formatPrice(dispEntry)}</b></div>
-          {!isScaleOut ? (
+          {isTrailing ? null : !isScaleOut ? (
             <div className="position-row">
                <span>{t('Hedef')}</span>
                <b><span style={{color:'#0ECB81'}}>{formatPrice(dispTp)}</span>
@@ -1093,13 +1190,15 @@ const ChartModal = () => {
               </div>
             );
           })()}
+          {!isTrailing && (
           <div className="position-row">
              <span>{t('Stop')}</span>
              <b><span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span>
                {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · -{Math.abs(riskPct).toFixed(2)}%</span>}
              </b>
           </div>
-          {rr != null && !isScaleOut && (
+          )}
+          {rr != null && !isScaleOut && !isTrailing && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
               <b style={{ color: '#F5B942' }}>1:{rr.toFixed(2)}
@@ -1161,7 +1260,7 @@ const ChartModal = () => {
 
           {(activeSignal.strategy || activeSignal.quality || Number.isFinite(activeSignal.confluenceScore) || activeSignal.htfTimeframe) && (
             <div className="position-panel__intel">
-              {Number.isFinite(activeSignal.confluenceScore) && (
+              {Number.isFinite(activeSignal.confluenceScore) && !isTrailing && (
                 <div className="position-row"><span>{t('Konfluens')}</span><b style={{ color: '#F5B942' }}>{activeSignal.confluenceScore}</b></div>
               )}
               {activeSignal.quality && (
