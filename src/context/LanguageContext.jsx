@@ -138,6 +138,7 @@ const EN = {
     'London pre-NY (07-13 UTC) skipped · flat Fri 16:00 ET · no weekend positions',
   'işlem': 'trades',
   'alınmaz': 'not taken',
+  'Binance · GERÇEK': 'Binance · REAL',
   // Scale-out (d30_4h_so) chart panel
   'Runner Cap (+{cap}R)': 'Runner Cap (+{cap}R)',
   'Runner Cap +{cap}R': 'Runner Cap +{cap}R',

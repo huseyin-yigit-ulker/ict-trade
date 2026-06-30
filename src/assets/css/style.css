@@ -2631,3 +2631,14 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
 .session-pill__stat { font-size: 12px; color: var(--muted); }
 .session-pill__stat .win { color: var(--win); }
 .session-pill__stat .loss { color: var(--loss); }
+
+/* OPUS = REAL money on Binance → distinct Binance-gold badge + accent (vs green CANLI / amber PAPER). */
+.sidebar__live-badge--binance { color: #F0B90B; background: rgba(240,185,11,0.18); border-color: rgba(240,185,11,0.5); }
+.sidebar__group--d30so8f3h7 { border-left-color: #F0B90B;
+  background: linear-gradient(90deg, rgba(240,185,11,0.12), rgba(240,185,11,0.02)); }
+.sidebar__group--d30so8f3h7 .sidebar__group-name,
+.sidebar__group--d30so8f3h7 .sidebar__group-label { color: #F0B90B; }
+.sidebar__group--d30so8f3h7 .sidebar__leaf-dot--live { background: #F0B90B; box-shadow: 0 0 6px #F0B90B; }
+/* Binance Canlı link pinned directly above the strategies — Binance-gold accent. */
+.sidebar__link--binance { color: #F0B90B; font-weight: 600; }
+.sidebar__link--binance .sidebar__icon { color: #F0B90B; }

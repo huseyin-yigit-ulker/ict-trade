@@ -93,7 +93,7 @@ const GROUPS = [
   // 30m+4h breakout, ·0.5R confirm entry, book 30% at TP1, runner to +8R cap / BE / 7-day stop,
   // BTC/ETH/SOL/FET/ARB, one-per-symbol, $5 risk, risk-safe auto-leverage. Pinned to the top +
   // highlighted. Every OTHER stream below is BACKTEST-ONLY (research; not traded live)…
-  { key: 'd30so8f3h7',   name: 'OPUS', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
+  { key: 'd30so8f3h7',   name: 'OPUS', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true },
 
   // …EXCEPT this volume-gated twin: same d30so8f3h7 signals/exit, but only TAKEN when daily volume
   // is CONTRACTING at signal time (vch<0.9). Robustly fewer SL + smaller worst-month, higher WR/PF
@@ -162,6 +162,11 @@ const Sidebar = () => {
           <span className="sidebar__icon"><IconHome /></span><span>{t('Genel Bakış')}</span>
         </NavLink>
 
+        {/* Binance Canlı — pinned directly above the strategies (real-money OPUS feed) */}
+        <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
+          <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Canlı')}</span>
+        </NavLink>
+
         <button
           className="sidebar__section"
           onClick={toggleStrategies}
@@ -180,7 +185,9 @@ const Sidebar = () => {
                 <div className="sidebar__group-label">
                   <span className="sidebar__icon">{g.icon}</span>
                   {g.name && <b className="sidebar__group-name">{g.name}</b>}{g.label}
-                  {g.live && <span className={`sidebar__live-badge${g.paper ? ' sidebar__live-badge--paper' : ''}`}>● {g.paper ? t('PAPER') : t('CANLI')}</span>}
+                  {g.live && (g.real
+                    ? <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('Binance · GERÇEK')}</span>
+                    : <span className={`sidebar__live-badge${g.paper ? ' sidebar__live-badge--paper' : ''}`}>● {g.paper ? t('PAPER') : t('CANLI')}</span>)}
                 </div>
                 {g.modes.map((m) => (
                   <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">
@@ -194,9 +201,6 @@ const Sidebar = () => {
         )}
 
         <div className="sidebar__navsep" />
-        <NavLink to="/binance" className="sidebar__link">
-          <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Canlı')}</span>
-        </NavLink>
         <NavLink to="/trend" className="sidebar__link">
           <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
         </NavLink>

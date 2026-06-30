@@ -233,6 +233,8 @@ enabled) the OPUS executor trades real Binance Futures.
 - Added **MIDAS** (gold-only VWAP-trend, paper) — full stream: `sync/midas/`, UI, cron (per-minute emit +
   nightly backfill). See [MIDAS.md](MIDAS.md). Deployed on the VM + pushed to main.
 - Added this **RUNBOOK.md** (project-wide system runbook).
+- UI: marked **OPUS** as real-money with a distinct **Binance-gold badge** ("Binance · GERÇEK", vs green
+  CANLI / amber PAPER); pinned the **Binance Canlı** nav link directly above the strategies list.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
