@@ -72,7 +72,7 @@ def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None
     # can lag the fire time until the directional gate confirms).
     fire = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
     fire_utc = fire.tz_convert("UTC") if fire.tz is not None else fire.tz_localize("UTC")
-    tag = f"🅾️ <b>{name}</b> · " if name else ""          # strategy display name (e.g. OPUS) prefix
+    tag = f"🏷️ <b>{name}</b> · " if name else ""          # strategy display name (OPUS/FABLE) prefix
     if confirm_htf:
         head = f"{tag}⛰️ <b>DONCHIAN {tf} + {confirm_htf} ONAY</b> — Hybrid Trend Breakout"
         logic = (f"{tf} 55-bar kırılım + <b>{confirm_htf} trend yönü onayı</b> "
