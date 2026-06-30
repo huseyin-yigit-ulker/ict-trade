@@ -150,16 +150,30 @@ def main():
     args = ap.parse_args()
 
     now = pd.Timestamp.now(tz="UTC")
-    op = M.current_open(now)
-    if op is not None:
-        # SINGLE-POSITION rule — matches the backtest EXACTLY: while a position is OPEN, IGNORE all
-        # new setups (same OR opposite direction). MIDAS does NOT reverse on an opposite signal (tested:
-        # reversing hurts — the trailing stop manages the exit). Only the open position is emitted/tracked.
-        sigs = [op]
+    # SINGLE-POSITION rule, DB-AUTHORITATIVE. The live table is the source of truth for "are we in a
+    # position": if an OPEN midas row already exists (pos != closed, within the 8h max-hold window),
+    # emit NOTHING — _track_open_positions manages it to its trailing-stop / 8h / session exit (same
+    # OR opposite setups are IGNORED; MIDAS does not reverse). Previously this leaned on current_open
+    # (a re-derivation from a sliding 10h walk) which returns None in chop even while positions are
+    # open, so latest_setup fired a NEW setup every few minutes and piled up conflicting long+short
+    # phantom positions. Only look for a fresh setup when the book is actually FLAT.
+    conn = None if args.dry_run else tsc.live_conn()
+    has_open = False
+    if conn is not None:
+        gcur = conn.cursor()
+        gcur.execute("""SELECT 1 FROM ict_trade.signals WHERE mode=%s
+                        AND COALESCE(context->>'pos','open') <> 'closed'
+                        AND signal_time >= %s LIMIT 1""",
+                     (MODE, (now - pd.Timedelta(minutes=M.MAX_HOLD_MIN + 60)).to_pydatetime()))
+        has_open = gcur.fetchone() is not None
+        gcur.close()
+    if has_open:
+        sigs = []
     else:
-        sigs = M.latest_setup(now, lookback_min=int(args.lookback_min))
-    print(f"=== MIDAS CANLI @ {now:%Y-%m-%d %H:%M}Z | XAUUSDT 1m | "
-          f"lookback={args.lookback_min:g}m | mode='{MODE}' ===", flush=True)
+        op = M.current_open(now)        # self-heal: surface an open trade whose formation alert we missed
+        sigs = [op] if op is not None else M.latest_setup(now, lookback_min=int(args.lookback_min))
+    print(f"=== MIDAS CANLI @ {now:%Y-%m-%d %H:%M}Z | XAUUSDT 1m | lookback={args.lookback_min:g}m | "
+          f"mode='{MODE}'{' · IN POSITION (no new emit)' if has_open else ''} ===", flush=True)
     for s in sigs:
         fire = s["signal_time"] + pd.Timedelta(minutes=1)
         print(f"  XAUUSDT {s['direction'].upper():<5} @ {fire:%m-%d %H:%M} "
@@ -169,7 +183,6 @@ def main():
         print("[dry-run] no DB write / no tracking.")
         return
 
-    conn = tsc.live_conn()
     inserted = alerted = 0
     if sigs:
         cur = conn.cursor()
