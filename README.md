@@ -1,5 +1,8 @@
 # PUSU — Liquidity Ambush Intelligence
 
+> 📘 **Full system runbook** (requirements, all streams, fresh-clone setup, cron, ops, changelog):
+> **[RUNBOOK.md](RUNBOOK.md)**. Gold stream: [MIDAS.md](MIDAS.md).
+
 React + Vite tabanlı ICT (Inner Circle Trader) sinyal paneli: canlı sinyaller,
 backtest drill-down (Yıl → Ay → Gün), TradingView grafik entegrasyonu ve
 Supabase veri katmanı.
