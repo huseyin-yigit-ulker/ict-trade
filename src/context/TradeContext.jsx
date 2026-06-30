@@ -735,6 +735,7 @@ export const TradeProvider = ({ children }) => {
   // updated synchronously by setStrategy before this re-runs.
   useEffect(() => {
     let intervalId;
+    let onVisible;
     if (!strategy || !mode) return () => {};
 
     setDateStart(''); setDateEnd(''); setPendingDateStart(''); setPendingDateEnd('');
@@ -751,14 +752,24 @@ export const TradeProvider = ({ children }) => {
         const now = new Date();
         const minute = now.getMinutes();
         const second = now.getSeconds();
-        const inWindow = (minute % 15 === 0) || (minute % 15 === 1);
-        const aligned = second % 10 === 0;
+        // MIDAS (1m signals + trailing-stop EXITS at arbitrary minutes) needs a fast refetch cadence:
+        // its open/closed state lives in context.pos, which ONLY loadLive refreshes. The 30m/1h streams
+        // only change on :00/:15/:30/:45, so they keep refetching just in that aligned window. Without
+        // this, a MIDAS trade that closed mid-period lingers as 'AKTİF' until the next 15-min tick.
+        const isMidas = strategyRef.current === 'midas';
+        const inWindow = isMidas ? true : ((minute % 15 === 0) || (minute % 15 === 1));
+        const aligned = isMidas ? (second % 30 === 0) : (second % 10 === 0);
         if (inWindow && aligned) loadLive();
       }, 1000);
+      // Background tabs throttle the timer above, so a trade that closed while the tab was hidden would
+      // otherwise stay 'AKTİF' (with a client-side-ticking duration) until refocus. Refetch on visible.
+      onVisible = () => { if (document.visibilityState === 'visible') loadLive(); };
+      document.addEventListener('visibilitychange', onVisible);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
+      if (onVisible) document.removeEventListener('visibilitychange', onVisible);
     };
   }, [strategy, mode, loadBacktest, loadLive]);
 
