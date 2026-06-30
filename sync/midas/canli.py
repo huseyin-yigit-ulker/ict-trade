@@ -101,27 +101,36 @@ def _track_open_positions(conn, now, no_telegram, step=0.5):
             exits += 1
             print(f"  ✓ {sym} {d} KAPANDI {r:+.2f}R ({res['reason']})", flush=True)
             continue
-        # still open -> store the trailing-stop path (for the live chart) + alert on a new locked-R milestone
+        # still open -> store the trailing-stop path (live chart) + alert. step<=0: on EVERY trailing-stop
+        # change; step>0: on each locked-R milestone. Message carries trade + trailing-stop detail.
         locked = res["locked_r"]
-        ctx.update({"cur_sl": res["cur_sl"], "best": res["best"], "locked_r": round(locked, 2),
+        prev_sl = ctx.get("cur_sl")                    # last stored stop (None on the very first run)
+        new_sl = res["cur_sl"]
+        ctx.update({"cur_sl": new_sl, "best": res["best"], "locked_r": round(locked, 2),
                     "pos": "open", "trail": res["trail"], "init_sl": res["init_sl"]})
-        changed = False; lab = ""
+        changed = False
         if step <= 0:
-            if locked >= 0 and abs(res["cur_sl"] - ctx.get("notif_sl", float(sl))) > 1e-6:
-                changed = True; lab = f"kilitli +{locked:.2f}R"; ctx["notif_sl"] = res["cur_sl"]
+            base = ctx.get("notif_sl", float(sl))      # last NOTIFIED stop level
+            moved = (new_sl - base) if side > 0 else (base - new_sl)
+            if moved > 1e-6:                           # the stop ratcheted favourably -> alert
+                changed = True; ctx["notif_sl"] = new_sl
         else:
             m = math.floor(locked / step)
             if locked >= 0 and m > ctx.get("sl_milestone", -999):
-                changed = True
-                lab = "breakeven (risk sıfır)" if m == 0 else f"kilitli +{m*step:.1f}R"
-                ctx["sl_milestone"] = m
+                changed = True; ctx["sl_milestone"] = m
         if changed:
             if not no_telegram:
-                _telegram_send(f"🔁 <b>{NAME}</b> · XAUUSDT {d} · SL güncellendi\n"
-                               f"Yeni iz-süren stop: <code>{res['cur_sl']:.2f}</code>\n"
-                               f"Durum: <b>{lab}</b>  (anlık {res['last_price']:.2f})")
+                arrow = "🟢 LONG ▲" if side > 0 else "🔴 SHORT ▼"
+                mins = int(res.get("minutes_open", 0)); dur = f"{mins // 60}sa {mins % 60}dk"
+                state = "breakeven üstü ✅" if locked >= 0 else "breakeven altı ⏳"
+                delta = "" if prev_sl is None else f"  (önceki <code>{prev_sl:.2f}</code>, +{abs(new_sl - prev_sl):.2f})"
+                _telegram_send(
+                    f"🔁 <b>{NAME}</b> · XAUUSDT {arrow} · <b>iz-süren stop güncellendi</b>\n"
+                    f"Giriş <code>{float(entry):.2f}</code> → Anlık <code>{res['last_price']:.2f}</code>\n"
+                    f"Yeni stop: <code>{new_sl:.2f}</code>{delta}\n"
+                    f"Kilitli: <b>{'+' if locked >= 0 else ''}{locked:.2f}R</b> · {state} · Süre {dur}")
             sl_msgs += 1
-            print(f"  🔁 {sym} {d} SL→{res['cur_sl']:.2f} · {lab}", flush=True)
+            print(f"  🔁 {sym} {d} SL→{new_sl:.2f} · {locked:+.2f}R", flush=True)
         cur.execute(_UPDATE_CTX, (json.dumps(ctx), sym, st, d, MODE)); conn.commit()
     cur.close()
     return sl_msgs, exits

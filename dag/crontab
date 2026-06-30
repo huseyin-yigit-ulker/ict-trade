@@ -52,10 +52,10 @@
 # MIDAS live emit + LIVE TRAILING TRACK — PAPER (mode='midas'). Runs EVERY MINUTE. Each run: (1) emits
 # fresh VWAP-trend setups (real FX-gold hours + session filter: Asia/Overlap/NY, London 07-13 UTC
 # skipped, Fri flat 16:00 ET, no weekend); (2) replays every OPEN position's trailing stop and pushes
-# a Telegram alert on each new locked-R milestone (breakeven, +0.5R, +1R, …) and on exit. TELEGRAM ON
-# (same bot as OPUS/FABLE). --sl-step 0.5 default (use 0 for every stop change; --no-telegram to silence).
+# a Telegram alert on EVERY trailing-stop change (--sl-step 0: trade + stop detail each ratchet) and on
+# exit. TELEGRAM ON (same bot as OPUS/FABLE). Set --sl-step 0.5 for milestone-only; --no-telegram to mute.
 # Executor NOT touched; nightly backtest below is the authoritative book.
-* * * * * sleep 20 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas/canli.py --emit --lookback-min 3 --sl-step 0.5 >> $HOME/ict-midas.log 2>&1
+* * * * * sleep 20 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas/canli.py --emit --lookback-min 3 --sl-step 0 >> $HOME/ict-midas.log 2>&1
 # 01:30 — MIDAS backtest refresh (END OF DAY): rebuild version='midas' from XAUUSDT 1m for 2026 each
 #   night (DELETE + re-upsert, idempotent), so the MIDAS backtest view extends as the year accrues.
 #   FX/ECN cost model ($0.50/oz round-trip) — gold-only, 2026-only. Engine: sync/midas/backfill.py.
