@@ -332,6 +332,16 @@ const ChartModal = () => {
           priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
         });
 
+    // MIDAS overlay: the anchored-VWAP line the signal logic keys off (LONG = close>VWAP + VWAP slope>0
+    // + pullback to within 0.25·ATR of VWAP; SHORT mirror). Reset each FX day (18:00 ET). midas only.
+    const vwapSeries = isTrailing
+      ? chart.addSeries(LineSeries, {
+          color: '#3B82F6', lineWidth: 2, lastValueVisible: true, priceLineVisible: false,
+          crosshairMarkerVisible: false, title: 'VWAP',
+          priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+        })
+      : null;
+
     // ---------------------------------------------------------
     // VERİ ÇEKME VE MANTIK ALANI
     // ---------------------------------------------------------
@@ -372,9 +382,20 @@ const ChartModal = () => {
         let klineInterval = pickInterval();
         let displayMs = intervalMs(klineInterval);
 
+        // UTC ms of the most recent 18:00 America/New_York at/before `ms` — the FX-gold session open
+        // = the anchored-VWAP reset point. Scans back hour-by-hour so it's DST-correct (Intl handles
+        // EDT/EST). Used for MIDAS so the VWAP overlay anchors where the backend's signals() anchors.
+        const fxAnchorMs = (ms) => {
+          const etHour = (t) => parseInt(new Intl.DateTimeFormat('en-US',
+            { timeZone: 'America/New_York', hour12: false, hour: '2-digit' }).format(new Date(t)), 10) % 24;
+          let t = ms - (ms % 3600000);
+          for (let i = 0; i < 26; i += 1) { if (etHour(t) === 18) return t; t -= 3600000; }
+          return ms - 24 * 3600000;
+        };
         // Window: PAD_BARS before signal; backtest ends POST_CLOSE_BARS past the exit, live = now.
         const computeWindow = () => {
-          const start = signalOpenMs - Math.max(PAD_BARS * ltfMs, PAD_BARS * displayMs);
+          let start = signalOpenMs - Math.max(PAD_BARS * ltfMs, PAD_BARS * displayMs);
+          if (isTrailing) start = Math.min(start, fxAnchorMs(signalOpenMs));   // MIDAS: anchor VWAP at session open
           const end = mode === 'live' ? Date.now()
             : Math.max(backtestExitTsMs + POST_CLOSE_BARS * displayMs, signalOpenMs + 60 * 1000);
           return { start, end };
@@ -417,7 +438,8 @@ const ChartModal = () => {
 
         let candles = rawData.map(d => ({
           time: d[0] / 1000,
-          open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4])
+          open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4]),
+          volume: parseFloat(d[5])   // needed for the MIDAS anchored-VWAP overlay
         }));
 
         const { entry: sigEntry, tp: sigTp, sl, dir } = activeSignal;
@@ -622,6 +644,25 @@ const ChartModal = () => {
 
         if (isLineChart) mainSeries.setData(candles.map((c) => ({ time: c.time, value: c.close })));
         else mainSeries.setData(candles);
+
+        // MIDAS anchored-VWAP overlay — same metric the backend signals() uses: typical price
+        // (H+L+C)/3 weighted by volume, cumulative and RESET at each FX trading day (18:00 ET, the
+        // gold/FX session open). Computed client-side from the candles so it needs no backend change.
+        if (vwapSeries) {
+          const fxDay = (timeSec) => new Intl.DateTimeFormat('en-CA',
+            { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
+            .format(new Date(timeSec * 1000 - 18 * 3600 * 1000));   // shift -18h -> session-day key
+          let curDay = null; let cumPV = 0; let cumV = 0;
+          const vwapData = candles.map((c) => {
+            const day = fxDay(c.time);
+            if (day !== curDay) { curDay = day; cumPV = 0; cumV = 0; }
+            const tp = (c.high + c.low + c.close) / 3;
+            const v = Number.isFinite(c.volume) && c.volume > 0 ? c.volume : 1;
+            cumPV += tp * v; cumV += v;
+            return { time: c.time, value: cumPV / cumV };
+          });
+          vwapSeries.setData(vwapData);
+        }
 
         // 2. Zone right edge — ends at the real close (backtest / terminal live), else last bar.
         let endTimeForGraph = candles.length ? candles[candles.length - 1].time : entryTs;
@@ -902,7 +943,13 @@ const ChartModal = () => {
           // MIDAS (isTrailing): keep the pre-entry context (like backtest) so the run-up into the
           // VWAP-pullback entry is visible; other live streams open AT the signal.
           const liveFrom = Math.max(candles[0].time, signalSec);
-          const fromTime = (mode === 'live' && !isTrailing && liveFrom < toTime) ? liveFrom : candles[0].time;
+          // MIDAS data now reaches back to the session VWAP-anchor (often hours pre-signal); frame the
+          // view on the trade with ~90 min of pre-signal context so it isn't zoomed out to the whole
+          // session. The VWAP line still extends left off-screen (scroll to see the full anchored line).
+          const midasFrom = Math.max(candles[0].time, signalSec - 90 * 60);
+          const fromTime = isTrailing
+            ? midasFrom
+            : ((mode === 'live' && liveFrom < toTime) ? liveFrom : candles[0].time);
           try {
             tsApi.setVisibleRange({ from: fromTime, to: toTime });
           } catch {
