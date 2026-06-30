@@ -2015,6 +2015,15 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
   border-radius: 6px; padding: 1px 6px; animation: livePulse 2s ease-in-out infinite; }
 @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 .sidebar__group--live .sidebar__leaf-dot--live { background: var(--win); box-shadow: 0 0 6px var(--win); }
+/* Strategy display name (OPUS / FABLE) prepended above the technical label. */
+.sidebar__group-name { font-family: var(--mono); font-weight: 800; letter-spacing: 0.14em; font-size: 11px;
+  color: var(--win); margin-right: 7px; }
+/* FABLE = paper (volume-gate twin), not real Binance money → amber accents instead of green. */
+.sidebar__group--paper { border-left-color: var(--accent);
+  background: linear-gradient(90deg, rgba(245,185,66,0.10), rgba(245,185,66,0.02)); }
+.sidebar__group--paper .sidebar__group-label { color: var(--accent); }
+.sidebar__group--paper .sidebar__group-name { color: var(--accent); }
+.sidebar__live-badge--paper { color: var(--accent); background: rgba(245,185,66,0.16); border-color: rgba(245,185,66,0.4); }
 .sidebar__leaf { padding-left: 38px; }
 .sidebar__leaf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); flex: 0 0 auto; }
 .sidebar__leaf.active .sidebar__leaf-dot--live { background: var(--win); }

@@ -93,13 +93,13 @@ const GROUPS = [
   // 30m+4h breakout, ·0.5R confirm entry, book 30% at TP1, runner to +8R cap / BE / 7-day stop,
   // BTC/ETH/SOL/FET/ARB, one-per-symbol, $5 risk, risk-safe auto-leverage. Pinned to the top +
   // highlighted. Every OTHER stream below is BACKTEST-ONLY (research; not traded live)…
-  { key: 'd30so8f3h7',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
+  { key: 'd30so8f3h7',   name: 'OPUS', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
 
   // …EXCEPT this volume-gated twin: same d30so8f3h7 signals/exit, but only TAKEN when daily volume
   // is CONTRACTING at signal time (vch<0.9). Robustly fewer SL + smaller worst-month, higher WR/PF
   // (fewer trades). LIVE-MONITORED (paper) via mode='dch30_4hvg' — CANLI in the dashboard but NOT
   // on Binance (the executor still trades only the ungated d30so8f3h7). Backfill: volgate_backfill.py.
-  { key: 'd30so8f3vg',   label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g ·VG0.9', icon: <IconIntel />, modes: ['live', 'backtest'], live: true },
+  { key: 'd30so8f3vg',   name: 'FABLE', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g ·VG0.9', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true },
 
   // ── 1h family (backtest-only) ──
   { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['backtest'] },
@@ -170,10 +170,11 @@ const Sidebar = () => {
         {stratOpen && (
           <div className="sidebar__strategies">
             {GROUPS.map((g) => (
-              <div key={g.key} className={`sidebar__group sidebar__group--${g.key}${g.live ? ' sidebar__group--live' : ''}`}>
+              <div key={g.key} className={`sidebar__group sidebar__group--${g.key}${g.live ? ' sidebar__group--live' : ''}${g.paper ? ' sidebar__group--paper' : ''}`}>
                 <div className="sidebar__group-label">
-                  <span className="sidebar__icon">{g.icon}</span>{g.label}
-                  {g.live && <span className="sidebar__live-badge">● {t('CANLI')}</span>}
+                  <span className="sidebar__icon">{g.icon}</span>
+                  {g.name && <b className="sidebar__group-name">{g.name}</b>}{g.label}
+                  {g.live && <span className={`sidebar__live-badge${g.paper ? ' sidebar__live-badge--paper' : ''}`}>● {g.paper ? t('PAPER') : t('CANLI')}</span>}
                 </div>
                 {g.modes.map((m) => (
                   <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">

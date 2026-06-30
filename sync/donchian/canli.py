@@ -58,7 +58,8 @@ def _telegram_send(text_msg: str) -> bool:
         return False
 
 
-def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None = None) -> str:
+def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None = None,
+                   name: str | None = None) -> str:
     """DONCHIAN-labelled alert so the receiver knows the signal's source strategy, its
     timeframe (1h vs 30m look otherwise identical) AND, for the hybrid stream, that a
     higher-tf trend confirmation gated it."""
@@ -71,13 +72,14 @@ def _telegram_text(s: "strat.DonSignal", tf: str = "1h", confirm_htf: str | None
     # can lag the fire time until the directional gate confirms).
     fire = s.timestamp + pd.Timedelta(minutes=TF_MINUTES[tf])
     fire_utc = fire.tz_convert("UTC") if fire.tz is not None else fire.tz_localize("UTC")
+    tag = f"🅾️ <b>{name}</b> · " if name else ""          # strategy display name (e.g. OPUS) prefix
     if confirm_htf:
-        head = f"⛰️ <b>DONCHIAN {tf} + {confirm_htf} ONAY</b> — Hybrid Trend Breakout"
+        head = f"{tag}⛰️ <b>DONCHIAN {tf} + {confirm_htf} ONAY</b> — Hybrid Trend Breakout"
         logic = (f"{tf} 55-bar kırılım + <b>{confirm_htf} trend yönü onayı</b> "
                  f"(fiyat {confirm_htf} Donchian orta çizgisinin {('üstünde' if s.direction=='long' else 'altında')})")
         src = f"DONCHIAN {tf}+{confirm_htf} (hybrid)"
     else:
-        head = f"⛰️ <b>DONCHIAN {tf}</b> — Trend Breakout"
+        head = f"{tag}⛰️ <b>DONCHIAN {tf}</b> — Trend Breakout"
         logic = f"55-bar kırılım ({tf}), güçlü trend"
         src = f"DONCHIAN {tf}"
     return (
@@ -170,6 +172,8 @@ def main():
                     help="emit signals whose bar closed within this many hours (default 1.5)")
     ap.add_argument("--no-telegram", action="store_true",
                     help="skip Telegram alerts (for back-filling past signals into the live table)")
+    ap.add_argument("--name", default=None,
+                    help="strategy display name (e.g. OPUS) prefixed to the Telegram alert head")
     ap.add_argument("--telegram-symbols", default=None,
                     help="comma-separated symbols; if set, ONLY these symbols' formations send a "
                          "Telegram alert (all signals still write to the DB). Limits pings to the "
@@ -266,7 +270,7 @@ def main():
             # gated symbols (not in --telegram-symbols) are marked sent WITHOUT pinging, so they
             # don't spam and don't retry every run — only the live-traded set actually alerts.
             gated = args.no_telegram or (tg_syms is not None and s.symbol.upper() not in tg_syms)
-            ok = True if gated else _telegram_send(_telegram_text(s, tf, confirm_htf))
+            ok = True if gated else _telegram_send(_telegram_text(s, tf, confirm_htf, name=args.name))
             if ok:
                 ctx["tg_sent"] = True
                 cur.execute(_UPDATE_CTX, (json.dumps(ctx), s.symbol, st, d, mode))
