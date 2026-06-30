@@ -208,11 +208,14 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
 - **Live view staleness FIXED (`TradeContext`):** MIDAS open/closed lives in `context.pos`, refreshed
   only by `loadLive`, which ran only in the 15-min-aligned window → a closed trade lingered as 'AKTİF'
   with a ticking duration. Now MIDAS refetches every 30s + on tab focus (`visibilitychange`).
-- **Standalone live chart (`MidasLiveChart`, route `/midas/chart`):** a dedicated, trade-independent
-  XAU 1m monitor drawing the exact signal metrics, recomputed every 30s — anchored VWAP (validated ==
-  backend to the cent), ±0.25·ATR(15m) pullback band, and AL/SAT markers where the core rule fires
-  (== backend signals() over the session) + a metrics header. (The per-trade ChartModal VWAP overlay
-  that was tried first was reverted — the metrics live on this separate chart, not the trade chart.)
+- **Live chart at the top of the MIDAS live view (`MidasLiveChart`, embedded in `Dashboard`):** a
+  trade-independent XAU 1m monitor pinned above the trade list (midas + live only), recomputed every
+  30s — anchored VWAP (validated == backend to the cent), ±0.25·ATR(15m) pullback band, AL/SAT markers
+  where the core rule fires (== backend signals() over the session), a metrics header, AND a live
+  **signal-conditions checklist** (per direction: slope / price-vs-VWAP / pullback-to-VWAP / candle /
+  session, each ✓/✗; 🟢/🔴 HAZIR when all met). The per-trade ChartModal VWAP overlay tried first was
+  reverted (metrics live on this chart, not the trade chart); the early standalone /midas/chart route
+  was folded into the live-view embed.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

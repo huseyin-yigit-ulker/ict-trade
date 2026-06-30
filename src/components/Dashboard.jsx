@@ -5,6 +5,7 @@ import { scaleOutLiveR, isScaleOutStrategy, soCapFromStrategy, isConfirmStrategy
 import Sparkline from './viz/Sparkline';
 import PusuLogo from './PusuLogo';
 import StrategyIntro from './StrategyIntro';
+import MidasLiveChart from './MidasLiveChart';
 
 // Click-to-copy price value — copies the RAW value (full precision, ready to
 // paste into an order ticket) and flashes a ✓. Stops propagation so the card's
@@ -1033,6 +1034,11 @@ const Dashboard = () => {
       <StrategyIntro />
       {renderKpiHero()}
       {renderMidasSessions()}
+      {isTrailing && mode === 'live' && (
+        <div style={{ height: 560, marginBottom: 16, border: '1px solid #1E2329', borderRadius: 10, overflow: 'hidden' }}>
+          <MidasLiveChart />
+        </div>
+      )}
       {filteredSignals.length === 0 && (
         <div className="dash-empty">
           <PusuLogo size={46} className="dash-empty__logo" animated />

@@ -70,7 +70,17 @@ const compute = (candles) => {
     }
   }
   const i = candles.length - 1;
-  const last = { price: candles[i].close, vwap: vw[i], slope: slope[i], atr: a[i], time: candles[i].time };
+  const lb = candles[i]; const v = vw[i]; const aa = a[i]; const slp = slope[i];
+  const tol = Number.isFinite(aa) ? TOUCH_TOL * aa : NaN;
+  const utch = new Date(lb.time * 1000).getUTCHours();
+  const cond = {
+    sessOk: !(utch >= SKIP_START && utch < SKIP_END),
+    aboveVWAP: lb.close > v, belowVWAP: lb.close < v,
+    slopeUp: slp > 0, slopeDn: slp < 0,
+    pullLong: lb.low <= v + tol, pullShort: lb.high >= v - tol,
+    bull: lb.close > lb.open, bear: lb.close < lb.open,
+  };
+  const last = { price: lb.close, vwap: v, slope: slp, atr: aa, tol, cond, time: lb.time };
   return { vwapData, bandU, bandL, markers, last };
 };
 
@@ -145,10 +155,24 @@ export default function MidasLiveChart() {
   }, []);
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
-  const sigState = last && Number.isFinite(last.slope)
-    ? (last.price > last.vwap && last.slope > 0 ? 'YUKARI trend (AL tarafı)'
-      : last.price < last.vwap && last.slope < 0 ? 'AŞAĞI trend (SAT tarafı)' : 'trend yok / VWAP yakını')
-    : '—';
+  const c = last?.cond;
+  const longReady = c && c.sessOk && c.aboveVWAP && c.slopeUp && c.pullLong && c.bull;
+  const shortReady = c && c.sessOk && c.belowVWAP && c.slopeDn && c.pullShort && c.bear;
+
+  const Pill = ({ ok, label }) => (
+    <span style={{ padding: '2px 7px', borderRadius: 6, fontSize: 11, whiteSpace: 'nowrap',
+      background: ok ? 'rgba(14,203,129,0.14)' : 'rgba(246,70,93,0.10)',
+      color: ok ? '#0ECB81' : '#9AA4AD',
+      border: `1px solid ${ok ? 'rgba(14,203,129,0.45)' : 'rgba(122,132,141,0.25)'}` }}>
+      {ok ? '✓' : '✗'} {label}
+    </span>
+  );
+  const Row = ({ side, ready, color, items }) => (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <b style={{ color, minWidth: 78 }}>{side} {ready ? (color === '#0ECB81' ? '🟢 HAZIR' : '🔴 HAZIR') : ''}</b>
+      {items.map((it) => <Pill key={it.label} ok={it.ok} label={it.label} />)}
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0B0E11', color: '#EAECEF' }}>
@@ -160,9 +184,28 @@ export default function MidasLiveChart() {
         <span>fiyat−VWAP <b>{last ? fmt(last.price - last.vwap) : '—'}</b></span>
         <span>eğim(60) <b>{fmt(last?.slope, 2)}</b></span>
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
-        <span>durum: <b>{sigState}</b></span>
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
       </div>
+      {c && (
+        <div style={{ padding: '8px 14px', borderBottom: '1px solid #1E2329', display: 'flex', flexDirection: 'column',
+          gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+          <span style={{ color: '#848E9C', fontSize: 10, letterSpacing: '0.04em' }}>SİNYAL KOŞULLARI (anlık · hepsi ✓ olunca sinyal oluşur)</span>
+          <Row side="AL" ready={longReady} color="#0ECB81" items={[
+            { ok: c.slopeUp, label: 'eğim>0 (yukarı trend)' },
+            { ok: c.aboveVWAP, label: 'fiyat > VWAP' },
+            { ok: c.pullLong, label: "VWAP'a çekilme (low ≤ VWAP+0.25·ATR)" },
+            { ok: c.bull, label: 'yükselen mum (close>open)' },
+            { ok: c.sessOk, label: 'seans uygun (07-13 UTC dışı)' },
+          ]} />
+          <Row side="SAT" ready={shortReady} color="#F6465D" items={[
+            { ok: c.slopeDn, label: 'eğim<0 (aşağı trend)' },
+            { ok: c.belowVWAP, label: 'fiyat < VWAP' },
+            { ok: c.pullShort, label: "VWAP'a çekilme (high ≥ VWAP−0.25·ATR)" },
+            { ok: c.bear, label: 'düşen mum (close<open)' },
+            { ok: c.sessOk, label: 'seans uygun (07-13 UTC dışı)' },
+          ]} />
+        </div>
+      )}
       <div ref={containerRef} style={{ flex: 1, minHeight: 0 }} />
     </div>
   );
