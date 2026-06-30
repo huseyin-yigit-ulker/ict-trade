@@ -195,6 +195,23 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
 - **Telegram:** on entry / **every** trailing-stop change (`--sl-step 0`, enriched message) / exit.
 - **Cron:** `canli` every minute, `backfill` nightly 01:30. Deployed on the VM (`crontab dag/crontab`).
 
+### 2026-06-30 — VWAP-anchor + single-position + chart fixes (commits a314f7f, b9b7c66, def97ea, e48b68e)
+- **Live signal bug FIXED (`strategy.latest_setup`):** it loaded only a 12h window, but the anchored
+  VWAP resets at 18:00 ET and a session runs up to ~24h — so it anchored VWAP at the window start
+  (~4033) instead of the session open (~4008), ~20-25 pts off. That flipped close>VWAP / close<VWAP and
+  fired spurious, often opposite-direction setups (the back-to-back XAU shorts). Now a 2-day warmup like
+  `generate_trades` / `track_open`. Live VWAP now matches the backtest.
+- **Emitter single-position made DB-AUTHORITATIVE (`canli`):** the guard leaned on `current_open` (a
+  sliding-10h re-derivation that returns None in chop), so `latest_setup` kept firing and piled up
+  conflicting long+short "open" rows (14 phantoms in ~90 min). Now: if an OPEN midas row exists in the
+  live table, emit NOTHING; only look for a setup when flat. Cleaned the phantom rows.
+- **Live view staleness FIXED (`TradeContext`):** MIDAS open/closed lives in `context.pos`, refreshed
+  only by `loadLive`, which ran only in the 15-min-aligned window → a closed trade lingered as 'AKTİF'
+  with a ticking duration. Now MIDAS refetches every 30s + on tab focus (`visibilitychange`).
+- **Chart VWAP overlay (`ChartModal`):** draws the anchored-VWAP line MIDAS keys off (client-side,
+  verified to match the backend to the cent); fetch window extended back to the session anchor so it
+  anchors correctly, view still framed on the trade.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
