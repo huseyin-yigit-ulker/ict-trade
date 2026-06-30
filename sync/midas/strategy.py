@@ -278,7 +278,11 @@ def latest_setup(now: pd.Timestamp, lookback_min: int = 10, *, cost=COST_RT):
     """For CANLI: fresh VWAP-trend setups whose SIGNAL bar closed within `lookback_min` minutes.
     Returns list of dicts {direction, entry, sl, tp, signal_time}. entry = signal-bar close (the
     live reference price); sl = 1.5*ATR; tp = nominal trail-distance target line."""
-    df = load_1m(now - pd.Timedelta(hours=12), now)      # enough for VWAP(day)+ATR+slope
+    # 2-day warmup (NOT 12h): the anchored VWAP resets at 18:00 ET, and a session can be ~24h old, so a
+    # 12h window anchored the VWAP at the window start instead of the session open — off by ~20+ pts,
+    # flipping close>VWAP/close<VWAP and firing spurious (often opposite-direction) signals. generate_trades
+    # / track_open already use a 2-day warmup; latest_setup must too so live matches the backtest anchor.
+    df = load_1m(now - pd.Timedelta(days=2), now)
     if df.empty:
         return []
     df = add_market_open(df)
