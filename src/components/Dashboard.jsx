@@ -286,6 +286,13 @@ const Dashboard = () => {
 
   const getLiveRLabel = (sig, status, lastPrice = null) => {
     if (!status) return { label: '--', cls: 'waiting' };
+    // MIDAS (trailing-stop): the realised R is the STORED context.pnl_r (a 3.5×ATR trailing exit, not
+    // a fixed TP/SL or scale-out geometry), so read it directly — don't run the scale-out R model.
+    if (isTrailing) {
+      const r = Number(sig?.context?.pnl_r);
+      if (Number.isFinite(r)) return { label: `${r >= 0 ? '+' : ''}${r.toFixed(2)}R`, cls: r >= 0 ? 'win' : 'loss' };
+      return { label: '--', cls: 'waiting' };
+    }
     if (status === 'TP Oldu' || status === 'BE Oldu') {
       const r = liveOutcomeR(sig, status, halfFor(sig), isSO, soCapR, soConservative, soBookFrac);
       return { label: `${r >= 0 ? '+' : ''}${r.toFixed(2)}R`, cls: r >= 0 ? 'win' : 'loss' };
@@ -818,14 +825,22 @@ const Dashboard = () => {
                 </span>
               </div>
               {isTrailing ? (
-              <div className="trade-metric intel-exec__tpsl">
-                <span className="metric-label">{t('Çıkış')}</span>
-                <span className="metric-value">
-                  {Number.isFinite(sig.exitPrice)
-                    ? <CopyVal value={sig.exitPrice} title={t('Kopyala')}>{formatPrice(sig.exitPrice)}</CopyVal>
-                    : '--'}
-                </span>
-              </div>
+              (() => {
+                // MIDAS exit lives in context.exit_px once the trailing stop closes it (the row's
+                // exit_price column stays null for the trailing model); fall back to sig.exitPrice.
+                const mexit = (sig?.context?.pos === 'closed' && Number.isFinite(Number(sig?.context?.exit_px)))
+                  ? Number(sig.context.exit_px) : sig.exitPrice;
+                return (
+                  <div className="trade-metric intel-exec__tpsl">
+                    <span className="metric-label">{t('Çıkış')}</span>
+                    <span className="metric-value">
+                      {Number.isFinite(mexit)
+                        ? <CopyVal value={mexit} title={t('Kopyala')}>{formatPrice(mexit)}</CopyVal>
+                        : '--'}
+                    </span>
+                  </div>
+                );
+              })()
               ) : (
               <div className="trade-metric intel-exec__tpsl">
                 <span className="metric-label">{t('Hedef')} / {t('Risk')}</span>
