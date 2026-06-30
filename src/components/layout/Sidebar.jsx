@@ -201,6 +201,9 @@ const Sidebar = () => {
         )}
 
         <div className="sidebar__navsep" />
+        <NavLink to="/midas/chart" className="sidebar__link">
+          <span className="sidebar__icon"><IconIntel /></span><span>{t('MIDAS Canlı Grafik')}</span>
+        </NavLink>
         <NavLink to="/trend" className="sidebar__link">
           <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
         </NavLink>
