@@ -102,6 +102,9 @@ export default function MidasLiveChart({ startMs = null, endMs = null }) {
     const chart = createChart(containerRef.current, {
       layout: { background: { type: 'solid', color: '#0B0E11' }, textColor: '#EAECEF',
         fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace" },
+      // crosshair (hover) time label in UTC — same as the axis labels + the cards (never local time)
+      localization: { timeFormatter: (ts) => new Date(ts * 1000)
+        .toLocaleString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' UTC' },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       width: containerRef.current.clientWidth, height: containerRef.current.clientHeight,
       rightPriceScale: { borderColor: '#2B3139', scaleMargins: { top: 0.15, bottom: 0.15 } },
