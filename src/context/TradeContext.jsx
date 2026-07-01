@@ -430,6 +430,9 @@ export const TradeProvider = ({ children }) => {
           // MIDAS trailing-stop path: [[unix_sec, stop_price], …] + the fixed initial SL (1R).
           trail: (item.context && item.context.trail) || null,
           initSl: (item.context && Number.isFinite(item.context.init_sl)) ? item.context.init_sl : null,
+          // Carry the whole context through — MIDAS live status/R (context.pos / context.pnl_r) reads
+          // it. Dropping it here left every MIDAS card stuck on 'AKTİF' even after the trade closed.
+          context: item.context ?? null,
         };
       })
       .filter(Boolean)
