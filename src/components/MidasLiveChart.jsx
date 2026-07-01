@@ -84,10 +84,42 @@ const compute = (candles) => {
   return { vwapData, bandU, bandL, markers, last };
 };
 
+// When a `trades` list is given (backtest day): HIGHLIGHT the signals that actually OPENED a trade —
+// bright arrow + "AL/SAT ±R" at the trade's signal bar — while the other clustered signal-formation
+// markers are dimmed (still visible, but muted). Without trades, returns the core markers unchanged.
+const highlightMarkers = (coreMarkers, trades, candles) => {
+  if (!trades || !trades.length || !candles.length) return coreMarkers;
+  const times = candles.map((c) => c.time);
+  const snap = (ms) => {                                   // nearest candle bar at/before the signal ms
+    const target = Math.floor(ms / 60000) * 60;
+    let best = times[0];
+    for (const tt of times) { if (tt <= target) best = tt; else break; }
+    return best;
+  };
+  const tradeBar = new Map();
+  for (const tr of trades) { if (Number.isFinite(tr.signalMs)) tradeBar.set(snap(tr.signalMs), tr); }
+  const dim = coreMarkers.filter((m) => !tradeBar.has(m.time)).map((m) => ({
+    ...m, size: 1, text: undefined,
+    color: m.color === '#0ECB81' ? 'rgba(14,203,129,0.28)' : 'rgba(246,70,93,0.26)',
+  }));
+  const hi = [...tradeBar.entries()].map(([time, tr]) => {
+    const r = Number(tr.r);
+    return {
+      time, position: tr.direction === 'long' ? 'belowBar' : 'aboveBar',
+      shape: tr.direction === 'long' ? 'arrowUp' : 'arrowDown', size: 2,
+      color: Number.isFinite(r) ? (r >= 0 ? '#0ECB81' : '#F6465D') : '#F0B90B',
+      text: `${tr.direction === 'long' ? 'AL' : 'SAT'}${Number.isFinite(r) ? ` ${r >= 0 ? '+' : ''}${r.toFixed(2)}R` : ''}`,
+    };
+  });
+  return [...dim, ...hi];
+};
+
 // Live (default): anchor→now, polls every 30s. Static (startMs+endMs given): a fixed historical day
 // window (e.g. a backtest day), no polling — same VWAP/band/markers, fit to the whole window.
-export default function MidasLiveChart({ startMs = null, endMs = null }) {
+export default function MidasLiveChart({ startMs = null, endMs = null, trades = null }) {
   const isStatic = Number.isFinite(startMs) && Number.isFinite(endMs);
+  const tradesRef = useRef(trades);
+  tradesRef.current = trades;                              // latest trades without re-running the effect
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
@@ -142,9 +174,10 @@ export default function MidasLiveChart({ startMs = null, endMs = null }) {
         const { vwapData, bandU: bu, bandL: bl, markers, last: lm } = compute(candles);
         if (cancelled || !chartRef.current) return;
         candle.setData(candles); vwap.setData(vwapData); bandU.setData(bu); bandL.setData(bl);
-        markers.sort((a, b) => a.time - b.time);
-        if (!markersRef.current) markersRef.current = createSeriesMarkers(candle, markers);
-        else markersRef.current.setMarkers(markers);
+        const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
+        finalMarkers.sort((a, b) => a.time - b.time);
+        if (!markersRef.current) markersRef.current = createSeriesMarkers(candle, finalMarkers);
+        else markersRef.current.setMarkers(finalMarkers);
         if (!framedRef.current && candles.length) {
           const n = candles.length;
           try {

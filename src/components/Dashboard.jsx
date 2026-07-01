@@ -1031,9 +1031,16 @@ const Dashboard = () => {
                       const exs = selectedDayTrades.map((s) => s.exitTs).filter(Number.isFinite);
                       const startMs = Math.min(...dts);
                       const endMs = Math.max(Math.max(...dts), exs.length ? Math.max(...exs) : 0) + 2 * 60 * 60 * 1000;
+                      // the signals that actually OPENED a trade — highlighted on the chart vs the
+                      // dimmed cluster of all signal-formation markers.
+                      const dayTrades = selectedDayTrades.map((s) => ({
+                        signalMs: s.dateObj?.getTime(),
+                        direction: s.dir === 'LONG' ? 'long' : 'short',
+                        r: Number(s.pnlR),
+                      }));
                       return (
                         <div style={{ height: 460, marginBottom: 16, border: '1px solid #1E2329', borderRadius: 10, overflow: 'hidden' }}>
-                          <MidasLiveChart startMs={startMs} endMs={endMs} />
+                          <MidasLiveChart startMs={startMs} endMs={endMs} trades={dayTrades} />
                         </div>
                       );
                     })()}

@@ -228,6 +228,11 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
   fit-to-window, no live conditions panel). Embedded in the MIDAS backtest day-notebook ABOVE the
   day's cards: that day's XAU 1m price + anchored VWAP + ±0.25·ATR band + signal-formation AL/SAT
   markers, with the day's trade cards below.
+- **Highlight the traded signals:** on the backtest day chart, the signals that actually OPENED a
+  trade (the day's cards) render as a bright arrow + "AL/SAT ±R" at their signal bar, while the rest
+  of the clustered signal-formation markers are dimmed — so you see which of the many buy/sell signals
+  were taken (MIDAS is one-position-at-a-time, so most clustered signals are skipped). Chart + card
+  times are all UTC (axis, crosshair, and cards).
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
