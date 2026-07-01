@@ -551,10 +551,13 @@ const ChartModal = () => {
         // when canli marks it closed (context.pos) do we anchor the close at the last trailing-stop point.
         if (mode === 'live' && isTrailing) {
           entryFilled = true;
-          entryFillSec = entryFillSec ?? snapBar(entryTs);
+          // snapBar expects MS: entryTs is already SECONDS (line ~438) and the trail timestamps are
+          // UNIX SECONDS — pass ms so we don't divide a seconds value by 1000 (which snaps every
+          // target back to candles[0], collapsing entry+exit onto the first bar).
+          entryFillSec = entryFillSec ?? snapBar(signalOpenMs + ltfMs);
           if (activeSignal?.context?.pos === 'closed'
               && Array.isArray(activeSignal.trail) && activeSignal.trail.length) {
-            closeBarSec = snapBar(activeSignal.trail[activeSignal.trail.length - 1][0]);
+            closeBarSec = snapBar(activeSignal.trail[activeSignal.trail.length - 1][0] * 1000);
             closeBarIdx = candles.findIndex((c) => c.time === closeBarSec);
           }
         }

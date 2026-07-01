@@ -239,6 +239,20 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
   FX-sessions, ~26h > 1500 bars) the 1m fetch is PAGINATED (up to ~4 pages) instead of coarsening, so
   all client-side signal markers stay accurate. (e.g. 2026-06-29: 1759 bars, 101 signals, 2 trades.)
 
+### 2026-07-01 — ChartModal: closed live MIDAS trade shows the FULL trade (entry→exit path), not a collapsed stub (commit bb61248)
+- Root cause of the broken per-trade chart (entry+exit markers piled on the FIRST bar, price never
+  reaching the SL): a UNIT bug. `snapBar()` expects milliseconds (it does `Math.floor(ms/1000)`), but
+  the MIDAS-live block fed it SECONDS — `entryTs` is already seconds (line ~438) and the trail
+  timestamps are UNIX seconds. Dividing a seconds value by 1000 collapses every target to ~1970, so
+  `find(time >= t)` matched candles[0] → closeBarSec = the first bar → the candle slice trimmed to
+  ~31 bars ending well before the real exit → the SL-hit bar was cut off and Giriş/Çıkış both landed
+  on bar 0.
+- Fix: pass ms — `snapBar(signalOpenMs + ltfMs)` for the entry fill and `snapBar(trail[-1][0] * 1000)`
+  for the close. Verified headless on both live closed trades: SL 3539 (22:03→23:45, window
+  21:56→00:15, Giriş@22:03 · Çıkış@23:45, price visibly drops to the 4009.32 stop) and TP 3467
+  (05:32→12:57, the 26-point trailing-stop staircase climbs 3966→4012 and the Çıkış lands where it's
+  hit, +2.11R). Panels already correct (Süre/Giriş/Çıkış/R); this was chart-geometry only.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
