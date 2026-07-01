@@ -1067,10 +1067,18 @@ const ChartModal = () => {
         const distToEntry = mode === 'live' ? pctDist(liveLastPrice, dispEntry) : null;
         const effDate = effectiveSignalDate(activeSignal);
         const ageMs = effDate ? (Date.now() - effDate.getTime()) : null;
-        // For closed backtest trades, duration is bar-close → exit_time.
-        const closedDurationMs = mode === 'backtest' && sig.exitTs && effDate
+        // MIDAS live CLOSED (context.pos, set by canli): the exit time is the last trailing-stop point,
+        // the realised R + exit price come from context — so a closed trade shows Süre/Çıkış/R (not a
+        // live-ticking duration + 0% PnL).
+        const midasClosedLive = mode === 'live' && isTrailing && activeSignal.context?.pos === 'closed';
+        const midasExitMs = (midasClosedLive && Array.isArray(activeSignal.trail) && activeSignal.trail.length)
+          ? activeSignal.trail[activeSignal.trail.length - 1][0] * 1000 : null;
+        const midasR = midasClosedLive ? Number(activeSignal.context?.pnl_r) : null;
+        const midasExitPx = midasClosedLive ? Number(activeSignal.context?.exit_px) : null;
+        // For closed trades, duration is signal → exit (backtest exit_time, or the MIDAS-live exit).
+        const closedDurationMs = (mode === 'backtest' && sig.exitTs && effDate)
           ? sig.exitTs - effDate.getTime()
-          : null;
+          : (midasExitMs && effDate ? midasExitMs - effDate.getTime() : null);
         const exitPrice = mode === 'backtest' ? sig.exitPrice : null;
 
         // Scale-out (d30_4h_so): first target +1R (60% booked), runner (40%) rides to breakeven
@@ -1143,7 +1151,7 @@ const ChartModal = () => {
             <span>{t('Sinyal (UTC)')}</span><b>{formatSignalTime(effDate)}</b>
           </div>
           <div className="position-row">
-            <span>{mode === 'live' ? t('Süre (canlı)') : t('Süre')}</span>
+            <span>{(mode === 'live' && !midasClosedLive) ? t('Süre (canlı)') : t('Süre')}</span>
             <b>{formatDuration(closedDurationMs ?? ageMs)}</b>
           </div>
           <div className="position-row"><span>{t('Giriş')}{isConfirmEntry ? ' ·0.5R' : ''}</span><b>{formatPrice(dispEntry)}</b></div>
@@ -1212,7 +1220,7 @@ const ChartModal = () => {
               <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+{soCapR}R / {soHorizD}g</span></b>
             </div>
           )}
-          {mode === 'live' && Number.isFinite(liveLastPrice) && (
+          {mode === 'live' && !midasClosedLive && Number.isFinite(liveLastPrice) && (
             <>
               <div className="position-row">
                 <span>{t('Anlık Fiyat')}</span>
@@ -1228,15 +1236,18 @@ const ChartModal = () => {
               )}
             </>
           )}
-          {mode === 'backtest' && Number.isFinite(exitPrice) && exitPrice !== activeSignal.entry && (
+          {((mode === 'backtest' && Number.isFinite(exitPrice) && exitPrice !== activeSignal.entry)
+            || (midasClosedLive && Number.isFinite(midasExitPx))) && (
             <div className="position-row">
               <span>{t('Çıkış')}</span>
-              <b>{formatPrice(exitPrice)}</b>
+              <b>{formatPrice(midasClosedLive ? midasExitPx : exitPrice)}</b>
             </div>
           )}
           <div className="position-row">
             <span>{t('PnL')}</span>
-            {Number.isFinite(soLiveR) ? (
+            {midasClosedLive && Number.isFinite(midasR) ? (
+              <b style={{ color: midasR >= 0 ? '#0ECB81' : '#F6465D' }}>{midasR >= 0 ? '+' : ''}{midasR.toFixed(2)}R</b>
+            ) : Number.isFinite(soLiveR) ? (
               // scale-out LIVE R: +0.6−fee secured at the +1R partial / BE (floor while the
               // runner rides), −1R for a pre-+1R stop. Realised R comes from the nightly sync.
               <b style={{color: soLiveR >= 0 ? '#0ECB81' : '#F6465D'}}>

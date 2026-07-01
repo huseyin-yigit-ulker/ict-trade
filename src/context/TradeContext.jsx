@@ -289,6 +289,10 @@ export const TradeProvider = ({ children }) => {
     // Kept streams are all backtest-only; default to backtest (live mode has no streams now).
     try { const m = localStorage.getItem('pusu.mode'); return (m === 'backtest' || m === 'live') ? m : 'backtest'; } catch { return 'backtest'; }
   });
+  // Current mode, readable synchronously inside async loaders so a STALE load (e.g. the initial
+  // backtest load that fires before CommandCenterPage switches to live) can't overwrite the other
+  // mode's signal set — the 529 backtest rows were clobbering the 3 live MIDAS trades.
+  const modeRef = useRef(mode);
   const setStrategy = useCallback((s) => {
     strategyRef.current = s;
     setStrategyState(s);
@@ -549,6 +553,7 @@ export const TradeProvider = ({ children }) => {
       // gate, so a failed/absent ER drops the signal.
       const finalMapped = isLight ? await applyLightGate(mapped) : mapped;
 
+      if (modeRef.current !== 'live') return;   // mode switched away while fetching — don't clobber
       processData(finalMapped);
       setLastUpdated(new Date());
     } catch (err) {
@@ -577,6 +582,7 @@ export const TradeProvider = ({ children }) => {
     const cacheKey = `${backtestSchema}.${backtestTable}|${btVersion}|2024-01-01|${BACKTEST_ALLOWED_SYMBOLS.join(',')}`;
     const cached = backtestCacheRef.current.get(cacheKey);
     if (!force && cached) {
+      if (modeRef.current !== 'backtest') return;   // don't apply backtest data onto the live view
       setLiveError('');
       processData(cached.rows);
       setBacktestInsights(cached.insights);
@@ -665,6 +671,7 @@ export const TradeProvider = ({ children }) => {
         .map((row) => ({ ...row, ltf_timeframe: row.ltf_timeframe ?? ltfTf,
                                  htf_timeframe: row.htf_timeframe ?? htfTf }));
 
+      if (modeRef.current !== 'backtest') return;   // mode switched to live — don't clobber live data
       processData(filteredRows);
 
       // Server-side RPC analytics aggregate the static (v1) set.
@@ -740,6 +747,7 @@ export const TradeProvider = ({ children }) => {
     let intervalId;
     let onVisible;
     if (!strategy || !mode) return () => {};
+    modeRef.current = mode;   // so a stale loader (other mode) can bail before overwriting allSignals
 
     setDateStart(''); setDateEnd(''); setPendingDateStart(''); setPendingDateEnd('');
     setLiveStatuses({});
