@@ -164,20 +164,30 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     const load = async () => {
       try {
         const end = isStatic ? endMs : Date.now();
-        // anchor the VWAP at the FX session that contains the window start, bounded to ~1450 1m bars
-        const start = Math.max(fxAnchorMs(isStatic ? startMs : end), end - 1450 * 60000);
-        const base = `symbol=${SYMBOL}&interval=1m&startTime=${start}&endTime=${end}&limit=1500`;
+        // Anchor the VWAP at the FX session that contains the window start. A MIDAS UTC "day" can hold
+        // TWO FX-sessions (~26h apart), too wide for 1m (>1500 bars), so coarsen the interval to fit
+        // the WHOLE window (both trades) in ~1450 bars — keeping 1m whenever it fits.
+        const anchor = fxAnchorMs(isStatic ? startMs : end);
+        const LADDER = [['1m', 60000], ['5m', 300000], ['15m', 900000], ['1h', 3600000]];
+        let interval = '1m';
+        for (const [iv, ms] of LADDER) { interval = iv; if ((end - anchor) / ms <= 1450) break; }
+        const coarse = interval !== '1m';
+        const base = `symbol=${SYMBOL}&interval=${interval}&startTime=${anchor}&endTime=${end}&limit=1500`;
         let raw = await (await fetch(`https://fapi.binance.com/fapi/v1/klines?${base}`)).json();
         if (!Array.isArray(raw)) raw = await (await fetch(`https://api.binance.com/api/v3/klines?${base}`)).json();
         if (!Array.isArray(raw) || !raw.length) { if (!cancelled) setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
         const { vwapData, bandU: bu, bandL: bl, markers, last: lm } = compute(candles);
         if (cancelled || !chartRef.current) return;
-        candle.setData(candles); vwap.setData(vwapData); bandU.setData(bu); bandL.setData(bl);
-        const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
+        candle.setData(candles); vwap.setData(vwapData);
+        // the ATR band + the per-bar signal-rule cluster markers only make sense at 1m; on a coarsened
+        // wide-day view show just the VWAP + the actual trade highlights (accurate from the DB).
+        bandU.setData(coarse ? [] : bu); bandL.setData(coarse ? [] : bl);
+        const finalMarkers = highlightMarkers(coarse ? [] : markers, tradesRef.current, candles);
         finalMarkers.sort((a, b) => a.time - b.time);
         if (!markersRef.current) markersRef.current = createSeriesMarkers(candle, finalMarkers);
         else markersRef.current.setMarkers(finalMarkers);
+        lm.interval = interval;
         if (!framedRef.current && candles.length) {
           const n = candles.length;
           try {
@@ -222,7 +232,7 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0B0E11', color: '#EAECEF' }}>
       <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', flexWrap: 'wrap', padding: '10px 14px',
         borderBottom: '1px solid #1E2329', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
-        <strong style={{ color: '#F0B90B' }}>MIDAS · XAUUSDT 1m · {isStatic
+        <strong style={{ color: '#F0B90B' }}>MIDAS · XAUUSDT {last?.interval || '1m'} · {isStatic
           ? new Date(endMs).toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
           : 'CANLI'}</strong>
         <span>Fiyat <b>{fmt(last?.price)}</b></span>
