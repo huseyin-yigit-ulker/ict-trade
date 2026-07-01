@@ -233,6 +233,11 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
   of the clustered signal-formation markers are dimmed — so you see which of the many buy/sell signals
   were taken (MIDAS is one-position-at-a-time, so most clustered signals are skipped). Chart + card
   times are all UTC (axis, crosshair, and cards).
+- **All signals shown + entry/exit marks, 1m via pagination:** the backtest day chart shows EVERY
+  signal-formation (dimmed cluster) with the taken trades highlighted — an amber AL/SAT arrow at the
+  ENTRY bar and a result-coloured "Çıkış ±R" circle at the EXIT bar. To keep 1m on a wide day (two
+  FX-sessions, ~26h > 1500 bars) the 1m fetch is PAGINATED (up to ~4 pages) instead of coarsening, so
+  all client-side signal markers stay accurate. (e.g. 2026-06-29: 1759 bars, 101 signals, 2 trades.)
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

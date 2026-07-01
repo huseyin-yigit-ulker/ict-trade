@@ -1035,6 +1035,7 @@ const Dashboard = () => {
                       // dimmed cluster of all signal-formation markers.
                       const dayTrades = selectedDayTrades.map((s) => ({
                         signalMs: s.dateObj?.getTime(),
+                        exitMs: s.exitTs,
                         direction: s.dir === 'LONG' ? 'long' : 'short',
                         r: Number(s.pnlR),
                       }));

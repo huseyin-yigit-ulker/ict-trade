@@ -90,27 +90,33 @@ const compute = (candles) => {
 const highlightMarkers = (coreMarkers, trades, candles) => {
   if (!trades || !trades.length || !candles.length) return coreMarkers;
   const times = candles.map((c) => c.time);
-  const snap = (ms) => {                                   // nearest candle bar at/before the signal ms
+  const t0 = times[0]; const t1 = times[times.length - 1];
+  const inWin = (ms) => Number.isFinite(ms) && ms / 1000 >= t0 - 60 && ms / 1000 <= t1 + 60;
+  const snap = (ms) => {                                   // nearest candle bar at/before a timestamp
     const target = Math.floor(ms / 60000) * 60;
     let best = times[0];
     for (const tt of times) { if (tt <= target) best = tt; else break; }
     return best;
   };
-  const tradeBar = new Map();
-  for (const tr of trades) { if (Number.isFinite(tr.signalMs)) tradeBar.set(snap(tr.signalMs), tr); }
-  const dim = coreMarkers.filter((m) => !tradeBar.has(m.time)).map((m) => ({
+  const entryBars = new Set();
+  const hi = [];
+  for (const tr of trades) {
+    const r = Number(tr.r); const long = tr.direction === 'long';
+    if (inWin(tr.signalMs)) {                              // ENTRY: amber arrow "AL"/"SAT" at the signal bar
+      const bar = snap(tr.signalMs); entryBars.add(bar);
+      hi.push({ time: bar, position: long ? 'belowBar' : 'aboveBar', shape: long ? 'arrowUp' : 'arrowDown',
+        size: 2, color: '#F0B90B', text: long ? 'AL' : 'SAT' });
+    }
+    if (inWin(tr.exitMs)) {                                // EXIT: result-coloured circle "Çıkış ±R"
+      hi.push({ time: snap(tr.exitMs), position: long ? 'aboveBar' : 'belowBar', shape: 'circle', size: 1,
+        color: Number.isFinite(r) && r < 0 ? '#F6465D' : '#0ECB81',
+        text: `Çıkış${Number.isFinite(r) ? ` ${r >= 0 ? '+' : ''}${r.toFixed(2)}R` : ''}` });
+    }
+  }
+  const dim = coreMarkers.filter((m) => !entryBars.has(m.time)).map((m) => ({
     ...m, size: 1, text: undefined,
     color: m.color === '#0ECB81' ? 'rgba(14,203,129,0.28)' : 'rgba(246,70,93,0.26)',
   }));
-  const hi = [...tradeBar.entries()].map(([time, tr]) => {
-    const r = Number(tr.r);
-    return {
-      time, position: tr.direction === 'long' ? 'belowBar' : 'aboveBar',
-      shape: tr.direction === 'long' ? 'arrowUp' : 'arrowDown', size: 2,
-      color: Number.isFinite(r) ? (r >= 0 ? '#0ECB81' : '#F6465D') : '#F0B90B',
-      text: `${tr.direction === 'long' ? 'AL' : 'SAT'}${Number.isFinite(r) ? ` ${r >= 0 ? '+' : ''}${r.toFixed(2)}R` : ''}`,
-    };
-  });
   return [...dim, ...hi];
 };
 
@@ -165,29 +171,36 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
       try {
         const end = isStatic ? endMs : Date.now();
         // Anchor the VWAP at the FX session that contains the window start. A MIDAS UTC "day" can hold
-        // TWO FX-sessions (~26h apart), too wide for 1m (>1500 bars), so coarsen the interval to fit
-        // the WHOLE window (both trades) in ~1450 bars — keeping 1m whenever it fits.
+        // TWO FX-sessions (~26h apart) — too wide for a single 1500-bar 1m fetch — so PAGINATE the 1m
+        // fetch (up to ~4 pages ≈ 4 days). Staying at 1m keeps ALL signal-formation markers accurate
+        // (the non-traded ones only exist client-side, computed on 1m bars).
         const anchor = fxAnchorMs(isStatic ? startMs : end);
-        const LADDER = [['1m', 60000], ['5m', 300000], ['15m', 900000], ['1h', 3600000]];
-        let interval = '1m';
-        for (const [iv, ms] of LADDER) { interval = iv; if ((end - anchor) / ms <= 1450) break; }
-        const coarse = interval !== '1m';
-        const base = `symbol=${SYMBOL}&interval=${interval}&startTime=${anchor}&endTime=${end}&limit=1500`;
-        let raw = await (await fetch(`https://fapi.binance.com/fapi/v1/klines?${base}`)).json();
-        if (!Array.isArray(raw)) raw = await (await fetch(`https://api.binance.com/api/v3/klines?${base}`)).json();
-        if (!Array.isArray(raw) || !raw.length) { if (!cancelled) setStatus('Veri yok'); return; }
+        const page = async (from) => {
+          const q = `symbol=${SYMBOL}&interval=1m&startTime=${from}&endTime=${end}&limit=1500`;
+          let r = await (await fetch(`https://fapi.binance.com/fapi/v1/klines?${q}`)).json();
+          if (!Array.isArray(r)) r = await (await fetch(`https://api.binance.com/api/v3/klines?${q}`)).json();
+          return Array.isArray(r) ? r : [];
+        };
+        let raw = [];
+        let cursor = anchor;
+        for (let p = 0; p < 4 && cursor < end; p += 1) {
+          const pg = await page(cursor);
+          if (!pg.length) break;
+          raw = raw.concat(pg);
+          if (pg.length < 1500) break;
+          cursor = pg[pg.length - 1][0] + 60000;            // next page starts after the last bar (no overlap)
+        }
+        if (cancelled || !chartRef.current) return;
+        if (!raw.length) { setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
         const { vwapData, bandU: bu, bandL: bl, markers, last: lm } = compute(candles);
-        if (cancelled || !chartRef.current) return;
-        candle.setData(candles); vwap.setData(vwapData);
-        // the ATR band + the per-bar signal-rule cluster markers only make sense at 1m; on a coarsened
-        // wide-day view show just the VWAP + the actual trade highlights (accurate from the DB).
-        bandU.setData(coarse ? [] : bu); bandL.setData(coarse ? [] : bl);
-        const finalMarkers = highlightMarkers(coarse ? [] : markers, tradesRef.current, candles);
+        candle.setData(candles); vwap.setData(vwapData); bandU.setData(bu); bandL.setData(bl);
+        // markers = ALL signal-formation moments (dimmed) + the trades that opened (entry arrow + exit)
+        const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
         finalMarkers.sort((a, b) => a.time - b.time);
         if (!markersRef.current) markersRef.current = createSeriesMarkers(candle, finalMarkers);
         else markersRef.current.setMarkers(finalMarkers);
-        lm.interval = interval;
+        lm.interval = '1m';
         if (!framedRef.current && candles.length) {
           const n = candles.length;
           try {
