@@ -1016,10 +1016,13 @@ export const TradeProvider = ({ children }) => {
       if (stopped) return;
 
       // Compute every status, then commit ONCE (no per-signal setState render storm).
+      const isMidas = strategyRef.current === 'midas';
       const updates = {};
       for (const sig of pending) {
-        const candles = candlesBySym[sig.symbol];
-        if (!candles || candles.length === 0) continue;
+        const candles = candlesBySym[sig.symbol] || [];
+        // MIDAS status is authoritative from context.pos (open/closed) and needs NO candles — compute
+        // it even if the fetch came back empty. Other streams derive status from the candle scan.
+        if (candles.length === 0 && !isMidas) continue;
         const result = computeLiveStatusFromCandles(sig, candles);
         updates[sig.id] = { status: result.status, lastPrice: result.lastPrice };
       }
