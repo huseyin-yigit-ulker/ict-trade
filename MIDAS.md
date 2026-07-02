@@ -424,6 +424,20 @@ real maker fill-rate/slippage study, not mainnet P&L.
   +58.7 both still comfortably positive. Live cron picks both fixes up automatically (single
   `add_market_open`/`_fx_day` path); first live effect: Jul-3 (July-4th observed) flat from 13:00 ET.
 
+### 2026-07-02 (7) — Live/backtest parity audit PASS + 3 orphan live rows deleted
+- **Parity audit** (cron + signal formation + chart data): installed crontab == dag/crontab, canli
+  fresh to the minute; matched live signals have 0 SL / 0 entry-ref mismatches; the two settled trades
+  common to both sides match the backtest book **to the cent** (05:31 +2.11R, 20:02 −0.33R);
+  `parity_report.py` (track_open vs walk) 0 mismatches under the new filter code; backtest rows 12/12
+  integrity PASS (trail endpoints/monotonic ratchet/pnl recompute/no overlap/London+holiday compliance).
+- **Deleted 3 orphan `mode='midas'` live rows** (user: "görmeyeyim") that today's filters would never
+  emit — they were real alerts from older code eras, absent from the authoritative book:
+  Jun-30 18:34 LONG −1.04R (pre-VWAP-anchor-fix b9b7c66 artifact), Jun-30 22:02 LONG −1.06R and
+  Jul-1 22:01 LONG +3.65R (session-open flood, pre-`MATURE_MIN` era). Net −1.55R of phantom live
+  history removed; live view now shows exactly the book-consistent trades. One transition artifact
+  noted, no action needed: the book's Jul-2 00:43 +3.30R trade has no live twin (live was held by the
+  pre-filter 22:01 position at the time; self-resolves).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
