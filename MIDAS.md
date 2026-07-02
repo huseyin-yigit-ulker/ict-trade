@@ -63,7 +63,7 @@ mainnet today = OPUS only.
 ### Strategy / backend — `sync/midas/`
 | File | Role |
 |---|---|
-| `strategy.py` | Core. Data load + FX-gold market-hours filter, anchored VWAP, ATR(15m), `signals()` (VWAP-pullback + London 07-13 UTC skip), `walk()` (leak-free single-position backtest with 3.5×ATR trailing), `generate_trades()`, `track_open()` (live trailing replay for one open position), `current_open()` (self-heal). All tuned constants live at the top (`SLOPE_N`, `ATR_INIT_MULT`, `TRAIL_MULT`, `MAX_HOLD_MIN`, `COST_RT`, `SKIP_UTC_START/END`). |
+| `strategy.py` | Core. Data load + FX-gold market-hours filter, anchored VWAP, ATR(15m), `signals()` (VWAP-pullback + London 07-13 UTC skip + 2h session-maturity), `walk()` (leak-free single-position backtest with 3.5×ATR trailing), `generate_trades()`, `track_open()` (live trailing replay for one open position), `current_open()` (self-heal). All tuned constants live at the top (`SLOPE_N`, `ATR_INIT_MULT`, `TRAIL_MULT`, `MAX_HOLD_MIN`, `COST_RT`, `SKIP_UTC_START/END`, `MATURE_MIN`). |
 | `backfill.py` | Nightly: replays 2026, writes **SETTLED-only** trades to `trading_signals` (`version='midas'`), stores the trailing-stop path in `context.trail`. `--dry-run` / `--apply`. |
 | `canli.py` | Per-minute live: emits fresh setups + tracks the open position → `signals` (`mode='midas'`); Telegram on entry / **every trailing-stop change** (`--sl-step 0`) / exit. `--dry-run` / `--emit`, `--sl-step N`, `--no-telegram`, `--lookback-min N`. |
 
@@ -193,9 +193,10 @@ bridge (`sync/midas_exec/`, §5) uses `LIVE_TRADING_ENABLED` + `MIDAS_EXEC_ENABL
 previous + delta, locked R, breakeven state, duration) · exit (price, reason, final R).
 
 **Strategy params** (`sync/midas/strategy.py`): `SLOPE_N=60`, `ATR_INIT_MULT=1.5` (=1R), `TRAIL_MULT=3.5`,
-`MAX_HOLD_MIN=480` (8h), `TOUCH_TOL=0.25`, `COST_RT=0.50` ($/oz), `SKIP_UTC_START=7 / END=13` (London skip).
-Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-13 UTC skipped**; flat Fri
-16:00 ET (weekend buffer); never holds the weekend.
+`MAX_HOLD_MIN=480` (8h), `TOUCH_TOL=0.25`, `COST_RT=0.50` ($/oz), `SKIP_UTC_START=7 / END=13` (London skip),
+`MATURE_MIN=120` (session-maturity: no NEW entries in the first 2h after the 18:00 ET fx-day open).
+Sessions traded: Asia 22-07 (after the 2h maturity window), London-NY overlap 13-17, NY 17-21 UTC;
+**London 07-13 UTC skipped**; flat Fri 16:00 ET (weekend buffer); never holds the weekend.
 
 **DB row shapes:**
 - Backtest `trading_signals`: one row/trade, `version='midas'`, `context={kind,init_sl,trail:[[unix_sec,price],…]}`.
@@ -374,6 +375,27 @@ real maker fill-rate/slippage study, not mainnet P&L.
   incompatible. MIDAS stays PAPER on Binance; real-money only via a low-fixed-cost FX/ECN broker
   (OANDA v20 / IBKR `ib_async` / cTrader Open API — reliable market fills, ~$0.20-0.50/oz round-trip).
   (Per-trade recompute puts the plain taker+taker loss at −47R, cleaner than the earlier −92R estimate.)
+
+### 2026-07-02 — Session-maturity filter shipped (`MATURE_MIN=120`): no entries in the fx-day's first 2h
+- **Loss-anatomy audit of the 2026 book found one structural defect:** the first 2h after the 18:00 ET
+  VWAP-anchor reset produced a 188-trade flood worth ≈ 0R net. Root cause is mechanical, not regime:
+  (a) with a fresh anchor, price ≈ VWAP by construction → the "pullback touch" fires constantly;
+  (b) the 60-bar slope window **crosses the anchor reset**, comparing the fresh VWAP against the prior
+  day's full-session VWAP → the trend gate is meaningless there. Proof: masking the slope to
+  within-session-only gives **identical** results to skipping the first 60 min.
+- **Fix:** `MATURE_MIN=120` in `signals()` — no NEW entries in the first 120 min of the fx-day (open
+  positions/exits untouched). 2026-H1: +139.5R/528tr → **+145.0R/396tr**, PF 1.46→**1.68**, maxDD
+  −23→**−18**, worst month +11.1→+17.3, **IS +81→+85 AND OOS +58→+60 both improve**; plateau smooth
+  across 30–180 min. 25% fewer trades = lower fixed-cost drag. DB rebased: 530 → **400 rows, +150.5R,
+  WR 40%, PF 1.70** (full year through Jul-2). Backfill + canli pick it up automatically (single
+  `signals()` path).
+- Rejected after honest IS/OOS tests (kept out deliberately): breakeven-ratchet at +1R (standalone
+  +6R but redundant with maturity — combo LOSES R; a `BE(1.0→+0.1R)` combo trades ~11R for WR 37%→54%
+  if smoothness is ever wanted); extending the 8h time-stop (10h/12h/∞ all worse — the cap locks
+  profit near its peak); strong-slope entry filter (IS/OOS inconsistent); same-day loss-streak cooldown
+  (inverted: trades after 2-3 same-day losses are the BEST bucket, avgR ~0.8, IS+OOS consistent).
+- London 07-13 UTC salvage re-tested: trend-in-window −9.9R, VWAP-fade +24.9 IS → **−31.1 OOS**
+  (sign-flip mirage), tight fade −18.4R → the skip stays; the window is dead, not mis-traded.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

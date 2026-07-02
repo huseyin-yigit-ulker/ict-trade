@@ -8,8 +8,9 @@ NEVER holds across the rollover/weekend ("anlik islem ac-kapa"). One position at
 
 Validated on Binance XAUUSDT 1m 2026-H1 (see FX-GOLD-VWAP-RAPORU.md): +115R, PF 1.32, IS+54/OOS+61,
 both directions positive, edge survives a parameter plateau + honest IS->OOS + random-entry null +
-liquid-hours test + an independent reimplementation. NO-LOOKAHEAD: every signal is decided on a
-bar's CLOSE and filled at the NEXT bar's open.
+liquid-hours test + an independent reimplementation. With the London skip + session-maturity filter
+(shipped config, 2026-H1): +145R, PF 1.68, 396 trades, IS +85 / OOS +60, maxDD -18R, all months green.
+NO-LOOKAHEAD: every signal is decided on a bar's CLOSE and filled at the NEXT bar's open.
 
 COST NOTE: this is an FX instrument. The default cost is $0.50/oz round-trip (~1.1 bps at $4000) =
 a tight ECN-FX/CFD spread+slippage. The strategy DIES on Binance crypto taker fees (~10 bps ≈ $4/oz);
@@ -47,6 +48,17 @@ TP_REF_MULT = TRAIL_MULT / ATR_INIT_MULT   # nominal "target" line for the UI (=
 # OOS held (+64 -> +61). Asia (22-07), London-NY overlap (13-17) and NY afternoon (17-21) stay on.
 SKIP_UTC_START = 7
 SKIP_UTC_END = 13
+
+# Session-MATURITY filter — no NEW entries in the first MATURE_MIN minutes after the 18:00 ET fx-day
+# open. Structural, not a regime fit: right after the anchor reset (a) price ≈ VWAP by construction,
+# so the "pullback touch" fires constantly, and (b) the 60-bar slope window CROSSES the anchor reset
+# (compares the fresh VWAP against the prior day's full-session VWAP) so the trend gate is meaningless.
+# Proof of mechanism: masking the slope to within-session-only gives IDENTICAL results to skipping the
+# first 60 min. The first-2h flood was 188 trades ≈ 0R net. 2026-H1 with 120: +139.5R/528tr ->
+# +145.0R/396tr, PF 1.46 -> 1.68, maxDD -23 -> -18, worst month +11.1 -> +17.3, IS +81 -> +85,
+# OOS +58 -> +60; plateau smooth across 30/60/90/120/150/180. (Open positions are NOT affected —
+# only new entries; walk()/track_open() manage exits exactly as before.)
+MATURE_MIN = 120
 
 
 # ---------------------------------------------------------------- data + market hours
@@ -110,11 +122,15 @@ def signals(df: pd.DataFrame, atr: pd.Series | None = None):
     lo = df["low"].to_numpy(); hi = df["high"].to_numpy()
     a = atr.to_numpy(); openmkt = df["open_mkt"].to_numpy(bool)
     uth = df.index.hour.to_numpy()                  # UTC hour for the session filter
+    day = pd.Series(_fx_day(df))
+    bars_in = day.groupby(day).cumcount().to_numpy()  # ≈ minutes since the 18:00 ET fx-day open
     tol = TOUCH_TOL * a
     for i in range(SLOPE_N + 1, n):
         if not openmkt[i] or not np.isfinite(vw[i]) or not np.isfinite(a[i]) or a[i] <= 0:
             continue
         if SKIP_UTC_START <= uth[i] < SKIP_UTC_END:  # skip the London pre-NY window (07-13 UTC)
+            continue
+        if bars_in[i] < MATURE_MIN:                  # session-maturity: VWAP anchor too fresh (see top)
             continue
         if c[i] > vw[i] and slope[i] > 0 and lo[i] <= vw[i] + tol[i] and c[i] > o[i]:
             side[i] = 1; stop[i] = c[i] - ATR_INIT_MULT * a[i]
