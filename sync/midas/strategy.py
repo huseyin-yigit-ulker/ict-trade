@@ -49,6 +49,16 @@ TP_REF_MULT = TRAIL_MULT / ATR_INIT_MULT   # nominal "target" line for the UI (=
 SKIP_UTC_START = 7
 SKIP_UTC_END = 13
 
+# CME/COMEX gold HOLIDAY calendar (calibrated against Binance XAUUSDT volume — see MIDAS.md
+# 2026-07-02 audit). Binance keeps printing synthetic EWMA bars through real-market halts (Jan-1
+# medVol 0.0, MLK 2.4 vs ~105 normal), so without this the backtest "fills" on phantom prices.
+# FULL: the entire ET day is off. EARLY: flat from 13:00 ET (COMEX metals halt ~13:30) until the
+# normal 18:00 ET evening reopen (data: Presidents/Memorial reopen with real volume at 18:00).
+# Conservative by design — sacrifices ~30min of thin pre-halt trade. EXTEND YEARLY.
+HOLIDAY_FULL_ET = ("2026-01-01", "2026-04-03", "2026-12-25", "2027-01-01")
+HOLIDAY_EARLY_ET = ("2026-01-19", "2026-02-16", "2026-05-25", "2026-06-19", "2026-07-03",
+                    "2026-09-07", "2026-11-26", "2026-11-27", "2026-12-24")
+
 # Session-MATURITY filter — no NEW entries in the first MATURE_MIN minutes after the 18:00 ET fx-day
 # open. Structural, not a regime fit: right after the anchor reset (a) price ≈ VWAP by construction,
 # so the "pullback touch" fires constantly, and (b) the 60-bar slope window CROSSES the anchor reset
@@ -83,6 +93,11 @@ def add_market_open(df: pd.DataFrame) -> pd.DataFrame:
     is_open &= ~((dow == 6) & (hour < 18))       # Sunday opens 18:00 ET
     is_open &= ~((dow == 4) & (hour >= 16))      # Friday: flat 1h early (16:00 ET, weekend buffer)
     is_open &= ~((dow <= 3) & (hour == 17))      # Mon-Thu 17:00-18:00 break
+    et_date = et.normalize()                     # US holidays (see HOLIDAY_* at top)
+    hol_full = pd.DatetimeIndex(list(HOLIDAY_FULL_ET)).tz_localize("America/New_York")
+    hol_early = pd.DatetimeIndex(list(HOLIDAY_EARLY_ET)).tz_localize("America/New_York")
+    is_open &= ~et_date.isin(hol_full)                              # full close: whole ET day off
+    is_open &= ~(et_date.isin(hol_early) & (hour >= 13) & (hour < 18))  # early close: flat 13:00-18:00 ET
     out = df.copy(); out["open_mkt"] = is_open.values
     return out
 
@@ -98,9 +113,15 @@ def atr_tf(df: pd.DataFrame, tf: str = ATR_TF, n: int = ATR_N) -> pd.Series:
 
 
 def _fx_day(df: pd.DataFrame) -> np.ndarray:
-    """FX-day id; boundary = 18:00 ET (the gold/FX day open)."""
+    """FX-day id; boundary = 18:00 ET (the gold/FX day open).
+
+    +6h, NOT -18h: the 6h span from 18:00 ET to midnight never contains the 02:00 DST jump, so the
+    boundary stays pinned to 18:00 wall-clock ET on transition days. The old -18h subtraction crossed
+    the spring-forward jump and slid the DST-Sunday boundary to 19:00 ET, gluing the Sunday-open hour
+    onto the synthetic-weekend group (contaminated VWAP + bypassed maturity filter — 4 phantom trades
+    on 2026-03-08)."""
     et = df.index.tz_convert("America/New_York")
-    return (et - pd.Timedelta(hours=18)).normalize().view("int64")
+    return (et + pd.Timedelta(hours=6)).normalize().view("int64")
 
 
 def anchored_vwap(df: pd.DataFrame):

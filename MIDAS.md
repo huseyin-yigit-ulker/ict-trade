@@ -194,7 +194,9 @@ previous + delta, locked R, breakeven state, duration) · exit (price, reason, f
 
 **Strategy params** (`sync/midas/strategy.py`): `SLOPE_N=60`, `ATR_INIT_MULT=1.5` (=1R), `TRAIL_MULT=3.5`,
 `MAX_HOLD_MIN=480` (8h), `TOUCH_TOL=0.25`, `COST_RT=0.50` ($/oz), `SKIP_UTC_START=7 / END=13` (London skip),
-`MATURE_MIN=120` (session-maturity: no NEW entries in the first 2h after the 18:00 ET fx-day open).
+`MATURE_MIN=120` (session-maturity: no NEW entries in the first 2h after the 18:00 ET fx-day open),
+`HOLIDAY_FULL_ET` / `HOLIDAY_EARLY_ET` (US-holiday calendar — full-close days off entirely, early-close
+days flat 13:00→18:00 ET; **extend yearly**).
 Sessions traded: Asia 22-07 (after the 2h maturity window), London-NY overlap 13-17, NY 17-21 UTC;
 **London 07-13 UTC skipped**; flat Fri 16:00 ET (weekend buffer); never holds the weekend.
 
@@ -396,6 +398,31 @@ real maker fill-rate/slippage study, not mainnet P&L.
   (inverted: trades after 2-3 same-day losses are the BEST bucket, avgR ~0.8, IS+OOS consistent).
 - London 07-13 UTC salvage re-tested: trend-in-window −9.9R, VWAP-fade +24.9 IS → **−31.1 OOS**
   (sign-flip mirage), tight fade −18.4R → the skip stays; the window is dead, not mis-traded.
+
+### 2026-07-02 (6) — Filter audit: DST anchor bug fixed + US-holiday calendar added
+- **Full audit of the session/market-hours filters** (user request), three parts: (1) calendar logic —
+  all 7 rules PASS on 259,581 bars, zero violations, and the Mon-Thu 17:00-18:00 ET break is confirmed
+  BY DATA (min-volume ET hour = 17:00 in every month, volume −85..95%, tracking DST 22→21 UTC exactly);
+  (2) trade-book compliance — 0 London-window entries, 0 immature entries, 0 positions held through a
+  closed bar, latest Friday exit 15:59 ET, longest hold exactly 8h, fill always signal+1 bar;
+  (3) two real defects found and fixed:
+- **BUG — DST spring-forward anchor slide.** `_fx_day` used `(et − 18h).normalize()`; the 18h
+  subtraction crosses the 02:00 DST jump, so on 2026-03-08 the fx-day boundary slid to 19:00 ET: the
+  Sunday-open hour glued onto the synthetic-weekend group → weekend-contaminated VWAP + bypassed
+  maturity filter → 4 phantom trades (bars_in showed 1380). **Fix: `(et + 6h).normalize()`** — the
+  6h span 18:00→midnight never contains the 02:00 jump, provably DST-safe both directions; boundaries
+  now pin to 18:00 ET on every day incl. transitions.
+- **GAP — no holiday model.** Binance keeps printing synthetic EWMA bars through real-market halts:
+  Jan-1 medVol **0.0**, MLK **2.4** (vs ~105 normal) yet the book "filled" 16 trades worth +13.5R of
+  partly-phantom liquidity across 6 US holidays. Added a volume-calibrated CME/COMEX calendar:
+  `HOLIDAY_FULL_ET` (Jan-1, Good-Friday, Christmas, New-Year-27: whole ET day off) +
+  `HOLIDAY_EARLY_ET` (MLK, Presidents, Memorial, Juneteenth, Jul-3, Labor, Thanksgiving+Fri, Dec-24:
+  flat 13:00→18:00 ET — data shows the 18:00 evening reopen is real volume, so it stays on).
+  **Extend the lists yearly.**
+- Net effect (honest correction DOWN): 2026-H1 +145.0R/396tr → **+139.5R/385tr, PF 1.67** (phantom
+  profit removed); full-year DB rebased 400 → **389 rows, +145.0R, WR 39%, PF 1.70**. IS +80.8 / OOS
+  +58.7 both still comfortably positive. Live cron picks both fixes up automatically (single
+  `add_market_open`/`_fx_day` path); first live effect: Jul-3 (July-4th observed) flat from 13:00 ET.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
