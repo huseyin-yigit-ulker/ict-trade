@@ -22,8 +22,11 @@ from-scratch reimplementation that reproduced it to the decimal.
 / S&P / Nasdaq. Keep it XAU-only.
 
 ⚠️ **Cost reality:** MIDAS uses an **FX/ECN cost model ($0.50/oz ≈ 1 bp)**. On Binance taker fees
-(~10 bps ≈ $4/oz) it turns **negative**. MIDAS is therefore a **PAPER** stream (signals + Telegram +
-dashboard), NOT a real-money Binance stream. The real-money executor trades only OPUS (d30so8f3h7).
+(~10 bps ≈ $4/oz) it turns **negative** (+142R → ≈ −92R). MIDAS is therefore a **PAPER** stream
+(signals + Telegram + dashboard). A real-money-capable Binance bridge now exists — **MIDAS-X**
+(`sync/midas_exec/`, version `midasx`) — but it runs **TESTNET / dry-run only**; a Binance-fee
+simulation MUST show a positive net-of-fee edge before any mainnet arming (see §5). Real-money
+mainnet today = OPUS only.
 
 ---
 
@@ -66,6 +69,23 @@ dashboard), NOT a real-money Binance stream. The real-money executor trades only
 
 Shared engine helpers reused from `sync/trade_sync_common.py` (DB connections, `fetch_klines`, `build_row`) and `backtest/ict/data.py` (Binance klines).
 
+### Real-money bridge — `sync/midas_exec/` (TESTNET / dry-run first; version `midasx`)
+Clones the OPUS executor pattern (`sync/live_exec`) but implements MIDAS's own mechanics: a post-only
+maker LIMIT entry, the 1.5×ATR initial stop, and the 3.5×ATR chandelier trailing exit driven by the
+**same `strategy.track_open`** the paper feed uses (so live == paper by construction). See §5 + `sync/midas_exec/README.md`.
+| File | Role |
+|---|---|
+| `executor.py` | cron #1 — reads `mode='midas'` → maker entry → chandelier trailing → 8h/session exit → reconcile (idempotent, deterministic `mdx-…` coids). Testnet = synthetic MARKET-on-trigger; mainnet = resting `STOP_MARKET` + cancel/replace. |
+| `config.py` | `MidasExecCfg` + `load_cfg()`; `MIDAS_*` env; **fail-closed**; `MIDAS_BINANCE_TESTNET` (own network flag, testnet-first) so MIDAS can be testnet while OPUS is mainnet. |
+| `state.py` | only-writer of `ict_trade.midas_positions`; context-aware writeback to `trading_signals` (`version='midasx'`). |
+| `schema.sql` | additive `midas_positions` / `midas_orders` (separate from OPUS's `live_positions`). |
+| `safety_sweep.py` / `killswitch.py` | XAUUSDT-scoped guards + operator CLI (`--halt` flips `MIDAS_EXEC_ENABLED`, OPUS untouched). |
+| `parity_report.py` | Faz-0 gate — `track_open` replay vs the backtest `walk()` (0 mismatches). |
+
+Depends on a one-line additive fix in `sync/live_exec/exchange_info.py`: gold is a `TRADIFI_PERPETUAL`
+(not `PERPETUAL`), so `is_tradable(sym, allow=('PERPETUAL','TRADIFI_PERPETUAL'))` accepts XAUUSDT while
+`is_tradable_perp` (the OPUS gate) still rejects it.
+
 ### Frontend — `src/` (React + Vite)
 | File | MIDAS-relevant change |
 |---|---|
@@ -80,7 +100,11 @@ Shared engine helpers reused from `sync/trade_sync_common.py` (DB connections, `
 | `assets/css/style.css` | `.session-card` styling. |
 
 ### Ops — `dag/crontab`
-The VM crontab (applied with `crontab dag/crontab`). MIDAS lines: per-minute `canli.py --emit` and nightly `backfill.py --apply` at 01:30 UTC.
+The VM crontab (applied with `crontab dag/crontab`). MIDAS lines: per-minute `canli.py --emit`
+(paper) and nightly `backfill.py --apply` at 01:30 UTC. **MIDAS-X** adds a per-minute
+`midas_exec/executor.py` + a `*/3` `midas_exec/safety_sweep.py` — both **no-op** until
+`LIVE_TRADING_ENABLED=true` AND `MIDAS_EXEC_ENABLED=true` AND `MIDAS_EXEC_DRY_RUN=false` (log →
+`~/ict-midas-exec.log`).
 
 ---
 
@@ -143,9 +167,12 @@ crontab -l | grep -c canli.py        # MIDAS + Donchian emit lines present
 
 **Ops (optional):** `GITHUB_TOKEN` (git push over HTTPS).
 
-**NOT used by MIDAS** (they drive the OPUS real-money Binance executor — leave as-is / unset for a MIDAS-only
-box): `BINANCE_TESTNET*`, `LIVE_TRADING_ENABLED`, `EXEC_*`, `LEVERAGE*`, `MARGIN_TYPE`, `RISK_PER_TRADE_USD`,
-`MAX_*`, `AUTO_LEVERAGE`, `CLOSE_FRAC`, `HORIZON_DAYS`, `RUNNER_CAP_R`, `DCH_*`, `LIVE_ENTRY_MODE`.
+**Not used by the paper MIDAS stream** (`canli.py` / `backfill.py`) — but the **MIDAS-X** real-money
+bridge (`sync/midas_exec/`, §5) uses `LIVE_TRADING_ENABLED` + `MIDAS_EXEC_ENABLED` + `MIDAS_EXEC_DRY_RUN`
++ `MIDAS_BINANCE_TESTNET` + `BINANCE_[TESTNET_]API_KEY/SECRET` + the `MIDAS_*` sizing knobs
+(see `sync/midas_exec/.env.example`). **OPUS-only** (unused by anything MIDAS): `EXEC_*`, `LEVERAGE*`,
+`MARGIN_TYPE`, `RISK_PER_TRADE_USD`, `MAX_*`, `AUTO_LEVERAGE`, `CLOSE_FRAC`, `HORIZON_DAYS`,
+`RUNNER_CAP_R`, `DCH_*`, `LIVE_ENTRY_MODE`. Leave all of these unset for a paper-only MIDAS box.
 
 > `VITE_*` vars are read by Vite **at build time** → rebuild (`npm run build`) after changing them.
 
@@ -173,6 +200,44 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
 **DB row shapes:**
 - Backtest `trading_signals`: one row/trade, `version='midas'`, `context={kind,init_sl,trail:[[unix_sec,price],…]}`.
 - Live `signals`: `mode='midas'`, `context={pos:'open'|'closed', cur_sl, best, locked_r, trail, init_sl, …}`.
+
+### MIDAS-X — real-money bridge (TESTNET first) — `sync/midas_exec/`
+The gold executor that turns the `mode='midas'` signals into real Binance orders "like OPUS". **It is
+fail-closed and testnet/dry-run by default.**
+
+> **⚠️ One-time account prerequisite — sign the "TradFi-Perps agreement".** Gold (XAUUSDT) is a Binance
+> `TRADIFI_PERPETUAL`. An account that hasn't accepted the TradFi-Perps agreement gets **`-4411 "Please
+> sign TradFi-Perps agreement"`** on every order (verified on testnet). Accept it once in the Binance
+> Futures UI (or API) on **each** account you'll use (testnet for validation, mainnet later) BEFORE
+> arming — otherwise no XAU order will ever fill. The executor detects `-4411`, logs a clear hint, and
+> pings Telegram instead of silently failing.
+
+Bring-up:
+
+```bash
+# 0) one-time: create the tables (idempotent, additive — never touches OPUS's live_positions)
+psql "$DB_CONNECTION_STRING" -f sync/midas_exec/schema.sql
+
+# 1) parity gate (BLOCKING) — the executor's exit engine must reproduce the backtest to the decimal
+.venv/bin/python sync/midas_exec/parity_report.py            # expect: mismatches 0 -> PASS
+
+# 2) dry-run (no orders, no keys) — logs the intended maker entry + stop for each fresh signal
+.venv/bin/python sync/midas_exec/executor.py
+
+# 3) TESTNET armed — set BINANCE_TESTNET_API_KEY/SECRET, then:
+LIVE_TRADING_ENABLED=true MIDAS_EXEC_ENABLED=true MIDAS_EXEC_DRY_RUN=false \
+  MIDAS_BINANCE_TESTNET=true .venv/bin/python sync/midas_exec/executor.py
+# or set those in .env and let the cron run it every minute; watch ~/ict-midas-exec.log
+```
+Emergency: `killswitch.py --status | --flatten | --halt` (`--halt` = `MIDAS_EXEC_ENABLED=false`, MIDAS-only).
+
+**🚧 Mainnet gate (MUST pass before flipping `MIDAS_BINANCE_TESTNET=false`).** MIDAS is validated on a
+$0.50/oz FX cost (+142R); at Binance taker (~$4/oz) the same trades are ≈ −92R, and the chandelier exit
+is an inherently-taker `STOP_MARKET`. So before ANY mainnet money: re-run the settled MIDAS trades
+through the **real Binance fee schedule** (maker on filled entries, taker on the stop exit) instead of
+`COST_RT`. Arm mainnet only if that shows a **positive net-of-fee** edge — and even then start at
+`MIDAS_RISK_PER_TRADE_USD` $2-5. The near-term value of MIDAS-X is the testnet-validated infra + a
+real maker fill-rate/slippage study, not mainnet P&L.
 
 ---
 
@@ -252,6 +317,63 @@ Sessions traded: Asia 22-07, London-NY overlap 13-17, NY 17-21 UTC; **London 07-
   21:56→00:15, Giriş@22:03 · Çıkış@23:45, price visibly drops to the 4009.32 stop) and TP 3467
   (05:32→12:57, the 26-point trailing-stop staircase climbs 3966→4012 and the Çıkış lands where it's
   hit, +2.11R). Panels already correct (Süre/Giriş/Çıkış/R); this was chart-geometry only.
+
+### 2026-07-02 — MIDAS-X: real-money-capable Binance bridge (TESTNET / dry-run first) — `sync/midas_exec/`
+- **New package `sync/midas_exec/`** — the gold executor that runs MIDAS on Binance "like OPUS", but
+  cloned to MIDAS's own mechanics: a **post-only maker LIMIT** entry at the pullback close, the 1.5×ATR
+  initial stop, and the **3.5×ATR chandelier trailing** exit driven by the **same
+  `strategy.track_open`** the paper feed uses (so live == paper by construction). No fixed TP, no
+  reverse, single position. `executor.py` (cron #1) + `config.py` + `state.py` + `schema.sql` +
+  `safety_sweep.py` (cron #2) + `killswitch.py` + `parity_report.py` + README/.env.example.
+- **Load-bearing fix — `sync/live_exec/exchange_info.py` (additive, backward-compatible):** Binance
+  lists gold as `contractType=TRADIFI_PERPETUAL`, NOT `PERPETUAL`, so the old `is_tradable_perp` screen
+  silently rejected every XAUUSDT signal (`XAU tradable=False`). Added `is_tradable(sym, allow=…)` +
+  retained `contract_type`/`status`; MIDAS passes `allow=('PERPETUAL','TRADIFI_PERPETUAL')`, OPUS's
+  `is_tradable_perp` is unchanged. Verified on live mainnet **and** testnet exchangeInfo.
+- **Isolation from OPUS:** separate DB tables (`ict_trade.midas_positions`/`midas_orders`, applied via
+  `schema.sql`), separate `MIDAS_*` env namespace, and a killswitch/safety-sweep scoped to `XAUUSDT`
+  only — the two executors can never flatten each other. Own network flag `MIDAS_BINANCE_TESTNET`
+  (testnet-first) so MIDAS validates on testnet while OPUS keeps trading mainnet on the same `.env`.
+- **Writeback:** real fills land in `trading_signals` under **`version='midasx'`** (context-aware, with
+  the trailing path) — distinct from the paper `'midas'` the nightly backfill DELETE-rewrites.
+- **Execution model:** testnet = synthetic (recompute chandelier each tick, MARKET-close on the exit
+  trigger — testnet rejects conditional orders with -4120); mainnet = resting `STOP_MARKET(closePosition)`
+  + dead-band cancel/replace as the stop ratchets. Maker-only entries: cancel/skip on timeout or
+  `MIDAS_ENTRY_MAX_SLIP_R` slip, never chase with a taker. Fail-closed; deterministic `mdx-…` coids
+  (crash-safe/idempotent). Realized R/USD from `userTrades`, not the `COST_RT` model.
+- **Cron:** added a per-minute `midas_exec/executor.py` + `*/3` `midas_exec/safety_sweep.py` to
+  `dag/crontab` — **both no-op** until `LIVE_TRADING_ENABLED=true` AND `MIDAS_EXEC_ENABLED=true` AND
+  `MIDAS_EXEC_DRY_RUN=false`. Real-money executor (OPUS) **untouched**.
+- **Verified:** `parity_report.py` PASS — **531/531 settled 2026 trades, 0 mismatches** (`track_open`
+  replay == backtest `walk()`) + the live paper `mode='midas'` feed (5/5). Dry-run runs clean on the
+  testnet base with `XAUUSDT tradable=True`; sizing/slip-guard/intent-logging exercised; armed-testnet
+  order path wired (blocked only by the `-4411` account agreement below).
+- **Account prerequisite discovered — `-4411`:** gold (a `TRADIFI_PERPETUAL`) needs the account to have
+  accepted the Binance **"TradFi-Perps agreement"** or every order is rejected `-4411` (seen on testnet).
+  Accept it once per account before arming; the executor now detects `-4411` and logs/pings a clear hint.
+- **⚠️ Cost caveat still binding:** +142R (FX) → ≈ −92R (Binance taker). **MIDAS-X stays testnet/paper
+  until a Binance-fee simulation shows a positive net-of-fee edge** — this bridge is validated infra, not
+  a mainnet green light. See §5 "Mainnet gate".
+
+### 2026-07-02 — Maker-LIMIT entry does NOT rescue MIDAS on Binance fees (the §5 mainnet-gate sim → NEGATIVE)
+- This IS the "Binance-fee simulation" the MIDAS-X mainnet gate (above / §5) waits on. Result:
+  **maker-limit entry does NOT produce a positive net-of-fee edge → do NOT arm MIDAS-X mainnet.**
+- Q: could a **post-only maker LIMIT** entry (0.02% maker vs 0.05% taker) turn MIDAS net-positive on
+  Binance? Backtest `scratchpad/midas_maker_bt.py` clones the shipped `walk()` and swaps only the entry
+  (validation: FX-flat baseline reproduced +142.8R / 531tr). The maker idea forks into two dead ends:
+  - **Limit @ CLOSE ("at current price", ≈ marketable):** fills ~99% but a marketable order is charged
+    **taker** in reality → collapses to the market baseline **−47R**. Prints +9R only by *assuming* a
+    maker fee it would not actually receive.
+  - **Limit @ VWAP (genuinely passive, below market = the pullback target):** earns the maker fee but
+    **misses 40-60% of signals** — price runs away without returning to VWAP (adverse selection on the
+    very continuation runners that are the edge). Fill-effect alone (FX-flat) already halves it
+    +142→+60R; with the Binance % fee the tighter VWAP→stop distance shrinks 1R so fee-in-R explodes →
+    **−170R**. Theoretical ceiling (market fill + maker fee, same trades) is only **+16.7R**, unattainable.
+- Verdict: you either pay taker (−47R) or miss the runners (−170R). The edge needs (a) EVERY
+  continuation fill and (b) a low FIXED cost; Binance's % fee on gold's ~$4600 notional is structurally
+  incompatible. MIDAS stays PAPER on Binance; real-money only via a low-fixed-cost FX/ECN broker
+  (OANDA v20 / IBKR `ib_async` / cTrader Open API — reliable market fills, ~$0.20-0.50/oz round-trip).
+  (Per-trade recompute puts the plain taker+taker loss at −47R, cleaner than the earlier −92R estimate.)
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
