@@ -167,6 +167,12 @@ const Sidebar = () => {
           <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Canlı')}</span>
         </NavLink>
 
+        {/* Binance Paper · Altın — MIDAS-X gold executor on Binance TESTNET (paper, not real money) */}
+        <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance-paper">
+          <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Paper · Altın')}</span>
+          <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
+        </NavLink>
+
         <button
           className="sidebar__section"
           onClick={toggleStrategies}

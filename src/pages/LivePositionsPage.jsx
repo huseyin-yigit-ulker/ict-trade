@@ -92,12 +92,15 @@ export default function LivePositionsPage() {
     try {
       const [pos, snap, acc] = await Promise.all([
         getJSON('live_positions?select=*&order=updated_at.desc&limit=60'),
-        getJSON('live_account_snapshot?select=*'),
+        getJSON('live_account_snapshot?select=*&network=eq.mainnet'),
         getJSON('live_account?select=*'),
       ]);
       setPositions(pos);
       setSnaps(Object.fromEntries(snap.map((s) => [s.symbol, s])));
-      setAccount(acc[0] || null);
+      // OPUS is the real-money MAINNET stream. The MIDAS-X paper bridge writes a second, testnet
+      // live_account row into this shared table, so prefer the mainnet row (fall back to the single
+      // row on a testnet-only box) — otherwise acc[0] could be MIDAS-X's stale testnet account.
+      setAccount(acc.find((a) => a.network === 'mainnet') || acc[0] || null);
       setErr('');
       setUpdatedAt(new Date());
     } catch (e) {

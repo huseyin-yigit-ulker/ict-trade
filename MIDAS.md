@@ -89,6 +89,9 @@ Depends on a one-line additive fix in `sync/live_exec/exchange_info.py`: gold is
 ### Frontend — `src/` (React + Vite)
 | File | MIDAS-relevant change |
 |---|---|
+| `pages/MidasXLivePage.jsx` | **Binance Paper · Altın** page (`/binance-altin`) — the MIDAS-X gold executor's live view: reads `ict_trade.midas_positions` + `live_account_snapshot`(XAUUSDT) + `live_account`(testnet) via PostgREST, shows account KPIs + open positions (İlk SL / İz-Süren SL / Kilitli R / live K-Z / live R / countdown) + recently-closed. Reuses `LivePositionsPage.css`; badged **PAPER/TESTNET**, never "GERÇEK". |
+| `pages/LivePositionsPage.jsx` | (OPUS real-money) — the sibling this clones. |
+| `App.jsx` / `layout/Sidebar.jsx` | route `/binance-altin` + a second pinned nav link "Binance Paper · Altın" (amber PAPER accent) directly under "Binance Canlı". |
 | `utils/streamStats.js` | MIDAS entry in the `STREAMS` registry (`version:'midas'`). |
 | `components/layout/Sidebar.jsx` | MIDAS nav entry (live+paper badge). |
 | `components/layout/Topbar.jsx` | `midas: 'Midas'` label. |
@@ -398,6 +401,45 @@ real maker fill-rate/slippage study, not mainnet P&L.
   (inverted: trades after 2-3 same-day losses are the BEST bucket, avgR ~0.8, IS+OOS consistent).
 - London 07-13 UTC salvage re-tested: trend-in-window −9.9R, VWAP-fade +24.9 IS → **−31.1 OOS**
   (sign-flip mirage), tight fade −18.4R → the skip stays; the window is dead, not mis-traded.
+
+### 2026-07-02 (5) — MIDAS-X cron installed on the VM (dry-run) + TradFi still blocking
+- Installed the two MIDAS-X cron lines into the live crontab (`crontab dag/crontab`; backed up first to
+  `dag/crontab.backup.pre-midasx-*`). Diff confirmed the ONLY change vs the running crontab was the
+  MIDAS-X block. It runs **dry-run** (MIDAS_EXEC_* unset → not armed): every minute it refreshes the
+  testnet `live_account`/XAU snapshot (so the "Binance Paper · Altın" page stays fresh, no "5 dk eski")
+  and logs intended orders — NO orders, NO positions. Log: `~/ict-midas-exec.log`.
+- TradFi-Perps agreement STILL unsigned (re-probed → `-4411`), so arming now would only spam `-4411`
+  per signal with zero fills. To start real testnet paper trades: sign the agreement, then set
+  `MIDAS_EXEC_ENABLED=true` + `MIDAS_EXEC_DRY_RUN=false` (one flip). Kept dry-run deliberately until then.
+
+### 2026-07-02 (4) — fix: MIDAS-X testnet account row made the OPUS "Binance Canlı" page read stale
+- Regression from adding MIDAS-X: it writes a second `ict_trade.live_account` row (network='testnet')
+  into the table OPUS's `LivePositionsPage` reads with `acc[0]` (unordered) → PostgREST returned the
+  testnet row first, so the real-money page showed the stale testnet account + a false "5 dk'dan eski"
+  warning (OPUS's mainnet executor was actually fresh, ~20-47s). Fix (`src/pages/LivePositionsPage.jsx`):
+  pick `acc.find(a=>a.network==='mainnet') || acc[0]`, and scope the snapshot query to
+  `network=eq.mainnet`. MIDAS-X page already reads its own network via the XAU snapshot. Needs a UI
+  rebuild/deploy to reach the live dashboard. (MIDAS-X page's own "stale" is correct — it isn't running:
+  cron not installed + not armed.)
+
+### 2026-07-02 (3) — strict paper/live API-key separation
+- MIDAS-X `config.py` key selection is now STRICT: paper (testnet) uses ONLY `BINANCE_TESTNET_API_KEY/
+  SECRET`, live (mainnet) uses ONLY `BINANCE_API_KEY/SECRET` — removed the testnet→mainnet fallback so
+  the paper executor can never borrow the real-money key. Missing the required key while armed →
+  fail-closed. Verified: MIDAS-X paper → testnet base + testnet key (not live); MIDAS-X mainnet → live
+  key; OPUS unchanged (mainnet + live key, still armed). (`.env BINANCE_TESTNET=false` = OPUS mainnet.)
+
+### 2026-07-02 (2) — UI: "Binance Paper · Altın" page for MIDAS-X (under Binance Canlı)
+- Added `src/pages/MidasXLivePage.jsx` at route **`/binance-altin`**, pinned in the Sidebar directly
+  under the real-money **Binance Canlı** (OPUS) link with an amber **PAPER** badge (never the gold
+  "Binance · GERÇEK"). It's a clone of `LivePositionsPage` pointed at MIDAS-X's tables:
+  `ict_trade.midas_positions` + `live_account_snapshot`(symbol=XAUUSDT) + `live_account`(testnet),
+  read anon via PostgREST (grants from `sync/midas_exec/schema.sql`). Columns fit the trailing model:
+  Giriş / Mark / İlk SL / **İz-Süren SL** (cur_sl) / **Kilitli R** (locked_r) / live K-Z / live R /
+  countdown (entry_deadline or 8h time-stop), + account KPIs + recently-closed. Network chip auto-reads
+  the XAU snapshot's network (TESTNET now). Reuses `LivePositionsPage.css`; `npm run build` clean.
+- The page is empty until MIDAS-X actually runs (arm on testnet + install the cron); it's a live
+  30s-refresh view of whatever the executor has snapshotted.
 
 ### 2026-07-02 (6) — Filter audit: DST anchor bug fixed + US-holiday calendar added
 - **Full audit of the session/market-hours filters** (user request), three parts: (1) calendar logic —

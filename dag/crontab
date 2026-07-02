@@ -70,3 +70,15 @@
 */2 * * * * sleep 25 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/live_exec/executor.py     >> $HOME/ict-exec.log 2>&1
 # Safety sweep (cron #2): independent orphan/protective-stop/clock-skew/risk-cap guard.
 */5 * * * * sleep 50 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/live_exec/safety_sweep.py  >> $HOME/ict-exec.log 2>&1
+
+# --- MIDAS-X LIVE EXECUTION (Binance TRADIFI_PERPETUAL XAUUSDT; TESTNET/dry-run first) ---
+# MIDAS's real-money-capable bridge: reads the SAME mode='midas' signals (paper feed above), places a
+# POST-ONLY maker LIMIT entry, then rides the 3.5*ATR chandelier trailing stop (sync/midas/strategy.
+# track_open) to an 8h/session exit. Records real fills under version='midasx' (distinct from the paper
+# 'midas' the nightly backfill rewrites). SEPARATE tables/env/killswitch from OPUS (never cross-flatten).
+# ⚠️ MIDAS dies on Binance taker fees (+142R FX -> -92R taker) — a Binance-fee sim gates any mainnet arm.
+# BOTH lines no-op while LIVE_TRADING_ENABLED=false OR MIDAS_EXEC_ENABLED=false OR MIDAS_EXEC_DRY_RUN=true.
+# Executor every minute (matches the 1m chandelier), offset +35s off the :20s canli emit.
+* * * * * sleep 35 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/executor.py     >> $HOME/ict-midas-exec.log 2>&1
+# Safety sweep (cron #2): independent XAUUSDT-scoped orphan/reconciler-freshness/clock-skew guard.
+*/3 * * * * sleep 50 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/safety_sweep.py >> $HOME/ict-midas-exec.log 2>&1

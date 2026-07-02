@@ -1,0 +1,137 @@
+"""MIDAS live-execution config — single knob/secret surface for the gold (XAUUSDT) Binance bridge.
+
+Reuses tsc._read_env() (the same .env parser the sync jobs use). All MIDAS knobs are namespaced
+`MIDAS_*` so this executor coexists on ONE .env with the OPUS executor (which owns EXEC_*/RISK_*).
+Shared master/network/secret switches (LIVE_TRADING_ENABLED, BINANCE_TESTNET, BINANCE_[TESTNET_]API_*,
+BINANCE_PROXY, TELEGRAM_*) are read from the same keys both executors use.
+
+Everything is fail-CLOSED: if MIDAS is armed for real orders (LIVE_TRADING_ENABLED=true AND
+MIDAS_EXEC_ENABLED=true AND MIDAS_EXEC_DRY_RUN=false) but the API keys are missing, load_cfg()
+hard-exits BEFORE any network call.
+
+TESTNET-FIRST posture: BINANCE_TESTNET and MIDAS_EXEC_DRY_RUN both default TRUE, so a bare run is a
+no-op intent logger against testnet until the operator explicitly flips them.
+"""
+from __future__ import annotations
+
+import os
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+_HERE = Path(__file__).resolve()
+sys.path.insert(0, str(_HERE.parents[1]))           # sync/ -> trade_sync_common
+import trade_sync_common as tsc                      # noqa: E402
+
+# Binance USDⓈ-M Futures REST. Mainnet by default; testnet base kept for testnet-first validation.
+MAINNET_BASE = "https://fapi.binance.com"
+TESTNET_BASE = "https://testnet.binancefuture.com"
+
+
+def _b(env: dict, key: str, default: bool) -> bool:
+    return str(env.get(key, str(default))).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _f(env: dict, key: str, default: float) -> float:
+    try:
+        return float(env.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _i(env: dict, key: str, default: int) -> int:
+    try:
+        return int(float(env.get(key, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+@dataclass(frozen=True)
+class MidasExecCfg:
+    # ---- master switches ----
+    trading_enabled: bool          # LIVE_TRADING_ENABLED — shared master kill (false => no-op)
+    exec_enabled: bool             # MIDAS_EXEC_ENABLED — per-strategy arm (lets MIDAS run while OPUS is off)
+    dry_run: bool                  # MIDAS_EXEC_DRY_RUN — compute + log intents, send NOTHING
+    testnet: bool                  # BINANCE_TESTNET — point REST at the testnet base + testnet keys
+    # ---- secrets ----
+    api_key: str
+    api_secret: str
+    base_url: str
+    proxy: str                     # BINANCE_PROXY — optional egress proxy (geo-blocked runners)
+    # ---- instrument / sizing / risk ----
+    symbol: str                    # MIDAS_SYMBOL (XAUUSDT)
+    risk_usd: float                # MIDAS_RISK_PER_TRADE_USD — USD lost if the 1.5*ATR stop hits
+    leverage: int                  # MIDAS_LEVERAGE — fixed (clamped to the TradFi bracket by the exchange)
+    margin_type: str               # MIDAS_MARGIN_TYPE — ISOLATED | CROSSED
+    max_concurrent: int            # MIDAS_MAX_CONCURRENT — hard 1 (also enforced by the unique index)
+    # ---- entry (maker-first) ----
+    maker_entry: bool              # MIDAS_MAKER_ENTRY — post-only LIMIT (GTX); false => MARKET (testnet only)
+    entry_timeout_sec: int         # MIDAS_ENTRY_TIMEOUT_SEC — cancel an unfilled maker entry after this
+    entry_max_slip_r: float        # MIDAS_ENTRY_MAX_SLIP_R — abandon if price ran this many R past the ref
+    # ---- trailing (mainnet resting-stop cancel/replace) ----
+    sl_deadband_ticks: int         # MIDAS_SL_DEADBAND_TICKS — only replace the stop past this many ticks
+    # ---- writeback / notify ----
+    exec_version: str              # MIDAS_EXEC_VERSION — trading_signals tag (distinct from paper 'midas')
+    exec_name: str                 # MIDAS_EXEC_NAME — Telegram prefix
+    telegram_chat_id: str          # TELEGRAM_EXEC_CHAT_ID (falls back to TELEGRAM_CHAT_ID)
+
+    @property
+    def armed(self) -> bool:
+        """True only when real orders may be sent (everything else is a no-op / intent log)."""
+        return self.trading_enabled and self.exec_enabled and not self.dry_run
+
+    @property
+    def symbols(self) -> tuple[str, ...]:
+        return (self.symbol,)
+
+
+def load_cfg() -> MidasExecCfg:
+    env = {**os.environ, **tsc._read_env()}   # .env wins for secrets; process env for cron overrides
+
+    trading_enabled = _b(env, "LIVE_TRADING_ENABLED", False)
+    exec_enabled = _b(env, "MIDAS_EXEC_ENABLED", False)
+    dry_run = _b(env, "MIDAS_EXEC_DRY_RUN", True)
+    # MIDAS has its OWN network flag (default TRUE = testnet-first), independent of the shared
+    # BINANCE_TESTNET that OPUS uses — so MIDAS can validate on testnet while OPUS trades mainnet on
+    # the same .env. Flip MIDAS_BINANCE_TESTNET=false only when MIDAS graduates to mini-mainnet.
+    testnet = _b(env, "MIDAS_BINANCE_TESTNET", True)
+
+    # Keys are network-specific so testnet + mainnet creds coexist in .env: flipping BINANCE_TESTNET
+    # switches which pair is used. STRICT separation (no cross-fallback): paper (testnet) uses ONLY the
+    # testnet/paper key, live (mainnet) uses ONLY the mainnet/live key — the paper executor can never
+    # borrow the real-money key, and vice-versa. Missing the required key => fail-closed below when armed.
+    if testnet:
+        api_key = (env.get("BINANCE_TESTNET_API_KEY") or "").strip()
+        api_secret = (env.get("BINANCE_TESTNET_API_SECRET") or "").strip()
+    else:
+        api_key = (env.get("BINANCE_API_KEY") or "").strip()
+        api_secret = (env.get("BINANCE_API_SECRET") or "").strip()
+
+    cfg = MidasExecCfg(
+        trading_enabled=trading_enabled,
+        exec_enabled=exec_enabled,
+        dry_run=dry_run,
+        testnet=testnet,
+        api_key=api_key,
+        api_secret=api_secret,
+        base_url=TESTNET_BASE if testnet else MAINNET_BASE,
+        proxy=str(env.get("BINANCE_PROXY", "")).strip(),
+        symbol=str(env.get("MIDAS_SYMBOL", "XAUUSDT")).strip().upper(),
+        risk_usd=_f(env, "MIDAS_RISK_PER_TRADE_USD", 2.0),
+        leverage=_i(env, "MIDAS_LEVERAGE", 5),
+        margin_type=str(env.get("MIDAS_MARGIN_TYPE", "ISOLATED")).strip().upper(),
+        max_concurrent=_i(env, "MIDAS_MAX_CONCURRENT", 1),
+        maker_entry=_b(env, "MIDAS_MAKER_ENTRY", True),
+        entry_timeout_sec=_i(env, "MIDAS_ENTRY_TIMEOUT_SEC", 120),
+        entry_max_slip_r=_f(env, "MIDAS_ENTRY_MAX_SLIP_R", 0.25),
+        sl_deadband_ticks=_i(env, "MIDAS_SL_DEADBAND_TICKS", 2),
+        exec_version=str(env.get("MIDAS_EXEC_VERSION", "midasx")).strip(),
+        exec_name=str(env.get("MIDAS_EXEC_NAME", "MIDAS-X")).strip(),
+        telegram_chat_id=str(env.get("TELEGRAM_EXEC_CHAT_ID") or env.get("TELEGRAM_CHAT_ID") or "").strip(),
+    )
+
+    # fail-CLOSED: armed for real orders but no credentials -> stop before any network call.
+    if cfg.armed and not (cfg.api_key and cfg.api_secret):
+        raise SystemExit("MIDAS armed (LIVE_TRADING_ENABLED=true & MIDAS_EXEC_ENABLED=true & "
+                         "MIDAS_EXEC_DRY_RUN=false) but Binance API key/secret are empty — refusing to run.")
+    return cfg

@@ -2,9 +2,13 @@
 
 Binance rejects orders whose price isn't a multiple of PRICE_FILTER.tickSize or whose qty isn't
 a multiple of LOT_SIZE.stepSize, and whose notional is below the symbol's MIN_NOTIONAL. This
-quantizes our deterministic levels to the exchange grid and screens symbols at boot:
-only status=TRADING + contractType=PERPETUAL pass (so XAUUSDT and any delisted/settling perp
-are rejected automatically — they never become a managed position).
+quantizes our deterministic levels to the exchange grid and screens symbols at boot.
+
+Tradability is contract-type aware: `is_tradable_perp()` (the OPUS/Donchian gate) still passes ONLY
+status=TRADING + contractType=PERPETUAL, but the raw contractType is now retained so a caller can opt
+into other live contract classes. Gold on Binance USDⓈ-M is a `TRADIFI_PERPETUAL` (NOT `PERPETUAL`),
+so MIDAS calls `is_tradable("XAUUSDT", allow=("PERPETUAL","TRADIFI_PERPETUAL"))` to trade it while the
+plain-perp streams keep rejecting it automatically.
 """
 from __future__ import annotations
 
@@ -21,7 +25,9 @@ class SymbolFilters:
     min_notional: float
     price_precision: int
     qty_precision: int
-    tradable: bool          # status==TRADING and contractType==PERPETUAL
+    tradable: bool          # status==TRADING and contractType==PERPETUAL (the plain-perp gate)
+    contract_type: str = "" # raw contractType, e.g. 'PERPETUAL' | 'TRADIFI_PERPETUAL' | 'CURRENT_QUARTER'
+    status: str = ""        # raw status, e.g. 'TRADING'
 
 
 def _round_to(value: float, step: float, *, mode: str) -> float:
@@ -56,6 +62,8 @@ class ExchangeInfo:
                     min_qty = float(f.get("minQty", 0) or 0)
                 elif ft in ("MIN_NOTIONAL", "NOTIONAL"):
                     min_notional = float(f.get("notional", f.get("minNotional", 0)) or 0)
+            ctype = str(s.get("contractType") or "")
+            status = str(s.get("status") or "")
             self._by_symbol[sym] = SymbolFilters(
                 symbol=sym,
                 tick_size=tick,
@@ -64,11 +72,19 @@ class ExchangeInfo:
                 min_notional=min_notional,
                 price_precision=int(s.get("pricePrecision", 8)),
                 qty_precision=int(s.get("quantityPrecision", 8)),
-                tradable=(s.get("status") == "TRADING" and s.get("contractType") == "PERPETUAL"),
+                tradable=(status == "TRADING" and ctype == "PERPETUAL"),
+                contract_type=ctype,
+                status=status,
             )
 
     def get(self, symbol: str) -> SymbolFilters | None:
         return self._by_symbol.get(symbol)
+
+    def is_tradable(self, symbol: str, *, allow: tuple[str, ...] = ("PERPETUAL",)) -> bool:
+        """status=TRADING and contractType in `allow`. Default = plain perps only (OPUS behaviour).
+        MIDAS passes allow=('PERPETUAL','TRADIFI_PERPETUAL') to trade the Binance gold contract."""
+        f = self._by_symbol.get(symbol)
+        return bool(f and f.status == "TRADING" and f.contract_type in allow)
 
     def is_tradable_perp(self, symbol: str) -> bool:
         f = self._by_symbol.get(symbol)

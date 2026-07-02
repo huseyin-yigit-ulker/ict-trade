@@ -2642,3 +2642,7 @@ body { padding-bottom: 40px; }   /* room for the fixed ticker */
 /* Binance Canlı link pinned directly above the strategies — Binance-gold accent. */
 .sidebar__link--binance { color: #F0B90B; font-weight: 600; }
 .sidebar__link--binance .sidebar__icon { color: #F0B90B; }
+/* Binance Paper · Altın (MIDAS-X testnet) — amber PAPER accent, distinct from the gold real-money link. */
+.sidebar__link--binance-paper { color: var(--accent); font-weight: 600; }
+.sidebar__link--binance-paper .sidebar__icon { color: var(--accent); }
+.sidebar__link--binance-paper .sidebar__live-badge { margin-left: auto; }

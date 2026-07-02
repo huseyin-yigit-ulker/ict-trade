@@ -14,8 +14,10 @@ A quantitative crypto/FX **trading research + live signal system**:
 - **Live emitters** (cron, every bar) detect fresh signals and write them to a live DB.
 - A **React/Vite dashboard** reads both DBs (live feed + backtest drill-down Year→Month→Day, with
   TradingView-style charts).
-- A **real-money Binance Futures executor** trades exactly one stream (**OPUS**); everything else is
-  **paper** (signals + Telegram + dashboard only).
+- A **real-money Binance Futures executor** trades exactly one stream on mainnet (**OPUS**); everything
+  else is **paper** (signals + Telegram + dashboard only). A second executor, **MIDAS-X**
+  (`sync/midas_exec/`), can place real gold orders but runs **TESTNET / dry-run only** until a
+  Binance-fee simulation clears it for mainnet.
 - **Telegram** alerts on formations / trade lifecycle.
 
 Three streams are surfaced live; the rest of the "Donchian book" is backtest-only research.
@@ -25,6 +27,7 @@ Three streams are surfaced live; the rest of the "Donchian book" is backtest-onl
 | **OPUS** (`d30so8f3h7`) | Donchian 30m breakout + 4h confirm, scale-out (60% @ +1R, runner +8R cap / BE / 7d) | ✅ | **REAL** (Binance Futures) |
 | **FABLE** (`d30so8f3vg`) | OPUS twin, only taken when daily volume is contracting (vch<0.9) | ✅ | paper |
 | **MIDAS** (`midas`) | Gold-only (XAUUSDT) 1m VWAP-trend pullback + 3.5×ATR trailing | ✅ | paper |
+| **MIDAS-X** (`midasx`) | MIDAS as real Binance orders (maker entry + chandelier trailing) | ✅ | **TESTNET** (dry-run first; mainnet gated on a fee sim) |
 | Donchian book (`donchianc`, `d1h_so*`, `d30so*`, …) | breakout families, various exits | backtest-only | — |
 
 Deep dives: **[MIDAS.md](MIDAS.md)** (gold stream), [STRATEJI-RAPORU.md](STRATEJI-RAPORU.md) &
@@ -61,6 +64,8 @@ ict-trade/
 │   ├── donchian/            Donchian strategy: strategy.py, canli.py (live emit), scaleout*.py,
 │   │                        portfolio_backfill.py, volgate_backfill.py (FABLE), …
 │   ├── midas/               MIDAS gold stream: strategy.py, backfill.py, canli.py   → see MIDAS.md
+│   ├── midas_exec/          MIDAS-X gold executor (testnet-first): executor.py, config.py, state.py,
+│   │                        schema.sql, safety_sweep.py, killswitch.py, parity_report.py → see MIDAS.md §5
 │   ├── live_exec/           REAL-MONEY Binance executor (OPUS): executor.py, safety_sweep.py,
 │   │                        config.py, binance_futures.py, killswitch.py, state.py, schema.sql
 │   ├── sync_daily.py        Nightly ETL: resolve live signals → backtest versions
@@ -127,6 +132,8 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `*/2 * * * *` | `live_exec/executor.py` | **REAL-MONEY** OPUS reconciler |
 | `*/5 * * * *` | `live_exec/safety_sweep.py` | executor safety guard |
+| `* * * * *` | `midas_exec/executor.py` | **MIDAS-X** reconciler (testnet; no-op until armed) |
+| `*/3 * * * *` | `midas_exec/safety_sweep.py` | MIDAS-X safety guard (XAUUSDT-scoped) |
 
 Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-sync.log`, `~/ict-exec.log`.
 
@@ -154,6 +161,13 @@ Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-sync.log`, `~/ict-exec.log
 (`EXEC_NAME/VERSION/ENABLED_SYMBOLS/DRY_RUN`), `RISK_PER_TRADE_USD`, `MAX_TOTAL_RISK_USD`,
 `MAX_CONCURRENT_POSITIONS`, `LEVERAGE`/`LEVERAGE_MAX`/`AUTO_LEVERAGE`, `MARGIN_TYPE`, `LIVE_ENTRY_MODE`,
 `CLOSE_FRAC`, `HORIZON_DAYS`, `RUNNER_CAP_R`, `DCH_ENTRY_AT_CONFIRM`, `DCH_SO_RUNNER_CAP`.
+
+**MIDAS-X gold executor only** (testnet-first; leave unset on a paper box): `MIDAS_EXEC_ENABLED`,
+`MIDAS_EXEC_DRY_RUN`, `MIDAS_BINANCE_TESTNET` (MIDAS's own network flag, independent of `BINANCE_TESTNET`),
+`MIDAS_RISK_PER_TRADE_USD`, `MIDAS_LEVERAGE`, `MIDAS_MARGIN_TYPE`, `MIDAS_MAKER_ENTRY`,
+`MIDAS_ENTRY_TIMEOUT_SEC`, `MIDAS_ENTRY_MAX_SLIP_R`, `MIDAS_SL_DEADBAND_TICKS`, `MIDAS_EXEC_VERSION`,
+`MIDAS_EXEC_NAME` (+ shares `LIVE_TRADING_ENABLED`, `BINANCE_TESTNET_API_KEY/SECRET`). Full list:
+`sync/midas_exec/.env.example`.
 
 ---
 
@@ -200,12 +214,18 @@ enabled) the OPUS executor trades real Binance Futures.
 
 ## 8. Operations & safety
 
-- **Logs:** `tail -f ~/ict-{donchian,midas,sync,exec}.log`.
-- **Real-money executor:** `sync/live_exec/` — `executor.py` (reconciler, */2), `safety_sweep.py`
+- **Logs:** `tail -f ~/ict-{donchian,midas,midas-exec,sync,exec}.log`.
+- **Real-money executor (OPUS):** `sync/live_exec/` — `executor.py` (reconciler, */2), `safety_sweep.py`
   (orphan/protective-stop/risk-cap guard, */5), `killswitch.py` (emergency flatten). Protection is
   **exchange-side** (algo SL/TP placed at entry). Gated by `.env LIVE_TRADING_ENABLED`; per-trade $ risk,
   max concurrent, max total risk, auto-leverage all from `.env`. **Read `sync/live_exec/README.md` before
   enabling.**
+- **MIDAS-X gold executor (testnet-first):** `sync/midas_exec/` — `executor.py` (reconciler, every min),
+  `safety_sweep.py` (*/3, XAUUSDT-scoped), `killswitch.py` (`--status/--flatten/--halt`; `--halt` flips
+  `MIDAS_EXEC_ENABLED` only — OPUS untouched). Separate DB tables + `MIDAS_*` env; testnet uses a
+  synthetic bracket. Gated by `LIVE_TRADING_ENABLED` **and** `MIDAS_EXEC_ENABLED` **and**
+  `MIDAS_EXEC_DRY_RUN=false`. **Do NOT set `MIDAS_BINANCE_TESTNET=false` (mainnet) until the Binance-fee
+  simulation passes** — MIDAS is −92R on taker. See MIDAS.md §5.
 - **Deploy an update (this VM):** `git pull` → if UI changed `npm run build` → if cron changed
   `crontab dag/crontab` → push code with `GITHUB_TOKEN`
   (`git push "https://x-access-token:$TOKEN@github.com/huseyin-yigit-ulker/ict-trade.git" HEAD:main`).
@@ -235,6 +255,21 @@ enabled) the OPUS executor trades real Binance Futures.
 - Added this **RUNBOOK.md** (project-wide system runbook).
 - UI: marked **OPUS** as real-money with a distinct **Binance-gold badge** ("Binance · GERÇEK", vs green
   CANLI / amber PAPER); pinned the **Binance Canlı** nav link directly above the strategies list.
+
+### 2026-07-02
+- Added **MIDAS-X** (`sync/midas_exec/`) — a real-money-capable Binance executor for the gold stream,
+  running **TESTNET / dry-run first**. Reads the `mode='midas'` signals and drives a post-only maker
+  entry + 3.5×ATR chandelier trailing exit via `strategy.track_open` (live == paper by construction).
+  Separate DB tables (`ict_trade.midas_positions/midas_orders`), `MIDAS_*` env, and an XAUUSDT-scoped
+  killswitch/safety-sweep — fully isolated from the OPUS executor (never cross-flatten). Added 2 cron
+  lines (both no-op until `LIVE_TRADING_ENABLED` + `MIDAS_EXEC_ENABLED` + `MIDAS_EXEC_DRY_RUN=false`).
+- Additive fix to `sync/live_exec/exchange_info.py`: gold is a `TRADIFI_PERPETUAL` (not `PERPETUAL`) —
+  added `is_tradable(sym, allow=…)`; OPUS's `is_tradable_perp` unchanged. Verified mainnet + testnet.
+- **Cost caveat unchanged:** MIDAS is +142R on FX cost but ≈ −92R on Binance taker; MIDAS-X stays
+  testnet/paper until a Binance-fee simulation shows a positive net-of-fee edge (MIDAS.md §5). OPUS
+  remains the only mainnet real-money stream. Parity gate PASS (531/531 settled 2026 trades, 0 mismatches).
+- **Account prerequisite:** gold is a `TRADIFI_PERPETUAL` → the trading account must accept Binance's
+  **"TradFi-Perps agreement"** once (testnet + mainnet) or every XAU order returns `-4411`. See MIDAS.md §5.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

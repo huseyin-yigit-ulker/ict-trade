@@ -12,6 +12,7 @@ import SettingsPage from './pages/SettingsPage';
 import TrendPage from './pages/TrendPage';
 import MarketCapPage from './pages/MarketCapPage';
 import LivePositionsPage from './pages/LivePositionsPage';
+import MidasXLivePage from './pages/MidasXLivePage';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
                   <Route path="/trend" element={<TrendPage />} />
                   <Route path="/total" element={<MarketCapPage />} />
                   <Route path="/binance" element={<LivePositionsPage />} />
+                  <Route path="/binance-altin" element={<MidasXLivePage />} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
                   <Route path="/intelligence" element={<IntelligencePage />} />
                   <Route path="/settings" element={<SettingsPage />} />
