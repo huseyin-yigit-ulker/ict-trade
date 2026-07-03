@@ -13,8 +13,9 @@ const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 const OPEN_STATES = ['PENDING_ENTRY', 'ENTRY_WORKING', 'OPEN_FULL', 'RUNNER', 'CLOSING'];
 const REFRESH_MS = 30000;
-// Live runner cap (R) — mirrors .env DCH_SO_RUNNER_CAP. Flip both together to switch 6R↔8R.
-const CAP_R = 6;
+// Live stream = OPUS d30so8f3h7 (.env EXEC_VERSION): books CLOSE_FRAC=0.3 (30%) at +1R, runner rides to
+// RUNNER_CAP_R=8. Keep CAP_R + SO.closeFrac below in sync with .env RUNNER_CAP_R / CLOSE_FRAC.
+const CAP_R = 8;
 
 const STATE_BADGE = {
   PENDING_ENTRY: { label: 'GİRİŞ BEKLİYOR', cls: 'st-wait' },
@@ -57,7 +58,7 @@ const fmtR = (v) => (v == null ? '—' : `${Number(v) >= 0 ? '+' : ''}${Number(v
 // Scale-out plan (d30so{CAP_R}c): book CLOSE_FRAC at +FIRST_R (locks a floor), runner rides to +CAP_R.
 // ·0.5R confirmed entry => R is measured against risk_eff = (1+buf)*risk0 (executor's denom),
 // so the structural +CAP_R from the breakout is +(CAP_R-buf)/(1+buf) R of the realistic risk.
-const SO = { closeFrac: 0.6, firstR: 1.0, confirmBuf: 0.5, capR: CAP_R };
+const SO = { closeFrac: 0.3, firstR: 1.0, confirmBuf: 0.5, capR: CAP_R };
 const CAP_R_TOTAL = SO.closeFrac * SO.firstR + (1 - SO.closeFrac) * ((SO.capR - SO.confirmBuf) / (1 + SO.confirmBuf));
 
 function ago(iso, t) {
@@ -156,7 +157,7 @@ export default function LivePositionsPage() {
       <div className="livex__head">
         <h1>{t('Binance Canlı')}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
-        <span className="livex__badge">{`d30so${CAP_R}c · ${CAP_R}R ·0.5R`}</span>
+        <span className="livex__badge">{`d30so8f3h7 · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`}</span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(account?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>

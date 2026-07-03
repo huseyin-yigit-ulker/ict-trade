@@ -271,6 +271,14 @@ enabled) the OPUS executor trades real Binance Futures.
 - **Account prerequisite:** gold is a `TRADIFI_PERPETUAL` → the trading account must accept Binance's
   **"TradFi-Perps agreement"** once (testnet + mainnet) or every XAU order returns `-4411`. See MIDAS.md §5.
 
+### 2026-07-03
+- Fix: the **Binance Canlı** page (`src/pages/LivePositionsPage.jsx`) still computed the locked-R / TP1
+  split with the OLD `d30so6c` economics (`closeFrac 0.6`, `CAP_R 6`), but the live executor runs
+  `d30so8f3h7` (`.env CLOSE_FRAC=0.3`, `RUNNER_CAP_R=8`). It overstated the runner's locked floor ~2×
+  (showed +0.60R vs the real +0.30R). Set `CAP_R=8`, `SO.closeFrac=0.3`, and the header badge to
+  `d30so8f3h7 · +8R · %30 TP1`. Verified against the live ETH RUNNER: `tp1_qty 0.04 / qty 0.135 = 29.6%`
+  (≈30%), locked now +0.30R ($1.40) = the actual booked TP1 leg ($1.385, floor of 0.0405→0.04).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
