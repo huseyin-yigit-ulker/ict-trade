@@ -480,6 +480,22 @@ real maker fill-rate/slippage study, not mainnet P&L.
   noted, no action needed: the book's Jul-2 00:43 +3.30R trade has no live twin (live was held by the
   pre-filter 22:01 position at the time; self-resolves).
 
+### 2026-07-03 — MIDAS-X ARMED on TESTNET (paper): TradFi agreement signed via API, $5 risk
+- **The -4411 blocker is GONE**: the TradFi-Perps agreement can be signed via the API —
+  `POST /fapi/v1/stock/contract` (signed request) — done on the TESTNET account; verified by a
+  far-from-market post-only probe order (ACCEPTED status=NEW, then cancelled clean). Testnet
+  balance $5055 USDT.
+- **Armed the paper executor** (.env, backed up first): `MIDAS_EXEC_ENABLED=true`,
+  `MIDAS_EXEC_DRY_RUN=false`, `MIDAS_BINANCE_TESTNET=true` (explicit), `MIDAS_RISK_PER_TRADE_USD=5`
+  (user: $5/trade risk, OPUS convention). First armed cycle:
+  `ARMED (LIVE ORDERS) | testnet | XAUUSDT risk $5 5x ISOLATED | maker=True` — cron (every minute)
+  now places REAL testnet orders on the next mode='midas' signal and manages the 1.5×ATR stop +
+  3.5×ATR chandelier trailing continuously (track_open-driven, synthetic MARKET-on-trigger on testnet).
+- Guardrails unchanged: testnet-only key (strict separation — can never borrow the mainnet key),
+  XAUUSDT-scoped killswitch/safety-sweep, OPUS untouched, **mainnet still gated OFF** (the fee study
+  proved MIDAS dies on Binance % fees — this is a fill-quality/slippage study, not a mainnet
+  green light). "Binance Paper · Altın" (`/binance-altin`) page will populate as positions open.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
