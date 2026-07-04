@@ -1765,14 +1765,67 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
   .topbar__title { font-size: 14px; }
 
   /* Modals full-screen (override the ≤900px inset:2%). */
-  #modal { inset: 0; border-radius: 0; }
-  #chart-header { padding-top: calc(10px + env(safe-area-inset-top)); }
+  #modal { inset: 0; border-radius: 0; display: flex !important; flex-direction: column; }
   .modal-overlay { padding: 0; }
   .summary-screen { padding: 16px; padding-top: calc(16px + env(safe-area-inset-top)); }
 
-  /* Charts: hover legend is useless on touch; give the position panel full width. */
-  .chart-hover-info { display: none; }
-  .position-panel { left: 8px; right: 8px; width: auto; }
+  /* ─────── Chart screen — native trading-app redesign (stacked, mobile only) ───────
+     app-bar (pair + chart-style) → chart fills → trade card as a stat-tile bottom sheet.
+     All layout via flex order + !important overrides of the desktop floating panel;
+     the web (≥769px) is untouched. */
+  #chart-header {
+    order: 0; flex: 0 0 auto;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 8px !important;
+  }
+  .chart-header-top { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .chart-header-top h2 { font-size: 17px !important; font-weight: 800; }
+  .chart-style-seg { margin-left: auto; }
+  .chart-style-seg button { padding: 7px 12px; }     /* ≥44px touch row */
+  .chart-hover-info { display: none; }               /* hover legend is useless on touch */
+
+  /* Close → compact round button that clears the notch */
+  #close-modal, .close-modern {
+    top: calc(env(safe-area-inset-top) + 8px) !important; right: 10px !important;
+    z-index: 6; padding: 7px 13px !important; border-radius: 999px !important;
+  }
+
+  /* Chart fills the gap between the app-bar and the trade card. */
+  #chart-container, .tv-iframe {
+    order: 2; flex: 1 1 auto !important;
+    height: auto !important; min-height: 240px !important;
+  }
+  .chart-warning { order: 1; position: static !important; margin: 6px 12px; top: auto; right: auto; }
+
+  /* Trade details → a bottom sheet of stat tiles (label over value), NOT a floating
+     draggable panel. Hairline grid via 1px gap on a border-coloured background. */
+  .position-panel, .position-panel.horizontal, .position-panel.bottom-left {
+    order: 3;
+    position: static !important; left: auto !important; right: auto !important;
+    top: auto !important; bottom: auto !important;
+    width: 100% !important; min-width: 0 !important; max-height: 44dvh; overflow-y: auto;
+    display: grid !important; grid-template-columns: 1fr 1fr; gap: 1px;
+    padding: 0 !important; border: none !important; border-top: 1px solid var(--border) !important;
+    border-radius: 16px 16px 0 0; background: var(--border);
+    padding-bottom: env(safe-area-inset-bottom) !important; backdrop-filter: none !important;
+  }
+  /* title row spans full width; no drag on touch */
+  .position-panel__bar {
+    grid-column: 1 / -1; cursor: default !important; touch-action: auto;
+    margin: 0 !important; padding: 12px 14px !important;
+    background: var(--panel); border-bottom: none !important; border-radius: 16px 16px 0 0;
+  }
+  .position-panel__intel {
+    grid-column: 1 / -1; margin: 0 !important; padding: 0 !important; border-top: none !important;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  }
+  /* each row → a tile */
+  .position-panel .position-row,
+  .position-panel.horizontal .position-row {
+    flex-direction: column !important; align-items: flex-start !important; justify-content: center;
+    gap: 3px; padding: 9px 12px; background: var(--panel);
+  }
+  .position-panel .position-row span { font-size: 10px; color: var(--muted); letter-spacing: 0.02em; }
+  .position-panel .position-row b { font-size: 13.5px; }
 
   /* Dense tables scroll horizontally instead of blowing out the viewport.
      display:block turns the table itself into the scroll container (no JSX wrap). */
