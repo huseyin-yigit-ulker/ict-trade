@@ -2491,7 +2491,19 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
 
 @media (max-width: 900px) {
   .kz-pill { display: none; }
-  .topbar__controls .status-filter { max-width: 100%; overflow-x: auto; }
+  /* Topbar → clean app bar: title row above, a single horizontally-scrollable
+     controls row below (filters/symbol/refresh never stack into 2–3 lines). */
+  .topbar { flex-wrap: wrap; }
+  .topbar__left, .topbar__controls { flex: 1 1 100%; }
+  .topbar__controls {
+    flex-wrap: nowrap; justify-content: flex-start;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .topbar__controls::-webkit-scrollbar { display: none; }
+  .topbar__controls .status-filter { flex: 0 0 auto; overflow: visible; max-width: none; }
+  .topbar__controls .multi-select-container,
+  .topbar__controls .coin-select,
+  .topbar__refresh, .db-pill { flex: 0 0 auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
