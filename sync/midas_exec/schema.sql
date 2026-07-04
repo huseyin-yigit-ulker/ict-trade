@@ -100,8 +100,10 @@ create table if not exists ict_trade.live_account_snapshot (
   mark_price      numeric,
   unrealized_pnl  numeric,
   leverage        integer,
+  funding_fee     numeric,                                -- FUNDING_FEE income since entry (<0 = we paid)
   updated_at      timestamptz  default current_timestamp
 );
+alter table ict_trade.live_account_snapshot add column if not exists funding_fee numeric;
 
 create table if not exists ict_trade.live_account (
   network            text       primary key,

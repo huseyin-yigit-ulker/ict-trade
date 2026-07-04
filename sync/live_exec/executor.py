@@ -287,6 +287,35 @@ def _realized_since(client, sym, since) -> float:
         return 0.0
 
 
+def _funding_since(client, sym, since) -> float:
+    """Sum FUNDING_FEE income (USDT) for `sym` since `since` — the funding paid (<0) / received (>0)
+    over the current open position. Binance settles funding every 8h on a perp; userTrades.realizedPnl
+    does NOT include it, so it is tracked separately here as the position's live funding cost."""
+    if not since:
+        return 0.0
+    try:
+        start_ms = int(pd.Timestamp(since).timestamp() * 1000)
+        return sum(float(r.get("income", 0) or 0)
+                   for r in client.income(symbol=sym, income_type="FUNDING_FEE", start_ms=start_ms))
+    except BinanceError:
+        return 0.0
+
+
+def _open_entry_times(conn, symbols) -> dict:
+    """symbol -> entry_fill_time of the currently-open managed position (anchors funding-since-entry)."""
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT symbol, min(entry_fill_time)
+        FROM ict_trade.live_positions
+        WHERE state in ('OPEN_FULL','RUNNER','CLOSING')
+          AND entry_fill_time is not null AND symbol = ANY(%s)
+        GROUP BY symbol
+    """, (list(symbols),))
+    out = {r[0]: r[1] for r in cur.fetchall()}
+    cur.close()
+    return out
+
+
 def _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now) -> None:
     """Binance is flat but DB still shows the position open — finalize from exchange truth
     (realizedPnl since entry), so the reconciler stops looping and the record is accurate."""
@@ -611,23 +640,26 @@ def _write_snapshot(cfg, client, conn) -> None:
               float(acc.get("totalUnrealizedProfit", 0) or 0), bool(acc.get("canTrade", False))))
         # per-symbol: every enabled symbol + anything currently holding a position
         want = set(cfg.symbols)
+        entry_times = _open_entry_times(conn, want)     # funding is summed since the position opened
         for r in client.position_risk():
             sym = r.get("symbol")
             amt = float(r.get("positionAmt", 0) or 0)
             if sym not in want and amt == 0:
                 continue
+            # funding paid/received on the OPEN position (flat symbols carry none)
+            funding = _funding_since(client, sym, entry_times.get(sym)) if amt != 0 else 0.0
             cur.execute("""
                 INSERT INTO ict_trade.live_account_snapshot
-                  (symbol, network, position_amt, entry_price, mark_price, unrealized_pnl, leverage, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s, current_timestamp)
+                  (symbol, network, position_amt, entry_price, mark_price, unrealized_pnl, leverage, funding_fee, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s, current_timestamp)
                 ON CONFLICT (symbol) DO UPDATE SET
                   network=EXCLUDED.network, position_amt=EXCLUDED.position_amt,
                   entry_price=EXCLUDED.entry_price, mark_price=EXCLUDED.mark_price,
                   unrealized_pnl=EXCLUDED.unrealized_pnl, leverage=EXCLUDED.leverage,
-                  updated_at=current_timestamp
+                  funding_fee=EXCLUDED.funding_fee, updated_at=current_timestamp
             """, (sym, net, amt, float(r.get("entryPrice", 0) or 0),
                   float(r.get("markPrice", 0) or 0), float(r.get("unRealizedProfit", 0) or 0),
-                  int(float(r.get("leverage", 0) or 0))))
+                  int(float(r.get("leverage", 0) or 0)), funding))
         conn.commit()
     except (BinanceError, Exception) as e:  # noqa: BLE001
         conn.rollback()

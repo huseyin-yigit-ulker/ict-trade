@@ -169,7 +169,7 @@ export default function MidasXLivePage() {
               <tr>
                 <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Durum')}</th>
                 <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>{t('İlk SL')}</th><th>{t('İz-Süren SL')}</th>
-                <th>{t('Kilitli R')}</th><th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>{t('Geri Sayım')}</th>
+                <th>{t('Kilitli R')}</th><th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>Funding</th><th>{t('Geri Sayım')}</th>
               </tr>
             </thead>
             <tbody>
@@ -192,6 +192,9 @@ export default function MidasXLivePage() {
                     <td className="mono" data-label={t('Miktar')}>{p.qty ?? '—'}</td>
                     <td className={`mono ${Number(lc?.upnl) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı K/Z')}>{fmtUsd(lc?.upnl)}</td>
                     <td className={`mono ${Number(lc?.liveR) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı R')}>{fmtR(lc?.liveR)}</td>
+                    <td className={`mono ${Number(snap?.funding_fee) > 0 ? 'pos' : Number(snap?.funding_fee) < 0 ? 'neg' : 'dim'}`} data-label="Funding">
+                      {snap?.funding_fee == null ? '—' : (Number(snap.funding_fee) >= 0 ? '+' : '−') + '$' + Math.abs(Number(snap.funding_fee)).toFixed(2)}
+                    </td>
                     <td className="mono dim" data-label={t('Geri Sayım')}>{cd || '—'}</td>
                   </tr>
                 );

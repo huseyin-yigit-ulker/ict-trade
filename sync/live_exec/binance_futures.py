@@ -118,6 +118,21 @@ class BinanceFutures:
             p["startTime"] = start_ms
         return self._request("GET", "/fapi/v1/userTrades", p, signed=True)
 
+    def income(self, *, symbol: str | None = None, income_type: str | None = None,
+               start_ms: int | None = None, limit: int = 1000) -> list[dict]:
+        """Income history (/fapi/v1/income). incomeType='FUNDING_FEE' isolates the 8-hourly funding
+        cashflows on a perp: each row's `income` is <0 when WE paid funding, >0 when we received it.
+        Summed since a position's entry, it is the funding cost accrued while that trade is open."""
+        p: dict = {"limit": limit}
+        if symbol is not None:
+            p["symbol"] = symbol
+        if income_type is not None:
+            p["incomeType"] = income_type
+        if start_ms is not None:
+            p["startTime"] = start_ms
+        out = self._request("GET", "/fapi/v1/income", p, signed=True)
+        return out if isinstance(out, list) else []
+
     def get_order(self, symbol: str, *, client_order_id: str | None = None,
                   order_id: int | None = None) -> dict:
         p: dict = {"symbol": symbol}

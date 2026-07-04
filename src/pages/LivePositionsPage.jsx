@@ -122,6 +122,9 @@ export default function LivePositionsPage() {
 
   const open = positions.filter((p) => OPEN_STATES.includes(p.state));
   const closed = positions.filter((p) => p.state === 'CLOSED' || p.state === 'CANCELLED').slice(0, 12);
+  // Funding paid/received on the CURRENTLY-open positions (snapshot funding_fee summed since entry;
+  // negative = we paid). Binance settles perp funding every 8h — this is the live carry cost.
+  const openFunding = open.reduce((a, p) => a + (Number(snaps[p.symbol]?.funding_fee) || 0), 0);
   const net = account?.network || 'testnet';
   const stale = account && (Date.now() - new Date(account.updated_at).getTime() > 5 * 60 * 1000);
 
@@ -176,6 +179,10 @@ export default function LivePositionsPage() {
           <b className={Number(account?.total_unrealized) >= 0 ? 'pos' : 'neg'}>{fmtUsd(account?.total_unrealized)}</b>
         </div>
         <div className="livex__kpi"><span>{t('Açık Pozisyon')}</span><b>{open.length}</b></div>
+        <div className="livex__kpi">
+          <span>{t('Funding (açık)')}</span>
+          <b className={openFunding >= 0 ? 'pos' : 'neg'}>{open.length ? fmtUsdSigned(openFunding) : '—'}</b>
+        </div>
       </div>
 
       {/* open positions */}
@@ -189,7 +196,7 @@ export default function LivePositionsPage() {
               <tr>
                 <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Durum')}</th>
                 <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>SL</th><th>TP1</th><th>{`Cap +${CAP_R}R`}</th>
-                <th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>{t('Geri Sayım')}</th>
+                <th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>Funding</th><th>{t('Geri Sayım')}</th>
               </tr>
             </thead>
             <tbody>
@@ -228,6 +235,9 @@ export default function LivePositionsPage() {
                       {lc?.isRunner && (
                         <span className="livex__sub livex__lock">🔒 {fmtR(lc.bookedR)} {t('kilitli')}</span>
                       )}
+                    </td>
+                    <td className={`mono ${Number(s?.funding_fee) > 0 ? 'pos' : Number(s?.funding_fee) < 0 ? 'neg' : 'dim'}`} data-label="Funding">
+                      {s?.funding_fee == null ? '—' : fmtUsdSigned(s.funding_fee)}
                     </td>
                     <td className="mono dim" data-label={t('Geri Sayım')}>{cd || '—'}</td>
                   </tr>

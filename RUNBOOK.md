@@ -255,6 +255,17 @@ enabled) the OPUS executor trades real Binance Futures.
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-04
+- **Binance Canlı now shows funding-fee paid on open positions.** Perps settle funding every 8h and
+  it is NOT part of `userTrades.realizedPnl`, so it was invisible. New `BinanceFutures.income()`
+  (`/fapi/v1/income`, `incomeType=FUNDING_FEE`); both executors (`sync/live_exec/executor.py` OPUS +
+  `sync/midas_exec/executor.py` MIDAS-X) sum funding **since the position's `entry_fill_time`** and write
+  it to a new `ict_trade.live_account_snapshot.funding_fee` column (`<0` = we paid). Dashboard: a
+  **Funding** column per open position + a **Funding (açık)** KPI on the OPUS "Binance Canlı" page, and
+  the same column on the MIDAS-X "Binance Paper · Altın" page. Read-only (browser never signs a request).
+  - **Ops:** the `funding_fee` column is added by an idempotent `alter table … add column if not exists`
+    already applied to the live DB (also baked into `sync/live_exec/schema.sql` + `sync/midas_exec/schema.sql`
+    for fresh installs); anon SELECT grant already covers the new column. Rebuild/redeploy the dashboard
+    off-box (Render) to serve the new UI. No cron/env change.
 - **PUSU is now an installable mobile app (PWA) + native Web Push.** No new hosting/accounts/Mac — the
   existing Render static host + Supabase + the Oracle VM cover everything; Web Push uses VAPID directly
   (no Apple Developer / Firebase).
