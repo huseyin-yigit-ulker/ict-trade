@@ -3,6 +3,7 @@ import { createChart, CandlestickSeries, LineSeries, BaselineSeries, createSerie
 import { useTradeContext, isHalfFor } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import { scaleOutLiveR } from '../utils/liveR';
+import { useSwipeDownClose } from '../utils/useSwipeDownClose';
 
 const IconCandles = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
@@ -40,6 +41,8 @@ const cacheSet = (k, v) => {
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses, strategy } = useTradeContext();
   const { t, locale } = useLang();
+  // Mobile: swipe down on the header/handle to dismiss the chart sheet (inert on desktop).
+  const { dragY, handlers: swipeHandlers } = useSwipeDownClose(() => setActiveSignal(null));
   // ½TP modules: the chart annotates the partial-TP + breakeven lifecycle —
   // TP/2 dashed line, "%50 kapandı, SL→Entry" marker, BE stop segment.
   // karma: ½TP'lik sembol bazında (KARMA_MAP) — isHalfFor iki durumu da çözer.
@@ -1022,8 +1025,16 @@ const ChartModal = () => {
   useEffect(() => { setShowTv(chartView === 'tv'); }, [activeSignal, chartView]);
 
   return (
-    <div id="modal" style={{ display: 'block', backgroundColor: '#0B0E11', color: '#EAECEF' }}>
-      <div id="chart-header" style={{ borderBottom: '1px solid #2a2e39', padding: '10px', paddingRight: '104px' }}>
+    <div
+      id="modal"
+      style={{
+        display: 'block', backgroundColor: '#0B0E11', color: '#EAECEF',
+        transform: dragY ? `translateY(${dragY}px)` : undefined,
+        transition: dragY ? 'none' : 'transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1)',
+      }}
+    >
+      <div id="chart-header" {...swipeHandlers} style={{ borderBottom: '1px solid #2a2e39', padding: '10px', paddingRight: '104px' }}>
+        <div className="sheet-handle" aria-hidden="true" />
         <div className="chart-header-top">
           <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
             {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>

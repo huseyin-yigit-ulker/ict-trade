@@ -856,6 +856,9 @@ button.chip   { cursor: pointer; }
   align-items: center;
 }
 
+/* mobile drag-to-dismiss grab handle (hidden on desktop) */
+.sheet-handle { display: none; }
+
 #close-modal,
 .close-modern {
   position: absolute;
@@ -1774,8 +1777,13 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
      All layout via flex order + !important overrides of the desktop floating panel;
      the web (≥769px) is untouched. */
   #chart-header {
-    order: 0; flex: 0 0 auto;
-    padding: calc(8px + env(safe-area-inset-top)) 12px 8px !important;
+    order: 0; flex: 0 0 auto; flex-direction: column; align-items: stretch;
+    padding: calc(6px + env(safe-area-inset-top)) 12px 8px !important;
+    touch-action: pan-y;
+  }
+  .sheet-handle {
+    display: block; width: 38px; height: 4px; border-radius: 999px;
+    background: var(--muted-2); opacity: 0.5; margin: 2px auto 8px;
   }
   .chart-header-top { display: flex; align-items: center; gap: 10px; width: 100%; }
   .chart-header-top h2 { font-size: 17px !important; font-weight: 800; }
