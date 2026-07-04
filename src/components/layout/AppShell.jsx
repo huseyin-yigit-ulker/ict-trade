@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import MobileTabBar from './MobileTabBar';
 import LiveTicker from '../LiveTicker';
 import ChartModal from '../ChartModal';
 import StatsModal from '../StatsModal';
@@ -33,6 +34,7 @@ const AppShell = () => {
       {showStats && <StatsModal />}
       {showSummary && <SummaryModal />}
       <LiveTicker />
+      <MobileTabBar />
     </div>
   );
 };
