@@ -1827,9 +1827,9 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
   .position-panel .position-row span { font-size: 10px; color: var(--muted); letter-spacing: 0.02em; }
   .position-panel .position-row b { font-size: 13.5px; }
 
-  /* Dense tables scroll horizontally instead of blowing out the viewport.
-     display:block turns the table itself into the scroll container (no JSX wrap). */
-  .stats-table, .livex__table {
+  /* Backtest stats table scrolls horizontally (livex tables become cards — see
+     LivePositionsPage.css). */
+  .stats-table {
     display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap;
   }
 
@@ -2686,6 +2686,56 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
   .intro-cards { grid-template-columns: 1fr; }
   .intro-controls { flex-direction: column; align-items: stretch; }
   .intro-controls__right { justify-content: space-between; }
+}
+
+/* ── Overview ("Genel Bakış") — phone modernization (≤768px) ── */
+@media (max-width: 768px) {
+  /* Hero: compact so the stream cards are reachable without a full-screen scroll. */
+  .intro-hero { min-height: auto; padding: 16px 0 4px; }
+  .intro-hero__content { gap: 6px; padding: 6px 0; }
+  .intro-reticle svg { width: 56px !important; height: 56px !important; }
+  .intro-manifesto { font-size: 12.5px; }
+  .intro-scrollcue { display: none; }
+  .intro-leaders { gap: 8px; }
+  .intro-leader, .intro-overview-tile { min-width: 0; flex: 1 1 44%; padding: 10px 12px; }
+  .intro-leader__value { font-size: 20px; }
+
+  /* Controls: horizontally-scrollable chip + sort rows, full-width search. */
+  .intro-controls { gap: 8px; }
+  .intro-chips, .intro-sort {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .intro-chips::-webkit-scrollbar, .intro-sort::-webkit-scrollbar { display: none; }
+  .intro-chip, .intro-sort__btn { flex: 0 0 auto; min-height: 40px; }
+  .intro-controls__right { flex-direction: column; align-items: stretch; gap: 8px; }
+  .intro-search { width: 100%; }
+
+  /* Cards: single column, roomier, bigger lead stat, ≥44px actions, no hover-lift. */
+  .intro-cards { grid-template-columns: 1fr; gap: 12px; }
+  .intro-card { padding: 16px; gap: 12px; border-radius: 14px; }
+  .intro-card:hover { transform: none; }
+  .intro-card__name { font-size: 16.5px; }
+  .intro-stat__val { font-size: 16px; }
+  .intro-stat--lead .intro-stat__val { font-size: 22px; }
+  .intro-go { min-height: 44px; font-size: 13px; }
+}
+
+/* ── Mobile motion: sheet slide-ups, modal fade, tab press feedback (≤768px) ── */
+@keyframes pusu-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes pusu-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 768px) {
+  #modal { animation: pusu-fade-in 0.18s ease; }
+  .position-panel { animation: pusu-sheet-up 0.26s cubic-bezier(0.22, 0.61, 0.36, 1); }
+  .multi-select-content.show { animation: pusu-sheet-up 0.24s cubic-bezier(0.22, 0.61, 0.36, 1); }
+  .sidebar-scrim { animation: pusu-fade-in 0.2s ease; }
+  .summary-screen { animation: pusu-fade-in 0.18s ease; }
+  .mtab { transition: color 0.12s ease, transform 0.1s ease; }
+  .mtab:active { transform: scale(0.92); }
+  .intro-card:active, .livex__table tr:active { transform: scale(0.995); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #modal, .position-panel, .multi-select-content.show, .sidebar-scrim,
+  .summary-screen, .sidebar { animation: none !important; transition: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .intro-radar { animation: none; }

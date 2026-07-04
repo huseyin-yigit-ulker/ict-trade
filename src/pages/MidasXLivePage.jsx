@@ -181,18 +181,18 @@ export default function MidasXLivePage() {
                 const lc = liveCalc(p);
                 return (
                   <tr key={p.id}>
-                    <td className="mono">{p.symbol}</td>
-                    <td><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
-                    <td><span className={`st ${sb.cls}`}>{sb.label}</span></td>
-                    <td className="mono">{fmtPx(p.eff_entry || p.signal_entry)}</td>
-                    <td className="mono">{fmtPx(snap?.mark_price)}</td>
-                    <td className="mono dim">{fmtPx(p.signal_sl)}</td>
-                    <td className="mono">{fmtPx(p.cur_sl || p.signal_sl)}</td>
-                    <td className={`mono ${Number(lc?.lockedR) >= 0 ? 'pos' : 'dim'}`}>{fmtR(lc?.lockedR)}</td>
-                    <td className="mono">{p.qty ?? '—'}</td>
-                    <td className={`mono ${Number(lc?.upnl) >= 0 ? 'pos' : 'neg'}`}>{fmtUsd(lc?.upnl)}</td>
-                    <td className={`mono ${Number(lc?.liveR) >= 0 ? 'pos' : 'neg'}`}>{fmtR(lc?.liveR)}</td>
-                    <td className="mono dim">{cd || '—'}</td>
+                    <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
+                    <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                    <td data-label={t('Durum')}><span className={`st ${sb.cls}`}>{sb.label}</span></td>
+                    <td className="mono" data-label={t('Giriş')}>{fmtPx(p.eff_entry || p.signal_entry)}</td>
+                    <td className="mono" data-label={t('Mark')}>{fmtPx(snap?.mark_price)}</td>
+                    <td className="mono dim" data-label={t('İlk SL')}>{fmtPx(p.signal_sl)}</td>
+                    <td className="mono" data-label={t('İz-Süren SL')}>{fmtPx(p.cur_sl || p.signal_sl)}</td>
+                    <td className={`mono ${Number(lc?.lockedR) >= 0 ? 'pos' : 'dim'}`} data-label={t('Kilitli R')}>{fmtR(lc?.lockedR)}</td>
+                    <td className="mono" data-label={t('Miktar')}>{p.qty ?? '—'}</td>
+                    <td className={`mono ${Number(lc?.upnl) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı K/Z')}>{fmtUsd(lc?.upnl)}</td>
+                    <td className={`mono ${Number(lc?.liveR) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı R')}>{fmtR(lc?.liveR)}</td>
+                    <td className="mono dim" data-label={t('Geri Sayım')}>{cd || '—'}</td>
                   </tr>
                 );
               })}
@@ -220,12 +220,12 @@ export default function MidasXLivePage() {
                   const cancelled = p.state === 'CANCELLED';
                   return (
                     <tr key={p.id}>
-                      <td className="mono">{p.symbol}</td>
-                      <td><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
-                      <td><span className={`st ${cancelled ? 'st-cancel' : (win ? 'st-done' : 'st-sl')}`}>{EXIT_LABEL[p.exit_reason] || p.exit_reason || '—'}</span></td>
-                      <td className={`mono ${win ? 'pos' : 'neg'}`}>{p.realized_r == null ? '—' : fmtR(p.realized_r)}</td>
-                      <td className={`mono ${win ? 'pos' : 'neg'}`}>{p.realized_usd == null ? '—' : fmtUsd(p.realized_usd)}</td>
-                      <td className="mono dim">{ago(p.exit_time, t)}</td>
+                      <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
+                      <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                      <td data-label={t('Sonuç')}><span className={`st ${cancelled ? 'st-cancel' : (win ? 'st-done' : 'st-sl')}`}>{EXIT_LABEL[p.exit_reason] || p.exit_reason || '—'}</span></td>
+                      <td className={`mono ${win ? 'pos' : 'neg'}`} data-label="R">{p.realized_r == null ? '—' : fmtR(p.realized_r)}</td>
+                      <td className={`mono ${win ? 'pos' : 'neg'}`} data-label={t('USD')}>{p.realized_usd == null ? '—' : fmtUsd(p.realized_usd)}</td>
+                      <td className="mono dim" data-label={t('Çıkış')}>{ago(p.exit_time, t)}</td>
                     </tr>
                   );
                 })}
