@@ -26,3 +26,12 @@ create policy push_sub_insert on ict_trade.push_subscriptions
 drop policy if exists push_sub_delete on ict_trade.push_subscriptions;
 create policy push_sub_delete on ict_trade.push_subscriptions
   for delete to anon using (true);
+
+-- PostgREST applies RLS ON TOP of table grants, so the anon role also needs the
+-- table-level privileges (a table created via raw SQL doesn't get Supabase's
+-- default grants automatically).
+grant usage on schema ict_trade to anon;
+grant insert, delete on ict_trade.push_subscriptions to anon;
+
+-- Ask PostgREST to reload its schema cache so the new table is exposed immediately.
+notify pgrst, 'reload schema';

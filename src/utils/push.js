@@ -9,7 +9,11 @@
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// VAPID application server key. This is a PUBLIC key (sent to every browser), so
+// it is safe to ship in the bundle — committing it means no build-env var is
+// needed. An env var, if set, overrides it (lets you rotate without a code change).
+const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY
+  || 'BFzG5WnCk8-TIuFmNwO0xn4nIxAVMFwv0L9RT_7awvEOK0DIF_k764jaKrMDi8b-NSWzL2KF3AZ8wp2iYj92Mxk';
 
 const SUPA_HEADERS = {
   apikey: SUPA_KEY,
