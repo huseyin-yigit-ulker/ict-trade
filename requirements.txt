@@ -1,6 +1,7 @@
-PyGithub 
+PyGithub
 requests
 pandas
 sqlalchemy
 psycopg2-binary
 dotenv
+pywebpush          # Web Push (VAPID) fan-out — sync/push_notify.py; safe no-op if unset

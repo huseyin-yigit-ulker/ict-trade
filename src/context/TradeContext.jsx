@@ -317,6 +317,11 @@ export const TradeProvider = ({ children }) => {
       return next;
     });
   }, []);
+  // Mobile nav drawer — a phone-only overlay (distinct from the desktop
+  // `sidebarHidden` collapse above). Not persisted: a drawer always starts closed.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const toggleMobileNav = useCallback(() => setMobileNavOpen((o) => !o), []);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
   const [liveError, setLiveError] = useState('');
   // Wall-clock of the last successful data load — surfaced in the Topbar so the
   // operator can tell at a glance how fresh the board is.
@@ -1163,6 +1168,9 @@ export const TradeProvider = ({ children }) => {
     setStatusFilter,
     sidebarHidden,
     toggleSidebar,
+    mobileNavOpen,
+    toggleMobileNav,
+    closeMobileNav,
     liveError,
     liveStatuses,
     backtestInsights,
@@ -1204,6 +1212,9 @@ export const TradeProvider = ({ children }) => {
     setStatusFilter,
     sidebarHidden,
     toggleSidebar,
+    mobileNavOpen,
+    toggleMobileNav,
+    closeMobileNav,
     liveError,
     liveStatuses,
     backtestInsights,

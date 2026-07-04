@@ -29,6 +29,10 @@ sys.path.insert(0, str(_HERE.parents[1]))   # sync/        -> trade_sync_common
 sys.path.insert(0, str(_HERE.parent))        # sync/donchian -> strategy
 import trade_sync_common as tsc              # noqa: E402
 import strategy as strat                     # noqa: E402
+try:
+    import push_notify                       # noqa: E402  (Web Push sibling of Telegram)
+except Exception:                            # never let push imports break the emitter
+    push_notify = None
 
 HTF = "4h"                                   # trend-context label written to ict_trade.signals
 TF_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
@@ -278,6 +282,13 @@ def main():
                 if not gated:
                     alerted += 1
                     print(f"  📣 {s.symbol:<10} {d:<5} → Telegram", flush=True)
+                    # Native phone push alongside Telegram (no-op until push is configured).
+                    if push_notify is not None:
+                        push_notify.send_push(
+                            title=f"PUSU · {(args.name or mode)} {s.symbol} {d}",
+                            body=f"Formasyon @ {float(s.entry):g} · SL {float(s.stop_loss):g} · TP {float(s.take_profit_1):g}",
+                            url="/", tag=f"{mode}:{s.symbol}",
+                        )
     cur.close()
     conn.close()
     print(f"  {inserted} new row(s), {alerted} Telegram alert(s) (mode='{mode}')")

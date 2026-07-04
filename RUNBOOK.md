@@ -156,6 +156,11 @@ Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-sync.log`, `~/ict-exec.log
 **Telegram:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 **Git push:** `GITHUB_TOKEN`.
 
+**Web Push / PWA (optional — native phone notifications):**
+- Frontend (Vite, build-time): `VITE_VAPID_PUBLIC_KEY` — the public VAPID key the browser subscribes with.
+- VM only (never exposed to the browser): `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:`/`https:` contact URI).
+- Generate all three with `python scripts/gen_vapid.py`. Leave unset to disable push (the emitters no-op).
+
 **Real-money OPUS executor only** (leave unset on a paper/research box):
 `LIVE_TRADING_ENABLED`, `BINANCE_TESTNET`, `BINANCE_TESTNET_API_KEY/SECRET` (+ mainnet keys), `EXEC_*`
 (`EXEC_NAME/VERSION/ENABLED_SYMBOLS/DRY_RUN`), `RISK_PER_TRADE_USD`, `MAX_TOTAL_RISK_USD`,
@@ -248,6 +253,33 @@ enabled) the OPUS executor trades real Binance Futures.
 
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
+
+### 2026-07-04
+- **PUSU is now an installable mobile app (PWA) + native Web Push.** No new hosting/accounts/Mac — the
+  existing Render static host + Supabase + the Oracle VM cover everything; Web Push uses VAPID directly
+  (no Apple Developer / Firebase).
+  - **Installable PWA:** `vite-plugin-pwa` (`injectManifest`, custom `src/sw.js`) + web app manifest +
+    icons (`public/icons/*`, generated from `public/pusu.svg` via `scripts/gen_pwa_icons.py`) + iOS
+    home-screen meta tags in `index.html`. SW precaches the app **shell only**; Supabase/Binance/CoinGecko
+    are left on the network (never stale trading data). CSP (`vite.config.js`) gained `api.coingecko.com`
+    (fixes a latent block), `worker-src`, `manifest-src`.
+  - **Mobile UX pass:** the sidebar becomes a slide-in **drawer** on phones (`AppShell`/`Topbar`/`Sidebar`
+    + `mobileNav*` state in `TradeContext`); full-screen modals, ≥44px touch targets, scrollable dense
+    tables, and `env(safe-area-inset-*)` for notch/home-indicator in `src/assets/css/style.css` (new
+    ≤768px tier; the 820px icon-rail bounded to 769–820px).
+  - **Web Push:** Settings ▸ *Bildirimler* toggle (`src/utils/push.js`) subscribes and stores the
+    subscription in `ict_trade.push_subscriptions` (`supabase/push_subscriptions_schema.sql`). The VM
+    sender `sync/push_notify.py` (`pywebpush`) fans out **alongside Telegram** from `sync/donchian/canli.py`
+    + `sync/midas/canli.py` (guarded, best-effort; prunes dead endpoints). **No new cron line.**
+  - **Ops to activate (all safe no-ops until done):**
+    1. `python scripts/gen_vapid.py` → put `VITE_VAPID_PUBLIC_KEY` in the frontend env, `VAPID_PRIVATE_KEY`
+       + `VAPID_SUBJECT` in the VM `.env`.
+    2. Apply `supabase/push_subscriptions_schema.sql` in the live Supabase SQL editor.
+    3. VM: `pip install -r requirements.txt` (adds `pywebpush`).
+    4. Build the dashboard on a Node box (`npm install` picks up `vite-plugin-pwa`, then `npm run build`)
+       and deploy `dist/`. **iOS push requires the PWA be Added to Home Screen first (iOS 16.4+).**
+    5. Render (recommended): add a no-cache header rule for `/sw.js`, `/registerSW.js`, `/manifest.webmanifest`,
+       `/index.html` so shell/version updates propagate.
 
 ### 2026-06-30
 - Added **MIDAS** (gold-only VWAP-trend, paper) — full stream: `sync/midas/`, UI, cron (per-minute emit +

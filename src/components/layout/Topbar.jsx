@@ -61,7 +61,8 @@ const KillzoneClock = () => {
 
 const Topbar = () => {
   const {
-    sidebarHidden, toggleSidebar, dbStatus, dbMessage, strategy, mode,
+    sidebarHidden, toggleSidebar, mobileNavOpen, toggleMobileNav,
+    dbStatus, dbMessage, strategy, mode,
     statusFilter, setStatusFilter,
     selectedSymbols, pendingSymbols, allSignals,
     toggleSymbol, applySymbols, applySymbolSet, symbolPerf,
@@ -70,6 +71,18 @@ const Topbar = () => {
   } = useTradeContext();
   const { t, locale } = useLang();
   const loc = useLocation();
+
+  // On phones the toggle opens the overlay drawer; on desktop it collapses the
+  // persistent rail. Track the breakpoint reactively so the glyph/handler follow.
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const on = (e) => setIsNarrow(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
 
   const [symOpen, setSymOpen] = useState(false);
   const [sessOpen, setSessOpen] = useState(false);
@@ -116,11 +129,16 @@ const Topbar = () => {
       <div className="topbar__left">
         <button
           className="icon-btn topbar__toggle"
-          onClick={toggleSidebar}
-          title={sidebarHidden ? t('Menüyü Göster') : t('Menüyü Gizle')}
-          aria-label={sidebarHidden ? t('Menüyü Göster') : t('Menüyü Gizle')}
+          onClick={isNarrow ? toggleMobileNav : toggleSidebar}
+          title={isNarrow
+            ? (mobileNavOpen ? t('Menüyü Gizle') : t('Menüyü Göster'))
+            : (sidebarHidden ? t('Menüyü Göster') : t('Menüyü Gizle'))}
+          aria-label={isNarrow
+            ? (mobileNavOpen ? t('Menüyü Gizle') : t('Menüyü Göster'))
+            : (sidebarHidden ? t('Menüyü Göster') : t('Menüyü Gizle'))}
+          aria-expanded={isNarrow ? mobileNavOpen : undefined}
         >
-          {sidebarHidden ? '☰' : '‹‹'}
+          {isNarrow ? (mobileNavOpen ? '✕' : '☰') : (sidebarHidden ? '☰' : '‹‹')}
         </button>
         <div className="topbar__title">
           {loc.pathname === '/' ? t('Genel Bakış')

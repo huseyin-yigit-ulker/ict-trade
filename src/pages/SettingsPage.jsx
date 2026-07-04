@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { pushSupported, pushState, enablePush, disablePush } from '../utils/push';
 
 const SettingsPage = () => {
   const {
@@ -13,6 +14,22 @@ const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
   const [savedSymbols, setSavedSymbols] = useState(false);
+
+  // Web Push (native phone notifications) — mirrors the Telegram alerts.
+  const [push, setPush] = useState({ supported: pushSupported(), permission: 'default', subscribed: false });
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushErr, setPushErr] = useState('');
+  useEffect(() => { pushState().then(setPush).catch(() => {}); }, []);
+  const togglePush = async () => {
+    setPushBusy(true); setPushErr('');
+    try {
+      if (push.subscribed) await disablePush();
+      else await enablePush();
+      setPush(await pushState());
+    } catch (e) {
+      setPushErr(e?.message === 'denied' ? t('Bildirim izni reddedildi.') : t('Bildirim ayarlanamadı.'));
+    } finally { setPushBusy(false); }
+  };
 
   const uniqueSymbols = useMemo(() => [...new Set(allSignals.map((s) => s.symbol))].sort(), [allSignals]);
 
@@ -59,6 +76,28 @@ const SettingsPage = () => {
             <b className={dbStatus === 'ok' ? 'win' : dbStatus === 'fail' ? 'loss' : ''}>{dbMessage || '—'}</b>
           </div>
           <button className="header-btn" onClick={testDbConnection}>{t('Bağlantıyı Test Et')}</button>
+        </section>
+
+        {/* Notifications (Web Push) */}
+        <section className="overview-card settings-card">
+          <div className="summary-title">{t('Bildirimler')}</div>
+          <div className="settings-row">
+            <span>{t('Telefon Bildirimi')}</span>
+            <b className={push.subscribed ? 'win' : ''}>{push.subscribed ? '● ' + t('Açık') : t('Kapalı')}</b>
+          </div>
+          {!push.supported && (
+            <div className="settings-row">
+              <span className="loss" style={{ fontSize: 12 }}>
+                {t('Bu cihaz/kurulum desteklemiyor. iOS’ta önce uygulamayı Ana Ekrana ekleyin.')}
+              </span>
+            </div>
+          )}
+          <button className="header-btn" disabled={!push.supported || pushBusy} onClick={togglePush}>
+            {pushBusy ? '…' : push.subscribed ? '🔕 ' + t('Bildirimleri Kapat') : '🔔 ' + t('Bildirimleri Aç')}
+          </button>
+          {pushErr && (
+            <div className="settings-row"><span className="loss" style={{ fontSize: 12 }}>{pushErr}</span></div>
+          )}
         </section>
 
         {/* Symbols */}

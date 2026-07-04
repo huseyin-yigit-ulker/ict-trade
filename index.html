@@ -3,13 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/pusu.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is REQUIRED for env(safe-area-inset-*) to be non-zero
+         on notched phones — without it the safe-area CSS silently no-ops. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Private dashboard: keep it out of search indexes and strip referrers. -->
     <meta name="robots" content="noindex, nofollow" />
     <meta name="referrer" content="no-referrer" />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#0B0E11" />
     <meta name="description" content="PUSU — Liquidity Ambush Intelligence" />
+    <!-- Installable-PWA / iOS home-screen. The web app manifest link + SW
+         register script are injected at build by vite-plugin-pwa. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="PUSU" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>PUSU</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

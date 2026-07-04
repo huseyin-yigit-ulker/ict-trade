@@ -26,6 +26,10 @@ sys.path.insert(0, str(_HERE.parent))                 # sync/midas -> strategy
 sys.path.insert(0, str(_HERE.parents[1]))             # sync/      -> trade_sync_common
 import strategy as M                                  # noqa: E402
 import trade_sync_common as tsc                       # noqa: E402
+try:
+    import push_notify                                # noqa: E402  (Web Push sibling of Telegram)
+except Exception:                                     # never let push imports break the emitter
+    push_notify = None
 
 MODE = "midas"
 LTF = "1m"
@@ -209,6 +213,13 @@ def main():
                     if not args.no_telegram:
                         alerted += 1
                         print(f"  📣 XAUUSDT {d:<5} → Telegram", flush=True)
+                        # Native phone push alongside Telegram (no-op until push is configured).
+                        if push_notify is not None:
+                            push_notify.send_push(
+                                title=f"PUSU · {NAME} XAUUSDT {d}",
+                                body=f"Formasyon @ {float(s['entry']):g} · SL {float(s['sl']):g} · TP {float(s['tp']):g}",
+                                url="/binance-altin", tag=f"{MODE}:XAUUSDT",
+                            )
         cur.close()
 
     # Track OPEN positions -> SL-ratchet + exit alerts (runs every invocation, even with no new setup)

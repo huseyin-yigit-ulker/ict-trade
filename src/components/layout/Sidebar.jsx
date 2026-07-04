@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useTradeContext } from '../../context/TradeContext';
 import PusuLogo from '../PusuLogo';
 
 const IconCommand = () => (
@@ -133,6 +134,7 @@ const Sidebar = () => {
   const { user, logout } = useAuth();
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
+  const { closeMobileNav } = useTradeContext();
 
   const leafLabel = { live: t('Live'), backtest: t('Backtest') };
 
@@ -157,7 +159,9 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <nav className="sidebar__nav">
+      {/* Tapping any destination closes the phone drawer; the strategies-section
+          toggle stops propagation so expanding it keeps the drawer open. */}
+      <nav className="sidebar__nav" onClick={closeMobileNav}>
         <NavLink to="/" end className="sidebar__link sidebar__home">
           <span className="sidebar__icon"><IconHome /></span><span>{t('Genel Bakış')}</span>
         </NavLink>
@@ -175,7 +179,7 @@ const Sidebar = () => {
 
         <button
           className="sidebar__section"
-          onClick={toggleStrategies}
+          onClick={(e) => { e.stopPropagation(); toggleStrategies(); }}
           aria-expanded={stratOpen}
           title={stratOpen ? t('Gizle') : t('Göster')}
         >
