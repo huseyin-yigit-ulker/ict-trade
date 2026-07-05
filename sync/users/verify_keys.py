@@ -86,11 +86,11 @@ def verify_row(conn, row: dict, priv) -> str:
         ustore.push_user(conn, user_id, "API anahtarı doğrulandı ✅",
                          f"{network} anahtarınız geçerli. Bakiye: {balance:.2f} USDT."
                          + ("" if pos_mode_ok in (True, None) else " ⚠️ Hesap hedge modda — one-way moda geçin."),
-                         tag=f"key-{network}")
+                         tag=f"key-{network}", kind="system")
     else:
         ustore.push_user(conn, user_id, "API anahtarı REDDEDİLDİ ❌",
                          f"{network}: {reason}. Anahtarı yenileyin (Trading → API Anahtarları).",
-                         tag=f"key-{network}")
+                         tag=f"key-{network}", kind="system")
     print(f"[verify] key {key_id} {network} -> {status}" + (f" ({reason})" if reason else ""), flush=True)
     return status
 

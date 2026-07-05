@@ -2997,6 +2997,62 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 .admin-reason { display: block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-detail { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Kullanıcı Ekle formu — tek satır grid, telefonda alt alta. */
+.admin-newuser { display: grid; grid-template-columns: 1.4fr 1.2fr 1fr auto auto; gap: 8px; align-items: center; }
+.admin-newuser input[type="email"], .admin-newuser input[type="text"] {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); padding: 8px 10px; font-size: 13px; font-family: var(--mono); min-width: 0;
+}
+.admin-newuser input:focus { outline: none; border-color: var(--accent); }
+.admin-newuser__opt { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.admin-newuser__opt input { accent-color: var(--accent); }
+
+/* Erişim çipleri (BT / İSTH / İŞL) — açık = accent, kapalı = soluk. */
+.admin-feats { display: inline-flex; gap: 4px; }
+.admin-feat {
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--muted);
+  border-radius: 5px; padding: 3px 7px; font-size: 10px; font-weight: 700;
+  font-family: var(--mono); cursor: pointer; letter-spacing: 0.03em;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.admin-feat.on { background: rgba(245, 185, 66, 0.14); color: var(--accent); border-color: var(--accent); }
+.admin-feat:disabled { opacity: 0.45; cursor: default; }
+.admin-del { margin-left: 2px; }
+
+/* Bildirim tercihleri (Settings) — dokunmatik-dostu satırlar. */
+.notif-prefs { display: grid; gap: 6px; }
+.notif-pref {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--panel-2);
+  font-size: 13px; color: var(--muted); cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.notif-pref.on { color: var(--text); border-color: var(--accent); }
+.notif-pref input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* Açılış sayfası seçici (Settings). */
+.settings-select {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); padding: 7px 10px; font-size: 13px; font-family: var(--mono);
+  max-width: 190px;
+}
+.settings-select:focus { outline: none; border-color: var(--accent); }
+
+/* Grafik lejantı — sade-dil çizgi/işaret rehberi; telefonda tek satır yatay kayar. */
+.chart-legend {
+  display: flex; gap: 14px; align-items: center; margin-top: 7px;
+  font-size: 11px; color: #848E9C; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  white-space: nowrap; scrollbar-width: none;
+}
+.chart-legend::-webkit-scrollbar { display: none; }
+.cl-item { display: inline-flex; align-items: center; gap: 5px; }
+.cl-line { display: inline-block; width: 16px; height: 0; border-top: 2px dashed #848E9C; }
+.cl-entry { border-top-style: solid; border-top-color: #848E9C; }
+.cl-tp { border-top-color: #0ECB81; }
+.cl-sl { border-top-color: #F6465D; }
+.cl-trail { border-top-color: #F5B942; }
+.cl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #F0B90B; }
+
 /* --- phone tier --- */
 @media (max-width: 768px) {
   .trading-page .settings-grid { grid-template-columns: 1fr; }
@@ -3009,4 +3065,9 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
   .tog.on::after { transform: translateX(19px); }
   .kill-btn, .apply-btn, .header-btn { min-height: 40px; }
   .tinput--num { width: 96px; }
+  .admin-newuser { grid-template-columns: 1fr; }
+  .admin-newuser input, .admin-newuser .apply-btn { width: 100%; }
+  .admin-feat { padding: 6px 9px; font-size: 11px; }   /* dokunma hedefi büyüsün */
+  .notif-pref { min-height: 44px; }
+  .settings-select { max-width: 160px; }
 }

@@ -57,15 +57,18 @@ NEW_SIGNAL_LOOKBACK_MIN = 15                                 # only enter a sign
 _HTML_RE = re.compile(r"<[^>]+>")
 
 
-def _alert(cfg, conn, text: str, *, title: str = "") -> None:
+def _alert(cfg, conn, text: str, *, title: str = "", kind: str = "") -> None:
     """Per-user event routing: Telegram stays the owner/admin channel (canonical account only,
     exactly today's behavior); the account's own user additionally gets a personal Web Push
-    (push_outbox -> sync/push_notify.py). Best-effort on both legs."""
+    (push_outbox -> sync/push_notify.py). Best-effort on both legs.
+    kind ('entry'|'exit'|'milestone'|'system') sadece push ayağını süzer (user_prefs
+    bildirim tercihleri); Telegram/owner kanalı her zaman tam akışı alır."""
     if cfg.is_canonical:
         notify.alert(text, chat_id=cfg.telegram_chat_id)
     if cfg.user_id:
         body = _HTML_RE.sub("", text)
-        ustore.push_user(conn, cfg.user_id, title or body.split("\n", 1)[0][:60], body, tag="exec")
+        ustore.push_user(conn, cfg.user_id, title or body.split("\n", 1)[0][:60], body,
+                         tag="exec", kind=kind)
 
 
 def _net(cfg) -> str:
@@ -360,7 +363,7 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
         st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason=reason, exit_time=now)
         _alert(cfg, conn, f"⏭️ <b>GİRİŞ İPTAL</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
                           f"maker limit {'fiyat kaçtı (+%.2gR)' % cfg.entry_max_slip_r if slipped else 'dolmadı (süre doldu)'}"
-                          f" — {_tag(cfg)}")
+                          f" — {_tag(cfg)}", kind="entry")
         print(f"  ⏭️ {sym} entry {reason} — cancelled")
         return
 
@@ -396,7 +399,8 @@ def _place_entry(cfg, client, conn, xi, pos, now) -> None:
             st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="error",
                          client_order_id=coid, payload={"err": str(e)}, user_id=pos.get("user_id"))
             _alert(cfg, conn, f"✋ <b>{sym}</b> MIDAS-X: hesap 'TradFi-Perps' sözleşmesini imzalamamış — Binance'te "
-                              f"altın işlemi için bir kereliğine onayla (aksi halde emir gitmez) — {_tag(cfg)}")
+                              f"altın işlemi için bir kereliğine onayla (aksi halde emir gitmez) — {_tag(cfg)}",
+                   kind="system")
             return
         print(f"  ! {sym} entry place error: {e}")
         st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="error",
@@ -427,7 +431,7 @@ def _enter_open(cfg, client, conn, xi, pos, avg: float, fill_time, resp, now) ->
     _alert(cfg, conn, f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
                       f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g}\n"
                       f"SL {float(pos['signal_sl']):g} (−1R · 1.5·ATR) · 3.5·ATR iz-süren · 8s/seans "
-                      f"({'borsa STOP' if not cfg.testnet else 'sentetik'}) — {_tag(cfg)}")
+                      f"({'borsa STOP' if not cfg.testnet else 'sentetik'}) — {_tag(cfg)}", kind="entry")
     print(f"  ✅ {sym} ENTERED @ {avg:g} · SL {float(pos['signal_sl']):g}")
 
 
@@ -481,7 +485,7 @@ def _finalize(cfg, client, conn, bt, pos, *, reason, exit_px, exit_time, res_pnl
     label = {"trail/stop": "iz-süren stop", "time": "8s süre", "session": "seans sonu",
              "closed_externally": "borsa/likidite kapanışı"}.get(reason, reason)
     _alert(cfg, conn, f"{emoji} <b>KAPANDI</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                      f"Çıkış {exit_px:g} ({label}) · <b>{r_txt}</b>{usd_txt} — {_tag(cfg)}")
+                      f"Çıkış {exit_px:g} ({label}) · <b>{r_txt}</b>{usd_txt} — {_tag(cfg)}", kind="exit")
     print(f"  🏁 {sym} CLOSED {r_txt} ({reason})")
 
 
@@ -688,7 +692,7 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
         ustore.clear_kill(live, user.settings_id)
         ustore.audit(live, uid, "kill_executed", {"stream": "midas", "network": net, "flattened": n})
         _alert(cfg, live, f"🟥 <b>ACİL DURDUR</b> · {n} pozisyon kapatıldı, MIDAS/{net} devre dışı bırakıldı — {_tag(cfg)}",
-               title="Acil durdurma tamamlandı")
+               title="Acil durdurma tamamlandı", kind="system")
         return
 
     # ---- entry gates: activation + daily loss cap (reconcile ALWAYS continues below)
@@ -703,7 +707,7 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
                               "cap_usd": user.daily_loss_cap_usd})
                 _alert(cfg, live, f"⛔ Günlük zarar limiti aşıldı ({lost:+.2f}$ ≤ −{user.daily_loss_cap_usd:g}$) — "
                                   f"bugün yeni işlem açılmayacak. Açık pozisyonlar yönetilmeye devam ediyor.",
-                       title="Günlük zarar limiti")
+                       title="Günlük zarar limiti", kind="system")
 
     sigs = shared.signals(live, cfg.symbol)
     print(f"  [{label}] {len(sigs)} recent midas signal(s) in window")
@@ -720,7 +724,7 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
                 _reconcile(cfg, client, live, bt_conn, xi, pos, now, shared)
             except BinanceError as e:
                 print(f"  ! {pos['symbol']} reconcile error: {e}")
-                _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> MIDAS reconcile error: {e}")
+                _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> MIDAS reconcile error: {e}", kind="system")
 
     if cfg.api_key and cfg.api_secret:
         _write_snapshot(cfg, client, live)

@@ -153,9 +153,43 @@ def set_key_invalid(conn, key_id: int, reason: str) -> None:
     conn.commit()
 
 
-def push_user(conn, user_id: str, title: str, body: str, *, tag: str = "", url: str = "/") -> None:
-    """Queue a personal Web Push (drained by sync/push_notify.py). Best-effort."""
+# push_user(kind=...) -> user_prefs kolonu. Bilinmeyen/boş kind her zaman gönderilir.
+_PREF_COLS = {
+    "entry": "notify_entry",         # giriş / ters sinyal / atlandı / giriş iptal
+    "exit": "notify_exit",           # stop / kapandı / cap / zaman doldu
+    "milestone": "notify_milestone", # TP1 / breakeven / iz süren stop ara olayları
+    "system": "notify_system",       # acil durdur / anahtar / sistem uyarıları
+}
+
+
+def push_allowed(conn, user_id: str, kind: str = "") -> bool:
+    """Kullanıcının bildirim tercihi (ict_trade.user_prefs). Satır/tablo yoksa veya
+    kind sınıflandırılmamışsa TRUE (varsayılan: her şey açık) — tercih kontrolü
+    hiçbir push yolunu kıramaz."""
+    col = _PREF_COLS.get(kind)
+    if not col:
+        return True
     try:
+        with conn.cursor() as cur:
+            cur.execute(f"select {col} from ict_trade.user_prefs where user_id = %s", (user_id,))
+            row = cur.fetchone()
+        return True if row is None else bool(row[0])
+    except Exception:  # noqa: BLE001 — migration 008 henüz uygulanmamış olabilir
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+
+
+def push_user(conn, user_id: str, title: str, body: str, *,
+              tag: str = "", url: str = "/", kind: str = "") -> None:
+    """Queue a personal Web Push (drained by sync/push_notify.py). Best-effort.
+    kind ('entry'|'exit'|'milestone'|'system') kullanıcının bildirim tercihine
+    (user_prefs) göre sessizce elenebilir; boş kind daima gönderilir."""
+    try:
+        if not push_allowed(conn, user_id, kind):
+            return
         payload = json.dumps({"title": title, "body": body, "tag": tag, "url": url})
         with conn.cursor() as cur:
             cur.execute("insert into ict_trade.push_outbox (user_id, payload) values (%s, %s::jsonb)",

@@ -284,6 +284,11 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
    coid'lerle devam etmeli). Rollback: `EXEC_MULTI_USER=false`.
 6. Faz-6: frontend zaten JWT'yle okuyor → `apply_sql.py --file supabase/migrations/007_rls_tighten.sql`
    (live_positions/midas_positions/account tabloları kullanıcıya-özel olur, anon push policy'leri düşer).
+7. **008 (2026-07-05, additive):** `apply_sql.py --file supabase/migrations/008_user_prefs_admin.sql` —
+   `user_prefs` (tema/dil/açılış sayfası + bildirim tercihleri) + `user_features` (admin'in kullanıcı-başına
+   backtest/istihbarat/işlem yüzeyi kapatması) + `admin_set_features` / `admin_delete_user` RPC'leri.
+   Uygulanmadan da sistem bugünkü gibi çalışır (default-açık); kullanıcı silme `auth.users` DELETE yetkisi
+   ister — pooler DSN'de yoksa dosyayı SQL editöründe çalıştır.
 
 **Cron ekleri (kurulu):** `verify_keys.py` (*/1 +40s) + `push_notify.py --drain` (*/1 +45s) → `~/ict-users.log`.
 **Kill:** kullanıcı UI'dan; admin `/admin`'den veya `killswitch.py --flatten --user <email>`.
@@ -303,6 +308,42 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
+
+### 2026-07-05
+- **Admin merkezî kontrol + kullanıcı ekleme/silme + kullanıcı tercihleri + bildirim tercihleri (§8a devamı).**
+  Tüm kullanıcı kontrolleri artık `/admin`'de; kullanıcı tarafında tema/dil/açılış sayfası + bildirim
+  tercihleri hesapla birlikte taşınır.
+  - **Admin — kullanıcı ekle:** `/admin` yeni "Kullanıcı Ekle" kartı — anonim GoTrue signup (admin
+    oturumuna dokunmaz, dönen session kaydedilmez) → profil trigger'la `pending` doğar → "Aktif olarak
+    başlat" işaretliyse `admin_set_user` ile anında aktive. Geçici şifre admin tarafından belirlenir.
+  - **Admin — kullanıcı sil:** yeni `admin_delete_user(p_user)` RPC (`supabase/migrations/008`) —
+    çift onaylı; kendi hesabını, canonical (owner) hesabı ve **açık pozisyonu olan** hesabı REDDEDER
+    (önce KILL). `auth.users` silinir → cascade profiles → keys/settings/prefs/features;
+    `push_subscriptions`/`push_outbox` elle temizlenir; audit satırı silinmeden önce yazılır.
+  - **Admin — rol yönetimi:** satırda "Admin Yap / Adminliği Al" (admin_set_user `p_role`); kendi rolünü
+    değiştiremez.
+  - **Admin — yüzey erişimleri (user_features):** kullanıcı-başına `backtest / intelligence / trading`
+    çipleri (BT/İSTH/İŞL) — `admin_set_features` RPC (audit'li; client'a UPDATE grant'i yok). Frontend
+    gating: Sidebar + MobileTabBar nav gizleme + `RequireFeature` route guard (`/trading`,
+    `/intelligence`) + CommandCenter backtest deep-link reddi. Satır yoksa **hepsi açık** (varsayılan).
+  - **Kullanıcı tercihleri (user_prefs):** tema/dil/açılış sayfası Supabase'te kullanıcı-başına kalıcı —
+    ThemeContext/LanguageContext setter'ları best-effort upsert eder (`src/utils/userPrefs.js`), login'de
+    sunucudaki değer uygulanır (`persist:false` ile geri yankı yok), `location.state.from` yoksa giriş
+    kullanıcının **Açılış Sayfası** tercihine yönlenir. Settings ▸ Görünüm'e "Açılış Sayfası" seçici eklendi.
+  - **Bildirim tercihleri:** Settings ▸ Bildirimler'e 5 olay anahtarı — girişler / kapanışlar /
+    ara hedef·iz süren / sinyal yayınları / sistem. Uygulama noktaları: `store.push_user(kind=...)`
+    (executor `_alert` çağrıları `entry|exit|milestone|system` etiketli; tercih kapalıysa outbox'a
+    yazılmaz — Telegram/owner kanalı ETKİLENMEZ) + `push_notify.send_push` broadcast'te
+    `notify_signals=false` kullanıcıların abonelikleri atlanır. Tercih satırı/tablosu yoksa her şey
+    gönderilir (default-açık, kırılmaz).
+  - **Grafik lejantı (anlaşılır grafik):** ChartModal başlığına sade-dil çizgi rehberi — "Giriş fiyatı /
+    Hedef (kâr al) / Stop (zararı kes) / İz süren stop — kâr kilitlenir / Giriş-Çıkış anları"; mobilde tek
+    satır yatay kayar (`.chart-legend`).
+  - **Ops (BEKLEYEN — tek adım):** migration 008 canlı DB'ye uygulanacak:
+    `.venv/bin/python sync/users/apply_sql.py --file supabase/migrations/008_user_prefs_admin.sql`
+    (owner DSN'de `auth.users` DELETE yetkisi yoksa dosyayı Supabase SQL editöründe çalıştır).
+    Uygulanana kadar her şey bugünkü gibi davranır (yeni tablolar yok → tüm yüzeyler açık, tercihler
+    default). Frontend Render'da yeniden build'lenmeli (git push tetikler). Cron/env değişikliği YOK.
 
 ### 2026-07-04
 - **Binance Canlı now shows funding-fee paid on open positions.** Perps settle funding every 8h and

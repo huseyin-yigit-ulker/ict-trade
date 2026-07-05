@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { savePrefs } from '../utils/userPrefs';
 
 // Lightweight i18n (no dependency). Pattern: the Turkish string IS the key.
 // t('Kapat') -> 'Kapat' in TR, EN[...] (or the key as fallback) in EN.
@@ -601,6 +602,45 @@ const EN = {
   'Bu cihaz/kurulum desteklemiyor. iOS’ta önce uygulamayı Ana Ekrana ekleyin.':
     'This device/install does not support it. On iOS, add the app to the Home Screen first.',
 
+  // --- Admin: user add/delete/role + access chips (2026-07-05) ---
+  'Kullanıcı Ekle': 'Add User',
+  'Geçici şifre (≥10)': 'Temporary password (≥10)',
+  'İsim (opsiyonel)': 'Name (optional)',
+  'Aktif olarak başlat': 'Start as active',
+  'Hesap admin tarafından açılır; geçici şifreyi kullanıcıya güvenli bir kanaldan iletin. Kullanıcı girişten sonra şifresini değiştirebilir.':
+    'Accounts are created by the admin; share the temporary password over a secure channel. The user can change it after signing in.',
+  'E-posta girin; şifre en az 10 karakter olmalı.': 'Enter an email; the password must be at least 10 characters.',
+  '{email} oluşturuldu ve aktive edildi. Geçici şifreyi kullanıcıya iletin.':
+    '{email} created and activated. Share the temporary password with the user.',
+  '{email} oluşturuldu (onay bekliyor). Geçici şifreyi kullanıcıya iletin.':
+    '{email} created (pending approval). Share the temporary password with the user.',
+  '{email}: hesap KALICI olarak silinecek (profil, anahtarlar, ayarlar, abonelikler). Emin misiniz?':
+    '{email}: the account will be PERMANENTLY deleted (profile, keys, settings, subscriptions). Are you sure?',
+  'Son onay: {email} silinsin mi?': 'Final confirmation: delete {email}?',
+  '{email} silindi.': '{email} deleted.',
+  'Erişim': 'Access',
+  'Adminliği Al': 'Revoke Admin',
+  'Admin Yap': 'Make Admin',
+  'Sil': 'Delete',
+
+  // --- Settings: user prefs + notification prefs (2026-07-05) ---
+  'Açılış Sayfası': 'Start Page',
+  'Tema, dil ve açılış sayfası hesabınıza kaydedilir — tüm cihazlarınızda geçerlidir.':
+    'Theme, language and start page are saved to your account — they apply on all your devices.',
+  'Hangi olaylar bildirilsin?': 'Which events should notify you?',
+  'Pozisyon girişleri': 'Position entries',
+  'Pozisyon kapanışları': 'Position closes',
+  'Ara hedef / iz süren stop': 'Interim target / trailing stop',
+  'Sinyal yayınları': 'Signal broadcasts',
+  'Sistem uyarıları': 'System alerts',
+
+  // --- Chart legend (plain-language) ---
+  'Giriş fiyatı': 'Entry price',
+  'İz süren stop — kâr kilitlenir': 'Trailing stop — locks in profit',
+  'Hedef (kâr al)': 'Target (take profit)',
+  'Stop (zararı kes)': 'Stop (cut loss)',
+  'Giriş/Çıkış anları': 'Entry/Exit markers',
+
   // --- weekday names returned by the SQL RPC (Turkish) ---
   'Pazartesi': 'Monday', 'Sali': 'Tuesday', 'Carsamba': 'Wednesday',
   'Persembe': 'Thursday', 'Cuma': 'Friday', 'Cumartesi': 'Saturday', 'Pazar': 'Sunday',
@@ -650,9 +690,12 @@ export const LanguageProvider = ({ children }) => {
     try { return localStorage.getItem(LS_KEY) || 'tr'; } catch { return 'tr'; }
   });
 
-  const setLang = useCallback((l) => {
+  // Persist: localStorage (instant) + ict_trade.user_prefs (cross-device, logged-in
+  // only). setLang(l, {persist:false}) is the server-apply path — no DB echo.
+  const setLang = useCallback((l, opts) => {
     setLangState(l);
     try { localStorage.setItem(LS_KEY, l); } catch { /* ignore */ }
+    if (opts?.persist !== false) savePrefs({ lang: l });
   }, []);
 
   const t = useCallback((key, vars) => {

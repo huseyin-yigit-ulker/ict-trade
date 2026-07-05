@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useTradeContext } from '../../context/TradeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LanguageContext';
 
 // Native-app-style bottom navigation (Binance-like) — phone only (CSS-gated to
@@ -37,6 +38,7 @@ const IMenu = () => (
 
 const MobileTabBar = () => {
   const { mobileNavOpen, toggleMobileNav, closeMobileNav } = useTradeContext();
+  const { features } = useAuth();
   const { t } = useLang();
   const cls = ({ isActive }) => `mtab${isActive ? ' is-active' : ''}`;
 
@@ -48,13 +50,17 @@ const MobileTabBar = () => {
       <NavLink to="/binance" className={cls} onClick={closeMobileNav}>
         <ILive /><span>{t('Canlı')}</span>
       </NavLink>
-      {/* İşlem Merkezi — per-user trading controls (keys / risk / activation). */}
-      <NavLink to="/trading" className={cls} onClick={closeMobileNav}>
-        <IGear /><span>{t('İşlem')}</span>
-      </NavLink>
-      <NavLink to="/intelligence" className={cls} onClick={closeMobileNav}>
-        <IIntel /><span>{t('İstihbarat')}</span>
-      </NavLink>
+      {/* İşlem Merkezi — per-user trading controls; admin kullanıcı-başına kapatabilir. */}
+      {features?.trading !== false && (
+        <NavLink to="/trading" className={cls} onClick={closeMobileNav}>
+          <IGear /><span>{t('İşlem')}</span>
+        </NavLink>
+      )}
+      {features?.intelligence !== false && (
+        <NavLink to="/intelligence" className={cls} onClick={closeMobileNav}>
+          <IIntel /><span>{t('İstihbarat')}</span>
+        </NavLink>
+      )}
       <button
         type="button"
         className={`mtab${mobileNavOpen ? ' is-active' : ''}`}

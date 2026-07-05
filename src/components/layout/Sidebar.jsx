@@ -125,7 +125,7 @@ const GROUPS = [
 ];
 
 const Sidebar = () => {
-  const { user, logout, isActive, isAdmin } = useAuth();
+  const { user, logout, isActive, isAdmin, features } = useAuth();
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
   const { closeMobileNav } = useTradeContext();
@@ -229,8 +229,9 @@ const Sidebar = () => {
               <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
             </NavLink>
 
-            {/* İşlem Merkezi — per-user keys/risk/activation (active accounts only) */}
-            {isActive && (
+            {/* İşlem Merkezi — per-user keys/risk/activation (active accounts only;
+                admin user_features.trading ile kullanıcı-başına kapatabilir) */}
+            {isActive && features?.trading !== false && (
               <NavLink to="/trading" className="sidebar__link">
                 <span className="sidebar__icon"><IconGear /></span><span>{t('İşlem Merkezi')}</span>
               </NavLink>
@@ -245,22 +246,27 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* ── BACKTEST — research-only streams (leaf links go to /:key/backtest) ── */}
-        <button
-          className="sidebar__section"
-          onClick={(e) => { e.stopPropagation(); toggleBacktest(); }}
-          aria-expanded={btOpen}
-          title={btOpen ? t('Gizle') : t('Göster')}
-        >
-          <span className="sidebar__icon"><IconStrategies /></span>
-          <span className="sidebar__section-label">BACKTEST</span>
-          <span className="sidebar__section-chev" aria-hidden="true">{btOpen ? '▾' : '▸'}</span>
-        </button>
+        {/* ── BACKTEST — research-only streams (leaf links go to /:key/backtest).
+              Admin user_features.backtest=false ile bölümü tamamen gizleyebilir. ── */}
+        {features?.backtest !== false && (
+          <>
+            <button
+              className="sidebar__section"
+              onClick={(e) => { e.stopPropagation(); toggleBacktest(); }}
+              aria-expanded={btOpen}
+              title={btOpen ? t('Gizle') : t('Göster')}
+            >
+              <span className="sidebar__icon"><IconStrategies /></span>
+              <span className="sidebar__section-label">BACKTEST</span>
+              <span className="sidebar__section-chev" aria-hidden="true">{btOpen ? '▾' : '▸'}</span>
+            </button>
 
-        {btOpen && (
-          <div className="sidebar__strategies">
-            {GROUPS.filter((g) => g.section === 'backtest').map(renderGroup)}
-          </div>
+            {btOpen && (
+              <div className="sidebar__strategies">
+                {GROUPS.filter((g) => g.section === 'backtest').map(renderGroup)}
+              </div>
+            )}
+          </>
         )}
 
         <div className="sidebar__navsep" />
@@ -270,9 +276,11 @@ const Sidebar = () => {
         <NavLink to="/total" className="sidebar__link">
           <span className="sidebar__icon"><IconTotal /></span><span>{t('TOTAL')}</span>
         </NavLink>
-        <NavLink to="/intelligence" className="sidebar__link">
-          <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
-        </NavLink>
+        {features?.intelligence !== false && (
+          <NavLink to="/intelligence" className="sidebar__link">
+            <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
+          </NavLink>
+        )}
         <NavLink to="/settings" className="sidebar__link">
           <span className="sidebar__icon"><IconSettings /></span><span>{t('Ayarlar')}</span>
         </NavLink>

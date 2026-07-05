@@ -92,7 +92,8 @@ def _sweep_account(cfg, live, skew_seen: set) -> int:
                      chat_id=cfg.telegram_chat_id)
         if uid:
             ustore.push_user(live, uid, "Sahipsiz pozisyon kapatıldı",
-                             f"{cfg.symbol} ({amt}) hesabınızda yönetilmeyen pozisyondu — kapatıldı.")
+                             f"{cfg.symbol} ({amt}) hesabınızda yönetilmeyen pozisyondu — kapatıldı.",
+                             kind="system")
 
     print(f"  [{label}/{net}] swept {len(managed)} managed | breaches={breaches}")
     return breaches

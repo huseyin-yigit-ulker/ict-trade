@@ -1069,6 +1069,20 @@ const ChartModal = () => {
             );
           })()}
         </div>
+        {/* Sade-dil grafik açıklaması: çizgi/işaret renklerinin anlamı — teknik jargon yok,
+            mobilde tek satır yatay kayar. Renkler createPriceLine/markers ile birebir. */}
+        {!showTv && (
+          <div className="chart-legend" aria-hidden="true">
+            <span className="cl-item"><i className="cl-line cl-entry" />{t('Giriş fiyatı')}</span>
+            {isTrailing ? (
+              <span className="cl-item"><i className="cl-line cl-trail" />{t('İz süren stop — kâr kilitlenir')}</span>
+            ) : (
+              <span className="cl-item"><i className="cl-line cl-tp" />{t('Hedef (kâr al)')}</span>
+            )}
+            <span className="cl-item"><i className="cl-line cl-sl" />{t('Stop (zararı kes)')}</span>
+            <span className="cl-item"><i className="cl-dot" />{t('Giriş/Çıkış anları')}</span>
+          </div>
+        )}
       </div>
 
       <button id="close-modal" className="close-modern" onClick={() => setActiveSignal(null)}>

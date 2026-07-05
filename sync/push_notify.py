@@ -62,6 +62,21 @@ def _mask_text(text: str) -> str:
     return text
 
 
+def _signal_muted_user_ids(conn) -> set:
+    """notify_signals=false diyen kullanıcılar (user_prefs) — sinyal broadcast'i almazlar.
+    Tablo henüz yoksa (migration 008 uygulanmadıysa) kimse susturulmaz."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT user_id::text FROM ict_trade.user_prefs WHERE notify_signals = false")
+            return {r[0] for r in cur.fetchall()}
+    except Exception:  # noqa: BLE001 — pre-migration-008
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return set()
+
+
 def _admin_user_ids(conn) -> set:
     """profiles admins (the owner) get the REAL wording; everyone else the codenames.
     Returns an empty set (mask for all user-stamped subs) if profiles doesn't exist yet."""
@@ -102,10 +117,15 @@ def send_push(title: str, body: str, url: str = "/", tag: str | None = None) -> 
         conn = tsc.live_conn()
         try:
             admins = _admin_user_ids(conn)
+            muted = _signal_muted_user_ids(conn)
             with conn.cursor() as cur:
                 cur.execute(_SELECT)
                 subs = cur.fetchall()
             for sub_id, endpoint, p256dh, auth, user_id in subs:
+                # kullanıcı tercihi: sinyal yayınları kapalıysa bu aboneliği atla
+                # (user-less legacy satırlar owner'ın cihazlarıdır — her zaman alır)
+                if user_id is not None and str(user_id) in muted:
+                    continue
                 info = {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}}
                 # legacy user-less subscriptions belong to the owner's devices (pre-multi-user)
                 data = payload if (user_id is None or str(user_id) in admins) else payload_masked

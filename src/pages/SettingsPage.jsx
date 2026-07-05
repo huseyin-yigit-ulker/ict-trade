@@ -5,6 +5,17 @@ import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { pushSupported, pushState, enablePush, disablePush } from '../utils/push';
+import { PAGE_CHOICES } from '../utils/userPrefs';
+
+// Bildirim tercihi anahtarları — ict_trade.user_prefs kolonlarıyla birebir;
+// VM tarafı push_user(kind=...) / send_push sinyal yayınlarında bunları uygular.
+const NOTIF_ROWS = [
+  { col: 'notify_entry', label: 'Pozisyon girişleri' },
+  { col: 'notify_exit', label: 'Pozisyon kapanışları' },
+  { col: 'notify_milestone', label: 'Ara hedef / iz süren stop' },
+  { col: 'notify_signals', label: 'Sinyal yayınları' },
+  { col: 'notify_system', label: 'Sistem uyarıları' },
+];
 
 const SettingsPage = () => {
   const {
@@ -13,8 +24,11 @@ const SettingsPage = () => {
   } = useTradeContext();
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
-  const { user, profile, isAdmin, logout } = useAuth();
+  const { user, profile, isAdmin, logout, prefs, updatePrefs, features } = useAuth();
   const [savedSymbols, setSavedSymbols] = useState(false);
+
+  // Tercih kolonları default-true: yalnızca açıkça false kapalıdır.
+  const notifOn = (col) => prefs?.[col] !== false;
 
   // Web Push (native phone notifications) — mirrors the Telegram alerts.
   const [push, setPush] = useState({ supported: pushSupported(), permission: 'default', subscribed: false });
@@ -59,6 +73,22 @@ const SettingsPage = () => {
               <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
             </div>
           </div>
+          <div className="settings-row">
+            <span>{t('Açılış Sayfası')}</span>
+            <select
+              className="settings-select"
+              value={prefs?.default_page || '/'}
+              onChange={(e) => updatePrefs({ default_page: e.target.value })}
+            >
+              {PAGE_CHOICES
+                .filter((c) => (c.path !== '/trading' || features?.trading !== false)
+                  && (c.path !== '/intelligence' || features?.intelligence !== false))
+                .map((c) => <option key={c.path} value={c.path}>{t(c.label)}</option>)}
+            </select>
+          </div>
+          <div className="form-note">
+            {t('Tema, dil ve açılış sayfası hesabınıza kaydedilir — tüm cihazlarınızda geçerlidir.')}
+          </div>
         </section>
 
         {/* Data & engine */}
@@ -98,6 +128,22 @@ const SettingsPage = () => {
           </button>
           {pushErr && (
             <div className="settings-row"><span className="loss" style={{ fontSize: 12 }}>{pushErr}</span></div>
+          )}
+          {/* Hangi olaylarda bildirim gelsin — kullanıcı-başına, tüm cihazlar için. */}
+          {push.subscribed && (
+            <div className="notif-prefs">
+              <div className="form-note">{t('Hangi olaylar bildirilsin?')}</div>
+              {NOTIF_ROWS.map((r) => (
+                <label key={r.col} className={`notif-pref${notifOn(r.col) ? ' on' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={notifOn(r.col)}
+                    onChange={() => updatePrefs({ [r.col]: !notifOn(r.col) })}
+                  />
+                  <span>{t(r.label)}</span>
+                </label>
+              ))}
+            </div>
           )}
         </section>
 

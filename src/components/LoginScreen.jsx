@@ -243,8 +243,9 @@ const LoginScreen = () => {
       }
       const res = await login(username.trim(), password, remember);
       if (res.ok) {
+        // Öncelik: guard'ın bıraktığı deep-link → kullanıcının açılış sayfası tercihi → '/'.
         const from = location.state?.from;
-        navigate(from && from !== '/login' ? from : '/', { replace: true });
+        navigate(from && from !== '/login' ? from : (res.defaultPage || '/'), { replace: true });
         return;
       }
       setLoading(false);

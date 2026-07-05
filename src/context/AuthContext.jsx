@@ -5,7 +5,9 @@ import {
   signIn as gtSignIn, signUp as gtSignUp, signOut as gtSignOut, authConfigured,
 } from '../utils/gotrue';
 import { ensureFreshSession, getJSON } from '../utils/supa';
+import { fetchPrefs, savePrefs } from '../utils/userPrefs';
 import { useLang } from './LanguageContext';
+import { useTheme } from './ThemeContext';
 
 // REAL multi-user auth: Supabase Auth (GoTrue) sessions + an ict_trade.profiles row per
 // user (role user|admin, status pending|active|disabled — signup lands PENDING until an
@@ -46,18 +48,26 @@ const leaveNote = (n) => { try { sessionStorage.setItem(NOTE_KEY, n); } catch { 
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
+// Admin'in kapatmadığı her yüzey açık: user_features satırı yoksa (veya henüz
+// yüklenmediyse) varsayılan hepsi-true'dur — gating yalnız açıkça false'ta devreye girer.
+const DEFAULT_FEATURES = { backtest: true, intelligence: true, trading: true };
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(loadSession);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [features, setFeatures] = useState(null);   // null = yüklenmedi → DEFAULT_FEATURES
+  const [prefs, setPrefs] = useState(null);
   const refreshTimer = useRef(null);
+  const { setTheme } = useTheme();
+  const { setLang } = useLang();
 
   const lockRemainingMs = useCallback(() => Math.max(0, readLock().until - Date.now()), []);
 
   // ---- profile: the app-level identity (role/status) behind the GoTrue session
   const loadProfile = useCallback(async (sess) => {
     const uid = sess?.user?.id;
-    if (!uid) { setProfile(null); return null; }
+    if (!uid) { setProfile(null); setFeatures(null); return null; }
     setProfileLoading(true);
     try {
       const rows = await getJSON(
@@ -65,6 +75,13 @@ export const AuthProvider = ({ children }) => {
       );
       const p = rows?.[0] || null;
       setProfile(p);
+      // Admin'in bu kullanıcıya açtığı yüzeyler — satır yoksa hepsi açık.
+      try {
+        const f = await getJSON(
+          `user_features?select=backtest,intelligence,trading&user_id=eq.${uid}`,
+        );
+        setFeatures(f?.[0] || DEFAULT_FEATURES);
+      } catch { setFeatures(DEFAULT_FEATURES); }   // tablo yok / geçici hata → kısıtlama yok
       return p;
     } catch {
       // transient error: keep the session, profile stays unknown (RequireActive treats as pending)
@@ -72,6 +89,25 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setProfileLoading(false);
     }
+  }, []);
+
+  // ---- prefs: tema/dil/açılış sayfası + bildirim tercihleri (user_prefs).
+  // apply=true (login + ilk mount) tema/dili sunucudaki değere çeker — persist:false
+  // ile, ki uygulama DB'ye geri yankılanmasın.
+  const loadPrefs = useCallback(async (apply = false) => {
+    const pr = await fetchPrefs();
+    setPrefs(pr);
+    if (apply && pr) {
+      if (pr.theme) setTheme(pr.theme, { persist: false });
+      if (pr.lang) setLang(pr.lang, { persist: false });
+    }
+    return pr;
+  }, [setTheme, setLang]);
+
+  // Ayar yüzeylerinin tek yazma yolu: local state + best-effort DB upsert birlikte.
+  const updatePrefs = useCallback((partial) => {
+    setPrefs((p) => ({ ...(p || {}), ...partial }));
+    savePrefs(partial);
   }, []);
 
   // ---- proactive refresh: timer at expiry−60s + on tab resume (PWA), + expiry event
@@ -105,7 +141,9 @@ export const AuthProvider = ({ children }) => {
     };
   }, [session]);
 
-  useEffect(() => { if (session) loadProfile(session); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (session) { loadProfile(session); loadPrefs(true); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- actions
   const login = useCallback(async (email, password, remember = true) => {
@@ -116,7 +154,10 @@ export const AuthProvider = ({ children }) => {
       saveSession(s, remember);
       setSession(s);
       loadProfile(s);
-      return { ok: true, lockedMs: 0 };
+      // Prefs beklenir (küçük tek satır): LoginScreen 'from' yoksa açılış sayfasına gider.
+      let defaultPage = null;
+      try { defaultPage = (await loadPrefs(true))?.default_page || null; } catch { /* ignore */ }
+      return { ok: true, lockedMs: 0, defaultPage };
     } catch (e) {
       const lock = readLock();
       lock.fails += 1;
@@ -131,7 +172,7 @@ export const AuthProvider = ({ children }) => {
       writeLock(lock);
       return { ok: false, lockedMs: 0, error: e?.message };
     }
-  }, [lockRemainingMs, loadProfile]);
+  }, [lockRemainingMs, loadProfile, loadPrefs]);
 
   const signup = useCallback(async (email, password, displayName = '') => {
     try {
@@ -154,6 +195,8 @@ export const AuthProvider = ({ children }) => {
     clearSession();
     setSession(null);
     setProfile(null);
+    setFeatures(null);
+    setPrefs(null);
     if (tok) gtSignOut(tok);
   }, []);
 
@@ -176,6 +219,9 @@ export const AuthProvider = ({ children }) => {
       isActive: profile?.status === 'active',
       isAdmin: profile?.role === 'admin' && profile?.status === 'active',
       isCanonical: !!profile?.is_canonical,
+      features: features || DEFAULT_FEATURES,
+      prefs,
+      updatePrefs,
       authConfigured: authConfigured(),
       login, signup, logout, refreshProfile, lockRemainingMs,
     }}>
@@ -223,5 +269,14 @@ export const RequireAdmin = ({ children }) => {
   const { isAdmin, profileLoading } = useAuth();
   if (profileLoading) return null;
   if (!isAdmin) return <Navigate to="/" replace />;
+  return children;
+};
+
+// Admin'in kullanıcı-başına kapatabildiği yüzeyler (user_features): kapalıysa ana
+// sayfaya döner. Satır/tablo yokken (features=DEFAULT) hiçbir şey kısıtlanmaz.
+export const RequireFeature = ({ k, children }) => {
+  const { features, profileLoading } = useAuth();
+  if (profileLoading) return null;
+  if (features?.[k] === false) return <Navigate to="/" replace />;
   return children;
 };

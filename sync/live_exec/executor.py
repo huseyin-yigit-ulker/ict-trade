@@ -51,15 +51,18 @@ _TAG = f"{_NAME} · {st.VERSION}" if _NAME else st.VERSION
 _HTML_RE = re.compile(r"<[^>]+>")
 
 
-def _alert(cfg, conn, text: str, *, title: str = "") -> None:
+def _alert(cfg, conn, text: str, *, title: str = "", kind: str = "") -> None:
     """Per-user event routing: Telegram stays the owner/admin channel (canonical account only,
     exactly today's behavior); the account's own user additionally gets a personal Web Push
-    (push_outbox -> sync/push_notify.py). Best-effort on both legs."""
+    (push_outbox -> sync/push_notify.py). Best-effort on both legs.
+    kind ('entry'|'exit'|'milestone'|'system') sadece push ayağını süzer (user_prefs
+    bildirim tercihleri); Telegram/owner kanalı her zaman tam akışı alır."""
     if cfg.is_canonical:
         notify.alert(text, chat_id=cfg.telegram_chat_id)
     if cfg.user_id:
         body = _HTML_RE.sub("", text)
-        ustore.push_user(conn, cfg.user_id, title or body.split("\n", 1)[0][:60], body, tag="exec")
+        ustore.push_user(conn, cfg.user_id, title or body.split("\n", 1)[0][:60], body,
+                         tag="exec", kind=kind)
 
 
 def _net(cfg) -> str:
@@ -413,7 +416,7 @@ def _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now) -> None:
                 "🏁 TP1+BE")
         tail = f"realized {realized_usd:+.2f}$ ({realized_r:+.2f}R)"
     _alert(cfg, conn, f"{head} · <b>{sym}</b> {dirn} #{pos['id']}\n"
-                      f"borsa-emri kapanışı (SL/TP/cap tetiklendi) · {tail} — {_TAG}")
+                      f"borsa-emri kapanışı (SL/TP/cap tetiklendi) · {tail} — {_TAG}", kind="exit")
 
 
 def _reverse_close(cfg, client, conn, bt_conn, pos, now) -> None:
@@ -439,7 +442,7 @@ def _reverse_close(cfg, client, conn, bt_conn, pos, now) -> None:
     _alert(cfg, conn, f"🔄 <b>TERS SİNYAL</b> · <b>{sym}</b> #{pos['id']}\n"
                       f"{str(pos['direction']).upper()} kapatıldı ({realized_usd:+.2f}$"
                       + (f", {realized_r:+.2f}R" if realized_r is not None else "")
-                      + ") → ters yön açılıyor" + f" — {_TAG}")
+                      + ") → ters yön açılıyor" + f" — {_TAG}", kind="exit")
 
 
 def _close(conn, bt_conn, pos, *, reason, exit_px, realized_r):
@@ -505,7 +508,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             if (last - lv.eff_entry) * lngd >= lv.risk_eff:      # already at/over +1R from entry
                 st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason="slipped")
                 _alert(cfg, conn, f"⏭️ <b>ATLANDI</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                                  f"fiyat +1R'yi geçti (geç onay) — giriş yapılmadı — {_TAG}")
+                                  f"fiyat +1R'yi geçti (geç onay) — giriş yapılmadı — {_TAG}", kind="entry")
                 return
         # Auto-leverage (risk-safe): set the per-trade leverage from the SL distance so the
         # liquidation sits ~2x the SL distance beyond entry (1/L ≈ 2*SL%) — liquidation can NEVER
@@ -519,7 +522,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             try:
                 client.set_leverage(sym, lev)
             except Exception as e:  # noqa: BLE001
-                _alert(cfg, conn, f"⚠️ <b>{sym}</b> set_leverage({lev}) hata: {e} — {cfg.leverage}x'e düşüldü")
+                _alert(cfg, conn, f"⚠️ <b>{sym}</b> set_leverage({lev}) hata: {e} — {cfg.leverage}x'e düşüldü",
+                       kind="system")
                 lev = cfg.leverage
         resp = _market(client, conn, pos, pos["qty"], leg="entry", reduce_only=False)
         avg = _avg_fill(client, sym, resp) or float(lv.eff_entry)
@@ -542,7 +546,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             st.patch(conn, pos["id"], context={**_ctx, "exch_tp": True})
         _alert(cfg, conn, f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
                           f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g} · {lev}x{' (oto)' if cfg.auto_leverage else ''}\n"
-                          f"SL {rl.sl:g} (−1R) · TP1 {rl.tp1:g} (%{int(cfg.close_frac*100)}) · cap {rl.cap:g} (+{cfg.runner_cap_r:g}R %{int((1-cfg.close_frac)*100)}) — borsa bracket — {_TAG}")
+                          f"SL {rl.sl:g} (−1R) · TP1 {rl.tp1:g} (%{int(cfg.close_frac*100)}) · cap {rl.cap:g} (+{cfg.runner_cap_r:g}R %{int((1-cfg.close_frac)*100)}) — borsa bracket — {_TAG}",
+               kind="entry")
         return
 
     if state in (st.OPEN_FULL, st.RUNNER) and exch_tp:
@@ -571,7 +576,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
                      context={**(_ctx or {}), "be_done": True})
             _alert(cfg, conn, f"🎯 <b>TP1 DOLDU</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
                               f"%{int(cfg.close_frac*100)} alındı @ {rl.tp1:g} (+1R · +{cfg.close_frac*cfg.first_r:.1f}R kilitli)\n"
-                              f"SL → breakeven {e:g} · runner %{int((1-cfg.close_frac)*100)} → +{cfg.runner_cap_r:g}R / BE / {cfg.horizon_days}g — {_TAG}")
+                              f"SL → breakeven {e:g} · runner %{int((1-cfg.close_frac)*100)} → +{cfg.runner_cap_r:g}R / BE / {cfg.horizon_days}g — {_TAG}",
+                   kind="milestone")
             return
         sl_level = e if be_done else rl.sl                       # backstop fires at BE once trailed
         since = (pd.Timestamp(pos["tp1_fill_time"]) if be_done and pos.get("tp1_fill_time")
@@ -585,7 +591,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now)
             _alert(cfg, conn, f"🛑 <b>{'BREAKEVEN STOP' if be_done else 'STOP −1R'}</b> · <b>{sym}</b> "
                               f"{str(pos['direction']).upper()} #{pos['id']}\n"
-                              f"sentetik backstop kapanışı @ {sl_level:g} — {_TAG}")
+                              f"sentetik backstop kapanışı @ {sl_level:g} — {_TAG}", kind="exit")
             return
         _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now, shared)
         return
@@ -598,7 +604,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="sl")
             _cancel_resting(cfg, client, sym)
             _close(conn, bt_conn, pos, reason="sl", exit_px=rl.sl, realized_r=-1.0 - _fee_r(cfg, pos))
-            _alert(cfg, conn, f"🛑 <b>{sym}</b> stopped −1R — {_TAG}")
+            _alert(cfg, conn, f"🛑 <b>{sym}</b> stopped −1R — {_TAG}", kind="exit")
             return
         if hit == "target":                                     # +1R -> book 60%, ride runner
             _market(client, conn, pos, pos["tp1_qty"], leg="tp1")
@@ -612,7 +618,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
                      tp1_fill_time=now, tp1_fill_px=rl.tp1)
             _place_protective_stop(cfg, client, conn, xi, pos, rl.be, leg="be_rest")   # runner protected at breakeven
             _alert(cfg, conn, f"🎯 <b>{sym}</b> TP1 +1R, booked {int(cfg.close_frac*100)}% "
-                              f"({pos['tp1_qty']}) — runner {runner_qty} to +{cfg.runner_cap_r:g}R/BE")
+                              f"({pos['tp1_qty']}) — runner {runner_qty} to +{cfg.runner_cap_r:g}R/BE",
+                   kind="milestone")
             return
         _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now, shared)
         return
@@ -626,14 +633,16 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             _cancel_resting(cfg, client, sym)
             _close(conn, bt_conn, pos, reason="breakeven", exit_px=be,
                    realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
-            _alert(cfg, conn, f"🏁 <b>{sym}</b> runner breakeven (+{cfg.close_frac*cfg.first_r:.1f}R) — {_TAG}")
+            _alert(cfg, conn, f"🏁 <b>{sym}</b> runner breakeven (+{cfg.close_frac*cfg.first_r:.1f}R) — {_TAG}",
+                   kind="exit")
             return
         if hit == "target":                                     # runner ran to +cap
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="cap")
             _cancel_resting(cfg, client, sym)
             r = cfg.close_frac * cfg.first_r + (1 - cfg.close_frac) * cfg.runner_cap_r - _fee_r(cfg, pos)
             _close(conn, bt_conn, pos, reason="cap", exit_px=cap, realized_r=r)
-            _alert(cfg, conn, f"🏁 <b>{sym}</b> runner CAP +{cfg.runner_cap_r:g}R ({r:+.2f}R) — {_TAG}")
+            _alert(cfg, conn, f"🏁 <b>{sym}</b> runner CAP +{cfg.runner_cap_r:g}R ({r:+.2f}R) — {_TAG}",
+                   kind="exit")
             return
         _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now, shared)
         return
@@ -669,7 +678,7 @@ def _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now: pd.Timestamp,
     r = booked + frac * max(runner_r, 0.0) - _fee_r(cfg, pos)
     _close(conn, bt_conn, pos, reason="time_stop", exit_px=last, realized_r=r)
     _alert(cfg, conn, f"⏱️ <b>3 GÜN DOLDU</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                      f"süre limiti — market kapandı @ {last:g} · realized {r:+.2f}R — {_TAG}")
+                      f"süre limiti — market kapandı @ {last:g} · realized {r:+.2f}R — {_TAG}", kind="exit")
 
 
 def _fee_r(cfg, pos: dict) -> float:
@@ -798,7 +807,7 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
         ustore.clear_kill(live, user.settings_id)
         ustore.audit(live, uid, "kill_executed", {"stream": "opus", "network": net, "flattened": n})
         _alert(cfg, live, f"🟥 <b>ACİL DURDUR</b> · {n} pozisyon kapatıldı, OPUS/{net} devre dışı bırakıldı — {_TAG}",
-               title="Acil durdurma tamamlandı")
+               title="Acil durdurma tamamlandı", kind="system")
         return
 
     # ---- entry gates: activation + daily loss cap (reconcile ALWAYS continues below)
@@ -813,7 +822,7 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
                               "cap_usd": user.daily_loss_cap_usd})
                 _alert(cfg, live, f"⛔ Günlük zarar limiti aşıldı ({lost:+.2f}$ ≤ −{user.daily_loss_cap_usd:g}$) — "
                                   f"bugün yeni işlem açılmayacak. Açık pozisyonlar yönetilmeye devam ediyor.",
-                       title="Günlük zarar limiti")
+                       title="Günlük zarar limiti", kind="system")
 
     # 1) NEW signals -> intents (dry) / positions (armed)
     sigs = [s for s in shared.signals(live) if s["symbol"] in set(cfg.symbols)]
@@ -884,7 +893,7 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
                 _reconcile(cfg, client, live, bt_conn, xi, pos, now, shared)
             except BinanceError as e:
                 print(f"  ! {pos['symbol']} reconcile error: {e}")
-                _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> reconcile error: {e}")
+                _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> reconcile error: {e}", kind="system")
 
     # 3) snapshot the real exchange state for the dashboard (read-only; needs only credentials)
     if cfg.api_key and cfg.api_secret:

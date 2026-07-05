@@ -82,7 +82,8 @@ def _sweep_account(cfg, live, skew_seen: set) -> int:
                          chat_id=cfg.telegram_chat_id)
             if uid:
                 ustore.push_user(live, uid, "Sahipsiz pozisyon kapatıldı",
-                                 f"{sym} ({amt}) hesabınızda yönetilmeyen pozisyondu — kapatıldı.")
+                                 f"{sym} ({amt}) hesabınızda yönetilmeyen pozisyondu — kapatıldı.",
+                                 kind="system")
 
     open_risk = st.total_open_risk_usd(live, cfg.risk_usd, user_id=uid, network=net if uid else None)
     if open_risk > cfg.max_total_risk_usd:
