@@ -142,12 +142,15 @@ const Sidebar = () => {
     return l.startsWith(`${n} · `) ? l.slice(n.length + 3) : l;
   };
 
-  // Two collapsible nav sections (they replace the old single 'pusu.navStrategies'
-  // header): CANLI MODÜL — the three live streams + the live/per-user pages —
-  // default OPEN; BACKTEST — the research-only streams — default COLLAPSED.
-  // Collapse state persists like the other PUSU prefs.
+  // Three collapsible nav sections: CANLI MODÜL — ONLY the live strategy streams —
+  // default OPEN; CANLI İŞLEMLER — the Binance mainnet/paper position boards + the
+  // per-user trading controls — default OPEN; BACKTEST — the research-only streams —
+  // default COLLAPSED. Collapse state persists like the other PUSU prefs.
   const [liveOpen, setLiveOpen] = useState(() => {
     try { return localStorage.getItem('pusu.navLive') !== '0'; } catch { return true; }
+  });
+  const [execOpen, setExecOpen] = useState(() => {
+    try { return localStorage.getItem('pusu.navExec') !== '0'; } catch { return true; }
   });
   const [btOpen, setBtOpen] = useState(() => {
     try { return localStorage.getItem('pusu.navBacktest') === '1'; } catch { return false; }
@@ -155,6 +158,11 @@ const Sidebar = () => {
   const toggleLive = () => setLiveOpen((o) => {
     const next = !o;
     try { localStorage.setItem('pusu.navLive', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
+  const toggleExec = () => setExecOpen((o) => {
+    const next = !o;
+    try { localStorage.setItem('pusu.navExec', next ? '1' : '0'); } catch { /* ignore */ }
     return next;
   });
   const toggleBacktest = () => setBtOpen((o) => {
@@ -202,14 +210,14 @@ const Sidebar = () => {
           <span className="sidebar__icon"><IconHome /></span><span>{t('Genel Bakış')}</span>
         </NavLink>
 
-        {/* ── CANLI MODÜL — live streams + live pages + per-user trading controls ── */}
+        {/* ── CANLI MODÜL — ONLY the live strategy streams ── */}
         <button
           className="sidebar__section"
           onClick={(e) => { e.stopPropagation(); toggleLive(); }}
           aria-expanded={liveOpen}
           title={liveOpen ? t('Gizle') : t('Göster')}
         >
-          <span className="sidebar__icon"><IconLive /></span>
+          <span className="sidebar__icon"><IconImpulse /></span>
           <span className="sidebar__section-label">{t('CANLI MODÜL')}</span>
           <span className="sidebar__section-chev" aria-hidden="true">{liveOpen ? '▾' : '▸'}</span>
         </button>
@@ -217,15 +225,32 @@ const Sidebar = () => {
         {liveOpen && (
           <div className="sidebar__strategies">
             {GROUPS.filter((g) => g.section === 'live').map(renderGroup)}
+          </div>
+        )}
 
-            {/* Binance Pozisyonlar — real-money OPUS executor board */}
+        {/* ── CANLI İŞLEMLER — Binance mainnet/paper position boards + per-user controls ── */}
+        <button
+          className="sidebar__section"
+          onClick={(e) => { e.stopPropagation(); toggleExec(); }}
+          aria-expanded={execOpen}
+          title={execOpen ? t('Gizle') : t('Göster')}
+        >
+          <span className="sidebar__icon"><IconLive /></span>
+          <span className="sidebar__section-label">{t('CANLI İŞLEMLER')}</span>
+          <span className="sidebar__section-chev" aria-hidden="true">{execOpen ? '▾' : '▸'}</span>
+        </button>
+
+        {execOpen && (
+          <div className="sidebar__strategies">
+            {/* Binance Mainnet — real-money executor board */}
             <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
-              <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Pozisyonlar')}</span>
+              <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Mainnet')}</span>
+              <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
             </NavLink>
 
-            {/* Gold executor on Binance TESTNET (paper, not real money) — name self-masks */}
+            {/* Paper — Binance TESTNET boards (gold executor; not real money) */}
             <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance-paper">
-              <span className="sidebar__icon"><IconLive /></span><span>{sd.name('midas')} · {t('Altın')}</span>
+              <span className="sidebar__icon"><IconLive /></span><span>{t('Paper')} · {t('Altın')}</span>
               <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
             </NavLink>
 

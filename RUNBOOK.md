@@ -469,6 +469,13 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   GoTrue + RLS ile uçtan uca doğrulandı. Not: kullanıcı istatistik kolonları (Açık Poz./Bugün)
   pozisyon satırları user_id'siz olduğundan Faz-5 backfill'e kadar '—' gösterir.
 
+### 2026-07-05 (3) — Sidebar: CANLI İŞLEMLER ayrı bölüm
+- Kullanıcı isteği: **CANLI MODÜL** artık yalnız canlı strateji akışlarını (3 stream) içeriyor;
+  Binance pozisyon panoları yeni **CANLI İŞLEMLER** bölümüne taşındı — **Binance Mainnet**
+  (`/binance`, GERÇEK rozetli) + **Paper · Altın** (`/binance-altin`, PAPER rozetli) + İşlem
+  Merkezi (`/trading`) + Yönetim (`/admin`, admin-only). Yeni bölümün katlanma durumu
+  `pusu.navExec` (default açık). i18n TR/EN eklendi.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
