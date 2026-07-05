@@ -1,0 +1,11 @@
+# scratchpad = araştırma script'leri REPODA, veri artıkları DIŞARIDA.
+# Whitelist yaklaşımı: her şey yok sayılır, yalnız kod (.py) + küçük .txt listeleri girer.
+# Cache'ler (paxg_cache/, fx_gold içindeki kline dump'ları), PNG ekran görüntüleri,
+# JSON dump'lar ve __pycache__ asla commit'lenmez (~160MB).
+*
+!.gitignore
+!*.py
+!*.txt
+!fx_gold/
+fx_gold/*
+!fx_gold/*.py
