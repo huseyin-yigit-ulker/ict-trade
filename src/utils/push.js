@@ -60,13 +60,24 @@ export async function enablePush() {
   if (!userId) throw new Error('no session');   // button is hidden for logged-out anyway
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('denied');
-  const reg = await navigator.serviceWorker.ready;
+  // serviceWorker.ready never rejects — it just hangs when no SW is registered
+  // (e.g. the Vite dev server has PWA devOptions off). Race it so we surface a
+  // clear error instead of a spinner that never resolves.
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('no service worker')), 6000)),
+  ]);
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
-    });
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+      });
+    } catch (e) {
+      // Brave/iOS-tab/blocked push services throw here — carry the name up.
+      throw new Error(`subscribe ${e?.name || 'error'}: ${e?.message || ''}`.trim());
+    }
   }
   const json = sub.toJSON();
   const body = {
@@ -82,7 +93,10 @@ export async function enablePush() {
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`db ${res.status}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`db ${res.status} ${detail.slice(0, 140)}`.trim());
+  }
   return true;
 }
 

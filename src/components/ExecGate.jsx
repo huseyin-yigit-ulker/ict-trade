@@ -6,31 +6,33 @@ import { getJSON } from '../utils/supa';
 
 // Canlı işlem panolarının (Binance Mainnet / Paper) önündeki KAPI.
 //
-// RLS Faz-6'ya (007) kadar canlı tabloları kullanıcı-bazlı ayırmıyor ve executor
-// tek-hesap modunda (EXEC_MULTI_USER=false) yalnız owner'ın (is_canonical) hesabını
-// yazıyor. Bu yüzden anahtarsız / owner-olmayan bir kullanıcıya operatörün Binance
-// verisi SIZMAMALI — bunun yerine kendi API anahtarını eklemeye yönlendirilir.
+// Faz-5/6 cutover (2026-07-05) sonrası: executor çok-kullanıcı modunda (her kullanıcı
+// KENDİ anahtarıyla işlem görür) ve canlı tablolar RLS ile kullanıcıya kilitli (007) —
+// yani bir kullanıcının JWT'siyle çekilen satırlar YALNIZ kendi hesabınındır. Kapı bu
+// yüzden kullanıcının o ağ için KENDİ GEÇERLİ anahtarı olup olmadığına bakar:
 //
-//   • owner (is_canonical)            → legacy tek-hesap panosunu görür (kendi verisi).
-//   • owner-değil + geçerli anahtar    → "hesabınız hazırlanıyor" (kendi verisi Faz-5 sonrası).
-//   • owner-değil + anahtar yok        → "API anahtarı ekle" → /trading.
+//   • geçerli anahtar (veya owner/is_admin)  → KENDİ panosu (RLS satırları kilitler).
+//   • anahtar doğrulanıyor (pending_verify)  → "hesabınız hazırlanıyor".
+//   • anahtar yok                            → "API anahtarı ekle" → /trading.
 //
 // Kapı çocukları (pano) yalnız 'ok' durumunda MOUNT edilir; aksi halde pano hiç
-// yüklenmez, dolayısıyla başkasının verisini çeken hiçbir sorgu atılmaz.
+// yüklenmez, dolayısıyla hiçbir sorgu atılmaz.
 export default function ExecGate({ network, children }) {
   const { isCanonical } = useAuth();
   const { t } = useLang();
   const [state, setState] = useState(isCanonical ? 'ok' : 'loading');
 
   useEffect(() => {
-    if (isCanonical) { setState('ok'); return undefined; }
+    if (isCanonical) { setState('ok'); return undefined; }   // owner: is_admin RLS → kendi satırları
     let alive = true;
     setState('loading');
     getJSON('user_api_keys_public?select=network,status')
       .then((rows) => {
         if (!alive) return;
         const mine = (rows || []).filter((r) => r.network === network);
-        setState(mine.some((r) => r.status === 'valid' || r.status === 'pending_verify') ? 'pending' : 'nokey');
+        if (mine.some((r) => r.status === 'valid')) setState('ok');          // kendi geçerli anahtarı → kendi panosu
+        else if (mine.some((r) => r.status === 'pending_verify')) setState('pending');
+        else setState('nokey');
       })
       .catch(() => { if (alive) setState('nokey'); });
     return () => { alive = false; };
@@ -51,7 +53,7 @@ export default function ExecGate({ network, children }) {
         <h2>{state === 'pending' ? t('Hesabınız hazırlanıyor') : t('Kendi API anahtarınızı ekleyin')}</h2>
         <p>
           {state === 'pending'
-            ? t('{net} anahtarınız kaydedildi. Canlı işlem hesabınız aktivasyon tamamlanınca açılacak — burada yalnızca KENDİ verileriniz gösterilir, başka hesabın verisi asla.', { net: netLabel })
+            ? t('{net} anahtarınız doğrulanıyor — birkaç dakika içinde hesabınız açılır. Burada yalnızca KENDİ verileriniz gösterilir, başka hesabın verisi asla.', { net: netLabel })
             : t('Canlı işlem verilerinizi görmek için önce {net} için kendi Binance API anahtarınızı eklemelisiniz. Başkasının hesap verisi burada gösterilmez.', { net: netLabel })}
         </p>
         <Link className="primary-btn" to="/trading" style={{ marginTop: 6 }}>{t('API Anahtarı Ekle')} →</Link>

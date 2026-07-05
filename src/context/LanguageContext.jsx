@@ -498,7 +498,7 @@ const EN = {
   'API Anahtarı Ekle': 'Add API Key',
   'testnet': 'testnet',
   'Canlı işlem verilerinizi görmek için önce {net} için kendi Binance API anahtarınızı eklemelisiniz. Başkasının hesap verisi burada gösterilmez.': 'To see your live trading data you must first add your own Binance API key for {net}. No one else\'s account data is shown here.',
-  '{net} anahtarınız kaydedildi. Canlı işlem hesabınız aktivasyon tamamlanınca açılacak — burada yalnızca KENDİ verileriniz gösterilir, başka hesabın verisi asla.': 'Your {net} key is saved. Your live trading account opens once activation completes — only YOUR data is shown here, never another account\'s.',
+  '{net} anahtarınız doğrulanıyor — birkaç dakika içinde hesabınız açılır. Burada yalnızca KENDİ verileriniz gösterilir, başka hesabın verisi asla.': 'Your {net} key is being verified — your account opens within a few minutes. Only YOUR data is shown here, never another account\'s.',
   'CANLI İŞLEMLER': 'LIVE TRADING',
   'Binance Mainnet': 'Binance Mainnet',
   'Paper': 'Paper',

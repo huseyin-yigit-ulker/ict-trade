@@ -490,6 +490,24 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   + `007` gerekir (armed mainnet'i ~10 dk duraklatan üretim migration'ı — auto-mode dışında, operatör
   onayıyla). ExecGate o güne kadarki güvenli ara-durum. Bu turda executor/`.env` DEĞİŞMEDİ (legacy).
 
+### 2026-07-05 (5) — ✅ FAZ-5 + FAZ-6 CUTOVER TAMAMLANDI: çok-kullanıcı canlı execution CANLI
+- **Operatör `scratchpad/faz5_cutover.sh`'yi çalıştırdı** (auto-mode classifier üretim-DB yazımını
+  bloke ettiği için operatör çalıştırdı): `killswitch --halt` → `seed_owner --backfill` → NULL-kontrol
+  → `005b` index/PK swap → `EXEC_MULTI_USER=true` → yeniden ARMED. Ardından bu oturum **`007` RLS**'i
+  uyguladı.
+- **Doğrulandı:** OPUS (owner/mainnet) + MIDAS-X (owner/testnet) her ikisi de `ARMED | MULTI-USER`,
+  hatasız reconcile; owner'ın 2 açık RUNNER pozisyonu (BTC #123, ETH #124) **AYNI coid'lerle** devam
+  ediyor; `live_positions`/`midas_positions` 0 NULL user_id; `live_account` PK `(user_id,network)`,
+  `live_account_snapshot` PK `(user_id,network,symbol)` (7 satır damgalı). **007:** RLS 4 tabloda açık,
+  policy'ler var, **anon SELECT reddediliyor** (sızıntı DB'de kapandı), executor owner-DSN ile bypass
+  edip normal çalışıyor.
+- **ExecGate güncellendi** (post-cutover): kapı artık `isCanonical` yerine kullanıcının o ağ için KENDİ
+  GEÇERLİ anahtarına bakıyor — geçerli anahtarı olan owner-olmayan kullanıcı da KENDİ panosunu görür
+  (RLS satırları kilitler); pending → "doğrulanıyor"; anahtar yok → /trading. Artık ikinci kullanıcı
+  (`ulkerhsyn1905`) kendi mainnet/testnet anahtarını ekleyip aktive edince kendi hesabından işlem görür
+  ve yalnız kendi verisini görür.
+- **Durum:** `.env EXEC_MULTI_USER=true`, `LIVE_TRADING_ENABLED=true`. Geri dönüş: `EXEC_MULTI_USER=false`.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

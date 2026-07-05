@@ -43,7 +43,15 @@ const SettingsPage = () => {
       else await enablePush();
       setPush(await pushState());
     } catch (e) {
-      setPushErr(e?.message === 'denied' ? t('Bildirim izni reddedildi.') : t('Bildirim ayarlanamadı.'));
+      console.error('[push] toggle failed:', e);
+      const m = e?.message || '';
+      setPushErr(
+        m === 'denied' ? t('Bildirim izni reddedildi (tarayıcı/telefon ayarından siteye izin verin).')
+          : m === 'no session' ? t('Oturum bulunamadı — çıkıp tekrar giriş yapın.')
+          : m === 'unsupported' || m === 'no service worker'
+            ? t('Bu tarayıcı/ortam bildirimi desteklemiyor. HTTPS gerekir; iOS’ta önce uygulamayı Ana Ekrana ekleyin.')
+            : `${t('Bildirim ayarlanamadı')}: ${m || t('bilinmeyen hata')}`,
+      );
     } finally { setPushBusy(false); }
   };
 
