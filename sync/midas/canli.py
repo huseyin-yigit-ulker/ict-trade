@@ -202,6 +202,15 @@ def main():
                                       st, MODE, LTF, HTF, "MIDAS VWAP-Trend", "TREND", 0, json.dumps(ctx)))
                 conn.commit(); inserted += 1
                 print(f"  + XAUUSDT {d:<5} @ {fire:%m-%d %H:%M} yazıldı", flush=True)
+                # Kişisel sinyal-izleme push'u — XAUUSDT'yi listesine ekleyen
+                # kullanıcılara kuyruğa yazar (--drain dağıtır). No-op until configured.
+                if push_notify is not None:
+                    push_notify.push_signal_watchers(
+                        MODE, M.SYMBOL,
+                        title=f"PUSU · {NAME} XAUUSDT {d}",
+                        body=f"Formasyon @ {float(s['entry']):g} · SL {float(s['sl']):g} · TP {float(s['tp']):g}",
+                        url="/binance-altin", tag=f"{MODE}:XAUUSDT",
+                    )
             else:
                 raw = existing[0]
                 ctx = raw if isinstance(raw, dict) else (json.loads(raw) if raw else {})

@@ -92,6 +92,31 @@ def _admin_user_ids(conn) -> set:
         return set()
 
 
+# signals.mode (scanner discriminator) -> anonim akış KEY'i (user_signal_watch.strategy).
+_MODE_TO_STREAM = {
+    "dch30_4h": "d30so8f3h7",    # OPUS
+    "dch30_4hvg": "d30so8f3vg",  # FABLE (volume-gated twin)
+    "midas": "midas",            # MIDAS / SIRIUS
+}
+
+
+def _watchlist_user_ids(conn) -> set:
+    """Bir sinyal izleme listesi (>=1 sembol) kuran kullanıcılar. Bunlar hedefli push'u
+    push_signal_watchers üzerinden alır, bu yüzden BROADCAST onları ATLAR (çift bildirim
+    olmaz). Tablo yoksa (migration 011 uygulanmadı) boş küme -> herkes broadcast alır."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT user_id::text FROM ict_trade.user_signal_watch "
+                        "WHERE cardinality(symbols) > 0")
+            return {r[0] for r in cur.fetchall()}
+    except Exception:  # noqa: BLE001 — pre-migration-011
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return set()
+
+
 def send_push(title: str, body: str, url: str = "/", tag: str | None = None) -> int:
     """Fan a notification out to every stored subscription. Returns the count sent.
     Swallows all errors — a push problem must never break signal emission.
@@ -118,6 +143,7 @@ def send_push(title: str, body: str, url: str = "/", tag: str | None = None) -> 
         try:
             admins = _admin_user_ids(conn)
             muted = _signal_muted_user_ids(conn)
+            watched = _watchlist_user_ids(conn)
             with conn.cursor() as cur:
                 cur.execute(_SELECT)
                 subs = cur.fetchall()
@@ -125,6 +151,10 @@ def send_push(title: str, body: str, url: str = "/", tag: str | None = None) -> 
                 # kullanıcı tercihi: sinyal yayınları kapalıysa bu aboneliği atla
                 # (user-less legacy satırlar owner'ın cihazlarıdır — her zaman alır)
                 if user_id is not None and str(user_id) in muted:
+                    continue
+                # izleme listesi kuran kullanıcı broadcast almaz — hedefli push
+                # (push_signal_watchers) üzerinden yalnız seçtiği (strateji,sembol)'ü alır
+                if user_id is not None and str(user_id) in watched:
                     continue
                 info = {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}}
                 # legacy user-less subscriptions belong to the owner's devices (pre-multi-user)
@@ -155,6 +185,52 @@ def send_push(title: str, body: str, url: str = "/", tag: str | None = None) -> 
         return sent
     except Exception as e:  # noqa: BLE001
         print(f"  push fan-out failed: {e}")
+        return 0
+
+
+def push_signal_watchers(mode: str, symbol: str, title: str, body: str,
+                         url: str = "/", tag: str | None = None) -> int:
+    """Queue a PERSONAL signal push for every user whose watchlist (ict_trade.user_signal_watch)
+    includes (stream_of(mode), symbol). Honors notify_signals. Text is masked to codenames
+    per-user (the --drain path doesn't mask). Fires for the FULL scanned universe (independent
+    of the owner's Telegram gate) so a user can watch any symbol. Rows are delivered by the
+    existing `--drain` cron. Best-effort; silent no-op pre-migration-011. Returns rows queued."""
+    try:
+        conn = tsc.live_conn()
+        try:
+            stream = _MODE_TO_STREAM.get(mode, mode)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT user_id::text FROM ict_trade.user_signal_watch "
+                                "WHERE strategy = %s AND %s = ANY(symbols)", (stream, symbol))
+                    watchers = [r[0] for r in cur.fetchall()]
+            except Exception:  # noqa: BLE001 — pre-migration-011 (table absent)
+                conn.rollback()
+                return 0
+            if not watchers:
+                return 0
+            muted = _signal_muted_user_ids(conn)
+            admins = _admin_user_ids(conn)
+            queued = 0
+            for uid in watchers:
+                if uid in muted:                    # sinyal yayınları kapalı -> atla
+                    continue
+                t_ = title if uid in admins else _mask_text(title)
+                b_ = body if uid in admins else _mask_text(body)
+                payload = json.dumps({"title": t_, "body": b_, "url": url, "tag": tag})
+                with conn.cursor() as cur:
+                    cur.execute("INSERT INTO ict_trade.push_outbox (user_id, payload) "
+                                "VALUES (%s, %s::jsonb)", (uid, payload))
+                queued += 1
+            conn.commit()
+            return queued
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+    except Exception as e:  # noqa: BLE001
+        print(f"  watcher enqueue skipped: {str(e)[:150]}")
         return 0
 
 

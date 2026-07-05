@@ -3030,6 +3030,7 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 }
 .notif-pref.on { color: var(--text); border-color: var(--accent); }
 .notif-pref input { accent-color: var(--accent); width: 16px; height: 16px; }
+.notif-watch { display: grid; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
 
 /* Açılış sayfası seçici (Settings). */
 .settings-select {

@@ -265,6 +265,16 @@ def main():
             conn.commit()
             inserted += 1
             print(f"  + {s.symbol:<10} {d:<5} @ {st:%m-%d %H:%M} yazıldı", flush=True)
+            # Kişisel sinyal-izleme push'u — TÜM taranan evren için (owner Telegram
+            # gate'inden bağımsız); yalnız bu (strateji,sembol)'ü listesine ekleyen
+            # kullanıcılara kuyruğa yazar, --drain dağıtır. No-op until push configured.
+            if push_notify is not None:
+                push_notify.push_signal_watchers(
+                    mode, s.symbol,
+                    title=f"PUSU · {(args.name or mode)} {s.symbol} {d}",
+                    body=f"Formasyon @ {float(s.entry):g} · SL {float(s.stop_loss):g} · TP {float(s.take_profit_1):g}",
+                    url="/", tag=f"{mode}:{s.symbol}",
+                )
         else:
             raw = existing[0]
             ctx = raw if isinstance(raw, dict) else (json.loads(raw) if raw else {})

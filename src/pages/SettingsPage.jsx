@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { changePassword } from '../utils/supa';
 import { pushSupported, pushState, enablePush, disablePush } from '../utils/push';
 import { PAGE_CHOICES } from '../utils/userPrefs';
+import SignalWatchCard from '../components/trading/SignalWatchCard';
 
 // Bildirim tercihi anahtarları — ict_trade.user_prefs kolonlarıyla birebir;
 // VM tarafı push_user(kind=...) / send_push sinyal yayınlarında bunları uygular.
@@ -174,6 +175,13 @@ const SettingsPage = () => {
                 </label>
               ))}
             </div>
+          )}
+          {/* Sinyal bildirim listesi — hangi strateji+sembolde push gelsin (opt-in). */}
+          {push.subscribed && notifOn('notify_signals') && (
+            <>
+              <div className="form-note" style={{ marginTop: 10 }}>{t('Sinyal Bildirim Listesi')}</div>
+              <SignalWatchCard />
+            </>
           )}
         </section>
 

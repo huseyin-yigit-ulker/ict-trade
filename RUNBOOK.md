@@ -530,6 +530,29 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - Dosyalar: streamMask.js, AuthContext.jsx, AdminPage.jsx, Sidebar.jsx, CommandCenterPage.jsx, IntroPage.jsx,
   IntelligencePage.jsx, LoginScreen.jsx, TradingSettingsPage.jsx, assets/css/style.css. (commit: pending)
 
+### 2026-07-05 (7) — Sinyal bildirim izleme listesi: kullanıcı strateji+sembol seçince o sinyalde telefon push'u
+- **İstek:** kullanıcı seçtiği strateji + sembolde sinyal oluşunca mobil bildirim alsın; seçebilsin.
+- **Bugün:** sinyal→push saf broadcast'ti (herkese; yalnız `notify_signals` mute + codename maske). Hedefli
+  abonelik yoktu.
+- **Model (opt-in, geriye-uyumlu):** `notify_signals` KAPALI → hiç sinyal push'u; AÇIK + liste BOŞ → tüm
+  sinyaller (eski davranış); AÇIK + liste DOLU → yalnız seçilen (strateji, sembol) çiftleri.
+- **DB:** migration **011** `user_signal_watch (user_id, strategy∈{d30so8f3h7,d30so8f3vg,midas}, symbols text[])`
+  + RLS (kendi satırı / admin hepsi). execution'dan (user_stream_settings) ve stream_universe'den ayrı.
+- **Frontend:** `SignalWatchCard` (SymbolPickerCard'ı yansıtır) — 3 canlı akışın (codename) her biri için
+  `stream_universe`'den sembol çoklu-seçimi + Kaydet; Ayarlar→Bildirimler'de, push açık & "Sinyal yayınları"
+  açıkken görünür. `utils/signalWatch.js` (fetch/upsert). NOVA/`d30so8f3vg` OPUS'un `opus` evrenini paylaşır.
+- **Backend (`sync/push_notify.py`):** `push_signal_watchers(mode,symbol,…)` — sinyal-insert'te (TÜM taranan
+  evren, owner Telegram gate'inden bağımsız) izleyicilere kişisel push'u `push_outbox`'a yazar (mevcut `--drain`
+  cron dağıtır), kullanıcı-başına codename maskeler. `send_push` broadcast'i artık izleme-listesi olan
+  kullanıcıları ATLAR (çift bildirim yok). Scanner çağrıları: `donchian/canli.py` + `midas/canli.py`.
+- **Doğrulama:** py_compile (3 dosya) + esbuild full module-graph resolve temiz.
+- **Deploy adımları (kullanıcı):** (1) `apply_sql.py --file supabase/migrations/011_user_signal_watch.sql`
+  (owner DSN, prod DB); (2) frontend build (Render); (3) VM'de yeni `push_notify.py`/scanner'lar cron'la
+  zaten canlı — ek adım yok (VAPID zaten yapılandırılmış).
+- Dosyalar: 011_user_signal_watch.sql, utils/signalWatch.js, components/trading/SignalWatchCard.jsx,
+  pages/SettingsPage.jsx, assets/css/style.css, sync/push_notify.py, sync/donchian/canli.py, sync/midas/canli.py.
+  (commit: pending)
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
