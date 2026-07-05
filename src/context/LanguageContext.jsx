@@ -560,6 +560,9 @@ const EN = {
   '%25 üzeri sunucu tarafından engellenir.': 'Above 25% is blocked server-side.',
   'Kaydedildi.': 'Saved.',
   'Kaydet': 'Save',
+  'Şifre Değiştir': 'Change Password',
+  'Şifre güncellendi.': 'Password updated.',
+  'Şifre güncellenemedi': 'Password update failed',
 
   // --- İşlem Merkezi: symbol picker + backtest ranking ---
   'Backtest Sıralaması': 'Backtest Ranking',

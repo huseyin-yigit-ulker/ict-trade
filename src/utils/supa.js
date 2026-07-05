@@ -75,6 +75,23 @@ export async function rpc(name, args = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+/** Change the logged-in user's password (GoTrue PUT /auth/v1/user). Throws with the
+    server's message on failure (e.g. weak password / same password). */
+export async function changePassword(newPassword) {
+  const s = await ensureFreshSession();
+  if (!s) throw new Error('no session');
+  const res = await fetch(`${URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: { apikey: KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: newPassword }),
+  });
+  if (!res.ok) {
+    const b = await res.json().catch(() => null);
+    throw new Error(b?.msg || b?.error_description || b?.message || `HTTP ${res.status}`);
+  }
+  return true;
+}
+
 /** Extract the human message from a PostgREST error body (e.g. a trigger's raise exception). */
 async function postgrestError(res) {
   try {

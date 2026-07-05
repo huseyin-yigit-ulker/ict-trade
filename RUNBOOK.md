@@ -284,11 +284,9 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
    coid'lerle devam etmeli). Rollback: `EXEC_MULTI_USER=false`.
 6. Faz-6: frontend zaten JWT'yle okuyor → `apply_sql.py --file supabase/migrations/007_rls_tighten.sql`
    (live_positions/midas_positions/account tabloları kullanıcıya-özel olur, anon push policy'leri düşer).
-7. **008 (2026-07-05, additive):** `apply_sql.py --file supabase/migrations/008_user_prefs_admin.sql` —
+7. **008 (2026-07-05, additive): ✅ UYGULANDI (2026-07-05, apply_sql.py ile — auth.users yetkisi sorunsuz).**
    `user_prefs` (tema/dil/açılış sayfası + bildirim tercihleri) + `user_features` (admin'in kullanıcı-başına
    backtest/istihbarat/işlem yüzeyi kapatması) + `admin_set_features` / `admin_delete_user` RPC'leri.
-   Uygulanmadan da sistem bugünkü gibi çalışır (default-açık); kullanıcı silme `auth.users` DELETE yetkisi
-   ister — pooler DSN'de yoksa dosyayı SQL editöründe çalıştır.
 
 **Cron ekleri (kurulu):** `verify_keys.py` (*/1 +40s) + `push_notify.py --drain` (*/1 +45s) → `~/ict-users.log`.
 **Kill:** kullanıcı UI'dan; admin `/admin`'den veya `killswitch.py --flatten --user <email>`.
@@ -339,11 +337,15 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   - **Grafik lejantı (anlaşılır grafik):** ChartModal başlığına sade-dil çizgi rehberi — "Giriş fiyatı /
     Hedef (kâr al) / Stop (zararı kes) / İz süren stop — kâr kilitlenir / Giriş-Çıkış anları"; mobilde tek
     satır yatay kayar (`.chart-legend`).
-  - **Ops (BEKLEYEN — tek adım):** migration 008 canlı DB'ye uygulanacak:
-    `.venv/bin/python sync/users/apply_sql.py --file supabase/migrations/008_user_prefs_admin.sql`
-    (owner DSN'de `auth.users` DELETE yetkisi yoksa dosyayı Supabase SQL editöründe çalıştır).
-    Uygulanana kadar her şey bugünkü gibi davranır (yeni tablolar yok → tüm yüzeyler açık, tercihler
-    default). Frontend Render'da yeniden build'lenmeli (git push tetikler). Cron/env değişikliği YOK.
+  - **Ops: ✅ migration 008 canlı DB'ye UYGULANDI (2026-07-05, apply_sql.py, sorunsuz).** Cron/env
+    değişikliği YOK.
+  - **Owner hesabı oluşturuldu + seed edildi (2026-07-05):** admin e-postası
+    **ulkerhuseyin1905@gmail.com** (GoTrue signup, geçici şifreyle; onay maili gönderildi —
+    "Confirm email" dashboard'da kapatılana kadar giriş için maildeki linke tıklanmalı).
+    `seed_owner.py` çalıştı: profil admin/active/**canonical**; mainnet anahtar **valid**
+    (bakiye ~$117, withdrawal yok, one-way ✓), testnet **valid** (~$5041); ayarlar: opus/mainnet
+    AÇIK ($5 risk, 5 sembol), opus/testnet kapalı, midas/testnet AÇIK. Ayarlar → "Şifre Değiştir"
+    kartı eklendi (GoTrue PUT /auth/v1/user) — geçici şifre ilk girişte değiştirilmeli.
 
 ### 2026-07-04
 - **Binance Canlı now shows funding-fee paid on open positions.** Perps settle funding every 8h and

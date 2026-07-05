@@ -4,6 +4,7 @@ import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { changePassword } from '../utils/supa';
 import { pushSupported, pushState, enablePush, disablePush } from '../utils/push';
 import { PAGE_CHOICES } from '../utils/userPrefs';
 
@@ -47,6 +48,27 @@ const SettingsPage = () => {
   };
 
   const uniqueSymbols = useMemo(() => [...new Set(allSignals.map((s) => s.symbol))].sort(), [allSignals]);
+
+  // Şifre değiştir (GoTrue PUT /auth/v1/user) — geçici şifreyle açılan hesaplar için şart.
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState(null);   // { ok: bool, text: string }
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    if (pwBusy) return;
+    if (pw1.length < 10) { setPwMsg({ ok: false, text: t('Şifre en az 10 karakter olmalı.') }); return; }
+    if (pw1 !== pw2) { setPwMsg({ ok: false, text: t('Şifreler eşleşmiyor.') }); return; }
+    setPwBusy(true); setPwMsg(null);
+    try {
+      await changePassword(pw1);
+      setPw1(''); setPw2(''); setPwOpen(false);
+      setPwMsg({ ok: true, text: t('Şifre güncellendi.') });
+    } catch (err) {
+      setPwMsg({ ok: false, text: `${t('Şifre güncellenemedi')}: ${err?.message || ''}` });
+    } finally { setPwBusy(false); }
+  };
 
   return (
     <div className="settings-page">
@@ -187,6 +209,31 @@ const SettingsPage = () => {
                 : t('Onay bekleniyor')}
             </span>
           </div>
+          <button className="header-btn" onClick={() => { setPwOpen((v) => !v); setPwMsg(null); }}>
+            🔑 {t('Şifre Değiştir')}
+          </button>
+          {pwOpen && (
+            <form onSubmit={submitPassword} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+              <input
+                className="tinput" type="password" autoComplete="new-password"
+                placeholder={t('Şifre (en az 10 karakter)')} maxLength={128}
+                value={pw1} onChange={(e) => { setPw1(e.target.value); setPwMsg(null); }}
+              />
+              <input
+                className="tinput" type="password" autoComplete="new-password"
+                placeholder={t('Şifre (tekrar)')} maxLength={128}
+                value={pw2} onChange={(e) => { setPw2(e.target.value); setPwMsg(null); }}
+              />
+              <button className="apply-btn" type="submit" disabled={pwBusy || !pw1 || !pw2}>
+                {pwBusy ? '…' : t('Kaydet')}
+              </button>
+            </form>
+          )}
+          {pwMsg && (
+            <div className="settings-row">
+              <span className={pwMsg.ok ? 'win' : 'loss'} style={{ fontSize: 12 }}>{pwMsg.text}</span>
+            </div>
+          )}
           <Link className="header-btn" to="/trading">{t('İşlem Merkezi')} →</Link>
           {isAdmin && <Link className="header-btn" to="/admin">{t('Yönetim')} →</Link>}
           <button className="header-btn settings-logout" onClick={logout}>⏻ {t('Çıkış Yap')}</button>
