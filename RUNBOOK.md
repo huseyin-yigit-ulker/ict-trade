@@ -476,6 +476,20 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   Merkezi (`/trading`) + Yönetim (`/admin`, admin-only). Yeni bölümün katlanma durumu
   `pusu.navExec` (default açık). i18n TR/EN eklendi.
 
+### 2026-07-05 (4) — Canlı işlem panolarına ExecGate: anahtarsız kullanıcı admin verisini görmesin
+- **Sorun:** yeni kullanıcı (`ulkerhsyn1905`) `/binance`'e girince owner'ın (admin) Binance
+  verisini görüyordu — canlı tablolar RLS ile ayrılmadığından (007 Faz-6'da) ve executor tek-hesap
+  modda (EXEC_MULTI_USER=false) yalnız owner'ı yazdığından, sayfa "kim girdiyse" filtresi yapmıyordu.
+- **Çözüm (`src/components/ExecGate.jsx`, üretim DB'sine dokunmaz):** `/binance` (mainnet) +
+  `/binance-altin` (testnet) route'ları `<ExecGate network=...>` ile sarıldı. Owner (`is_canonical`)
+  legacy panosunu görür; owner-olmayan kullanıcı KENDİ geçerli anahtarını (`user_api_keys_public`,
+  RLS-scoped) eklemeden pano MOUNT edilmez → "API Anahtarı Ekle" → `/trading` yönlendirmesi (anahtarı
+  varsa "hesabınız hazırlanıyor"). Böylece başka hesabın verisi asla gösterilmez. i18n TR/EN.
+- **NOT — tam çok-kullanıcı canlı execution hâlâ Faz-5 cutover'a bağlı:** kullanıcıların KENDİ
+  hesaplarından işlem açıp kendi verilerini görmesi için `--backfill` + `005b` + `EXEC_MULTI_USER=true`
+  + `007` gerekir (armed mainnet'i ~10 dk duraklatan üretim migration'ı — auto-mode dışında, operatör
+  onayıyla). ExecGate o güne kadarki güvenli ara-durum. Bu turda executor/`.env` DEĞİŞMEDİ (legacy).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

@@ -15,6 +15,7 @@ import LivePositionsPage from './pages/LivePositionsPage';
 import MidasXLivePage from './pages/MidasXLivePage';
 import TradingSettingsPage from './pages/TradingSettingsPage';
 import AdminPage from './pages/AdminPage';
+import ExecGate from './components/ExecGate';
 
 function App() {
   return (
@@ -29,8 +30,8 @@ function App() {
                   <Route index element={<IntroPage />} />
                   <Route path="/trend" element={<TrendPage />} />
                   <Route path="/total" element={<MarketCapPage />} />
-                  <Route path="/binance" element={<RequireActive><LivePositionsPage /></RequireActive>} />
-                  <Route path="/binance-altin" element={<RequireActive><MidasXLivePage /></RequireActive>} />
+                  <Route path="/binance" element={<RequireActive><ExecGate network="mainnet"><LivePositionsPage /></ExecGate></RequireActive>} />
+                  <Route path="/binance-altin" element={<RequireActive><ExecGate network="testnet"><MidasXLivePage /></ExecGate></RequireActive>} />
                   <Route path="/trading" element={<RequireActive><RequireFeature k="trading"><TradingSettingsPage /></RequireFeature></RequireActive>} />
                   <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
