@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, usingDefaultCreds, consumeAuthNote } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { codenameFor } from '../utils/streamMask';
+import { codenameFor, isResearchStream } from '../utils/streamMask';
 import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct } from '../utils/streamStats';
 import PusuLogo from './PusuLogo';
 
@@ -107,7 +107,10 @@ const TrackRecord = () => {
   }, []);
 
   if (!stats) return null;
+  // Public splash: yalnız CANLI (ürün) akımları — 18 backtest-only araştırma varyantı
+  // anonim ziyaretçiye gösterilmez (cherry-pick optiği + mekanik sızıntısı olmasın).
   const rows = STREAMS
+    .filter((s) => !isResearchStream(s.key))
     .map((s) => ({ s, m: stats[s.version] }))
     .filter((x) => x.m)
     .sort((a, b) => Number(b.m.total_r) - Number(a.m.total_r));

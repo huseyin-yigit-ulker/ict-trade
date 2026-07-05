@@ -36,7 +36,10 @@ const FEATURE_KEYS = [
   { k: 'intelligence', label: 'İSTH', title: 'İstihbarat' },
   { k: 'trading', label: 'İŞL', title: 'İşlem Merkezi' },
 ];
-const DEFAULT_FEAT = { backtest: true, intelligence: true, trading: true };
+// Backtest opt-in (araştırma laboratuvarı) → varsayılan KAPALI; İSTH/İŞL opt-out → açık.
+// (AuthContext.DEFAULT_FEATURES ile birebir aynı — admin bir çipi değiştirdiğinde tam
+// üçlü upsert edildiği için backtest sessizce açılmasın diye buradaki default da false.)
+const DEFAULT_FEAT = { backtest: false, intelligence: true, trading: true };
 
 export default function AdminPage() {
   const { t, locale } = useLang();

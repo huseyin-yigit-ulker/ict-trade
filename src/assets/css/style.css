@@ -2893,6 +2893,7 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 
 /* --- İşlem Merkezi page --- */
 .trading-intro { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 640px; }
+.trading-intro--risk { margin-top: 10px; padding: 8px 12px; color: var(--warn); font-size: 12px; line-height: 1.5; border: 1px solid rgba(240, 185, 11, 0.3); border-radius: 8px; background: rgba(240, 185, 11, 0.07); }
 
 /* inline feedback under forms/rows */
 .form-note { font-size: 12px; color: var(--muted); line-height: 1.5; }

@@ -40,6 +40,15 @@ export const CODENAMES = {
   d30so8f3: 'DRACO',
 };
 
+// ── ürün sınırı: CANLI (işlem açılabilir) akışlar vs backtest-only araştırma varyantları ──
+// Bu 3 akış canlı sinyal + kendi track record'unu taşır ve HERKESE görünür; CODENAMES'teki
+// diğer HER kod, shipe edilmemiş bir backtest-only araştırma varyantıdır ve yalnız admin'e
+// (ya da admin'in user_features.backtest=true ile açıkça yetki verdiği kullanıcıya) görünür.
+export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'd30so8f3vg', 'midas'];
+
+/** True = backtest-only araştırma varyantı (canlı olmayan herhangi bir codename). */
+export const isResearchStream = (key) => !!CODENAMES[key] && !LIVE_STREAM_KEYS.includes(key);
+
 const SLUG_TO_KEY = Object.fromEntries(
   Object.entries(CODENAMES).map(([key, code]) => [code.toLowerCase(), key]),
 );

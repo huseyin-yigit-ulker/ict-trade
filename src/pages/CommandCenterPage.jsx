@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { useTradeContext, isValidStrategy } from '../context/TradeContext';
 import { useAuth } from '../context/AuthContext';
-import { slugToKey, slugFor } from '../utils/streamMask';
+import { slugToKey, slugFor, isResearchStream } from '../utils/streamMask';
 import Dashboard from '../components/Dashboard';
 
 // Strategy × Mode view. The URL (/:strategy/:mode) is the source of truth: it syncs
@@ -13,7 +13,7 @@ import Dashboard from '../components/Dashboard';
 const CommandCenterPage = () => {
   const { strategy: pStrat, mode: pMode } = useParams();
   const { strategy, mode, setView } = useTradeContext();
-  const { features } = useAuth();
+  const { features, isAdmin, profileLoading } = useAuth();
   const keyFromSlug = slugToKey(pStrat);
   const validS = isValidStrategy(keyFromSlug) ? keyFromSlug : null;
   const validM = (pMode === 'backtest' || pMode === 'live') ? pMode : null;
@@ -25,8 +25,14 @@ const CommandCenterPage = () => {
   }, [validS, validM, strategy, mode, setView]);
 
   if (!validS || !validM) return <Navigate to={`/${slugFor('d30so8f3h7')}/live`} replace />;
-  // Admin bu kullanıcıya backtest yüzeyini kapattıysa deep-link de çalışmaz (nav zaten gizli).
-  if (validM === 'backtest' && features?.backtest === false) return <Navigate to="/" replace />;
+  // Araştırma (backtest-only) varyantları OPT-IN: yalnız admin ya da backtest yüzeyi açık
+  // kullanıcı açar; canlı akışların KENDİ backtest sekmesi (track record) herkese açık kalır.
+  // Deep-link bypass'ını da kapatır (nav zaten gizli). Profil yüklenirken yönlendirme yok —
+  // aksi halde admin cold-deep-link'te haksızca ana sayfaya atılır.
+  if (validM === 'backtest' && !profileLoading
+      && isResearchStream(keyFromSlug) && !isAdmin && features?.backtest !== true) {
+    return <Navigate to="/" replace />;
+  }
   return <Dashboard />;
 };
 

@@ -18,6 +18,9 @@ const TradingSettingsPage = () => {
         <p className="trading-intro">
           {t('Sinyaller merkezî olarak üretilir; emirler kendi Binance hesabınızda, kendi anahtarınızla çalışır.')}
         </p>
+        <p className="trading-intro trading-intro--risk">
+          {t('Geçmiş ve backtest performansı gelecekteki getiriyi garanti etmez; canlı sonuçlar (kayma, komisyon, kısmi dolum) backtest’in altında kalır. Gerçek-para işlemleri tamamen kendi sorumluluğunuzdadır.')}
+        </p>
       </div>
 
       <div className="settings-grid">

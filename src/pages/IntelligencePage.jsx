@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLang } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { BACKTEST_ALLOWED_SYMBOLS } from '../context/TradeContext';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
+import { isResearchStream } from '../utils/streamMask';
 import { STREAMS, fmtR, fmtExp, fmtPct, fmtPf } from '../utils/streamStats';
 import { MARKETS } from '../utils/symbolMeta';
 import {
@@ -91,6 +93,14 @@ const Section = ({ title, sub, children, full }) => (
 const IntelligencePage = () => {
   const { t, lang, locale } = useLang();
   const sd = useStreamDisplay();
+  const { isAdmin, features } = useAuth();
+  // Karşılaştırma havuzu = görme yetkin olan akımlar: canlı 3 daima; araştırma varyantları
+  // yalnız admin ya da backtest yüzeyi açık kullanıcı için. Yetkisiz İSTH kullanıcısı yalnız
+  // ürün (canlı) akımlarını karşılaştırır — 18 backtest-only varyant seçicilerde görünmez.
+  const pool = useMemo(
+    () => STREAMS.filter((s) => isAdmin || features?.backtest === true || !isResearchStream(s.key)),
+    [isAdmin, features],
+  );
   const fmtHrs = (h) => (h == null ? '—' : h >= 48 ? `${(h / 24).toFixed(1)}${t('g')}` : `${h.toFixed(1)}${t('sa')}`);
   const [data, setData] = useState({});            // version -> normalised trades (all streams)
   const [status, setStatus] = useState('loading'); // loading | ok | error
@@ -105,11 +115,20 @@ const IntelligencePage = () => {
   const pickA = (v) => { if (v === verB) persistB(verA); persistA(v); };
   const pickB = (v) => { if (v === verA) persistA(verB); persistB(v); };
 
+  // Seçili A/B havuz dışına düşerse (varsayılanlar araştırma akımı; kullanıcı yetkisiz olabilir)
+  // havuzun ilk iki akımına çek. A≠B korunur; havuz daima ≥3 (canlı) akım içerir.
+  useEffect(() => {
+    if (!pool.some((s) => s.version === verA)) { persistA(pool[0].version); return; }
+    if (verB === verA || !pool.some((s) => s.version === verB)) {
+      persistB((pool.find((s) => s.version !== verA) || pool[0]).version);
+    }
+  }, [pool, verA, verB]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load EVERY registered stream once (cache-aware) so switching the A/B selectors
   // is instant — no refetch. Subsequent visits reuse STREAM_CACHE.
   useEffect(() => {
     let alive = true;
-    Promise.allSettled(STREAMS.map((s) => loadStream(s.version).then((tr) => [s.version, tr])))
+    Promise.allSettled(pool.map((s) => loadStream(s.version).then((tr) => [s.version, tr])))
       .then((results) => {
         if (!alive) return;
         const ok = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
@@ -118,7 +137,7 @@ const IntelligencePage = () => {
         setStatus('ok');
       });
     return () => { alive = false; };
-  }, []);
+  }, [pool]);
 
   const meta = (version) => {
     const s = STREAMS.find((x) => x.version === version) || { key: version };
@@ -231,11 +250,11 @@ const IntelligencePage = () => {
         <div className="intel-controls">
           <div className="intel-pick">
             <select className="intel-select intel-select--a" value={verA} onChange={(e) => pickA(e.target.value)} aria-label="stream A">
-              {STREAMS.map((s) => <option key={s.version} value={s.version}>{optLabel(s)}</option>)}
+              {pool.map((s) => <option key={s.version} value={s.version}>{optLabel(s)}</option>)}
             </select>
             <span className="intel-vs">{t('vs')}</span>
             <select className="intel-select intel-select--b" value={verB} onChange={(e) => pickB(e.target.value)} aria-label="stream B">
-              {STREAMS.map((s) => <option key={s.version} value={s.version}>{optLabel(s)}</option>)}
+              {pool.map((s) => <option key={s.version} value={s.version}>{optLabel(s)}</option>)}
             </select>
           </div>
           <div className="seg seg--sm" role="group" aria-label="window">

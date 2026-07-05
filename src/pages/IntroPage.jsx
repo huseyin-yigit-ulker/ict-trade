@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
-import { slugFor } from '../utils/streamMask';
+import { slugFor, isResearchStream } from '../utils/streamMask';
 import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct, fmtPf } from '../utils/streamStats';
 import PusuLogo from '../components/PusuLogo';
 
@@ -16,6 +17,15 @@ const IntroPage = () => {
   const { lang, t } = useLang();
   const navigate = useNavigate();
   const sd = useStreamDisplay();
+  const { isAdmin, features } = useAuth();
+
+  // Ürün sınırı: araştırma varyantları opt-in — yetkisiz kullanıcı (admin değil ve
+  // backtest yüzeyi kapalı) yalnız 3 CANLI akımı görür. Hub'daki tüm sayaç/sıralama/
+  // kartlar bu havuzdan türer, böylece 18 backtest-only akım genel bakışta görünmez.
+  const pool = useMemo(
+    () => STREAMS.filter((s) => isAdmin || features?.backtest === true || !isResearchStream(s.key)),
+    [isAdmin, features],
+  );
 
   // Anonymized-by-default head: codename + generic tagline; the admin's lazy
   // adminStreamInfo overlay swaps in the real title/tagline/summary/sections.
@@ -58,12 +68,12 @@ const IntroPage = () => {
   // the per-card R bars stay comparable as you change the category/sort.
   const maxAbsR = useMemo(() => {
     if (!stats) return 1;
-    return Math.max(1, ...STREAMS.map((s) => Math.abs(Number(stats[s.version]?.total_r) || 0)));
-  }, [stats]);
+    return Math.max(1, ...pool.map((s) => Math.abs(Number(stats[s.version]?.total_r) || 0)));
+  }, [stats, pool]);
 
   const leaders = useMemo(() => {
     if (!stats) return null;
-    const withStats = STREAMS.map((s) => ({ s, m: stats[s.version] })).filter((x) => x.m);
+    const withStats = pool.map((s) => ({ s, m: stats[s.version] })).filter((x) => x.m);
     if (!withStats.length) return null;
     const pick = (sel) => withStats.reduce((a, b) => (sel(b.m) > sel(a.m) ? b : a));
     const totalSignals = withStats.reduce((sum, x) => sum + (Number(x.m.total_trades) || 0), 0);
@@ -73,7 +83,7 @@ const IntroPage = () => {
       topWin: pick((m) => Number(m.win_rate) || 0),
       totalSignals,
     };
-  }, [stats]);
+  }, [stats, pool]);
 
   const matchCat = (s) =>
     cat === 'all' ||
@@ -94,7 +104,7 @@ const IntroPage = () => {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return STREAMS
+    return pool
       .filter(matchCat)
       .filter((s) => {
         if (!q) return true;
@@ -104,7 +114,7 @@ const IntroPage = () => {
       })
       .sort((a, b) => metricOf(b) - metricOf(a));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, sort, query, stats, lang]);
+  }, [cat, sort, query, stats, lang, pool]);
 
   // 2026-06-14: core/adaptive/session families removed with the OOS-negative streams —
   // only the range book remains, so the category chips collapse to all / range / light.
@@ -148,12 +158,12 @@ const IntroPage = () => {
             <div className="intro-reticle"><PusuLogo size={72} animated /></div>
             <h1 className="intro-title">PUSU</h1>
             <div className="intro-sub">Liquidity Ambush Intelligence</div>
-            <p className="intro-manifesto">{t('{n} işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.', { n: STREAMS.length })}</p>
+            <p className="intro-manifesto">{t('{n} işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.', { n: pool.length })}</p>
 
             <div className="intro-leaders">
               <div className="intro-overview-tile">
                 <span className="intro-leader__label">{t('Akım')}</span>
-                <span className="intro-leader__value">{STREAMS.length}</span>
+                <span className="intro-leader__value">{pool.length}</span>
                 <span className="intro-leader__who">
                   {leaders ? `${leaders.totalSignals.toLocaleString(lang === 'en' ? 'en-US' : 'tr-TR')} ${t('sinyal')}` : '—'}
                 </span>

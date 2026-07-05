@@ -508,6 +508,28 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   ve yalnız kendi verisini görür.
 - **Durum:** `.env EXEC_MULTI_USER=true`, `LIVE_TRADING_ENABLED=true`. Geri dönüş: `EXEC_MULTI_USER=false`.
 
+### 2026-07-05 (6) — Ürün/laboratuvar ayrımı: 18 backtest-only araştırma varyantı kullanıcıdan gizlendi
+- **Sorun:** genel bakış (IntroPage), login vitrini (LoginScreen), İstihbarat karşılaştırması ve BACKTEST
+  nav bölümü 21 akışın TAMAMINI (3 canlı + 18 shipe-edilmemiş araştırma varyantı) her kullanıcıya, gerçek
+  backtest R'leriyle gösteriyordu — ürün vitrini ile araştırma defteri aynı yüzeyde (choice-paralysis +
+  cherry-pick optiği + mekanik sızıntısı; canlı-vs-backtest çerçevesi yok).
+- **Yeni kural:** yalnız 3 CANLI akım (OPUS/FABLE/MIDAS = `LIVE_STREAM_KEYS`, `streamMask.js`) ürün olarak
+  herkese görünür; diğer 18 = `isResearchStream()` → **opt-in**: yalnız admin, ya da admin'in backtest
+  yüzeyini `user_features.backtest=true` ile açtığı kullanıcı görür. Canlı akımların KENDİ backtest sekmesi
+  (track record) bu kuraldan bağımsız — herkese açık (CANLI MODÜL bölümünde, araştırma bölümünde değil).
+- **Uygulandı:** `DEFAULT_FEATURES.backtest`/`DEFAULT_FEAT` = false (opt-out→opt-in); Sidebar BACKTEST bölümü
+  `isAdmin || features.backtest`; CommandCenterPage deep-link guard artık stream-farkındalıklı (araştırma
+  varyantları yetkisiz kullanıcıda `/` redirect — doğrudan-URL bypass kapandı); IntroPage & IntelligencePage
+  sayaç+sıralama+seçiciler entitled havuzdan türer (İstihbarat A/B varsayılanları araştırma akımı olduğu için
+  havuza clamp'lenir); LoginScreen public vitrini yalnız canlı akımlar. İşlem Merkezi'ne "geçmiş/backtest
+  performansı garanti değildir; canlı R altında kalır" risk çerçevesi (gerçek-para activation yüzeyi).
+- **Doğrulama:** esbuild syntax + full-bundle module-graph resolve temiz. Vite dev bu kutuda boot etmiyor
+  (vite-plugin-pwa eksik + Node 20.18<20.19) — prod build Render'da.
+- **Bekleyen (opsiyonel):** `user_features.backtest` SQL kolon default'u hâlâ `true` (008); `admin_set_features`
+  daima üçlüyü açık yazdığından pratikte inert, tam tutarlılık için ileride false'a çekilebilir.
+- Dosyalar: streamMask.js, AuthContext.jsx, AdminPage.jsx, Sidebar.jsx, CommandCenterPage.jsx, IntroPage.jsx,
+  IntelligencePage.jsx, LoginScreen.jsx, TradingSettingsPage.jsx, assets/css/style.css. (commit: pending)
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

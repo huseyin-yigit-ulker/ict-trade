@@ -48,9 +48,12 @@ const leaveNote = (n) => { try { sessionStorage.setItem(NOTE_KEY, n); } catch { 
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
-// Admin'in kapatmadığı her yüzey açık: user_features satırı yoksa (veya henüz
-// yüklenmediyse) varsayılan hepsi-true'dur — gating yalnız açıkça false'ta devreye girer.
-const DEFAULT_FEATURES = { backtest: true, intelligence: true, trading: true };
+// Yüzey varsayılanları. İSTİHBARAT/İŞLEM opt-out: satır yoksa açık, admin açıkça false
+// yaparsa kapanır. BACKTEST ise opt-in: 18 araştırma varyantı ürün değil laboratuvardır,
+// bu yüzden varsayılan KAPALI — yalnız admin (isAdmin) veya admin'in backtest yüzeyini
+// açıkça =true yaptığı kullanıcı görür. (Canlı 3 akışın kendi backtest sekmesi bundan
+// bağımsız: o CANLI MODÜL'de, araştırma bölümünde değil — isResearchStream=false.)
+const DEFAULT_FEATURES = { backtest: false, intelligence: true, trading: true };
 
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(loadSession);

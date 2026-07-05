@@ -272,8 +272,10 @@ const Sidebar = () => {
         )}
 
         {/* ── BACKTEST — research-only streams (leaf links go to /:key/backtest).
-              Admin user_features.backtest=false ile bölümü tamamen gizleyebilir. ── */}
-        {features?.backtest !== false && (
+              OPT-IN: yalnız admin, ya da admin'in backtest yüzeyini açtığı kullanıcı görür
+              (18 araştırma varyantı = laboratuvar, ürün değil). Canlı akışların kendi
+              backtest sekmesi CANLI MODÜL'de, bu bölümden bağımsız. ── */}
+        {(isAdmin || features?.backtest === true) && (
           <>
             <button
               className="sidebar__section"
