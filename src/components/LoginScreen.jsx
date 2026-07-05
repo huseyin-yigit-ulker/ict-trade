@@ -286,7 +286,6 @@ const LoginScreen = () => {
             <div className="boot-title">PUSU</div>
             <div className="boot-sub">Liquidity Ambush Intelligence</div>
           </div>
-          <p className="login-hero__manifesto">{t('Sekiz işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.')}</p>
           <TrackRecord />
         </section>
 
