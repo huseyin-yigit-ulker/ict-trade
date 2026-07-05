@@ -2,12 +2,16 @@
 
     python sync/midas_exec/killswitch.py --status     # account + XAUUSDT position/orders + DB rows
     python sync/midas_exec/killswitch.py --flatten     # cancel XAUUSDT orders + market-close + rows CLOSED
+    python sync/midas_exec/killswitch.py --flatten --user a@b.c   # ONE user's account/rows (multi-user)
     python sync/midas_exec/killswitch.py --halt        # set MIDAS_EXEC_ENABLED=false in .env (MIDAS-only)
 
 --flatten is the emergency stop for MIDAS: it cancels every open order on the MIDAS symbol and
 market-closes any residual, then marks the midas_positions rows CLOSED — it does NOT touch OPUS.
 --halt flips the MIDAS-scoped flag (MIDAS_EXEC_ENABLED=false) so only MIDAS no-ops; use the OPUS
 killswitch --halt (LIVE_TRADING_ENABLED=false) to stop everything.
+
+flatten_positions() is also the executor's kill-switch primitive (user taps "ACİL DURDUR" →
+user_stream_settings.kill_requested → the next tick calls it with that user's cfg/scope).
 """
 from __future__ import annotations
 
@@ -51,44 +55,88 @@ def cmd_status(cfg):
     live.close()
 
 
+def flatten_positions(cfg, client, conn, *, user_id=None, network=None,
+                      reason: str = "killswitch") -> int:
+    """Cancel every open order (incl. algo conditionals) and MARKET-close every residual position
+    on the account behind `client` for the MIDAS symbols, then mark the matching midas_positions
+    rows CLOSED. user_id=None = legacy whole-table semantics (the original --flatten); with a
+    user_id the DB update touches ONLY that user's rows (the exchange side is inherently
+    per-account — the client IS that user's account). Returns the market-closed count."""
+    rows = st.fetch_open(conn, None, user_id=user_id, network=network)
+    syms = set(cfg.symbols) | {p["symbol"] for p in rows}
+    closed = 0
+    for sym in sorted(syms):
+        try:
+            client.cancel_all_open_orders(sym)
+        except BinanceError:
+            pass
+        try:
+            client.cancel_all_algo_orders(sym)      # resting SL conditionals (mainnet)
+        except BinanceError:
+            pass
+        amt = 0.0
+        for p in client.position_risk(sym):
+            if p.get("symbol") == sym:
+                amt = float(p.get("positionAmt", 0) or 0)
+        if amt:
+            side = "SELL" if amt > 0 else "BUY"
+            try:
+                client.new_order(symbol=sym, side=side, type="MARKET", quantity=abs(amt), reduceOnly="true")
+                closed += 1
+                print(f"  flattened {sym} ({amt})")
+            except BinanceError as e:
+                print(f"  ! {sym}: {e}")
+    cur = conn.cursor()
+    q = ("UPDATE ict_trade.midas_positions SET state=%s, exit_reason=%s, "
+         "exit_time=current_timestamp WHERE state = ANY(%s)")
+    params: list = [st.CLOSED, reason, list(st.OPEN_STATES)]
+    if user_id is not None:
+        q += " AND user_id = %s"
+        params.append(user_id)
+        if network is not None:
+            q += " AND network = %s"
+            params.append(network)
+    cur.execute(q, tuple(params))
+    conn.commit()
+    cur.close()
+    return closed
+
+
 def cmd_flatten(cfg):
     if not (cfg.api_key and cfg.api_secret):
         raise SystemExit("no API keys — cannot flatten.")
     client = _client(cfg)
     client.sync_time()
     live = tsc.live_conn()
-    sym = cfg.symbol
-    try:
-        client.cancel_all_open_orders(sym)
-    except BinanceError:
-        pass
-    try:
-        client.cancel_all_algo_orders(sym)
-    except BinanceError:
-        pass
-    amt = 0.0
-    for p in client.position_risk(sym):
-        if p.get("symbol") == sym:
-            amt = float(p.get("positionAmt", 0) or 0)
-    closed = 0
-    if amt:
-        side = "SELL" if amt > 0 else "BUY"
-        try:
-            client.new_order(symbol=sym, side=side, type="MARKET", quantity=abs(amt), reduceOnly="true")
-            closed = 1
-            print(f"  flattened {sym} ({amt})")
-        except BinanceError as e:
-            print(f"  ! {sym}: {e}")
-    cur = live.cursor()
-    cur.execute("UPDATE ict_trade.midas_positions SET state=%s, exit_reason='killswitch', "
-                "exit_time=current_timestamp WHERE state = ANY(%s)",
-                (st.CLOSED, list(st.OPEN_STATES)))
-    live.commit()
-    cur.close()
+    closed = flatten_positions(cfg, client, live)
     live.close()
-    notify.alert(f"🟥 MIDAS KILLSWITCH --flatten: {closed} {sym} position(s) market-closed",
+    notify.alert(f"🟥 MIDAS KILLSWITCH --flatten: {closed} {cfg.symbol} position(s) market-closed",
                  chat_id=cfg.telegram_chat_id)
     print(f"  done — {closed} flattened, midas_positions rows marked CLOSED.")
+
+
+def cmd_flatten_user(cfg, email: str):
+    """Flatten ONE user's MIDAS account (multi-user mode): their keys, their rows only."""
+    sys.path.insert(0, str(_HERE.parents[1] / "users"))
+    import store as ustore  # noqa: E402
+    live = tsc.live_conn()
+    users = [u for u in ustore.load_exec_users(live, "midas") if u.email.lower() == email.lower()]
+    if not users:
+        live.close()
+        raise SystemExit(f"no loadable exec user {email!r} (needs active profile + valid key)")
+    total = 0
+    for u in users:
+        ucfg = cfgmod.cfg_for_user(cfg, u)
+        client = _client(ucfg)
+        client.sync_time()
+        total += flatten_positions(ucfg, client, live, user_id=u.user_id, network=u.network,
+                                   reason="killswitch_admin")
+        ustore.audit(live, u.user_id, "kill_executed", {"stream": "midas", "network": u.network,
+                                                        "by": "cli", "flattened": total})
+    live.close()
+    notify.alert(f"🟥 MIDAS KILLSWITCH --user {email}: {total} position(s) market-closed",
+                 chat_id=cfg.telegram_chat_id)
+    print(f"  done — {total} flattened for {email}.")
 
 
 def cmd_halt():
@@ -112,6 +160,7 @@ def main():
     g.add_argument("--status", action="store_true")
     g.add_argument("--flatten", action="store_true")
     g.add_argument("--halt", action="store_true")
+    ap.add_argument("--user", default=None, help="flatten only this user's account (email)")
     args = ap.parse_args()
     if args.halt:
         cmd_halt()
@@ -120,7 +169,10 @@ def main():
     if args.status:
         cmd_status(cfg)
     elif args.flatten:
-        cmd_flatten(cfg)
+        if args.user:
+            cmd_flatten_user(cfg, args.user)
+        else:
+            cmd_flatten(cfg)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { AuthProvider, RequireAuth } from './context/AuthContext';
+import { AuthProvider, RequireAuth, RequireActive, RequireAdmin } from './context/AuthContext';
 import { TradeProvider } from './context/TradeContext';
 import LoginScreen from './components/LoginScreen';
 import AppShell from './components/layout/AppShell';
@@ -13,6 +13,8 @@ import TrendPage from './pages/TrendPage';
 import MarketCapPage from './pages/MarketCapPage';
 import LivePositionsPage from './pages/LivePositionsPage';
 import MidasXLivePage from './pages/MidasXLivePage';
+import TradingSettingsPage from './pages/TradingSettingsPage';
+import AdminPage from './pages/AdminPage';
 
 function App() {
   return (
@@ -27,8 +29,10 @@ function App() {
                   <Route index element={<IntroPage />} />
                   <Route path="/trend" element={<TrendPage />} />
                   <Route path="/total" element={<MarketCapPage />} />
-                  <Route path="/binance" element={<LivePositionsPage />} />
-                  <Route path="/binance-altin" element={<MidasXLivePage />} />
+                  <Route path="/binance" element={<RequireActive><LivePositionsPage /></RequireActive>} />
+                  <Route path="/binance-altin" element={<RequireActive><MidasXLivePage /></RequireActive>} />
+                  <Route path="/trading" element={<RequireActive><TradingSettingsPage /></RequireActive>} />
+                  <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
                   <Route path="/intelligence" element={<IntelligencePage />} />
                   <Route path="/settings" element={<SettingsPage />} />

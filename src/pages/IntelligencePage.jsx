@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLang } from '../context/LanguageContext';
 import { BACKTEST_ALLOWED_SYMBOLS } from '../context/TradeContext';
-import { STRATEGY_INFO } from '../utils/strategyInfo';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 import { STREAMS, fmtR, fmtExp, fmtPct, fmtPf } from '../utils/streamStats';
 import { MARKETS } from '../utils/symbolMeta';
 import {
@@ -90,6 +90,7 @@ const Section = ({ title, sub, children, full }) => (
 
 const IntelligencePage = () => {
   const { t, lang, locale } = useLang();
+  const sd = useStreamDisplay();
   const fmtHrs = (h) => (h == null ? '—' : h >= 48 ? `${(h / 24).toFixed(1)}${t('g')}` : `${h.toFixed(1)}${t('sa')}`);
   const [data, setData] = useState({});            // version -> normalised trades (all streams)
   const [status, setStatus] = useState('loading'); // loading | ok | error
@@ -120,9 +121,9 @@ const IntelligencePage = () => {
   }, []);
 
   const meta = (version) => {
-    const s = STREAMS.find((x) => x.version === version) || { key: version, tf: version };
-    const info = STRATEGY_INFO[s.key]?.[lang] || STRATEGY_INFO[s.key]?.tr;
-    return { tf: s.tf || s.key, title: s.label || info?.title || s.key };
+    const s = STREAMS.find((x) => x.version === version) || { key: version };
+    // Anonymized codename for everyone; the admin overlay swaps in the real label.
+    return { tf: sd.isAdmin ? sd.label(s.key) : '', title: sd.name(s.key) };
   };
   const metaA = meta(verA);
   const metaB = meta(verB);
@@ -367,7 +368,7 @@ const IntelligencePage = () => {
         </Section>
 
         {/* ---- direction ---- */}
-        <Section title={t('Yön — Long / Short')} sub={t('Kırılım yönü bazında R ve isabet.')}>
+        <Section title={t('Yön — Long / Short')} sub={t('İşlem yönü bazında R ve isabet.')}>
           <div className="overview-card">
             <CompareBars rows={m.dir.map((c) => ({ ...c, key: c.key, label: c.key === 'LONG' ? t('Long ↗') : t('Short ↘') }))}
                          valueOf={valR} subOf={subN} labelA={tagA} labelB={tagB} fmt={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}R`} />
@@ -393,7 +394,7 @@ const IntelligencePage = () => {
         </Section>
 
         {/* ---- hour of day ---- */}
-        <Section title={t('Günün Saati (UTC)')} sub={t('Kırılımın saatine göre R — seans etkisi.')}>
+        <Section title={t('Günün Saati (UTC)')} sub={t('İşlem saatine göre R — seans etkisi.')}>
           <div className="overview-card">
             <CompareBars rows={m.hr.map((c) => ({ ...c, key: String(c.key), label: `${String(c.key).padStart(2, '0')}:00` }))}
                          valueOf={valR} subOf={subN} labelA={tagA} labelB={tagB} fmt={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}R`} scroll />

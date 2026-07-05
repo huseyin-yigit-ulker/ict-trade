@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLang } from '../context/LanguageContext';
+import { authedFetch } from '../utils/supa';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 import './LivePositionsPage.css';
 
 // MIDAS-X — the gold (XAUUSDT) VWAP-trend executor (sync/midas_exec), read straight from the LIVE
@@ -17,7 +19,7 @@ const REFRESH_MS = 30000;
 
 const STATE_BADGE = {
   PENDING_ENTRY: { label: 'GİRİŞ BEKLİYOR', cls: 'st-wait' },
-  ENTRY_WORKING: { label: 'MAKER EMRİ (GTX)', cls: 'st-wait' },
+  ENTRY_WORKING: { label: 'GİRİŞ EMRİ', cls: 'st-wait' },   // order-type detail is admin-only knowledge
   OPEN: { label: 'AÇIK · İZ-SÜREN', cls: 'st-active' },
   CLOSED: { label: 'KAPANDI', cls: 'st-done' },
   CANCELLED: { label: 'İPTAL', cls: 'st-cancel' },
@@ -27,10 +29,9 @@ const EXIT_LABEL = {
   slipped: 'Fiyat Kaçtı', unfilled: 'Dolmadı', closed_externally: 'Borsa Kapanışı', killswitch: 'Killswitch',
 };
 
+// User-JWT fetch (utils/supa authedFetch) — RLS scopes the rows to the logged-in user.
 async function getJSON(path) {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, 'Accept-Profile': 'ict_trade' },
-  });
+  const res = await authedFetch(path);
   if (!res.ok) {
     const body = await res.text();
     const err = new Error(`HTTP ${res.status}`);
@@ -68,6 +69,7 @@ function countdown(iso, t) {
 
 export default function MidasXLivePage() {
   const { t } = useLang();
+  const sd = useStreamDisplay();   // stream identity masked for non-admins
   const [positions, setPositions] = useState([]);
   const [snap, setSnap] = useState(null);      // the XAUUSDT snapshot row
   const [account, setAccount] = useState(null);
@@ -134,16 +136,19 @@ export default function MidasXLivePage() {
       <div className="livex__head">
         <h1>{t('Binance Paper · Altın')}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
-        <span className="livex__badge">{'midasx · XAU 1m · iz-süren · PAPER'}</span>
+        {/* Admin sees the executor detail; everyone else just the codename. */}
+        <span className="livex__badge">{sd.isAdmin
+          ? `${sd.name('midas')}-X · XAU 1m · iz-süren · PAPER`
+          : `${sd.name('midas')} · PAPER`}</span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(snap?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>
 
       <div className="livex__warn">
-        {t('MIDAS altın stratejisi — Binance testnet (paper, gerçek para DEĞİL). Gerçek-para yalnızca OPUS.')}
+        {t('{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).', { name: sd.name('midas') })}
       </div>
       {stale && (
-        <div className="livex__warn">{t('Snapshot 5 dk’dan eski — MIDAS-X executor cron çalışmıyor olabilir.')}</div>
+        <div className="livex__warn">{t('Snapshot 5 dk’dan eski — executor cron çalışmıyor olabilir.')}</div>
       )}
       {err && <div className="livex__err">{err}</div>}
 

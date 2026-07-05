@@ -50,7 +50,7 @@ class BinanceFutures:
         return int(time.time() * 1000) + self._time_offset_ms
 
     def _request(self, method: str, path: str, params: dict | None = None,
-                 *, signed: bool = False) -> Any:
+                 *, signed: bool = False, base: str | None = None) -> Any:
         params = dict(params or {})
         if signed:
             params["timestamp"] = self._now_ms()
@@ -60,7 +60,7 @@ class BinanceFutures:
             query = f"{query}&signature={sig}"
         else:
             query = urllib.parse.urlencode(params, doseq=True)
-        url = f"{self.base}{path}" + (f"?{query}" if query else "")
+        url = f"{base or self.base}{path}" + (f"?{query}" if query else "")
 
         last_exc: Exception | None = None
         for attempt in range(5):
@@ -141,6 +141,18 @@ class BinanceFutures:
         if order_id is not None:
             p["orderId"] = order_id
         return self._request("GET", "/fapi/v1/order", p, signed=True)
+
+    def position_mode(self) -> dict:
+        """GET /fapi/v1/positionSide/dual → {"dualSidePosition": bool}. false = one-way mode,
+        which the multi-user executor requires (its netting math assumes one-way)."""
+        return self._request("GET", "/fapi/v1/positionSide/dual", signed=True)
+
+    def spot_api_restrictions(self, spot_base: str = "https://api.binance.com") -> dict:
+        """GET /sapi/v1/account/apiRestrictions — SPOT host, same key/secret. Reveals whether the
+        key can withdraw (enableWithdrawals): the key-verify cron REFUSES such keys. Mainnet only —
+        the futures testnet has no sapi surface."""
+        return self._request("GET", "/sapi/v1/account/apiRestrictions",
+                             signed=True, base=spot_base)
 
     # ---------------------------------------------------------------- account setup
     def set_leverage(self, symbol: str, leverage: int) -> dict:

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, LineSeries, BaselineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { useTradeContext, isHalfFor } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 import { scaleOutLiveR } from '../utils/liveR';
 import { useSwipeDownClose } from '../utils/useSwipeDownClose';
 
@@ -41,6 +42,7 @@ const cacheSet = (k, v) => {
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses, strategy } = useTradeContext();
   const { t, locale } = useLang();
+  const sd = useStreamDisplay();   // PRIVACY: exit-economics labels (cap R) are admin-only
   // Mobile: swipe down on the header/handle to dismiss the chart sheet (inert on desktop).
   const { dragY, handlers: swipeHandlers } = useSwipeDownClose(() => setActiveSignal(null));
   // ½TP modules: the chart annotates the partial-TP + breakeven lifecycle —
@@ -753,7 +755,7 @@ const ChartModal = () => {
           // The green TP / green ½TP / red SL lines are TRADE levels — drawn only for a trade that
           // was actually taken. A CANCELLED signal (directional veto / timeout) never opened, so
           // suppress them (no phantom green/red); only the entry/signal + the -0.5R veto show.
-          if (tp && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (tp && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? (sd.isAdmin ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('Hedef')) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
           // +1R and the runner then rides with a breakeven stop.
           if (partialLevel != null && !isCancelled && !isTrailing) {
@@ -1184,7 +1186,7 @@ const ChartModal = () => {
                </b>
             </div>
             <div className="position-row">
-               <span>{t('Runner Cap (+{cap}R)', { cap: soCapR })}</span>
+               <span>{sd.isAdmin ? t('Runner Cap (+{cap}R)', { cap: soCapR }) : t('Hedef')}</span>
                <b><span style={{color:'#0ECB81'}}>{formatPrice(dispTp)}</span>
                  {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
                </b>

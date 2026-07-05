@@ -71,6 +71,15 @@
 # Safety sweep (cron #2): independent orphan/protective-stop/clock-skew/risk-cap guard.
 */5 * * * * sleep 50 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/live_exec/safety_sweep.py  >> $HOME/ict-exec.log 2>&1
 
+# --- MULTI-USER LAYER (2026-07-04; RUNBOOK "Multi-user" bölümü) ---
+# Key-verify cron: user_api_keys 'pending_verify' satırlarını Binance'te doğrular (bakiye, futures,
+# withdrawal yetkisi -> withdrawal AÇIKSA reddeder, one-way mod), 'valid' anahtarları 24h'te bir tazeler.
+# Migrations uygulanana kadar tablo yok -> script sessizce hata basar, zararsız.
+* * * * * sleep 40 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/users/verify_keys.py >> $HOME/ict-users.log 2>&1
+# Kişisel push kuyruğu: executor'ların push_outbox'a yazdığı kullanıcıya-özel bildirimleri (giriş/TP/SL/
+# anahtar durumu) o kullanıcının push aboneliklerine gönderir. Broadcast push davranışı değişmedi.
+* * * * * sleep 45 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/push_notify.py --drain >> $HOME/ict-users.log 2>&1
+
 # --- MIDAS-X LIVE EXECUTION (Binance TRADIFI_PERPETUAL XAUUSDT; TESTNET/dry-run first) ---
 # MIDAS's real-money-capable bridge: reads the SAME mode='midas' signals (paper feed above), places a
 # POST-ONLY maker LIMIT entry, then rides the 3.5*ATR chandelier trailing stop (sync/midas/strategy.

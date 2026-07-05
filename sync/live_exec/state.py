@@ -54,7 +54,13 @@ def coid(pos_id: int, leg: str, gen: int = 0) -> str:
     return f"so8-{pos_id}-{leg}-{gen}"
 
 
-_INSERT = """
+# DUAL-MODE act-once insert. The legacy env path (user_id=None) keeps the ORIGINAL column set
+# and conflict target so the currently-armed single-user executor is bit-identical until the
+# Phase-5 cutover; the multi-user path targets the 005b per-user index (user_id, network,
+# symbol, signal_time, direction, version) NULLS NOT DISTINCT. The two are mutually exclusive
+# with the index swap: legacy insert works only pre-005b, user insert only post-005b — which is
+# exactly the EXEC_MULTI_USER flip done inside the same halt window as 005b.
+_INSERT_LEGACY = """
 INSERT INTO ict_trade.live_positions
   (symbol, signal_time, version, direction, side, entry_mode,
    signal_entry, signal_sl, signal_cap, risk0,
@@ -65,35 +71,63 @@ ON CONFLICT (symbol, signal_time, direction, version) DO NOTHING
 RETURNING id
 """
 
+_INSERT_USER = """
+INSERT INTO ict_trade.live_positions
+  (user_id, network, symbol, signal_time, version, direction, side, entry_mode,
+   signal_entry, signal_sl, signal_cap, risk0,
+   eff_entry, eff_sl, eff_tp1, eff_be, eff_cap,
+   qty, tp1_qty, leverage, state, entry_deadline, context)
+VALUES (%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s)
+ON CONFLICT (user_id, network, symbol, signal_time, direction, version) DO NOTHING
+RETURNING id
+"""
+
 
 def create_position(conn, *, symbol, signal_time, direction, side, entry_mode,
-                    lv, qty, tp1_qty, leverage, entry_deadline, context=None) -> int | None:
-    """Idempotent insert (act-once on the signal tuple). Returns the new id, or None if the
-    signal already produced a position (duplicate emit) — caller skips."""
+                    lv, qty, tp1_qty, leverage, entry_deadline, context=None,
+                    user_id=None, network=None) -> int | None:
+    """Idempotent insert (act-once on the signal tuple, per user+network). Returns the new id,
+    or None if the signal already produced a position (duplicate emit) — caller skips."""
     st = signal_time.to_pydatetime() if isinstance(signal_time, pd.Timestamp) else signal_time
-    cur = conn.cursor()
-    cur.execute(_INSERT, (
+    common = (
         symbol, st, VERSION, direction.upper(), side, entry_mode,
         lv.entry_close, lv.sl, lv.cap, lv.risk0,
         lv.eff_entry, lv.sl, lv.tp1, lv.be, lv.cap,
         qty, tp1_qty, leverage, PENDING_ENTRY,
         entry_deadline.to_pydatetime() if isinstance(entry_deadline, pd.Timestamp) else entry_deadline,
         Json(context or {}),
-    ))
+    )
+    cur = conn.cursor()
+    if user_id is None:
+        cur.execute(_INSERT_LEGACY, common)
+    else:
+        cur.execute(_INSERT_USER, (user_id, network) + common)
     row = cur.fetchone()
     conn.commit()
     cur.close()
     return int(row[0]) if row else None
 
 
-def fetch_open(conn, symbols=None) -> list[dict]:
-    """All positions in an OPEN state (optionally restricted to `symbols`)."""
+def _user_scope(q: str, params: list, user_id, network) -> str:
+    """Append the per-user filter. user_id=None = legacy single-tenant (no filter)."""
+    if user_id is not None:
+        q += " AND user_id = %s"
+        params.append(user_id)
+        if network is not None:
+            q += " AND network = %s"
+            params.append(network)
+    return q
+
+
+def fetch_open(conn, symbols=None, *, user_id=None, network=None) -> list[dict]:
+    """All positions in an OPEN state (optionally restricted to `symbols` and one user/network)."""
     cur = conn.cursor()
     q = "SELECT * FROM ict_trade.live_positions WHERE state = ANY(%s)"
     params: list = [list(OPEN_STATES)]
     if symbols:
         q += " AND symbol = ANY(%s)"
         params.append(list(symbols))
+    q = _user_scope(q, params, user_id, network)
     q += " ORDER BY symbol, signal_time"
     cur.execute(q, tuple(params))
     cols = [d[0] for d in cur.description]
@@ -102,10 +136,12 @@ def fetch_open(conn, symbols=None) -> list[dict]:
     return rows
 
 
-def open_symbols(conn) -> set[str]:
+def open_symbols(conn, *, user_id=None, network=None) -> set[str]:
     cur = conn.cursor()
-    cur.execute("SELECT DISTINCT symbol FROM ict_trade.live_positions WHERE state = ANY(%s)",
-                (list(OPEN_STATES),))
+    q = "SELECT DISTINCT symbol FROM ict_trade.live_positions WHERE state = ANY(%s)"
+    params: list = [list(OPEN_STATES)]
+    q = _user_scope(q, params, user_id, network)
+    cur.execute(q, tuple(params))
     out = {r[0] for r in cur.fetchall()}
     cur.close()
     return out
@@ -130,24 +166,34 @@ def patch(conn, pos_id: int, **fields) -> None:
 
 
 def log_order(conn, *, position_id, symbol, leg, action, client_order_id=None,
-              order_id=None, payload=None) -> None:
+              order_id=None, payload=None, user_id=None) -> None:
     cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO ict_trade.live_orders
-          (position_id, symbol, leg, action, client_order_id, order_id, payload)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
-    """, (position_id, symbol, leg, action, client_order_id, order_id,
-          Json(payload) if payload is not None else None))
+    if user_id is None:            # legacy shape — safe even before 005a added the column
+        cur.execute("""
+            INSERT INTO ict_trade.live_orders
+              (position_id, symbol, leg, action, client_order_id, order_id, payload)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (position_id, symbol, leg, action, client_order_id, order_id,
+              Json(payload) if payload is not None else None))
+    else:
+        cur.execute("""
+            INSERT INTO ict_trade.live_orders
+              (position_id, symbol, leg, action, client_order_id, order_id, payload, user_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (position_id, symbol, leg, action, client_order_id, order_id,
+              Json(payload) if payload is not None else None, user_id))
     conn.commit()
     cur.close()
 
 
-def total_open_risk_usd(conn, risk_usd_per_trade: float) -> float:
+def total_open_risk_usd(conn, risk_usd_per_trade: float, *, user_id=None, network=None) -> float:
     """Summed risk of currently-open positions (each ≈ one risk_usd unit). Cheap proxy used by
     the executor + safety sweep to enforce MAX_TOTAL_RISK_USD without re-pricing every stop."""
     cur = conn.cursor()
-    cur.execute("SELECT count(*) FROM ict_trade.live_positions WHERE state = ANY(%s)",
-                (list(OPEN_STATES),))
+    q = "SELECT count(*) FROM ict_trade.live_positions WHERE state = ANY(%s)"
+    params: list = [list(OPEN_STATES)]
+    q = _user_scope(q, params, user_id, network)
+    cur.execute(q, tuple(params))
     n = int(cur.fetchone()[0])
     cur.close()
     return n * risk_usd_per_trade

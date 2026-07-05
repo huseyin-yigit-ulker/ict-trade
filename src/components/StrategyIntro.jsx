@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
-import { infoFor } from '../utils/strategyInfo';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 
 // Slim, collapsible intro card shown at the top of every strategy view ("girişte").
-// Content is bilingual (tr/en) via strategyInfo + the active lang. Collapse state is
-// remembered globally so it doesn't nag on every visit.
+// PRIVACY: the real strategy card renders ONLY for the admin (adminStreamInfo lazy
+// chunk); everyone else sees the codename + a "details private" line — outsiders
+// must get no idea what the mechanics are.
 const StrategyIntro = () => {
   const { strategy } = useTradeContext();
   const { lang, t } = useLang();
+  const sd = useStreamDisplay();
   // Default COLLAPSED — the header is just a trigger; detail appears on click.
   const [open, setOpen] = useState(() => {
     try { return localStorage.getItem('pusu.introOpen') === '1'; } catch { return false; }
@@ -21,8 +23,15 @@ const StrategyIntro = () => {
     });
   };
 
-  const info = infoFor(strategy, lang);
-  if (!info) return null;
+  const info = sd.info(strategy, lang) || {
+    icon: '◆',
+    accent: '#F0B90B',
+    title: sd.name(strategy),
+    tagline: t('Otonom işlem akışı · detaylar gizli'),
+    summary: t('Bu akışın kuralları tescillidir ve görüntülenmez. Performansı Live/Backtest sekmelerinden izleyebilirsiniz.'),
+    sections: null,
+    caveat: null,
+  };
 
   return (
     <div

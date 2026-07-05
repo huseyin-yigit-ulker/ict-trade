@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
-import { infoFor } from '../utils/strategyInfo';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
+import { slugFor } from '../utils/streamMask';
 import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct, fmtPf } from '../utils/streamStats';
 import PusuLogo from '../components/PusuLogo';
 
@@ -14,6 +15,23 @@ import PusuLogo from '../components/PusuLogo';
 const IntroPage = () => {
   const { lang, t } = useLang();
   const navigate = useNavigate();
+  const sd = useStreamDisplay();
+
+  // Anonymized-by-default head: codename + generic tagline; the admin's lazy
+  // adminStreamInfo overlay swaps in the real title/tagline/summary/sections.
+  const headFor = (key) => {
+    const info = sd.info(key, lang);
+    if (info) return info;
+    return {
+      title: sd.name(key),
+      tagline: t('Otonom işlem akışı · detaylar gizli'),
+      summary: '',
+      sections: null,
+      caveat: null,
+      icon: '◆',
+      accent: '#F0B90B',
+    };
+  };
 
   const [stats, setStats] = useState(getCachedStats());
   const [loading, setLoading] = useState(!getCachedStats());
@@ -80,8 +98,8 @@ const IntroPage = () => {
       .filter(matchCat)
       .filter((s) => {
         if (!q) return true;
-        const c = infoFor(s.key, lang);
-        const blob = `${s.key} ${c?.title || ''} ${c?.tagline || ''} ${c?.summary || ''}`.toLowerCase();
+        const c = headFor(s.key);
+        const blob = `${sd.name(s.key)} ${c?.title || ''} ${c?.tagline || ''} ${c?.summary || ''}`.toLowerCase();
         return blob.includes(q);
       })
       .sort((a, b) => metricOf(b) - metricOf(a));
@@ -106,10 +124,9 @@ const IntroPage = () => {
 
   const LeaderTile = ({ label, entry, fmt }) => {
     if (!entry) return null;
-    const info = infoFor(entry.s.key, lang);
-    if (!info) return null;
+    const info = headFor(entry.s.key);
     return (
-      <button className="intro-leader" onClick={() => navigate(`/${entry.s.key}/backtest`)} style={{ '--acc': info.accent }}>
+      <button className="intro-leader" onClick={() => navigate(`/${slugFor(entry.s.key)}/backtest`)} style={{ '--acc': info.accent }}>
         <span className="intro-leader__label">{label}</span>
         <span className="intro-leader__value win">{fmt(entry.m)}</span>
         <span className="intro-leader__who"><span aria-hidden="true">{info.icon}</span> {info.title}</span>
@@ -185,7 +202,7 @@ const IntroPage = () => {
         <div className="intro-cards">
           {visible.length === 0 && <div className="intro-empty">{t('Sonuç yok')}</div>}
           {visible.map((s) => {
-            const info = infoFor(s.key, lang);
+            const info = headFor(s.key);
             const head = info;
             const m = statOf(s);
             const open = openKey === s.key;
@@ -203,10 +220,12 @@ const IntroPage = () => {
                   <span className="intro-card__chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
                 </button>
 
-                <div className="intro-card__chips">
-                  <span className="intro-tag">{FAMILY_LABEL[s.family]}</span>
-                  <span className="intro-tag intro-tag--exit">{EXIT_LABEL[s.exit]}</span>
-                </div>
+                {sd.isAdmin && (
+                  <div className="intro-card__chips">
+                    <span className="intro-tag">{FAMILY_LABEL[s.family]}</span>
+                    <span className="intro-tag intro-tag--exit">{EXIT_LABEL[s.exit]}</span>
+                  </div>
+                )}
 
                 {/* Headline result */}
                 {loading ? (
@@ -244,10 +263,10 @@ const IntroPage = () => {
                   <div className="intro-stat-sub">{t('Sonuç verisi yok')}</div>
                 )}
 
-                {/* What it does */}
-                <p className="intro-card__summary">{head.summary}</p>
+                {/* What it does — admin only; outsiders get no mechanics */}
+                {head.summary && <p className="intro-card__summary">{head.summary}</p>}
 
-                {open && (
+                {open && sd.isAdmin && (
                   <div className="intro-card__detail">
                     {Array.isArray(head.sections) && head.sections.map((sec, i) => (
                       <div key={i} className="intro-sec">
@@ -260,15 +279,17 @@ const IntroPage = () => {
                 )}
 
                 <div className="intro-card__foot">
-                  <button className="intro-go intro-go--live" onClick={() => navigate(`/${s.key}/live`)}>
+                  <button className="intro-go intro-go--live" onClick={() => navigate(`/${slugFor(s.key)}/live`)}>
                     <span className="intro-go__dot" /> {t('Live')}
                   </button>
-                  <button className="intro-go" onClick={() => navigate(`/${s.key}/backtest`)}>
+                  <button className="intro-go" onClick={() => navigate(`/${slugFor(s.key)}/backtest`)}>
                     {t('Backtest')}
                   </button>
-                  <button className="intro-go intro-go--ghost" onClick={() => setOpenKey(open ? null : s.key)}>
-                    {open ? t('Gizle') : t('Detay')}
-                  </button>
+                  {sd.isAdmin && (
+                    <button className="intro-go intro-go--ghost" onClick={() => setOpenKey(open ? null : s.key)}>
+                      {open ? t('Gizle') : t('Detay')}
+                    </button>
+                  )}
                 </div>
               </article>
             );

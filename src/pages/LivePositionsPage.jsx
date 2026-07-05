@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLang } from '../context/LanguageContext';
+import { authedFetch } from '../utils/supa';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 import './LivePositionsPage.css';
 
 // Reads the live-execution layer (sync/live_exec) straight from the LIVE Supabase via PostgREST:
@@ -31,10 +33,9 @@ const EXIT_LABEL = {
   time_stop: '3g Zaman', entry_expired: 'Giriş Dolmadı', reversed: 'Ters Döndü', killswitch: 'Killswitch',
 };
 
+// User-JWT fetch (utils/supa authedFetch) — RLS scopes the rows to the logged-in user.
 async function getJSON(path) {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, 'Accept-Profile': 'ict_trade' },
-  });
+  const res = await authedFetch(path);
   if (!res.ok) {
     const body = await res.text();
     const err = new Error(`HTTP ${res.status}`);
@@ -79,6 +80,12 @@ function countdown(iso, t) {
 
 export default function LivePositionsPage() {
   const { t } = useLang();
+  const sd = useStreamDisplay();   // stream identity masked for non-admins
+  // The runner-cap column/exit labels reveal the stream's R economics — admin only;
+  // everyone else sees a neutral "Hedef" (they still see the raw price levels, which
+  // are visible on their own Binance account anyway).
+  const capLabel = sd.isAdmin ? `Cap +${CAP_R}R` : t('Hedef');
+  const exitLabel = (r) => (r === 'cap' && !sd.isAdmin ? t('Hedef') : EXIT_LABEL[r] || r || '—');
   const [positions, setPositions] = useState([]);
   const [snaps, setSnaps] = useState({});
   const [account, setAccount] = useState(null);
@@ -160,7 +167,11 @@ export default function LivePositionsPage() {
       <div className="livex__head">
         <h1>{t('Binance Canlı')}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
-        <span className="livex__badge">{`d30so8f3h7 · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`}</span>
+        {/* Admin sees the plan economics; everyone else just the codename. The name comes
+            from useStreamDisplay so no raw stream key ships as a visible literal. */}
+        <span className="livex__badge">{sd.isAdmin
+          ? `${sd.name('d30so8f3h7')} · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`
+          : sd.name('d30so8f3h7')}</span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(account?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>
@@ -195,7 +206,7 @@ export default function LivePositionsPage() {
             <thead>
               <tr>
                 <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Durum')}</th>
-                <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>SL</th><th>TP1</th><th>{`Cap +${CAP_R}R`}</th>
+                <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>SL</th><th>TP1</th><th>{capLabel}</th>
                 <th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>Funding</th><th>{t('Geri Sayım')}</th>
               </tr>
             </thead>
@@ -219,7 +230,7 @@ export default function LivePositionsPage() {
                       {fmtPx(p.eff_tp1)}
                       {lc && <span className="livex__sub pos">{fmtUsdSigned(lc.tp1Usd)} {t('al')}</span>}
                     </td>
-                    <td className="mono dim" data-label={`Cap +${CAP_R}R`}>
+                    <td className="mono dim" data-label={capLabel}>
                       {fmtPx(p.signal_cap)}
                       {lc && <span className="livex__sub pos">{fmtUsdSigned(lc.capUsd)} {t('toplam')}</span>}
                     </td>
@@ -268,7 +279,7 @@ export default function LivePositionsPage() {
                     <tr key={p.id}>
                       <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                       <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
-                      <td data-label={t('Sonuç')}><span className={`st ${win ? 'st-done' : 'st-sl'}`}>{EXIT_LABEL[p.exit_reason] || p.exit_reason || '—'}</span></td>
+                      <td data-label={t('Sonuç')}><span className={`st ${win ? 'st-done' : 'st-sl'}`}>{exitLabel(p.exit_reason)}</span></td>
                       <td className={`mono ${win ? 'pos' : 'neg'}`} data-label="R">{fmtR(p.realized_r)}</td>
                       <td className={`mono ${win ? 'pos' : 'neg'}`} data-label={t('USD')}>{fmtUsd(p.realized_usd)}</td>
                       <td className="mono dim" data-label={t('Çıkış')}>{ago(p.exit_time, t)}</td>

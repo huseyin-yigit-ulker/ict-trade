@@ -2861,3 +2861,152 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
 .sidebar__link--binance-paper { color: var(--accent); font-weight: 600; }
 .sidebar__link--binance-paper .sidebar__icon { color: var(--accent); }
 .sidebar__link--binance-paper .sidebar__live-badge { margin-left: auto; }
+
+/*==========================================================================
+  Multi-user trading UI (2026-07) — appended, nothing above changes.
+  Login tabs + info note, pending-approval gate, İşlem Merkezi (/trading)
+  cards, status chips, kill switch, backtest-ranking + admin tables.
+  All colours via the existing theme vars → correct in dark AND light.
+==========================================================================*/
+
+/* --- Login: Giriş / Kayıt Ol segmented tabs + signup info note --- */
+.login-tabs { width: 100%; margin: -6px 0 2px; }
+.login-tabs button { flex: 1 1 0; padding: 9px 0; }
+.login-note--info {
+  color: var(--muted); background: var(--glass); border-color: var(--border);
+  line-height: 1.5;
+}
+
+/* --- Pending-approval / disabled-account gate (RequireActive) --- */
+.pending-gate { min-height: 70vh; display: grid; place-items: center; padding: 40px 20px; }
+.pending-gate__card { max-width: 480px; width: 100%; text-align: center; gap: 10px; }
+.pending-gate__card h2 { margin: 2px 0 0; font-size: 20px; color: var(--text); }
+.pending-gate__card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+/* --- Status chips (account / API key / stream state) --- */
+.chip--ok   { background: var(--win-soft);            color: var(--win); }
+.chip--warn { background: rgba(240, 185, 11, 0.12);   color: var(--warn); }
+.chip--err  { background: var(--loss-soft);           color: var(--loss); }
+
+/* header-btn as a router <Link> (İşlem Merkezi → / Yönetim →) */
+a.header-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+
+/* --- İşlem Merkezi page --- */
+.trading-intro { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 640px; }
+
+/* inline feedback under forms/rows */
+.form-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.form-note--ok   { color: var(--win); }
+.form-note--err  { color: var(--loss); }
+.form-note--warn { color: var(--warn); }
+
+/* key state banners (withdrawals / hedge mode) */
+.key-banner { font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 5px; }
+.key-banner--err  { border: 1px solid var(--loss); background: var(--loss-soft); color: var(--loss); }
+.key-banner--warn { border: 1px solid rgba(240, 185, 11, 0.5); background: rgba(240, 185, 11, 0.08); color: var(--warn); }
+
+/* text/number inputs on panel cards (theme-aware, unlike the dark-only .login-field) */
+.tfield { display: grid; gap: 5px; }
+.tfield span { font-size: 11px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.04em; }
+.tfield input, .tinput {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  padding: 9px 11px; border-radius: 6px; font-size: 13px; font-family: var(--mono);
+}
+.tfield input:focus, .tinput:focus { outline: none; border-color: var(--accent); }
+.tinput--num { width: 110px; flex: 0 0 auto; text-align: right; }
+.key-form { display: grid; gap: 10px; }
+.key-notes { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+
+/* stream activation rows */
+.stream-row { display: grid; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border-soft); }
+.stream-row:last-of-type { border-bottom: none; }
+.stream-row__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stream-row__name { font-weight: 700; font-size: 13px; color: var(--text); font-family: var(--mono); }
+.stream-row__acts { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.badge-real {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 999px;
+  color: #F0B90B; background: rgba(240, 185, 11, 0.16); border: 1px solid rgba(240, 185, 11, 0.45);
+}
+
+/* on/off switch */
+.tog {
+  position: relative; width: 42px; height: 23px; border-radius: 999px; flex: 0 0 auto; padding: 0;
+  border: 1px solid var(--border); background: var(--panel-2); cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.tog::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%;
+  background: var(--muted); transition: transform 0.15s ease, background 0.15s ease;
+}
+.tog.on { background: var(--win-soft); border-color: var(--win); }
+.tog.on::after { transform: translateX(19px); background: var(--win); }
+.tog:disabled { opacity: 0.5; cursor: default; }
+
+/* typed real-money confirmation */
+.stream-confirm { display: grid; gap: 8px; }
+.stream-confirm__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.stream-confirm__row .tinput { flex: 1 1 140px; width: auto; }
+
+/* destructive killswitch */
+.kill-btn {
+  background: var(--loss-soft); border: 1px solid var(--loss); color: var(--loss);
+  border-radius: 5px; padding: 6px 12px; font-size: 11px; font-weight: 800;
+  letter-spacing: 0.08em; cursor: pointer; transition: background 0.12s ease, color 0.12s ease;
+}
+.kill-btn:hover { background: var(--loss); color: #fff; }
+.kill-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* (stream, network) selector rows */
+.seg--rows { width: 100%; }
+.seg--rows button { flex: 1 1 0; }
+
+/* symbol picker: chips (left) + backtest ranking (right) */
+.sympick { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; align-items: start; }
+.sympick__pick, .sympick__rank { display: grid; gap: 10px; align-content: start; }
+.sympick__rank-title {
+  font-weight: 600; letter-spacing: 0.06em; font-size: 11px; text-transform: uppercase; color: var(--muted);
+}
+.rank-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-height: 320px; overflow-y: auto; }
+.rank-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rank-table th {
+  position: sticky; top: 0; background: var(--panel); text-align: left; padding: 6px 8px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.rank-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-soft); font-family: var(--mono); }
+.rank-table tbody tr { cursor: pointer; }
+.rank-table tbody tr:hover { background: var(--hover); }
+.rank-table tbody tr.sel td:first-child { color: var(--accent); font-weight: 700; }
+.rank-table tbody tr.off { opacity: 0.45; cursor: default; }
+
+/* --- Admin console --- */
+.admin-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.admin-page { display: grid; gap: 14px; align-content: start; }
+.admin-page .settings-head { margin-bottom: 2px; }
+.admin-card { display: grid; gap: 10px; align-content: start; }
+.admin-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 560px; }
+.admin-table th {
+  text-align: left; padding: 7px 9px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border);
+}
+.admin-table td { padding: 7px 9px; border-bottom: 1px solid var(--border-soft); color: var(--text); vertical-align: middle; }
+.admin-table .mono { font-family: var(--mono); }
+.admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.admin-actions .apply-btn, .admin-actions .header-btn { padding: 5px 10px; font-size: 11px; }
+.admin-reason { display: block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-detail { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- phone tier --- */
+@media (max-width: 768px) {
+  .trading-page .settings-grid { grid-template-columns: 1fr; }
+  .sympick { grid-template-columns: 1fr; }
+  .admin-head { flex-wrap: wrap; }
+  .admin-table { min-width: 640px; }        /* tables scroll inside .admin-tablewrap */
+  .stream-row__acts { width: 100%; justify-content: flex-end; }
+  .tog { min-width: 46px; min-height: 26px; }
+  .tog::after { width: 20px; height: 20px; }
+  .tog.on::after { transform: translateX(19px); }
+  .kill-btn, .apply-btn, .header-btn { min-height: 40px; }
+  .tinput--num { width: 96px; }
+}

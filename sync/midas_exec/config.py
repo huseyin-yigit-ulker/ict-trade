@@ -74,6 +74,11 @@ class MidasExecCfg:
     exec_version: str              # MIDAS_EXEC_VERSION — trading_signals tag (distinct from paper 'midas')
     exec_name: str                 # MIDAS_EXEC_NAME — Telegram prefix
     telegram_chat_id: str          # TELEGRAM_EXEC_CHAT_ID (falls back to TELEGRAM_CHAT_ID)
+    # ---- multi-user (EXEC_MULTI_USER — same one cutover switch as OPUS; identity set by cfg_for_user) ----
+    multi_user: bool = False       # fan out over ict_trade.user_stream_settings instead of env keys
+    user_id: str | None = None     # profiles.user_id of the account being driven (None = legacy env)
+    user_email: str = ""
+    is_canonical: bool = True      # legacy env == the owner: gates Telegram + trading_signals writeback
 
     @property
     def armed(self) -> bool:
@@ -128,10 +133,34 @@ def load_cfg() -> MidasExecCfg:
         exec_version=str(env.get("MIDAS_EXEC_VERSION", "midasx")).strip(),
         exec_name=str(env.get("MIDAS_EXEC_NAME", "MIDAS-X")).strip(),
         telegram_chat_id=str(env.get("TELEGRAM_EXEC_CHAT_ID") or env.get("TELEGRAM_CHAT_ID") or "").strip(),
+        multi_user=_b(env, "EXEC_MULTI_USER", False),
     )
 
     # fail-CLOSED: armed for real orders but no credentials -> stop before any network call.
-    if cfg.armed and not (cfg.api_key and cfg.api_secret):
+    # Multi-user mode carries keys PER USER (cfg_for_user) — a keyless user is skipped with an
+    # admin alert by the executor instead of hard-exiting the whole fleet.
+    if cfg.armed and not cfg.multi_user and not (cfg.api_key and cfg.api_secret):
         raise SystemExit("MIDAS armed (LIVE_TRADING_ENABLED=true & MIDAS_EXEC_ENABLED=true & "
                          "MIDAS_EXEC_DRY_RUN=false) but Binance API key/secret are empty — refusing to run.")
     return cfg
+
+
+def cfg_for_user(base: MidasExecCfg, u) -> MidasExecCfg:
+    """Specialize the env-level cfg for one ExecUser (sync/users/store.py): their keys, their
+    network, their risk knobs. Everything else (symbol, maker entry, trailing deadband, telegram)
+    stays global so the live layer can never drift from the paper strategy it mirrors. MIDAS users
+    are hard-locked to testnet by the store (and the table CHECK), but this stays generic."""
+    import dataclasses
+    testnet = (u.network == "testnet")
+    return dataclasses.replace(
+        base,
+        testnet=testnet,
+        base_url=TESTNET_BASE if testnet else MAINNET_BASE,
+        api_key=u.api_key,
+        api_secret=u.api_secret,
+        risk_usd=float(u.risk_usd),
+        max_concurrent=int(u.max_concurrent),
+        user_id=u.user_id,
+        user_email=u.email,
+        is_canonical=bool(u.is_canonical),
+    )

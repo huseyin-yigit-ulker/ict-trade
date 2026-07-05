@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTradeContext, KARMA_MAP } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
+import { useStreamDisplay } from '../../utils/useStreamDisplay';
 import { MARKETS, marketOf, strategyBadge } from '../../utils/symbolMeta';
 import { usSignalsActive } from '../../utils/sessions';
 import SessionInfo from '../SessionInfo';
 
-const STRAT_BASE_LABEL = { main: 'Main', range: 'Range', opus: 'Opus', midas: 'Midas' };
-// light twins reuse the parent label + " · Light"
-const STRAT_LABEL = { ...STRAT_BASE_LABEL };
 const MODE_LABEL = { live: 'Live', backtest: 'Backtest' };
 
 // ICT killzones (UTC) — the windows the engine actually hunts in. The pill
@@ -71,6 +69,7 @@ const Topbar = () => {
   } = useTradeContext();
   const { t, locale } = useLang();
   const loc = useLocation();
+  const sd = useStreamDisplay();   // anonymized stream names (admin sees the real ones)
 
   // On phones the toggle opens the overlay drawer; on desktop it collapses the
   // persistent rail. Track the breakpoint reactively so the glyph/handler follow.
@@ -145,7 +144,7 @@ const Topbar = () => {
             : loc.pathname === '/settings' ? t('Ayarlar')
             : loc.pathname === '/intelligence' ? t('İstihbarat')
             : loc.pathname === '/trend' ? t('Rejim Haritası')
-            : `${t(STRAT_LABEL[strategy] || 'Main')} · ${t(MODE_LABEL[mode] || 'Live')}`}
+            : `${sd.name(strategy)} · ${t(MODE_LABEL[mode] || 'Live')}`}
         </div>
         <KillzoneClock />
         <button

@@ -38,7 +38,14 @@ def coid(pos_id: int, leg: str, gen: int = 0) -> str:
     return f"mdx-{pos_id}-{leg}-{gen}"
 
 
-_INSERT = """
+# DUAL-MODE act-once insert. The legacy env path (user_id=None) keeps the ORIGINAL column set
+# and conflict target (schema.sql's uq_midas_positions_key) so the currently-armed single-user
+# executor is bit-identical until the Phase-5 cutover; the multi-user path targets the 005b
+# per-user index (user_id, network, symbol, signal_time, direction, version) NULLS NOT DISTINCT.
+# The two are mutually exclusive with the index swap: legacy insert works only pre-005b, user
+# insert only post-005b — which is exactly the EXEC_MULTI_USER flip done inside the same halt
+# window as 005b.
+_INSERT_LEGACY = """
 INSERT INTO ict_trade.midas_positions
   (symbol, signal_time, version, direction, side,
    signal_entry, signal_sl, risk0, cur_sl, qty, leverage, state, entry_deadline, context)
@@ -47,34 +54,62 @@ ON CONFLICT (symbol, signal_time, direction, version) DO NOTHING
 RETURNING id
 """
 
+_INSERT_USER = """
+INSERT INTO ict_trade.midas_positions
+  (user_id, network, symbol, signal_time, version, direction, side,
+   signal_entry, signal_sl, risk0, cur_sl, qty, leverage, state, entry_deadline, context)
+VALUES (%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s,%s,%s,%s)
+ON CONFLICT (user_id, network, symbol, signal_time, direction, version) DO NOTHING
+RETURNING id
+"""
+
 
 def create_position(conn, *, symbol, signal_time, direction, side, signal_entry, signal_sl,
-                    risk0, qty, leverage, entry_deadline, version, context=None) -> int | None:
-    """Idempotent insert (act-once on the signal tuple). Returns the new id, or None if the signal
-    already produced a position (duplicate/re-read, or a previously cancelled attempt) — caller skips."""
+                    risk0, qty, leverage, entry_deadline, version, context=None,
+                    user_id=None, network=None) -> int | None:
+    """Idempotent insert (act-once on the signal tuple, per user+network). Returns the new id, or
+    None if the signal already produced a position (duplicate/re-read, or a previously cancelled
+    attempt) — caller skips."""
     st = signal_time.to_pydatetime() if isinstance(signal_time, pd.Timestamp) else signal_time
-    cur = conn.cursor()
-    cur.execute(_INSERT, (
+    common = (
         symbol, st, version, direction.upper(), side,
         float(signal_entry), float(signal_sl), float(risk0), float(signal_sl),
         qty, leverage, PENDING_ENTRY,
         entry_deadline.to_pydatetime() if isinstance(entry_deadline, pd.Timestamp) else entry_deadline,
         Json(context or {}),
-    ))
+    )
+    cur = conn.cursor()
+    if user_id is None:
+        cur.execute(_INSERT_LEGACY, common)
+    else:
+        cur.execute(_INSERT_USER, (user_id, network) + common)
     row = cur.fetchone()
     conn.commit()
     cur.close()
     return int(row[0]) if row else None
 
 
-def fetch_open(conn, symbols=None) -> list[dict]:
-    """All MIDAS positions in an OPEN state (optionally restricted to `symbols`)."""
+def _user_scope(q: str, params: list, user_id, network) -> str:
+    """Append the per-user filter. user_id=None = legacy single-tenant (no filter — the SQL never
+    references the 005a columns, so it is safe before the migration lands)."""
+    if user_id is not None:
+        q += " AND user_id = %s"
+        params.append(user_id)
+        if network is not None:
+            q += " AND network = %s"
+            params.append(network)
+    return q
+
+
+def fetch_open(conn, symbols=None, *, user_id=None, network=None) -> list[dict]:
+    """All MIDAS positions in an OPEN state (optionally restricted to `symbols` and one user/network)."""
     cur = conn.cursor()
     q = "SELECT * FROM ict_trade.midas_positions WHERE state = ANY(%s)"
     params: list = [list(OPEN_STATES)]
     if symbols:
         q += " AND symbol = ANY(%s)"
         params.append(list(symbols))
+    q = _user_scope(q, params, user_id, network)
     q += " ORDER BY symbol, signal_time"
     cur.execute(q, tuple(params))
     cols = [d[0] for d in cur.description]
@@ -111,25 +146,34 @@ def patch(conn, pos_id: int, **fields) -> None:
 
 
 def log_order(conn, *, position_id, symbol, leg, action, client_order_id=None,
-              order_id=None, payload=None) -> None:
+              order_id=None, payload=None, user_id=None) -> None:
     cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO ict_trade.midas_orders
-          (position_id, symbol, leg, action, client_order_id, order_id, payload)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
-    """, (position_id, symbol, leg, action, client_order_id, order_id,
-          Json(payload) if payload is not None else None))
+    if user_id is None:            # legacy shape — safe even before 005a added the column
+        cur.execute("""
+            INSERT INTO ict_trade.midas_orders
+              (position_id, symbol, leg, action, client_order_id, order_id, payload)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (position_id, symbol, leg, action, client_order_id, order_id,
+              Json(payload) if payload is not None else None))
+    else:
+        cur.execute("""
+            INSERT INTO ict_trade.midas_orders
+              (position_id, symbol, leg, action, client_order_id, order_id, payload, user_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (position_id, symbol, leg, action, client_order_id, order_id,
+              Json(payload) if payload is not None else None, user_id))
     conn.commit()
     cur.close()
 
 
-def count_open(conn, symbols=None) -> int:
+def count_open(conn, symbols=None, *, user_id=None, network=None) -> int:
     cur = conn.cursor()
     q = "SELECT count(*) FROM ict_trade.midas_positions WHERE state = ANY(%s)"
     params: list = [list(OPEN_STATES)]
     if symbols:
         q += " AND symbol = ANY(%s)"
         params.append(list(symbols))
+    q = _user_scope(q, params, user_id, network)
     cur.execute(q, tuple(params))
     n = int(cur.fetchone()[0])
     cur.close()

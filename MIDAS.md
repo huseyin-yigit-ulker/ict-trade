@@ -496,6 +496,20 @@ real maker fill-rate/slippage study, not mainnet P&L.
   proved MIDAS dies on Binance % fees — this is a fill-quality/slippage study, not a mainnet
   green light). "Binance Paper · Altın" (`/binance-altin`) page will populate as positions open.
 
+### 2026-07-04 — MIDAS-X multi-user (kullanıcı-bazlı paper execution; RUNBOOK §8a)
+- MIDAS-X executor'ı OPUS ile aynı **çift-modlu** multi-user desenine geçirildi:
+  `EXEC_MULTI_USER=false` (şu an) = bugünkü tek-hesap davranış birebir; `true` = onaylı kullanıcılar
+  kendi **testnet** anahtarlarıyla paper işlem açar (`sync/users/store.load_exec_users(stream='midas')`
+  network'ü testnet'e kilitler; DB tarafında da `user_stream_settings` CHECK'i MIDAS mainnet'i reddeder —
+  fee analizi kararı değişmedi, mainnet kapalı).
+- `config.py` (`cfg_for_user`), `state.py` (dual-mode act-once insert + user-scoped okuma),
+  `executor.py` (`SharedTick` 1m-kline/exchangeInfo cache — */1 cadence'ta kritik; kill-switch gate,
+  günlük zarar limiti, kişisel push `push_outbox`; Telegram + `trading_signals(version='midasx')`
+  writeback sadece canonical/owner), `safety_sweep.py` (kullanıcı başına orphan taraması),
+  `killswitch.py` (`flatten_positions` + `--user <email>`). Maker-entry/chandelier mantığına dokunulmadı.
+- Cutover MIDAS için ayrı adım gerektirmez: OPUS'un Faz-5 penceresindeki `005b` index swap'i midas
+  tablolarını da kapsar, aynı `EXEC_MULTI_USER` bayrağı iki executor'ı birlikte çevirir.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

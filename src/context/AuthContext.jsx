@@ -1,84 +1,27 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import {
+  loadSession, saveSession, clearSession,
+  signIn as gtSignIn, signUp as gtSignUp, signOut as gtSignOut, authConfigured,
+} from '../utils/gotrue';
+import { ensureFreshSession, getJSON } from '../utils/supa';
+import { useLang } from './LanguageContext';
 
-// Soft client-side gate (static frontend — NOT real security; everything here
-// ships in the bundle, and the data layer must be protected by Supabase RLS).
-// Hardened as far as a static site allows:
-//  - credentials never appear as plaintext in the bundle. Override via .env:
-//      VITE_LOGIN_PBKDF2       ("iterations:saltHex:hashHex", strongest — generate
-//                               with `node scripts/gen-login-hash.mjs`)
-//      VITE_LOGIN_USER_SHA256 / VITE_LOGIN_PASS_SHA256 (hex digests)
-//      VITE_LOGIN_USER / VITE_LOGIN_PASS (plaintext, legacy fallback)
-//  - sessions expire (7 days with "remember me", 12 hours otherwise); an expired
-//    session surfaces a "session expired" note on the login screen
-//  - failed attempts are throttled with a PERSISTENT exponential backoff
-//    (5 fails → 30s, doubling per strike up to 15 min; survives refresh+tab close)
-const LS = 'pusu.auth';
+// REAL multi-user auth: Supabase Auth (GoTrue) sessions + an ict_trade.profiles row per
+// user (role user|admin, status pending|active|disabled — signup lands PENDING until an
+// admin approves it from /admin). RLS on the user tables is the actual security boundary;
+// this context only orchestrates the session + profile state on the client.
+//
+// Kept from the old soft gate: the persistent client-side fail-lockout UX (GoTrue also
+// rate-limits server-side) and the 'expired' login note.
 const LOCK_KEY = 'pusu.lock';
 const NOTE_KEY = 'pusu.authnote';
 const MAX_FAILS = 5;
 const LOCK_BASE_MS = 30_000;
 const LOCK_MAX_MS = 15 * 60_000;
-const REMEMBER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
-const USER_PLAIN = import.meta.env.VITE_LOGIN_USER || null;
-const PASS_PLAIN = import.meta.env.VITE_LOGIN_PASS || null;
-const PASS_PBKDF2 = import.meta.env.VITE_LOGIN_PBKDF2 || null;
-// Built-in fallback digests — ONLY for first-run convenience. They are public
-// (in the bundle + repo history), so any deployment MUST override them via .env.
-// `usingDefaultCreds` flags this state and the login screen shows a warning.
-const USER_SHA = import.meta.env.VITE_LOGIN_USER_SHA256
-  || 'd4822ddc3221d33dc53dab8616f2bd4d6039786ce432123a99a7571c50162b6c';
-const PASS_SHA = import.meta.env.VITE_LOGIN_PASS_SHA256
-  || '5e31e4ceb5a3c2ff647ec9e32fc8ec935d158da4d19ffd1f56be669ff47a9c26';   // sha256('pusu2001')
-
-export const usingDefaultCreds = !(
-  USER_PLAIN || PASS_PLAIN || PASS_PBKDF2
-  || import.meta.env.VITE_LOGIN_USER_SHA256 || import.meta.env.VITE_LOGIN_PASS_SHA256
-);
-if (usingDefaultCreds && import.meta.env.PROD) {
-  console.warn('[PUSU] Default login credentials are active. Set VITE_LOGIN_* in .env (see scripts/gen-login-hash.mjs).');
-}
-
-const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-const sha256Hex = async (text) => {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return toHex(buf);
-};
-
-// PBKDF2-SHA256 — makes offline brute-force of the bundled digest expensive
-// (vs a single SHA-256 which a GPU rig guesses billions of times per second).
-const pbkdf2Hex = async (password, saltHex, iterations) => {
-  const salt = new Uint8Array((saltHex.match(/.{2}/g) || []).map((h) => parseInt(h, 16)));
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
-    key, 256,
-  );
-  return toHex(bits);
-};
-
-const checkCredentials = async (username, password) => {
-  // Plaintext env vars (legacy) win; otherwise hash-compare. crypto.subtle
-  // needs a secure context (https / localhost) — both deploy + dev qualify.
-  if (USER_PLAIN || PASS_PLAIN) {
-    return username === (USER_PLAIN || 'pusu') && password === (PASS_PLAIN || '');
-  }
-  if (!globalThis.crypto?.subtle) return false;
-  const uh = await sha256Hex(username);
-  if (uh !== USER_SHA) return false;
-  if (PASS_PBKDF2) {
-    const [iterStr, saltHex, hashHex] = PASS_PBKDF2.split(':');
-    const iterations = Number(iterStr);
-    if (!Number.isFinite(iterations) || !saltHex || !hashHex) return false;
-    try {
-      return (await pbkdf2Hex(password, saltHex, iterations)) === hashHex.toLowerCase();
-    } catch { return false; }
-  }
-  return (await sha256Hex(password)) === PASS_SHA;
-};
+// Legacy export — the env-digest gate is gone; LoginScreen's warning banner keys off this.
+export const usingDefaultCreds = false;
 
 // --- persistent fail-lock state: { fails, strikes, until } in localStorage ---
 const readLock = () => {
@@ -90,22 +33,7 @@ const readLock = () => {
 const writeLock = (l) => { try { localStorage.setItem(LOCK_KEY, JSON.stringify(l)); } catch { /* ignore */ } };
 const clearLock = () => { try { localStorage.removeItem(LOCK_KEY); } catch { /* ignore */ } };
 
-const readStoredUser = () => {
-  try {
-    const u = JSON.parse(localStorage.getItem(LS) || sessionStorage.getItem(LS) || 'null');
-    if (!u) return null;
-    // Expired (or legacy entry without exp) → treat as signed out and leave a
-    // note so the login screen can explain why the user was bounced.
-    if (!Number.isFinite(u.exp) || u.exp < Date.now()) {
-      localStorage.removeItem(LS); sessionStorage.removeItem(LS);
-      try { sessionStorage.setItem(NOTE_KEY, 'expired'); } catch { /* ignore */ }
-      return null;
-    }
-    return u;
-  } catch { return null; }
-};
-
-// One-shot read of the auth note ('expired') left by readStoredUser.
+// One-shot read of the auth note ('expired') for the login screen.
 export const consumeAuthNote = () => {
   try {
     const n = sessionStorage.getItem(NOTE_KEY);
@@ -113,57 +41,144 @@ export const consumeAuthNote = () => {
     return n;
   } catch { return null; }
 };
+const leaveNote = (n) => { try { sessionStorage.setItem(NOTE_KEY, n); } catch { /* ignore */ } };
 
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(readStoredUser);
+  const [session, setSession] = useState(loadSession);
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const refreshTimer = useRef(null);
 
-  // ms until the lockout ends (0 = not locked). Survives refresh AND tab close.
   const lockRemainingMs = useCallback(() => Math.max(0, readLock().until - Date.now()), []);
 
-  const login = useCallback(async (username, password, remember = true) => {
-    if (lockRemainingMs() > 0) return { ok: false, lockedMs: lockRemainingMs() };
+  // ---- profile: the app-level identity (role/status) behind the GoTrue session
+  const loadProfile = useCallback(async (sess) => {
+    const uid = sess?.user?.id;
+    if (!uid) { setProfile(null); return null; }
+    setProfileLoading(true);
+    try {
+      const rows = await getJSON(
+        `profiles?select=user_id,email,display_name,role,status,is_canonical&user_id=eq.${uid}`,
+      );
+      const p = rows?.[0] || null;
+      setProfile(p);
+      return p;
+    } catch {
+      // transient error: keep the session, profile stays unknown (RequireActive treats as pending)
+      return null;
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
 
-    const ok = await checkCredentials(username, password);
-    if (!ok) {
+  // ---- proactive refresh: timer at expiry−60s + on tab resume (PWA), + expiry event
+  useEffect(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    if (!session) return undefined;
+    const ms = Math.max(5_000, (session.expires_at || 0) * 1000 - Date.now() - 60_000);
+    refreshTimer.current = setTimeout(async () => {
+      const s = await ensureFreshSession();
+      if (s) setSession(s);
+    }, ms);
+    return () => clearTimeout(refreshTimer.current);
+  }, [session]);
+
+  useEffect(() => {
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const s = await ensureFreshSession();
+      if (s && s.access_token !== session?.access_token) setSession(s);
+    };
+    const onExpired = () => {
+      leaveNote('expired');
+      setSession(null);
+      setProfile(null);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pusu:session-expired', onExpired);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pusu:session-expired', onExpired);
+    };
+  }, [session]);
+
+  useEffect(() => { if (session) loadProfile(session); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- actions
+  const login = useCallback(async (email, password, remember = true) => {
+    if (lockRemainingMs() > 0) return { ok: false, lockedMs: lockRemainingMs() };
+    try {
+      const s = await gtSignIn(email.trim(), password);
+      clearLock();
+      saveSession(s, remember);
+      setSession(s);
+      loadProfile(s);
+      return { ok: true, lockedMs: 0 };
+    } catch (e) {
       const lock = readLock();
       lock.fails += 1;
       if (lock.fails >= MAX_FAILS) {
-        // Exponential backoff: 30s → 1m → 2m → ... capped at 15 min.
         lock.fails = 0;
         lock.strikes += 1;
         const ms = Math.min(LOCK_MAX_MS, LOCK_BASE_MS * 2 ** (lock.strikes - 1));
         lock.until = Date.now() + ms;
         writeLock(lock);
-        return { ok: false, lockedMs: ms };
+        return { ok: false, lockedMs: ms, error: e?.message };
       }
       writeLock(lock);
-      return { ok: false, lockedMs: 0 };
+      return { ok: false, lockedMs: 0, error: e?.message };
     }
+  }, [lockRemainingMs, loadProfile]);
 
-    clearLock();
-    const ttl = remember ? REMEMBER_TTL_MS : SESSION_TTL_MS;
-    const u = { name: username, at: Date.now(), exp: Date.now() + ttl };
+  const signup = useCallback(async (email, password, displayName = '') => {
     try {
-      // "Remember me" → localStorage (survives close); otherwise sessionStorage (this tab only).
-      const store = remember ? localStorage : sessionStorage;
-      const other = remember ? sessionStorage : localStorage;
-      store.setItem(LS, JSON.stringify(u));
-      other.removeItem(LS);
-    } catch { /* ignore */ }
-    setUser(u);
-    return { ok: true, lockedMs: 0 };
-  }, [lockRemainingMs]);
+      const { session: s } = await gtSignUp(email.trim(), password, displayName);
+      if (s) {
+        saveSession(s, true);
+        setSession(s);
+        await loadProfile(s);
+        return { ok: true, pending: true };
+      }
+      // confirm-email is ON in the dashboard (not the intended config) — no session yet
+      return { ok: true, pending: true, needsConfirm: true };
+    } catch (e) {
+      return { ok: false, error: e?.message };
+    }
+  }, [loadProfile]);
 
   const logout = useCallback(() => {
-    try { localStorage.removeItem(LS); sessionStorage.removeItem(LS); } catch { /* ignore */ }
-    setUser(null);
+    const tok = loadSession()?.access_token;
+    clearSession();
+    setSession(null);
+    setProfile(null);
+    if (tok) gtSignOut(tok);
   }, []);
 
+  const refreshProfile = useCallback(() => loadProfile(loadSession()), [loadProfile]);
+
+  // Back-compat shape: Sidebar/Settings read user.name.
+  const user = session ? {
+    name: profile?.display_name || session.user?.email?.split('@')[0] || 'PUSU',
+    email: session.user?.email,
+    id: session.user?.id,
+  } : null;
+
   return (
-    <AuthContext.Provider value={{ user, isAuthed: !!user, login, logout, lockRemainingMs }}>
+    <AuthContext.Provider value={{
+      user,
+      session,
+      profile,
+      profileLoading,
+      isAuthed: !!session,
+      isActive: profile?.status === 'active',
+      isAdmin: profile?.role === 'admin' && profile?.status === 'active',
+      isCanonical: !!profile?.is_canonical,
+      authConfigured: authConfigured(),
+      login, signup, logout, refreshProfile, lockRemainingMs,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -174,5 +189,39 @@ export const RequireAuth = ({ children }) => {
   const { isAuthed } = useAuth();
   const loc = useLocation();
   if (!isAuthed) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  return children;
+};
+
+// Trading-surface guard: pending/disabled accounts see an approval notice instead.
+export const RequireActive = ({ children }) => {
+  const { isActive, profile, profileLoading } = useAuth();
+  const { t } = useLang();
+  if (isActive) return children;
+  return (
+    <div className="pending-gate">
+      <div className="overview-card pending-gate__card">
+        <div className="summary-kicker">PUSU</div>
+        {profile?.status === 'disabled' ? (
+          <>
+            <h2>{t('Hesap devre dışı')}</h2>
+            <p>{t('Hesabınız yönetici tarafından devre dışı bırakıldı. Erişim için sistem yöneticinize başvurun.')}</p>
+          </>
+        ) : (
+          <>
+            <h2>{t('Onay bekleniyor')}</h2>
+            <p>{profileLoading
+              ? t('Hesap durumu kontrol ediliyor…')
+              : t('Hesabınız oluşturuldu ve yönetici onayı bekliyor. Onaylandığında canlı işlem özellikleri açılacak.')}</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const RequireAdmin = ({ children }) => {
+  const { isAdmin, profileLoading } = useAuth();
+  if (profileLoading) return null;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return children;
 };

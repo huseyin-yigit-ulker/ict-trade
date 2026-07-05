@@ -11,53 +11,28 @@
 //   • range      — Burak RANGE_DEV range-deviation fade, full-TP, ensemble-trend gated (+9.2R OOS).
 //   • range_q    — RANGE+ : same gate + RR>=2 + drop ensemble score [0.20,0.30) (+26.2R OOS).
 //   • v2_light_r — IMPULSE·Light gated to the ensemble RANGE verdict (+15.5R OOS).
+// 2026-07-04 PRIVACY: PUSU is multi-user — the descriptive labels moved to
+// utils/adminStreamInfo.js (admin-only lazy chunk). This registry keeps ONLY the
+// version keys + filter axes; `label` is the anonymized codename so nothing in
+// the shared bundle reveals the mechanics. Render names via useStreamDisplay().
+import { codenameFor } from './streamMask';
+
+const S = (key, exit) => ({ key, version: key, exit, family: 'trend', tf: '', realistic: true, label: codenameFor(key) });
+
 export const STREAMS = [
-  // Strategy set = MAIN + RANGE + OPUS. (range_q / v2_light_r / range_1h / range_q_1h
-  // DB rows remain but aren't surfaced.)
-  // 2026-06-20: ONLY the realistic-entry (·0.5R) versions remain. The optimistic entry@close
-  // twins (donchian/dch30_4h/dch30_4h6/d30_4h_so) were removed from UI + DB — their entry was
-  // unrealistic (you can't fill at the breakout close when the trade only confirms +0.5R later).
-  // These enter at the +0.5R confirmation level; R is against the real (1.5×) risk (RR 4→2.33).
-  //
-  // ORDER = by timeframe family, each family's full-TP base first, then its scale-out caps:
-  //   1h family   : donchianc (full-TP) -> d1h_so4c / d1h_so6c / d1h_so8c (scale-out 4/6/8R)
-  //   30m+4h family: dch30_4hc / dch30_4h6c (full-TP) -> d30_4h_soc / d30so6c / d30so8c (scale-out)
-  // 2026-06-23: added the 1h scale-out family (d1h_so{4,6,8}c) — the 1h base entry (ER-gated, no
-  // 4h confirm) resolved under the same +1R-then-runner-cap exit as the 30m+4h scale-out trio.
-  // Names are deliberately explicit (d1h_so… vs d30so…) so the two families never collide.
-
   // ── 1h family ──
-  { key: 'donchianc',    version: 'donchianc',    exit: 'full', family: 'trend', tf: '1h ·0.5R',      realistic: true, label: 'DONCHIAN 1h ·0.5R' },
-  { key: 'd1h_so4c',     version: 'd1h_so4c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 4R ·0.5R' },
-  { key: 'd1h_so6c',     version: 'd1h_so6c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 6R ·0.5R' },
-  { key: 'd1h_so8c',     version: 'd1h_so8c',     exit: 'scaleout', family: 'trend', tf: '1h·WR 8R ·0.5R', realistic: true, label: 'DONCHIAN 1h·WR 8R ·0.5R' },
-  { key: 'd1hso4cm',     version: 'd1hso4cm',     exit: 'scaleout', family: 'trend', tf: '1h·WR 4R ·M0.25', realistic: true, label: 'DONCHIAN 1h·WR 4R ·M0.25' },
-  { key: 'd1hso6cm',     version: 'd1hso6cm',     exit: 'scaleout', family: 'trend', tf: '1h·WR 6R ·M0.25', realistic: true, label: 'DONCHIAN 1h·WR 6R ·M0.25' },
-  { key: 'd1hso8cm',     version: 'd1hso8cm',     exit: 'scaleout', family: 'trend', tf: '1h·WR 8R ·M0.25', realistic: true, label: 'DONCHIAN 1h·WR 8R ·M0.25' },
-
+  S('donchianc', 'full'),
+  S('d1h_so4c', 'scaleout'), S('d1h_so6c', 'scaleout'), S('d1h_so8c', 'scaleout'),
+  S('d1hso4cm', 'scaleout'), S('d1hso6cm', 'scaleout'), S('d1hso8cm', 'scaleout'),
   // ── 30m + 4h family ──
-  { key: 'dch30_4hc',    version: 'dch30_4hc',    exit: 'full', family: 'trend', tf: '30m+4h ·0.5R',  realistic: true, label: 'DONCHIAN 30m+4h ·0.5R' },
-  { key: 'dch30_4h6c',   version: 'dch30_4h6c',   exit: 'full', family: 'trend', tf: '30m+4h·6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h 6R ·0.5R' },
-  { key: 'd30_4h_soc',   version: 'd30_4h_soc',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·0.5R' },
-  { key: 'd30so6c',      version: 'd30so6c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·0.5R' },
-  { key: 'd30so8c',      version: 'd30so8c',      exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·0.5R', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·0.5R' },
-  { key: 'd30so4cm',     version: 'd30so4cm',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·M0.25', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·M0.25' },
-  { key: 'd30so6cm',     version: 'd30so6cm',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·M0.25', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·M0.25' },
-  { key: 'd30so8cm',     version: 'd30so8cm',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·M0.25', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·M0.25' },
-  { key: 'd30so4f3',     version: 'd30so4f3',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 4R ·b30', realistic: true, label: 'DONCHIAN 30m+4h·WR 4R ·b30' },
-  { key: 'd30so6f3',     version: 'd30so6f3',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 6R ·b30', realistic: true, label: 'DONCHIAN 30m+4h·WR 6R ·b30' },
-  { key: 'd30so8f3',     version: 'd30so8f3',     exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30', realistic: true, label: 'DONCHIAN 30m+4h·WR 8R ·b30' },
-  { key: 'd30so8f3h7',   version: 'd30so8f3h7',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30·7g', realistic: true, label: 'OPUS · DONCHIAN 30m+4h·WR 8R ·b30·7g' },
-  // volume-contraction-gated twin of d30so8f3h7: same signals/exit, only TAKEN when daily volume
-  // is contracting at signal time (vch<0.9) — robustly lower SL-rate + worst-month, higher WR/PF.
-  { key: 'd30so8f3vg',   version: 'd30so8f3vg',   exit: 'scaleout', family: 'trend', tf: '30m+4h·WR 8R ·b30·7g ·VG', realistic: true, label: 'FABLE · DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9' },
-
-  // ── MIDAS — gold-only intraday VWAP-trend (INDEPENDENT from the Donchian book) ──
-  // XAUUSDT 1m: trend-continuation — buy the pullback to anchored daily VWAP (sell the rally),
-  // risk 1.5×ATR, NO fixed target, ride a 3.5×ATR trailing stop to a session/8h exit, intraday-only.
-  // FX (ECN) cost model ($0.50/oz round-trip) — NOT crypto-taker (it dies at 10 bps). 2026, gold-only.
-  // Live = PAPER signal feed (mode='midas', sync/midas/canli.py); nightly backtest sync/midas/backfill.py.
-  { key: 'midas',        version: 'midas',        exit: 'full', family: 'trend', tf: 'XAU 1m·VWAP-trend·trail', realistic: true, label: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing)' },
+  S('dch30_4hc', 'full'), S('dch30_4h6c', 'full'),
+  S('d30_4h_soc', 'scaleout'), S('d30so6c', 'scaleout'), S('d30so8c', 'scaleout'),
+  S('d30so4cm', 'scaleout'), S('d30so6cm', 'scaleout'), S('d30so8cm', 'scaleout'),
+  S('d30so4f3', 'scaleout'), S('d30so6f3', 'scaleout'), S('d30so8f3', 'scaleout'),
+  S('d30so8f3h7', 'scaleout'),   // canlı gerçek-para akışı
+  S('d30so8f3vg', 'scaleout'),   // canlı paper ikizi
+  // ── altın akışı ──
+  S('midas', 'full'),
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

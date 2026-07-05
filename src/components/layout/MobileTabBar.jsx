@@ -18,9 +18,10 @@ const ILive = () => (
     <line x1="13.6" y1="4" x2="13.6" y2="16" /><rect x="11.4" y="7.6" width="4.4" height="5" rx="1" />
   </svg>
 );
-const ITarget = () => (
-  <svg viewBox="0 0 20 20" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.6">
-    <circle cx="10" cy="10" r="6.4" /><circle cx="10" cy="10" r="2.6" /><circle cx="10" cy="10" r="0.7" fill="currentColor" />
+const IGear = () => (
+  <svg viewBox="0 0 20 20" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="10" cy="10" r="2.7" />
+    <path d="M10 2.6v2.3M10 15.1v2.3M2.6 10h2.3M15.1 10h2.3M4.9 4.9l1.6 1.6M13.5 13.5l1.6 1.6M15.1 4.9l-1.6 1.6M6.5 13.5l-1.6 1.6" />
   </svg>
 );
 const IIntel = () => (
@@ -47,9 +48,9 @@ const MobileTabBar = () => {
       <NavLink to="/binance" className={cls} onClick={closeMobileNav}>
         <ILive /><span>{t('Canlı')}</span>
       </NavLink>
-      {/* OPUS = the flagship real-money stream (d30so8f3h7) live board. */}
-      <NavLink to="/d30so8f3h7/live" className={cls} onClick={closeMobileNav}>
-        <ITarget /><span>OPUS</span>
+      {/* İşlem Merkezi — per-user trading controls (keys / risk / activation). */}
+      <NavLink to="/trading" className={cls} onClick={closeMobileNav}>
+        <IGear /><span>{t('İşlem')}</span>
       </NavLink>
       <NavLink to="/intelligence" className={cls} onClick={closeMobileNav}>
         <IIntel /><span>{t('İstihbarat')}</span>

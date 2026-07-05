@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLang } from '../context/LanguageContext';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 import { fetchGlobal, buildBreadth, fmtUsd, BREADTH_REGIMES } from '../utils/marketCap';
 import { REGIME_BANDS } from '../utils/symbolMeta';
 import analysis from '../assets/data/marketcap_analysis.json';
@@ -59,6 +60,7 @@ const Tile = ({ label, value, sub, color }) => (
 
 const MarketCapPage = () => {
   const { t } = useLang();
+  const sd = useStreamDisplay();   // research note names streams — admin-only
   const [live, setLive] = useState(null);
   const [breadth, setBreadth] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -230,9 +232,11 @@ const MarketCapPage = () => {
           <p style={{ fontSize: 12, lineHeight: 1.55, opacity: 0.8, margin: '14px 0 4px' }}>
             {t('Bulgu: genişlik (TOTAL3) rejimi ER bandından bağımsız bilgi taşıyor. En çok R kazandığımız HAFİF bantta, hızlı yükselen TOTAL3 (risk-on coşkusu) hem 2026 hem 2025’te tutarlı biçimde ZARARLI; nötr/risk-off ise kârlı — “risk-on’da al” sezgisinin tersi.')}
           </p>
-          <p style={{ fontSize: 10.5, lineHeight: 1.5, opacity: 0.5, margin: 0 }}>
-            {t('Tek başına temiz bir gate çıkmıyor: etkinin en güçlü olduğu MAIN/OPUS örneklem-dışı (2025) zaten net-negatif, tek istikrarlı kârlı akış RANGE’de dayanıklı bir kazanım yok. Bu yüzden bir lookup + monitör olarak kullanılır; bir akışa bağlamadan önce OOS kazanım göster. Kaynak: sync/marketcap.py + marketcap_analysis.py.')}
-          </p>
+          {sd.isAdmin && (
+            <p style={{ fontSize: 10.5, lineHeight: 1.5, opacity: 0.5, margin: 0 }}>
+              {t('Tek başına temiz bir gate çıkmıyor: etkinin en güçlü olduğu MAIN/OPUS örneklem-dışı (2025) zaten net-negatif, tek istikrarlı kârlı akış RANGE’de dayanıklı bir kazanım yok. Bu yüzden bir lookup + monitör olarak kullanılır; bir akışa bağlamadan önce OOS kazanım göster. Kaynak: sync/marketcap.py + marketcap_analysis.py.')}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -408,7 +408,7 @@ const EN = {
   'Piyasa Sınıfı': 'Asset Class',
   'Kripto / metal / ABD hisse — trend edge’i nerede?': 'Crypto / metal / US stock — where is the trend edge?',
   'Yön — Long / Short': 'Direction — Long / Short',
-  'Kırılım yönü bazında R ve isabet.': 'R and hit-rate by breakout direction.',
+  'İşlem yönü bazında R ve isabet.': 'R and hit-rate by trade direction.',
   'Long ↗': 'Long ↗',
   'Short ↘': 'Short ↘',
   'Aylık Getiri': 'Monthly Return',
@@ -416,7 +416,7 @@ const EN = {
   'Haftanın Günü': 'Day of Week',
   'Sinyal gününe göre R (UTC).': 'R by signal day (UTC).',
   'Günün Saati (UTC)': 'Hour of Day (UTC)',
-  'Kırılımın saatine göre R — seans etkisi.': 'R by breakout hour — session effect.',
+  'İşlem saatine göre R — seans etkisi.': 'R by trade hour — session effect.',
   'Çeşitlendirme — ikisini birden çalıştırmak': 'Diversification — running both',
   'İki zaman dilimi ikame mi, tamamlayıcı mı? Düşük korelasyon + daha iyi Recovery = tamamlayıcı.':
     'Are the two timeframes substitutes or complements? Low correlation + better Recovery = complements.',
@@ -464,6 +464,142 @@ const EN = {
   '{f} kaymaya daha kırılgan (daha sık işlem ve/veya daha kısa risk mesafesi) — başabaş {a} ≈ {x}, {b} ≈ {y}.':
     '{f} is more fragile to slippage (more trades and/or a shorter risk distance) — break-even {a} ≈ {x}, {b} ≈ {y}.',
   'Başabaş ek kayma: {a} ≈ {x}, {b} ≈ {y}.': 'Break-even extra slippage: {a} ≈ {x}, {b} ≈ {y}.',
+
+  // --- Multi-user auth: login/signup tabs + approval gate ---
+  'E-posta': 'Email',
+  'Kayıt Ol': 'Sign Up',
+  'Yeni Hesap': 'New Account',
+  'Hesap Oluştur': 'Create Account',
+  'Şifre (en az 10 karakter)': 'Password (min 10 characters)',
+  'Şifre (tekrar)': 'Password (repeat)',
+  'Şifreler eşleşmiyor.': 'Passwords do not match.',
+  'Şifre en az 10 karakter olmalı.': 'Password must be at least 10 characters.',
+  'E-posta veya şifre hatalı.': 'Invalid email or password.',
+  'Kayıt başarısız. Tekrar deneyin.': 'Signup failed. Please try again.',
+  'Hesap oluşturuldu. E-postanızı doğrulayıp giriş yapın.': 'Account created. Verify your email, then sign in.',
+  'Kayıt sonrası hesabınız yönetici onayına düşer; onaylanana kadar canlı işlem özellikleri kapalıdır.':
+    'After signup your account awaits admin approval; live trading features stay locked until approved.',
+  'Onay bekleniyor': 'Approval pending',
+  'Hesap devre dışı': 'Account disabled',
+  'Hesabınız oluşturuldu ve yönetici onayı bekliyor. Onaylandığında canlı işlem özellikleri açılacak.':
+    'Your account has been created and is awaiting admin approval. Live trading features will unlock once approved.',
+  'Hesabınız yönetici tarafından devre dışı bırakıldı. Erişim için sistem yöneticinize başvurun.':
+    'Your account was disabled by an administrator. Contact your system administrator for access.',
+  'Hesap durumu kontrol ediliyor…': 'Checking account status…',
+
+  // --- Nav: live module / trading hub / admin ---
+  'Genel': 'Home',
+  'Canlı': 'Live',
+  'CANLI MODÜL': 'LIVE MODULE',
+  'Binance Pozisyonlar': 'Binance Positions',
+  'Altın': 'Gold',
+  'İşlem Merkezi': 'Trading Hub',
+  'Yönetim': 'Admin',
+  'Menü': 'Menu',
+
+  // --- Stream anonymization (multi-user privacy) ---
+  'Otonom işlem akışı · detaylar gizli': 'Autonomous trading stream · details private',
+  'Bu akışın kuralları tescillidir ve görüntülenmez. Performansı Live/Backtest sekmelerinden izleyebilirsiniz.':
+    "This stream's rules are proprietary and not displayed. You can follow its performance in the Live/Backtest tabs.",
+  '{name} yalnız paper (testnet) çalışır; gerçek-para modu sunucu tarafından reddedilir.':
+    '{name} runs paper (testnet) only; real-money mode is rejected server-side.',
+  '{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).':
+    '{name} gold stream — Binance testnet (paper, NOT real money).',
+
+  // --- İşlem Merkezi: intro + API keys ---
+  'Sinyaller merkezî olarak üretilir; emirler kendi Binance hesabınızda, kendi anahtarınızla çalışır.':
+    'Signals are generated centrally; orders run on your own Binance account with your own key.',
+  'API Anahtarı': 'API Key',
+  'Anahtar': 'Key',
+  'Anahtar yok': 'No key',
+  'Bakiye': 'Balance',
+  'Doğrulandı': 'Verified',
+  'Geçerli': 'Valid',
+  'Geçersiz': 'Invalid',
+  'Anahtar Ekle/Yenile': 'Add/Rotate Key',
+  'Gönder': 'Submit',
+  'Anahtar alındı — doğrulama başladı (≤1 dk).': 'Key received — verification started (≤1 min).',
+  'Şifreleme anahtarı yapılandırılmamış — anahtar gönderilemez (VITE_EXEC_PUBKEY_B64).':
+    'Encryption key not configured — keys cannot be submitted (VITE_EXEC_PUBKEY_B64).',
+  'Bu anahtarın ÇEKİM yetkisi var — reddedildi. Çekim yetkisiz yeni anahtar oluşturun.':
+    'This key has WITHDRAWAL permission — rejected. Create a new key without withdrawal access.',
+  'Binance hesabınız hedge modda; one-way moda geçin.':
+    'Your Binance account is in hedge mode; switch to one-way mode.',
+  'Anahtar yalnız şifreli saklanır (RSA) — sunucu düz metni hiç görmez.':
+    'Keys are stored encrypted only (RSA) — the server never sees the plaintext.',
+  'Sadece Futures trade yetkisi verin.': 'Grant Futures trading permission only.',
+  'Çekim (withdraw) yetkisi vermeyin.': 'Never grant withdrawal permission.',
+  'IP kısıtı önerilir': 'IP restriction recommended',
+
+  // --- İşlem Merkezi: stream activation ---
+  'Akış Aktivasyonu': 'Stream Activation',
+  'GERÇEK PARA': 'REAL MONEY',
+  'Akış etkin.': 'Stream enabled.',
+  'Akış kapatıldı — açık pozisyon varsa drain modunda yönetilip kapanır; yeni giriş açılmaz.':
+    'Stream disabled — open positions keep being managed in drain mode until closed; no new entries.',
+  'Önce sembol seçin — "Sembol Seçimi" kartından bu akış için en az bir sembol kaydedin.':
+    'Pick symbols first — save at least one symbol for this stream from the "Symbols" card.',
+  'GERÇEK PARA modunu açıyorsunuz. Onaylamak için kutuya "GERÇEK PARA" yazın.':
+    'You are enabling REAL MONEY mode. Type "GERÇEK PARA" into the box to confirm.',
+  'Onayla': 'Confirm',
+  'Vazgeç': 'Cancel',
+  '{name}: TÜM pozisyonlar piyasa emriyle kapatılacak ve akış devre dışı kalacak. Emin misiniz?':
+    '{name}: ALL positions will be closed at market and the stream will be disabled. Are you sure?',
+  '≤2 dk içinde tüm pozisyonlar kapatılacak ve akış devre dışı kalacak.':
+    'All positions will be closed and the stream disabled within ≤2 minutes.',
+
+  // --- İşlem Merkezi: risk limits ---
+  'Risk Ayarları': 'Risk Settings',
+  'İşlem başına risk (USD)': 'Risk per trade (USD)',
+  'Maks. eşzamanlı pozisyon': 'Max concurrent positions',
+  'Maks. toplam risk (USD)': 'Max total risk (USD)',
+  'Günlük zarar limiti (USD)': 'Daily loss cap (USD)',
+  'kapalı': 'off',
+  "Balansın %{pct}'i riske giriyor (risk × eşzamanlı).": '{pct}% of your balance is at risk (risk × concurrent).',
+  '%25 üzeri sunucu tarafından engellenir.': 'Above 25% is blocked server-side.',
+  'Kaydedildi.': 'Saved.',
+  'Kaydet': 'Save',
+
+  // --- İşlem Merkezi: symbol picker + backtest ranking ---
+  'Backtest Sıralaması': 'Backtest Ranking',
+  'Sıralama sadece bilgi amaçlı — seçim sizin.': 'The ranking is informational only — the choice is yours.',
+  'Sıralama alınamadı.': 'Could not load the ranking.',
+  'Semboller kaydedildi.': 'Symbols saved.',
+  'Bu akış için sembol listesi boş.': 'The symbol universe for this stream is empty.',
+  'Bu akışın sembol listesinde değil.': "Not in this stream's symbol universe.",
+  'seçili': 'selected',
+  'Yükleniyor…': 'Loading…',
+
+  // --- Admin console ---
+  'Kullanıcılar': 'Users',
+  'İsim': 'Name',
+  'Rol': 'Role',
+  'Kayıt Tarihi': 'Created At',
+  'İşlemler': 'Actions',
+  'Devre Dışı': 'Disable',
+  'Devre dışı': 'Disabled',
+  'Yeniden Aktifle': 'Re-activate',
+  'API Anahtarları': 'API Keys',
+  'Ağ': 'Network',
+  'Son 4': 'Last 4',
+  'Denetim Kaydı (son 50)': 'Audit Log (last 50)',
+  'Zaman': 'Time',
+  'Aktör': 'Actor',
+  'Eylem': 'Action',
+  "{email}: kullanıcının TÜM akışlarında pozisyonlar kapatılacak (kill). Emin misiniz?":
+    "{email}: positions on ALL of this user's streams will be closed (kill). Are you sure?",
+  'Kill istendi — ≤2 dk içinde uygulanır.': 'Kill requested — applied within ≤2 minutes.',
+
+  // --- Settings: web-push labels (previously untranslated) ---
+  'Bildirimler': 'Notifications',
+  'Telefon Bildirimi': 'Phone Notifications',
+  'Bildirimleri Aç': 'Enable Notifications',
+  'Bildirimleri Kapat': 'Disable Notifications',
+  'Kapalı': 'Off',
+  'Bildirim izni reddedildi.': 'Notification permission denied.',
+  'Bildirim ayarlanamadı.': 'Could not set up notifications.',
+  'Bu cihaz/kurulum desteklemiyor. iOS’ta önce uygulamayı Ana Ekrana ekleyin.':
+    'This device/install does not support it. On iOS, add the app to the Home Screen first.',
 
   // --- weekday names returned by the SQL RPC (Turkish) ---
   'Pazartesi': 'Monday', 'Sali': 'Tuesday', 'Carsamba': 'Wednesday',

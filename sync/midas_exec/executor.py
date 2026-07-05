@@ -12,6 +12,11 @@ the live stop path is identical to the paper feed by construction (the Faz-0 par
     LIVE_TRADING_ENABLED=true MIDAS_EXEC_ENABLED=true MIDAS_EXEC_DRY_RUN=false \
         BINANCE_TESTNET=true python sync/midas_exec/executor.py                        # armed on TESTNET
 
+MULTI-USER (EXEC_MULTI_USER=true — the same one cutover switch as OPUS): main() fans out over
+ict_trade.user_stream_settings (stream='midas', hard-locked testnet in sync/users/store.py) and runs
+the SAME per-account tick with each user's keys/risk, per-user try/except isolation, per-user rows
+(005a/005b user_id+network scoping) and per-user Web Push instead of the owner's Telegram.
+
 ⚠️ COST: MIDAS is validated on a $0.50/oz FX cost (+142R). On Binance TAKER (~10 bps ≈ $4/oz) the same
 trades are ≈ −92R. This bridge runs TESTNET/dry-run first; a Binance-fee simulation gates any mainnet
 arming (see parity_report.py + MIDAS.md). Master no-op when LIVE_TRADING_ENABLED / MIDAS_EXEC_ENABLED
@@ -19,6 +24,7 @@ are false.
 """
 from __future__ import annotations
 
+import re
 import sys
 import json
 from pathlib import Path
@@ -32,12 +38,15 @@ _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[1] / "midas"))         # strategy (the exit engine)
 sys.path.insert(0, str(_HERE.parents[1] / "live_exec"))     # reuse binance_futures/exchange_info/sizing/notify
 sys.path.insert(0, str(_HERE.parents[1]))                   # sync/           -> trade_sync_common
+sys.path.insert(0, str(_HERE.parents[1] / "users"))         # sync/users      -> store (multi-user fan-out)
 sys.path.insert(0, str(_HERE.parent))                       # sync/midas_exec -> config, state (front-most)
 import trade_sync_common as tsc                              # noqa: E402
 import config as cfgmod                                      # noqa: E402
 import state as st                                           # noqa: E402
 import sizing                                                # noqa: E402
 import notify                                                # noqa: E402
+import store as ustore                                       # noqa: E402  (sync/users/store.py)
+import killswitch as ks                                      # noqa: E402  (flatten_positions — resolves to OURS, dir is front-most)
 import strategy as M                                         # noqa: E402
 from binance_futures import BinanceFutures, BinanceError     # noqa: E402
 from exchange_info import ExchangeInfo                        # noqa: E402
@@ -45,16 +54,28 @@ from exchange_info import ExchangeInfo                        # noqa: E402
 ALLOW_CONTRACTS = ("PERPETUAL", "TRADIFI_PERPETUAL")         # gold on Binance is TRADIFI_PERPETUAL
 NEW_SIGNAL_LOOKBACK_MIN = 15                                 # only enter a signal this fresh (else stale)
 
+_HTML_RE = re.compile(r"<[^>]+>")
+
+
+def _alert(cfg, conn, text: str, *, title: str = "") -> None:
+    """Per-user event routing: Telegram stays the owner/admin channel (canonical account only,
+    exactly today's behavior); the account's own user additionally gets a personal Web Push
+    (push_outbox -> sync/push_notify.py). Best-effort on both legs."""
+    if cfg.is_canonical:
+        notify.alert(text, chat_id=cfg.telegram_chat_id)
+    if cfg.user_id:
+        body = _HTML_RE.sub("", text)
+        ustore.push_user(conn, cfg.user_id, title or body.split("\n", 1)[0][:60], body, tag="exec")
+
+
+def _net(cfg) -> str:
+    return "testnet" if cfg.testnet else "mainnet"
+
 
 # ------------------------------------------------------------------ wiring
 def _client(cfg) -> BinanceFutures:
     return BinanceFutures(api_key=cfg.api_key, api_secret=cfg.api_secret,
                           base_url=cfg.base_url, proxy=cfg.proxy)
-
-
-def _load_exchange_info(cfg, client) -> ExchangeInfo:
-    """exchangeInfo is PUBLIC — works in dry-run without API keys."""
-    return ExchangeInfo(client.exchange_info())
 
 
 def _tag(cfg) -> str:
@@ -74,6 +95,76 @@ def _ensure_account(cfg, client, symbol: str) -> None:
         client.set_leverage(symbol, cfg.leverage)
     except BinanceError as e:
         print(f"  ! {symbol} set_leverage({cfg.leverage}): {e} (kept exchange default)")
+
+
+# ------------------------------------------------------------------ shared per-tick caches
+class SharedTick:
+    """Everything user-INDEPENDENT in one cron tick, computed once and memoized so N users
+    never multiply the market-data footprint (Binance REQUEST_WEIGHT is per IP — the shared
+    VM egress is the scarce resource, account calls are per-key). At */1 cadence the 1m-kline
+    memo is what matters for the single MIDAS symbol:
+      * the fresh-signal window per symbol (one query — no user filter exists in it)
+      * exchangeInfo + clock offset per network base URL
+      * 1m klines per symbol (widest-range cache; narrower asks are slices)
+      * the FX-gold session check (pure market data — user-independent)."""
+
+    def __init__(self, now: pd.Timestamp):
+        self.now = now
+        self._signals: dict[str, list[dict]] = {}
+        self._xi: dict[str, ExchangeInfo] = {}
+        self._off: dict[str, int] = {}
+        self._k1m: dict[str, tuple[pd.Timestamp, object]] = {}
+        self._in_sess: bool | None = None
+
+    def signals(self, live_conn, symbol: str) -> list[dict]:
+        """Fresh mode='midas' signals for `symbol` that are not yet closed in the paper feed."""
+        if symbol not in self._signals:
+            w_start = self.now - pd.Timedelta(minutes=NEW_SIGNAL_LOOKBACK_MIN)
+            cur = live_conn.cursor()
+            cur.execute("""
+                SELECT symbol, signal_time, direction, entry, sl, tp, context
+                FROM ict_trade.signals
+                WHERE mode='midas' AND signal_time >= %s AND symbol = %s
+                  AND COALESCE(context->>'pos','open') <> 'closed'
+                ORDER BY signal_time DESC
+            """, (w_start.to_pydatetime(), symbol))
+            cols = [d[0] for d in cur.description]
+            self._signals[symbol] = [dict(zip(cols, r)) for r in cur.fetchall()]
+            cur.close()
+        return self._signals[symbol]
+
+    def sync_client(self, client) -> int:
+        """One /fapi/v1/time per network per tick; later clients reuse the measured offset."""
+        if client.base not in self._off:
+            self._off[client.base] = client.sync_time()
+        else:
+            client._time_offset_ms = self._off[client.base]
+        return self._off[client.base]
+
+    def xi_for(self, client) -> ExchangeInfo:
+        if client.base not in self._xi:
+            self._xi[client.base] = ExchangeInfo(client.exchange_info())
+        return self._xi[client.base]
+
+    def fetch_1m(self, symbol: str, start, end):
+        """Memoized tsc.fetch_1m. All executor asks end ≈ now; cache the widest [start, now]
+        per symbol and answer narrower asks with a slice."""
+        start = pd.Timestamp(start)
+        start = start.tz_localize("UTC") if start.tz is None else start.tz_convert("UTC")
+        cached = self._k1m.get(symbol)
+        if cached is None or start < cached[0]:
+            df = tsc.fetch_1m(symbol, start, end)
+            self._k1m[symbol] = (start, df)
+            return df
+        df = cached[1]
+        if df is None or getattr(df, "empty", True):
+            return df
+        return df[df.index >= start]
+
+    def in_session(self) -> bool:
+        if self._in_sess is None:
+            self._in_sess = _in_session(self.now)
+        return self._in_sess
 
 
 # ------------------------------------------------------------------ helpers
@@ -99,9 +190,10 @@ def _ctx(pos: dict) -> dict:
     return dict(c or {})
 
 
-def _last_price(sym, now) -> float | None:
+def _last_price(sym, now, shared: SharedTick | None = None) -> float | None:
     try:
-        d = tsc.fetch_1m(sym, now - pd.Timedelta(minutes=5), now)
+        fetch = shared.fetch_1m if shared is not None else tsc.fetch_1m
+        d = fetch(sym, now - pd.Timedelta(minutes=5), now)
         return float(d["close"].iloc[-1]) if d is not None and not d.empty else None
     except Exception:  # noqa: BLE001
         return None
@@ -156,15 +248,20 @@ def _funding_since(client, sym, since) -> float:
         return 0.0
 
 
-def _open_entry_times(conn, symbols) -> dict:
+def _open_entry_times(conn, symbols, user_id=None, network=None) -> dict:
     """symbol -> entry_fill_time of the currently-open MIDAS position (anchors funding-since-entry)."""
     cur = conn.cursor()
-    cur.execute("""
+    q = """
         SELECT symbol, min(entry_fill_time)
         FROM ict_trade.midas_positions
         WHERE state = 'OPEN' AND entry_fill_time is not null AND symbol = ANY(%s)
-        GROUP BY symbol
-    """, (list(symbols),))
+    """
+    params: list = [list(symbols)]
+    if user_id is not None:
+        q += " AND user_id = %s AND network = %s"
+        params += [user_id, network]
+    q += " GROUP BY symbol"
+    cur.execute(q, tuple(params))
     out = {r[0]: r[1] for r in cur.fetchall()}
     cur.close()
     return out
@@ -199,7 +296,8 @@ def _market_close(cfg, client, conn, pos, qty, *, leg) -> dict | None:
         print(f"  ! {sym} market close {leg}: {e}")
         return None
     st.log_order(conn, position_id=pos["id"], symbol=sym, leg=leg, action="fill",
-                 client_order_id=coid, order_id=resp.get("orderId"), payload=resp)
+                 client_order_id=coid, order_id=resp.get("orderId"), payload=resp,
+                 user_id=pos.get("user_id"))
     return resp
 
 
@@ -215,7 +313,8 @@ def _place_protective_stop(cfg, client, conn, xi, pos, level: float) -> bool:
             triggerPrice=xi.round_price(sym, level, mode="nearest"),
             closePosition="true", workingType="MARK_PRICE")
         st.log_order(conn, position_id=pos["id"], symbol=sym, leg="sl", action="place",
-                     client_order_id=resp.get("clientAlgoId"), order_id=resp.get("algoId"), payload=resp)
+                     client_order_id=resp.get("clientAlgoId"), order_id=resp.get("algoId"), payload=resp,
+                     user_id=pos.get("user_id"))
         return True
     except BinanceError as e:
         print(f"  ! {sym} protective stop algo failed: {e} (safety_sweep backstops)")
@@ -233,7 +332,7 @@ def _cancel_resting(cfg, client, sym: str) -> None:
 
 
 # ------------------------------------------------------------------ entry lifecycle
-def _manage_entry(cfg, client, conn, xi, pos, now) -> None:
+def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = None) -> None:
     sym = pos["symbol"]
     sign = _sign(pos["direction"])
     signal_entry = float(pos["signal_entry"])
@@ -247,7 +346,7 @@ def _manage_entry(cfg, client, conn, xi, pos, now) -> None:
         _enter_open(cfg, client, conn, xi, pos, avg, _order_fill_time(o, now), o, now)
         return
 
-    last = _last_price(sym, now)
+    last = _last_price(sym, now, shared)
     slipped = last is not None and ((last - signal_entry) * sign) > cfg.entry_max_slip_r * risk0
     dl = pos.get("entry_deadline")
     expired = dl is not None and now > pd.Timestamp(dl).tz_convert("UTC")
@@ -259,9 +358,9 @@ def _manage_entry(cfg, client, conn, xi, pos, now) -> None:
                 pass
         reason = "slipped" if slipped else "unfilled"
         st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason=reason, exit_time=now)
-        notify.alert(f"⏭️ <b>GİRİŞ İPTAL</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                     f"maker limit {'fiyat kaçtı (+%.2gR)' % cfg.entry_max_slip_r if slipped else 'dolmadı (süre doldu)'}"
-                     f" — {_tag(cfg)}", chat_id=cfg.telegram_chat_id)
+        _alert(cfg, conn, f"⏭️ <b>GİRİŞ İPTAL</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                          f"maker limit {'fiyat kaçtı (+%.2gR)' % cfg.entry_max_slip_r if slipped else 'dolmadı (süre doldu)'}"
+                          f" — {_tag(cfg)}")
         print(f"  ⏭️ {sym} entry {reason} — cancelled")
         return
 
@@ -295,17 +394,17 @@ def _place_entry(cfg, client, conn, xi, pos, now) -> None:
             print(f"  ✋ {sym} gold trading blocked: sign the Binance 'TradFi-Perps agreement' on this "
                   f"account (one-time) before MIDAS-X can place orders.")
             st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="error",
-                         client_order_id=coid, payload={"err": str(e)})
-            notify.alert(f"✋ <b>{sym}</b> MIDAS-X: hesap 'TradFi-Perps' sözleşmesini imzalamamış — Binance'te "
-                         f"altın işlemi için bir kereliğine onayla (aksi halde emir gitmez) — {_tag(cfg)}",
-                         chat_id=cfg.telegram_chat_id)
+                         client_order_id=coid, payload={"err": str(e)}, user_id=pos.get("user_id"))
+            _alert(cfg, conn, f"✋ <b>{sym}</b> MIDAS-X: hesap 'TradFi-Perps' sözleşmesini imzalamamış — Binance'te "
+                              f"altın işlemi için bir kereliğine onayla (aksi halde emir gitmez) — {_tag(cfg)}")
             return
         print(f"  ! {sym} entry place error: {e}")
         st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="error",
-                     client_order_id=coid, payload={"err": str(e)})
+                     client_order_id=coid, payload={"err": str(e)}, user_id=pos.get("user_id"))
         return
     st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="place",
-                 client_order_id=coid, order_id=resp.get("orderId"), payload=resp)
+                 client_order_id=coid, order_id=resp.get("orderId"), payload=resp,
+                 user_id=pos.get("user_id"))
     if resp.get("status") == "FILLED":
         avg = float(resp.get("avgPrice") or 0) or float(pos["signal_entry"])
         _enter_open(cfg, client, conn, xi, pos, avg, now, resp, now)
@@ -325,11 +424,10 @@ def _enter_open(cfg, client, conn, xi, pos, avg: float, fill_time, resp, now) ->
     if _place_protective_stop(cfg, client, conn, xi, pos, float(pos["signal_sl"])):
         ctx["placed_sl"] = float(pos["signal_sl"])
         st.patch(conn, pos["id"], context=ctx)
-    notify.alert(f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                 f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g}\n"
-                 f"SL {float(pos['signal_sl']):g} (−1R · 1.5·ATR) · 3.5·ATR iz-süren · 8s/seans "
-                 f"({'borsa STOP' if not cfg.testnet else 'sentetik'}) — {_tag(cfg)}",
-                 chat_id=cfg.telegram_chat_id)
+    _alert(cfg, conn, f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                      f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g}\n"
+                      f"SL {float(pos['signal_sl']):g} (−1R · 1.5·ATR) · 3.5·ATR iz-süren · 8s/seans "
+                      f"({'borsa STOP' if not cfg.testnet else 'sentetik'}) — {_tag(cfg)}")
     print(f"  ✅ {sym} ENTERED @ {avg:g} · SL {float(pos['signal_sl']):g}")
 
 
@@ -382,17 +480,16 @@ def _finalize(cfg, client, conn, bt, pos, *, reason, exit_px, exit_time, res_pnl
     emoji = "✅" if (realized_r is not None and realized_r >= 0) else "❌"
     label = {"trail/stop": "iz-süren stop", "time": "8s süre", "session": "seans sonu",
              "closed_externally": "borsa/likidite kapanışı"}.get(reason, reason)
-    notify.alert(f"{emoji} <b>KAPANDI</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                 f"Çıkış {exit_px:g} ({label}) · <b>{r_txt}</b>{usd_txt} — {_tag(cfg)}",
-                 chat_id=cfg.telegram_chat_id)
+    _alert(cfg, conn, f"{emoji} <b>KAPANDI</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                      f"Çıkış {exit_px:g} ({label}) · <b>{r_txt}</b>{usd_txt} — {_tag(cfg)}")
     print(f"  🏁 {sym} CLOSED {r_txt} ({reason})")
 
 
-def _reconcile(cfg, client, conn, bt, xi, pos, now) -> None:
+def _reconcile(cfg, client, conn, bt, xi, pos, now, shared: SharedTick | None = None) -> None:
     sym = pos["symbol"]
     state = pos["state"]
     if state in (st.PENDING_ENTRY, st.ENTRY_WORKING):
-        _manage_entry(cfg, client, conn, xi, pos, now)
+        _manage_entry(cfg, client, conn, xi, pos, now, shared)
         return
     if state != st.OPEN:
         return
@@ -400,8 +497,8 @@ def _reconcile(cfg, client, conn, bt, xi, pos, now) -> None:
     # exchange truth wins: DB says OPEN but Binance is flat -> the resting stop fired (mainnet) or a
     # manual/liquidation close happened. Finalize from realizedPnl instead of looping.
     if pos.get("entry_fill_time") and _position_amt(client, sym) == 0:
-        _finalize(cfg, client, conn, bt, pos, reason="closed_externally", exit_px=_last_price(sym, now),
-                  exit_time=now, res_pnl_r=None, now=now)
+        _finalize(cfg, client, conn, bt, pos, reason="closed_externally",
+                  exit_px=_last_price(sym, now, shared), exit_time=now, res_pnl_r=None, now=now)
         return
 
     # the trailing engine — the SAME call the paper canli.py drives (parity by construction)
@@ -410,7 +507,7 @@ def _reconcile(cfg, client, conn, bt, xi, pos, now) -> None:
     if res is None:
         tstop = pos.get("time_stop_at")
         if tstop and now >= pd.Timestamp(tstop).tz_convert("UTC"):   # data-gap fallback past the 8h cap
-            _finalize(cfg, client, conn, bt, pos, reason="time", exit_px=_last_price(sym, now),
+            _finalize(cfg, client, conn, bt, pos, reason="time", exit_px=_last_price(sym, now, shared),
                       exit_time=now, res_pnl_r=None, now=now)
         return
     if res["status"] == "closed":
@@ -421,23 +518,6 @@ def _reconcile(cfg, client, conn, bt, xi, pos, now) -> None:
 
 
 # ------------------------------------------------------------------ new signal -> position
-def _read_midas_signals(cfg, live, now) -> list[dict]:
-    """Fresh mode='midas' signals for our symbol that are not yet closed in the paper feed."""
-    w_start = now - pd.Timedelta(minutes=NEW_SIGNAL_LOOKBACK_MIN)
-    cur = live.cursor()
-    cur.execute("""
-        SELECT symbol, signal_time, direction, entry, sl, tp, context
-        FROM ict_trade.signals
-        WHERE mode='midas' AND signal_time >= %s AND symbol = %s
-          AND COALESCE(context->>'pos','open') <> 'closed'
-        ORDER BY signal_time DESC
-    """, (w_start.to_pydatetime(), cfg.symbol))
-    cols = [d[0] for d in cur.description]
-    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    cur.close()
-    return rows
-
-
 def _size_screen(cfg, xi, sig) -> tuple[float, float, str]:
     """Return (qty, risk0, skip_reason). skip_reason='' means OK."""
     sym = sig["symbol"]
@@ -456,13 +536,14 @@ def _size_screen(cfg, xi, sig) -> tuple[float, float, str]:
     return qty, risk0, ""
 
 
-def _create(cfg, xi, live, sig, now) -> int | None:
+def _create(cfg, xi, live, sig, now, shared: SharedTick | None = None) -> int | None:
     sym = sig["symbol"]; direction = sig["direction"]
     qty, risk0, skip = _size_screen(cfg, xi, sig)
     if skip:
         print(f"  · {sym} SKIP: {skip}")
         return None
-    if not _in_session(now):
+    in_sess = shared.in_session() if shared is not None else _in_session(now)
+    if not in_sess:
         print(f"  · {sym} SKIP: out of FX-gold session")
         return None
     entry = float(sig["entry"]); sl = float(sig["sl"])
@@ -475,7 +556,8 @@ def _create(cfg, xi, live, sig, now) -> int | None:
         live, symbol=sym, signal_time=pd.Timestamp(sig["signal_time"]), direction=direction,
         side=_side(direction), signal_entry=entry, signal_sl=sl, risk0=risk0, qty=qty,
         leverage=cfg.leverage, entry_deadline=now + pd.Timedelta(seconds=cfg.entry_timeout_sec),
-        version=cfg.exec_version, context=ctx)
+        version=cfg.exec_version, context=ctx,
+        user_id=cfg.user_id, network=_net(cfg) if cfg.user_id else None)
     if pos_id is not None:
         print(f"  + {sym} {direction.upper()} position {pos_id} created (maker entry pending)")
     return pos_id
@@ -498,42 +580,70 @@ def _log_intent(cfg, xi, sig, now) -> None:
 # ------------------------------------------------------------------ dashboard snapshot
 def _write_snapshot(cfg, client, conn) -> None:
     """Snapshot the REAL exchange state into ict_trade.live_account(_snapshot) for the dashboard.
-    Read-only on Binance; runs whenever credentials exist (even dry-run/halted). Non-fatal."""
-    net = "testnet" if cfg.testnet else "mainnet"
+    Read-only on Binance; runs whenever credentials exist (even dry-run/halted). Non-fatal.
+    DUAL-MODE like state.py: legacy (user_id None) keeps the original (network)/(symbol) keys;
+    multi-user targets the 005b per-user composite PKs."""
+    net = _net(cfg)
+    uid = cfg.user_id
     cur = conn.cursor()
     try:
         acc = client.account()
-        cur.execute("""
-            INSERT INTO ict_trade.live_account
-              (network, wallet_balance, available_balance, total_unrealized, can_trade, updated_at)
-            VALUES (%s,%s,%s,%s,%s, current_timestamp)
-            ON CONFLICT (network) DO UPDATE SET
-              wallet_balance=EXCLUDED.wallet_balance, available_balance=EXCLUDED.available_balance,
-              total_unrealized=EXCLUDED.total_unrealized, can_trade=EXCLUDED.can_trade,
-              updated_at=current_timestamp
-        """, (net, float(acc.get("totalWalletBalance", 0) or 0),
-              float(acc.get("availableBalance", 0) or 0),
-              float(acc.get("totalUnrealizedProfit", 0) or 0), bool(acc.get("canTrade", False))))
+        acc_vals = (float(acc.get("totalWalletBalance", 0) or 0),
+                    float(acc.get("availableBalance", 0) or 0),
+                    float(acc.get("totalUnrealizedProfit", 0) or 0), bool(acc.get("canTrade", False)))
+        if uid is None:
+            cur.execute("""
+                INSERT INTO ict_trade.live_account
+                  (network, wallet_balance, available_balance, total_unrealized, can_trade, updated_at)
+                VALUES (%s,%s,%s,%s,%s, current_timestamp)
+                ON CONFLICT (network) DO UPDATE SET
+                  wallet_balance=EXCLUDED.wallet_balance, available_balance=EXCLUDED.available_balance,
+                  total_unrealized=EXCLUDED.total_unrealized, can_trade=EXCLUDED.can_trade,
+                  updated_at=current_timestamp
+            """, (net,) + acc_vals)
+        else:
+            cur.execute("""
+                INSERT INTO ict_trade.live_account
+                  (user_id, network, wallet_balance, available_balance, total_unrealized, can_trade, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s, current_timestamp)
+                ON CONFLICT (user_id, network) DO UPDATE SET
+                  wallet_balance=EXCLUDED.wallet_balance, available_balance=EXCLUDED.available_balance,
+                  total_unrealized=EXCLUDED.total_unrealized, can_trade=EXCLUDED.can_trade,
+                  updated_at=current_timestamp
+            """, (uid, net) + acc_vals)
         want = set(cfg.symbols)
-        entry_times = _open_entry_times(conn, want)     # funding summed since the position opened
+        entry_times = _open_entry_times(conn, want, uid, net if uid else None)   # funding since entry
         for r in client.position_risk():
             sym = r.get("symbol")
             amt = float(r.get("positionAmt", 0) or 0)
             if sym not in want and amt == 0:
                 continue
             funding = _funding_since(client, sym, entry_times.get(sym)) if amt != 0 else 0.0
-            cur.execute("""
-                INSERT INTO ict_trade.live_account_snapshot
-                  (symbol, network, position_amt, entry_price, mark_price, unrealized_pnl, leverage, funding_fee, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s, current_timestamp)
-                ON CONFLICT (symbol) DO UPDATE SET
-                  network=EXCLUDED.network, position_amt=EXCLUDED.position_amt,
-                  entry_price=EXCLUDED.entry_price, mark_price=EXCLUDED.mark_price,
-                  unrealized_pnl=EXCLUDED.unrealized_pnl, leverage=EXCLUDED.leverage,
-                  funding_fee=EXCLUDED.funding_fee, updated_at=current_timestamp
-            """, (sym, net, amt, float(r.get("entryPrice", 0) or 0),
-                  float(r.get("markPrice", 0) or 0), float(r.get("unRealizedProfit", 0) or 0),
-                  int(float(r.get("leverage", 0) or 0)), funding))
+            row_vals = (amt, float(r.get("entryPrice", 0) or 0),
+                        float(r.get("markPrice", 0) or 0), float(r.get("unRealizedProfit", 0) or 0),
+                        int(float(r.get("leverage", 0) or 0)), funding)
+            if uid is None:
+                cur.execute("""
+                    INSERT INTO ict_trade.live_account_snapshot
+                      (symbol, network, position_amt, entry_price, mark_price, unrealized_pnl, leverage, funding_fee, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s, current_timestamp)
+                    ON CONFLICT (symbol) DO UPDATE SET
+                      network=EXCLUDED.network, position_amt=EXCLUDED.position_amt,
+                      entry_price=EXCLUDED.entry_price, mark_price=EXCLUDED.mark_price,
+                      unrealized_pnl=EXCLUDED.unrealized_pnl, leverage=EXCLUDED.leverage,
+                      funding_fee=EXCLUDED.funding_fee, updated_at=current_timestamp
+                """, (sym, net) + row_vals)
+            else:
+                cur.execute("""
+                    INSERT INTO ict_trade.live_account_snapshot
+                      (user_id, symbol, network, position_amt, entry_price, mark_price, unrealized_pnl, leverage, funding_fee, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, current_timestamp)
+                    ON CONFLICT (user_id, network, symbol) DO UPDATE SET
+                      position_amt=EXCLUDED.position_amt,
+                      entry_price=EXCLUDED.entry_price, mark_price=EXCLUDED.mark_price,
+                      unrealized_pnl=EXCLUDED.unrealized_pnl, leverage=EXCLUDED.leverage,
+                      funding_fee=EXCLUDED.funding_fee, updated_at=current_timestamp
+                """, (uid, sym, net) + row_vals)
         conn.commit()
     except (BinanceError, Exception) as e:  # noqa: BLE001
         conn.rollback()
@@ -542,55 +652,125 @@ def _write_snapshot(cfg, client, conn) -> None:
         cur.close()
 
 
-# ------------------------------------------------------------------ main
-def main():
-    cfg = cfgmod.load_cfg()
-    now = pd.Timestamp.now(tz="UTC")
+# ------------------------------------------------------------------ per-user tick
+def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> None:
+    """One full executor pass for ONE account (cfg carries the account's keys/knobs/identity).
+    user is the ExecUser row (None = legacy env account). Everything market-data-shaped goes
+    through `shared` so N accounts don't multiply the per-IP Binance weight."""
     armed = cfg.armed
-    head = ("ARMED (LIVE ORDERS)" if armed else
-            ("DRY-RUN (no orders)" if cfg.dry_run else "HALTED (disabled)"))
-    net = "testnet" if cfg.testnet else "MAINNET"
-    print(f"=== {_tag(cfg)} executor @ {now:%Y-%m-%d %H:%M}Z | {head} | {net} | {cfg.symbol} "
-          f"risk ${cfg.risk_usd:g} {cfg.leverage}x {cfg.margin_type} | maker={cfg.maker_entry} ===", flush=True)
-
-    if not (cfg.trading_enabled and cfg.exec_enabled) and not cfg.dry_run:
-        print("[halt] LIVE_TRADING_ENABLED / MIDAS_EXEC_ENABLED false and not a dry-run — no-op.")
-        return
+    uid = cfg.user_id
+    net = _net(cfg)
+    label = cfg.user_email or "env"
+    sym_filter = [cfg.symbol] if uid is None else None      # user mode reconciles ALL their rows
+    bt_conn = bt if cfg.is_canonical else None              # writeback = canonical/owner only
 
     client = _client(cfg)
     try:
-        off = client.sync_time()
-        xi = _load_exchange_info(cfg, client)
+        off = shared.sync_client(client)
+        xi = shared.xi_for(client)
     except BinanceError as e:
-        print(f"[fatal] exchangeInfo/time: {e}")
+        print(f"  [{label}] fatal exchangeInfo/time: {e}")
         return
     f = xi.get(cfg.symbol)
-    print(f"  clock offset {off:+d}ms | {cfg.symbol} tradable={xi.is_tradable(cfg.symbol, allow=ALLOW_CONTRACTS)} "
-          f"(type={getattr(f, 'contract_type', '?')} status={getattr(f, 'status', '?')})")
+    print(f"  [{label}/{net}] offset {off:+d}ms | {cfg.symbol} "
+          f"tradable={xi.is_tradable(cfg.symbol, allow=ALLOW_CONTRACTS)} "
+          f"(type={getattr(f, 'contract_type', '?')} status={getattr(f, 'status', '?')}) | "
+          f"risk ${cfg.risk_usd:g}", flush=True)
 
-    live = tsc.live_conn()
-    bt = tsc.backtest_conn() if armed else None
+    # ---- kill switch: flatten everything, drop the flag, disable — nothing else this tick
+    if user is not None and user.kill_requested:
+        n = 0
+        if armed:
+            try:
+                n = ks.flatten_positions(cfg, client, live, user_id=uid, network=net, reason="killswitch")
+            except Exception as e:  # noqa: BLE001
+                print(f"  [{label}] kill flatten error: {e}")
+        ustore.clear_kill(live, user.settings_id)
+        ustore.audit(live, uid, "kill_executed", {"stream": "midas", "network": net, "flattened": n})
+        _alert(cfg, live, f"🟥 <b>ACİL DURDUR</b> · {n} pozisyon kapatıldı, MIDAS/{net} devre dışı bırakıldı — {_tag(cfg)}",
+               title="Acil durdurma tamamlandı")
+        return
 
-    sigs = _read_midas_signals(cfg, live, now)
-    print(f"  {len(sigs)} recent midas signal(s) in window")
+    # ---- entry gates: activation + daily loss cap (reconcile ALWAYS continues below)
+    entries_ok = armed and (user is None or user.entries_allowed)
+    if entries_ok and user is not None and user.daily_loss_cap_usd:
+        lost = ustore.realized_today_usd(live, uid, net, "midas")
+        if lost <= -float(user.daily_loss_cap_usd):
+            entries_ok = False
+            if not ustore.daily_pause_notified(live, uid, "midas"):
+                ustore.audit(live, uid, "daily_loss_pause",
+                             {"stream": "midas", "network": net, "lost_usd": lost,
+                              "cap_usd": user.daily_loss_cap_usd})
+                _alert(cfg, live, f"⛔ Günlük zarar limiti aşıldı ({lost:+.2f}$ ≤ −{user.daily_loss_cap_usd:g}$) — "
+                                  f"bugün yeni işlem açılmayacak. Açık pozisyonlar yönetilmeye devam ediyor.",
+                       title="Günlük zarar limiti")
+
+    sigs = shared.signals(live, cfg.symbol)
+    print(f"  [{label}] {len(sigs)} recent midas signal(s) in window")
 
     if not armed:
         for sig in sigs:
             _log_intent(cfg, xi, sig, now)
     else:
-        if st.count_open(live, [cfg.symbol]) == 0 and sigs:
-            _create(cfg, xi, live, sigs[0], now)            # single position: newest fresh signal only
-        for pos in st.fetch_open(live, [cfg.symbol]):
+        if (entries_ok and sigs
+                and st.count_open(live, sym_filter, user_id=uid, network=net if uid else None) == 0):
+            _create(cfg, xi, live, sigs[0], now, shared)    # single position: newest fresh signal only
+        for pos in st.fetch_open(live, sym_filter, user_id=uid, network=net if uid else None):
             try:
-                _reconcile(cfg, client, live, bt, xi, pos, now)
+                _reconcile(cfg, client, live, bt_conn, xi, pos, now, shared)
             except BinanceError as e:
                 print(f"  ! {pos['symbol']} reconcile error: {e}")
-                notify.alert(f"⚠️ <b>{pos['symbol']}</b> MIDAS reconcile error: {e}",
-                             chat_id=cfg.telegram_chat_id)
+                _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> MIDAS reconcile error: {e}")
 
     if cfg.api_key and cfg.api_secret:
         _write_snapshot(cfg, client, live)
-        print(f"  snapshot written ({net})")
+        print(f"  [{label}] snapshot written ({net})")
+
+
+# ------------------------------------------------------------------ main
+def main():
+    base = cfgmod.load_cfg()
+    now = pd.Timestamp.now(tz="UTC")
+    armed = base.armed
+    head = ("ARMED (LIVE ORDERS)" if armed else
+            ("DRY-RUN (no orders)" if base.dry_run else "HALTED (disabled)"))
+    net = "testnet" if base.testnet else "MAINNET"
+    print(f"=== {_tag(base)} executor @ {now:%Y-%m-%d %H:%M}Z | {head} | {net} | {base.symbol} "
+          f"risk ${base.risk_usd:g} {base.leverage}x {base.margin_type} | maker={base.maker_entry} | "
+          f"{'MULTI-USER' if base.multi_user else 'single (env)'} ===", flush=True)
+
+    if not (base.trading_enabled and base.exec_enabled) and not base.dry_run:
+        print("[halt] LIVE_TRADING_ENABLED / MIDAS_EXEC_ENABLED false and not a dry-run — no-op.")
+        return
+
+    live = tsc.live_conn()
+    bt = tsc.backtest_conn() if armed else None
+    shared = SharedTick(now)
+
+    if base.multi_user:
+        try:
+            users = ustore.load_exec_users(live, "midas")
+        except Exception as e:  # noqa: BLE001
+            print(f"[fatal] load_exec_users: {e}")
+            notify.alert(f"⚠️ {_tag(base)} executor: kullanıcılar yüklenemedi: {e}", chat_id=base.telegram_chat_id)
+            live.close()
+            if bt:
+                bt.close()
+            return
+        print(f"  {len(users)} exec user-network row(s) loaded")
+        for u in users:
+            try:
+                _run_tick(cfgmod.cfg_for_user(base, u), u, live, bt, shared, now)
+            except Exception as e:  # noqa: BLE001 — one user can NEVER break another's reconcile
+                print(f"  ! user {u.email}/{u.network} tick error: {e}")
+                notify.alert(f"⚠️ {_tag(base)} exec kullanıcı hatası · {u.email}/{u.network}: {e}",
+                             chat_id=base.telegram_chat_id)
+                try:
+                    live.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
+    else:
+        _run_tick(base, None, live, bt, shared, now)
 
     live.close()
     if bt:

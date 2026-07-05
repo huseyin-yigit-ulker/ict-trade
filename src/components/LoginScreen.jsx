@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, usingDefaultCreds, consumeAuthNote } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
-import { infoFor } from '../utils/strategyInfo';
+import { codenameFor } from '../utils/streamMask';
 import { STREAMS, fetchAllSummaries, getCachedStats, fmtR, fmtExp, fmtPct } from '../utils/streamStats';
 import PusuLogo from './PusuLogo';
 
@@ -118,7 +118,8 @@ const TrackRecord = () => {
   const totalSignals = rows.reduce((sum, x) => sum + (Number(x.m.total_trades) || 0), 0);
   const top = rows[0];
   const bestExp = rows.reduce((a, b) => (Number(b.m.avg_r) > Number(a.m.avg_r) ? b : a));
-  const head = (s) => infoFor(s.key, lang) || {};
+  // Public screen — ALWAYS anonymized codenames (real names are admin-only, in-app).
+  const head = (s) => ({ title: codenameFor(s.key), icon: '◆', accent: '#F0B90B' });
 
   return (
     <div className="login-track">
@@ -145,11 +146,11 @@ const TrackRecord = () => {
       <div className="login-track__rows">
         {rows.map(({ s, m }) => {
           const r = Number(m.total_r);
-          const info = infoFor(s.key, lang) || {};
+          const info = head(s);
           return (
             <div key={s.key} className="login-track__row" style={{ '--acc': info.accent }}>
               <span className="login-track__icon" aria-hidden="true">{info.icon}</span>
-              <span className="login-track__name">{head(s).title}</span>
+              <span className="login-track__name">{info.title}</span>
               <span className="login-track__bar">
                 <span className={`login-track__fill ${r >= 0 ? 'win' : 'loss'}`} style={{ width: `${Math.min(100, (Math.abs(r) / maxAbsR) * 100)}%` }} />
               </span>
@@ -166,17 +167,20 @@ const TrackRecord = () => {
 };
 
 const LoginScreen = () => {
-  const { isAuthed, login, lockRemainingMs } = useAuth();
+  const { isAuthed, login, signup, lockRemainingMs } = useAuth();
   const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
-  const [username, setUsername] = useState('');
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [username, setUsername] = useState('');   // e-posta (legacy state adı korunuyor)
   const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [err, setErr] = useState('');
+  const [okNote, setOkNote] = useState('');
   const [note] = useState(() => consumeAuthNote()); // 'expired' | null
   const [shake, setShake] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
@@ -213,10 +217,30 @@ const LoginScreen = () => {
   const submit = (e) => {
     e.preventDefault();
     if (loading || !username.trim() || !password) return;
+    if (mode === 'signup') {
+      if (password.length < 10) { failFeedback(t('Şifre en az 10 karakter olmalı.')); return; }
+      if (password !== password2) { failFeedback(t('Şifreler eşleşmiyor.')); return; }
+    }
     setLoading(true);
     setErr('');
-    // Brief verification beat so the spinner reads as a real check (client-side gate).
+    setOkNote('');
     setTimeout(async () => {
+      if (mode === 'signup') {
+        const res = await signup(username.trim(), password);
+        setLoading(false);
+        if (res.ok && !res.needsConfirm) {
+          // Session açık — hesap 'onay bekliyor'; RequireActive canlı sayfaları kilitler.
+          navigate('/', { replace: true });
+          return;
+        }
+        if (res.ok && res.needsConfirm) {
+          setOkNote(t('Hesap oluşturuldu. E-postanızı doğrulayıp giriş yapın.'));
+          setMode('login');
+          return;
+        }
+        failFeedback(res.error || t('Kayıt başarısız. Tekrar deneyin.'));
+        return;
+      }
       const res = await login(username.trim(), password, remember);
       if (res.ok) {
         const from = location.state?.from;
@@ -228,7 +252,7 @@ const LoginScreen = () => {
         setLockLeft(Math.ceil(res.lockedMs / 1000));
         failFeedback(t('Çok fazla hatalı deneme. {s} sn bekleyin.', { s: Math.ceil(res.lockedMs / 1000) }));
       } else {
-        failFeedback(t('Kullanıcı adı veya şifre hatalı.'));
+        failFeedback(t('E-posta veya şifre hatalı.'));
       }
     }, 550);
   };
@@ -267,23 +291,36 @@ const LoginScreen = () => {
 
         <div className={`login-card login-card--auth${shake ? ' login-card--shake' : ''}`}>
           <div className="login-card__head">
-            <span className="login-card__kicker">{t('Operatör Girişi')}</span>
+            <span className="login-card__kicker">{mode === 'signup' ? t('Yeni Hesap') : t('Operatör Girişi')}</span>
             <span className="login-card__lock"><LockIcon /> {t('Şifreli Oturum')}</span>
+          </div>
+
+          <div className="login-tabs seg" role="tablist">
+            <button type="button" className={mode === 'login' ? 'active' : ''} role="tab"
+              onClick={() => { setMode('login'); setErr(''); setOkNote(''); }}>{t('Giriş Yap')}</button>
+            <button type="button" className={mode === 'signup' ? 'active' : ''} role="tab"
+              onClick={() => { setMode('signup'); setErr(''); setOkNote(''); }}>{t('Kayıt Ol')}</button>
           </div>
 
           {note === 'expired' && (
             <div className="login-note" role="status">{t('Oturum süresi doldu. Lütfen tekrar giriş yapın.')}</div>
           )}
+          {okNote && <div className="login-note" role="status">{okNote}</div>}
+          {mode === 'signup' && (
+            <div className="login-note login-note--info" role="note">
+              {t('Kayıt sonrası hesabınız yönetici onayına düşer; onaylanana kadar canlı işlem özellikleri kapalıdır.')}
+            </div>
+          )}
 
         <form className="login-form" onSubmit={submit}>
           <label className="login-field">
-            <span>{t('Kullanıcı adı')}</span>
+            <span>{t('E-posta')}</span>
             <input
-              type="text" name="username" autoFocus autoComplete="username"
-              autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={64}
+              type="email" name="email" autoFocus autoComplete="email"
+              autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={120}
               value={username}
               onChange={(e) => { setUsername(e.target.value); if (err && !locked) setErr(''); }}
-              placeholder={t('Kullanıcı adı')}
+              placeholder={t('E-posta')}
             />
           </label>
           <label className="login-field">
@@ -291,12 +328,13 @@ const LoginScreen = () => {
             <div className="login-pass-wrap">
               <input
                 ref={passRef}
-                type={showPass ? 'text' : 'password'} name="password" autoComplete="current-password"
+                type={showPass ? 'text' : 'password'} name="password"
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={128}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); if (err && !locked) setErr(''); }}
                 onKeyDown={trackCaps} onKeyUp={trackCaps} onBlur={() => setCapsOn(false)}
-                placeholder={t('Şifre')}
+                placeholder={mode === 'signup' ? t('Şifre (en az 10 karakter)') : t('Şifre')}
               />
               <button
                 type="button" className="login-pass-toggle"
@@ -310,16 +348,30 @@ const LoginScreen = () => {
             </div>
             {capsOn && <span className="login-caps" role="status">⇪ {t('Caps Lock açık')}</span>}
           </label>
-
-          <div className="login-aux">
-            <label className="login-remember">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              <span>{t('Beni Hatırla')}</span>
+          {mode === 'signup' && (
+            <label className="login-field">
+              <span>{t('Şifre (tekrar)')}</span>
+              <input
+                type={showPass ? 'text' : 'password'} name="password2" autoComplete="new-password"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={128}
+                value={password2}
+                onChange={(e) => { setPassword2(e.target.value); if (err && !locked) setErr(''); }}
+                placeholder={t('Şifre (tekrar)')}
+              />
             </label>
-            <button type="button" className="login-forgot" onClick={() => setShowForgot((v) => !v)}>
-              {t('Şifremi Unuttum')}
-            </button>
-          </div>
+          )}
+
+          {mode === 'login' && (
+            <div className="login-aux">
+              <label className="login-remember">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                <span>{t('Beni Hatırla')}</span>
+              </label>
+              <button type="button" className="login-forgot" onClick={() => setShowForgot((v) => !v)}>
+                {t('Şifremi Unuttum')}
+              </button>
+            </div>
+          )}
           {showForgot && <div className="login-forgot-note">{t('Erişim için sistem yöneticinize başvurun.')}</div>}
 
           {locked && !loading
@@ -328,7 +380,8 @@ const LoginScreen = () => {
           <button className="primary-btn login-submit" type="submit" disabled={!canSubmit}>
             {loading
               ? <><span className="btn-spinner" aria-hidden="true" />{t('Doğrulanıyor…')}</>
-              : locked ? `${t('Şifreli Oturum')} · ${lockLeft}s` : t('Piyasaya Gir')}
+              : locked ? `${t('Şifreli Oturum')} · ${lockLeft}s`
+                : mode === 'signup' ? t('Hesap Oluştur') : t('Piyasaya Gir')}
           </button>
         </form>
 

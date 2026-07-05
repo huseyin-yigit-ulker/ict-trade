@@ -6,6 +6,11 @@
 // (src/sw.js) shows them.
 //
 // Requires VITE_VAPID_PUBLIC_KEY in the frontend env (from scripts/gen_vapid.py).
+// Multi-user: rows are written with the USER JWT (authedFetch) and carry user_id,
+// so RLS scopes each subscription to its owner and the sender can target per-user.
+
+import { authedFetch } from './supa';
+import { loadSession } from './gotrue';
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -14,14 +19,6 @@ const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 // needed. An env var, if set, overrides it (lets you rotate without a code change).
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY
   || 'BFzG5WnCk8-TIuFmNwO0xn4nIxAVMFwv0L9RT_7awvEOK0DIF_k764jaKrMDi8b-NSWzL2KF3AZ8wp2iYj92Mxk';
-
-const SUPA_HEADERS = {
-  apikey: SUPA_KEY,
-  Authorization: `Bearer ${SUPA_KEY}`,
-  'Accept-Profile': 'ict_trade',
-  'Content-Profile': 'ict_trade',
-  'Content-Type': 'application/json',
-};
 
 // VAPID applicationServerKey must be a Uint8Array of the base64url public key.
 function urlB64ToUint8Array(base64String) {
@@ -59,6 +56,8 @@ export async function pushState() {
 
 export async function enablePush() {
   if (!pushSupported()) throw new Error('unsupported');
+  const userId = loadSession()?.user?.id;
+  if (!userId) throw new Error('no session');   // button is hidden for logged-out anyway
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('denied');
   const reg = await navigator.serviceWorker.ready;
@@ -75,11 +74,12 @@ export async function enablePush() {
     p256dh: json.keys?.p256dh ?? bufToB64Url(sub.getKey('p256dh')),
     auth: json.keys?.auth ?? bufToB64Url(sub.getKey('auth')),
     label: navigator.userAgent.slice(0, 120),
+    user_id: userId,
   };
-  // Upsert on the unique endpoint so re-subscribing refreshes the keys.
-  const res = await fetch(`${SUPA_URL}/rest/v1/push_subscriptions?on_conflict=endpoint`, {
+  // Upsert on the unique endpoint so re-subscribing refreshes the keys/owner.
+  const res = await authedFetch('push_subscriptions?on_conflict=endpoint', {
     method: 'POST',
-    headers: { ...SUPA_HEADERS, Prefer: 'resolution=merge-duplicates,return=minimal' },
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`db ${res.status}`);
@@ -94,9 +94,9 @@ export async function disablePush() {
   const endpoint = sub.endpoint;
   try { await sub.unsubscribe(); } catch { /* ignore */ }
   if (SUPA_URL && SUPA_KEY) {
-    await fetch(
-      `${SUPA_URL}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,
-      { method: 'DELETE', headers: SUPA_HEADERS },
+    await authedFetch(
+      `push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,
+      { method: 'DELETE' },
     ).catch(() => {});
   }
 }

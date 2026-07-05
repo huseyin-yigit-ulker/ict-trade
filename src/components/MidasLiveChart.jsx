@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers } from 'lightweight-charts';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 
 // Standalone LIVE chart for MIDAS (XAUUSDT 1m) — NOT tied to a trade. Draws the exact metrics the
 // signal logic (sync/midas/strategy.signals) keys off, recomputed live every 30s:
@@ -124,6 +125,11 @@ const highlightMarkers = (coreMarkers, trades, candles) => {
 // window (e.g. a backtest day), no polling — same VWAP/band/markers, fit to the whole window.
 export default function MidasLiveChart({ startMs = null, endMs = null, trades = null }) {
   const isStatic = Number.isFinite(startMs) && Number.isFinite(endMs);
+  // PRIVACY: the anchor line + the rule checklist render under neutral tags for
+  // everyone except the admin (whose real labels lazy-load from adminStreamInfo).
+  const sd = useStreamDisplay();
+  const REF = sd.refline();
+  const CONDS = sd.midasConds();
   const tradesRef = useRef(trades);
   tradesRef.current = trades;                              // latest trades without re-running the effect
   const containerRef = useRef(null);
@@ -158,7 +164,7 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: '#0ECB81', downColor: '#F6465D', borderVisible: false, wickUpColor: '#0ECB81', wickDownColor: '#F6465D',
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 } });
-    const vwap = chart.addSeries(LineSeries, { color: '#3B82F6', lineWidth: 2, title: 'VWAP', lastValueVisible: true,
+    const vwap = chart.addSeries(LineSeries, { color: '#3B82F6', lineWidth: 2, title: REF, lastValueVisible: true,
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 }, crosshairMarkerVisible: false });
     const bandOpts = { color: 'rgba(59,130,246,0.35)', lineWidth: 1, lineStyle: 2, lastValueVisible: false,
       priceLineVisible: false, crosshairMarkerVisible: false, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } };
@@ -219,7 +225,7 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     });
     ro.observe(containerRef.current);
     return () => { cancelled = true; if (id) clearInterval(id); ro.disconnect(); chart.remove(); chartRef.current = null; };
-  }, [startMs, endMs]);
+  }, [startMs, endMs, REF]);
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
   const c = last?.cond;
@@ -245,12 +251,12 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0B0E11', color: '#EAECEF' }}>
       <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', flexWrap: 'wrap', padding: '10px 14px',
         borderBottom: '1px solid #1E2329', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
-        <strong style={{ color: '#F0B90B' }}>MIDAS · XAUUSDT {last?.interval || '1m'} · {isStatic
+        <strong style={{ color: '#F0B90B' }}>{sd.name('midas')} · XAUUSDT {last?.interval || '1m'} · {isStatic
           ? new Date(endMs).toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
           : 'CANLI'}</strong>
         <span>Fiyat <b>{fmt(last?.price)}</b></span>
-        <span style={{ color: '#3B82F6' }}>VWAP <b>{fmt(last?.vwap)}</b></span>
-        <span>fiyat−VWAP <b>{last ? fmt(last.price - last.vwap) : '—'}</b></span>
+        <span style={{ color: '#3B82F6' }}>{REF} <b>{fmt(last?.vwap)}</b></span>
+        <span>fiyat−{REF} <b>{last ? fmt(last.price - last.vwap) : '—'}</b></span>
         <span>eğim(60) <b>{fmt(last?.slope, 2)}</b></span>
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
@@ -260,18 +266,18 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
           gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
           <span style={{ color: '#848E9C', fontSize: 10, letterSpacing: '0.04em' }}>SİNYAL KOŞULLARI (anlık · hepsi ✓ olunca sinyal oluşur)</span>
           <Row side="AL" ready={longReady} color="#0ECB81" items={[
-            { ok: c.slopeUp, label: 'eğim>0 (yukarı trend)' },
-            { ok: c.aboveVWAP, label: 'fiyat > VWAP' },
-            { ok: c.pullLong, label: "VWAP'a çekilme (low ≤ VWAP+0.25·ATR)" },
-            { ok: c.bull, label: 'yükselen mum (close>open)' },
-            { ok: c.sessOk, label: 'seans uygun (07-13 UTC dışı)' },
+            { ok: c.slopeUp, label: CONDS.slopeUp },
+            { ok: c.aboveVWAP, label: CONDS.above },
+            { ok: c.pullLong, label: CONDS.pullLong },
+            { ok: c.bull, label: CONDS.bull },
+            { ok: c.sessOk, label: CONDS.sess },
           ]} />
           <Row side="SAT" ready={shortReady} color="#F6465D" items={[
-            { ok: c.slopeDn, label: 'eğim<0 (aşağı trend)' },
-            { ok: c.belowVWAP, label: 'fiyat < VWAP' },
-            { ok: c.pullShort, label: "VWAP'a çekilme (high ≥ VWAP−0.25·ATR)" },
-            { ok: c.bear, label: 'düşen mum (close<open)' },
-            { ok: c.sessOk, label: 'seans uygun (07-13 UTC dışı)' },
+            { ok: c.slopeDn, label: CONDS.slopeDn },
+            { ok: c.belowVWAP, label: CONDS.below },
+            { ok: c.pullShort, label: CONDS.pullShort },
+            { ok: c.bear, label: CONDS.bear },
+            { ok: c.sessOk, label: CONDS.sess },
           ]} />
         </div>
       )}

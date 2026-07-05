@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useTradeContext } from '../../context/TradeContext';
+import { useStreamDisplay } from '../../utils/useStreamDisplay';
+import { slugFor } from '../../utils/streamMask';
 import PusuLogo from '../PusuLogo';
 
 const IconCommand = () => (
@@ -75,80 +77,114 @@ const IconTotal = () => (
     <rect x="13.6" y="3" width="3.4" height="14.5" rx="0.8" />
   </svg>
 );
+// İşlem Merkezi: a gear — per-user execution controls (keys / risk / activation).
+const IconGear = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="10" cy="10" r="2.6" />
+    <path d="M10 2.6v2.2M10 15.2v2.2M2.6 10h2.2M15.2 10h2.2M4.9 4.9l1.5 1.5M13.6 13.6l1.5 1.5M15.1 4.9l-1.5 1.5M6.4 13.6l-1.5 1.5" />
+  </svg>
+);
+// Yönetim: a shield — the admin console.
+const IconShield = () => (
+  <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 2.4 16.4 5v5c0 4.2-2.7 6.6-6.4 7.6C6.3 16.6 3.6 14.2 3.6 10V5Z" />
+    <path d="M7.2 10l2 2 3.6-3.8" />
+  </svg>
+);
 
-// Strategy × Mode nested nav. MAIN runs the v1 set (mode='live'), IMPULSE the refined
-// v2 set (mode='impulse') — dag.py emits each hourly. KARMA = per-symbol best cell of
-// {main,impulse} × {tam,½TP} from the 2026 selection run (sync/karma_map.py) — live
-// reads both parents, filtered per symbol. OPUS = MAIN signals kept only in each
-// symbol's edge NY-session. IMPULSE · Light / KARMA · Light = the same stream filtered
-// to the light-trend 4h-ER band [0.20,0.35) (the regime-routing audit's edge zone).
-// 2026-06-13 prune: the standalone ½TP streams (v3/v4, karma_half, opus_half), the 8
-// Chop twins and the redundant Light cells were removed (UI + DB) to focus R&D.
-// PULSE retired 2026-06-10; RADAR/SQUEEZE removed 2026-06-11.
-// 2026-06-14: removed the 6 OOS-negative streams (v1/v2/karma/opus + the two _light
-// twins) from UI + DB — every one bled out-of-sample in 2025 (−60..−245R), in-sample
-// period-fit. Only the OOS-positive "range book" remains (range +9.2R, range_q +26.2R,
-// v2_light_r +15.5R in 2025). All three are backtest-only (no live scanner).
+// Stream nav data — IDENTITY-FREE by design (multi-user anonymization, 2026-07-04).
+// Entries carry only routing/flag data (key/icon/modes/section/live/paper/real);
+// display names + labels resolve at render time through useStreamDisplay(), which
+// serves neutral codenames to everyone and the real names only to the admin (whose
+// strings live in a separate lazy chunk — see utils/streamMask.js). Leaf URLs use
+// the codename slug (slugFor) so raw stream keys never appear in the address bar.
 const GROUPS = [
-  // ⭐ THE REAL-MONEY STRATEGY — d30so8f3h7 is the ONLY stream running on Binance (real money):
-  // 30m+4h breakout, ·0.5R confirm entry, book 30% at TP1, runner to +8R cap / BE / 7-day stop,
-  // BTC/ETH/SOL/FET/ARB, one-per-symbol, $5 risk, risk-safe auto-leverage. Pinned to the top +
-  // highlighted. Every OTHER stream below is BACKTEST-ONLY (research; not traded live)…
-  { key: 'd30so8f3h7',   name: 'OPUS', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true },
-
-  // …EXCEPT this volume-gated twin: same d30so8f3h7 signals/exit, but only TAKEN when daily volume
-  // is CONTRACTING at signal time (vch<0.9). Robustly fewer SL + smaller worst-month, higher WR/PF
-  // (fewer trades). LIVE-MONITORED (paper) via mode='dch30_4hvg' — CANLI in the dashboard but NOT
-  // on Binance (the executor still trades only the ungated d30so8f3h7). Backfill: volgate_backfill.py.
-  { key: 'd30so8f3vg',   name: 'FABLE', label: 'DONCHIAN 30m+4h·WR 8R ·b30·7g ·VG0.9', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true },
-
-  // 🥇 MIDAS — GOLD-ONLY (XAUUSDT) intraday VWAP-trend, INDEPENDENT from the Donchian book.
-  // 1m pullback-to-VWAP continuation, 3.5×ATR trailing, intraday-only ("anlik ac-kapa"), 2026.
-  // LIVE = PAPER signal feed (mode='midas', sync/midas/canli.py); nightly backtest sync/midas/backfill.py.
-  // FX/ECN cost model ($0.50/oz) — paper-only, the real-money executor is NOT touched.
-  { key: 'midas',        name: 'MIDAS', label: 'ALTIN VWAP-Trend (XAU 1m·trailing)', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true },
-
-  // ── 1h family (backtest-only) ──
-  { key: 'donchianc',    label: 'DONCHIAN 1h ·0.5R',          icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd1h_so4c',     label: 'DONCHIAN 1h·WR 4R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd1h_so6c',     label: 'DONCHIAN 1h·WR 6R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd1h_so8c',     label: 'DONCHIAN 1h·WR 8R ·0.5R',    icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd1hso4cm',     label: 'DONCHIAN 1h·WR 4R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd1hso6cm',     label: 'DONCHIAN 1h·WR 6R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd1hso8cm',     label: 'DONCHIAN 1h·WR 8R ·M0.25',   icon: <IconIntel />, modes: ['backtest'] },
-  // ── 30m + 4h family (backtest-only) ──
-  { key: 'dch30_4hc',    label: 'DONCHIAN 30m+4h ·0.5R',      icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'dch30_4h6c',   label: 'DONCHIAN 30m+4h·6R ·0.5R',   icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30_4h_soc',   label: 'DONCHIAN 30m+4h·WR 4R ·0.5R', icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so6c',      label: 'DONCHIAN 30m+4h·WR 6R ·0.5R', icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so8c',      label: 'DONCHIAN 30m+4h·WR 8R ·0.5R', icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so4cm',     label: 'DONCHIAN 30m+4h·WR 4R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so6cm',     label: 'DONCHIAN 30m+4h·WR 6R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so8cm',     label: 'DONCHIAN 30m+4h·WR 8R ·M0.25', icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so4f3',     label: 'DONCHIAN 30m+4h·WR 4R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so6f3',     label: 'DONCHIAN 30m+4h·WR 6R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
-  { key: 'd30so8f3',     label: 'DONCHIAN 30m+4h·WR 8R ·b30',  icon: <IconIntel />, modes: ['backtest'] },
+  // ── canlı modül: 1 gerçek-para akışı + 2 paper akış ──
+  { key: 'd30so8f3h7', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
+  { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true, section: 'live' },
+  { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true, section: 'live' },
+  // ── backtest-only araştırma akışları ──
+  { key: 'donchianc',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd1h_so4c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd1h_so6c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd1h_so8c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd1hso4cm',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd1hso6cm',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd1hso8cm',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'dch30_4hc',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'dch30_4h6c', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30_4h_soc', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so6c',    icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so8c',    icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so4cm',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so6cm',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so8cm',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so4f3',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so6f3',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so8f3',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
 ];
 
 const Sidebar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isActive, isAdmin } = useAuth();
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
   const { closeMobileNav } = useTradeContext();
+  const sd = useStreamDisplay();   // codenames for everyone; real names lazy-load for admins
 
   const leafLabel = { live: t('Live'), backtest: t('Backtest') };
 
-  // The 8 strategy streams are collected under a collapsible "Stratejiler" header
-  // so the rail stays calm now that "Genel Bakış" is the home. Default open;
-  // collapse state persists like the other PUSU prefs.
-  const [stratOpen, setStratOpen] = useState(() => {
-    try { return localStorage.getItem('pusu.navStrategies') !== '0'; } catch { return true; }
+  // Admin-only technical sublabel; drops the redundant "NAME · " prefix when present.
+  const techLabel = (key) => {
+    if (!sd.isAdmin) return null;
+    const n = sd.name(key);
+    const l = sd.label(key);
+    if (!l || l === n) return null;
+    return l.startsWith(`${n} · `) ? l.slice(n.length + 3) : l;
+  };
+
+  // Two collapsible nav sections (they replace the old single 'pusu.navStrategies'
+  // header): CANLI MODÜL — the three live streams + the live/per-user pages —
+  // default OPEN; BACKTEST — the research-only streams — default COLLAPSED.
+  // Collapse state persists like the other PUSU prefs.
+  const [liveOpen, setLiveOpen] = useState(() => {
+    try { return localStorage.getItem('pusu.navLive') !== '0'; } catch { return true; }
   });
-  const toggleStrategies = () => setStratOpen((o) => {
+  const [btOpen, setBtOpen] = useState(() => {
+    try { return localStorage.getItem('pusu.navBacktest') === '1'; } catch { return false; }
+  });
+  const toggleLive = () => setLiveOpen((o) => {
     const next = !o;
-    try { localStorage.setItem('pusu.navStrategies', next ? '1' : '0'); } catch { /* ignore */ }
+    try { localStorage.setItem('pusu.navLive', next ? '1' : '0'); } catch { /* ignore */ }
     return next;
   });
+  const toggleBacktest = () => setBtOpen((o) => {
+    const next = !o;
+    try { localStorage.setItem('pusu.navBacktest', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
+
+  // Shared renderer for a strategy-stream group (icons / leafLabel / badges preserved).
+  // Names come from useStreamDisplay: codename for everyone, real name (+ technical
+  // sublabel) only for the admin. Leaf links navigate by codename SLUG, not raw key.
+  const renderGroup = (g) => (
+    <div key={g.key} className={`sidebar__group sidebar__group--${g.key}${g.live ? ' sidebar__group--live' : ''}${g.paper ? ' sidebar__group--paper' : ''}`}>
+      <div className="sidebar__group-label">
+        <span className="sidebar__icon">{g.icon}</span>
+        {g.section === 'live'
+          ? <><b className="sidebar__group-name">{sd.name(g.key)}</b>{techLabel(g.key)}</>
+          : <span>{sd.isAdmin ? sd.label(g.key) : sd.name(g.key)}</span>}
+        {g.live && (g.real
+          ? <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('Binance · GERÇEK')}</span>
+          : <span className={`sidebar__live-badge${g.paper ? ' sidebar__live-badge--paper' : ''}`}>● {g.paper ? t('PAPER') : t('CANLI')}</span>)}
+      </div>
+      {g.modes.map((m) => (
+        <NavLink key={m} to={`/${slugFor(g.key)}/${m}`} end className="sidebar__link sidebar__leaf">
+          <span className={`sidebar__leaf-dot sidebar__leaf-dot--${m}`} />
+          <span>{leafLabel[m]}</span>
+        </NavLink>
+      ))}
+    </div>
+  );
 
   return (
     <aside className="sidebar">
@@ -166,47 +202,64 @@ const Sidebar = () => {
           <span className="sidebar__icon"><IconHome /></span><span>{t('Genel Bakış')}</span>
         </NavLink>
 
-        {/* Binance Canlı — pinned directly above the strategies (real-money OPUS feed) */}
-        <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
-          <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Canlı')}</span>
-        </NavLink>
-
-        {/* Binance Paper · Altın — MIDAS-X gold executor on Binance TESTNET (paper, not real money) */}
-        <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance-paper">
-          <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Paper · Altın')}</span>
-          <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
-        </NavLink>
-
+        {/* ── CANLI MODÜL — live streams + live pages + per-user trading controls ── */}
         <button
           className="sidebar__section"
-          onClick={(e) => { e.stopPropagation(); toggleStrategies(); }}
-          aria-expanded={stratOpen}
-          title={stratOpen ? t('Gizle') : t('Göster')}
+          onClick={(e) => { e.stopPropagation(); toggleLive(); }}
+          aria-expanded={liveOpen}
+          title={liveOpen ? t('Gizle') : t('Göster')}
         >
-          <span className="sidebar__icon"><IconStrategies /></span>
-          <span className="sidebar__section-label">{t('Stratejiler')}</span>
-          <span className="sidebar__section-chev" aria-hidden="true">{stratOpen ? '▾' : '▸'}</span>
+          <span className="sidebar__icon"><IconLive /></span>
+          <span className="sidebar__section-label">{t('CANLI MODÜL')}</span>
+          <span className="sidebar__section-chev" aria-hidden="true">{liveOpen ? '▾' : '▸'}</span>
         </button>
 
-        {stratOpen && (
+        {liveOpen && (
           <div className="sidebar__strategies">
-            {GROUPS.map((g) => (
-              <div key={g.key} className={`sidebar__group sidebar__group--${g.key}${g.live ? ' sidebar__group--live' : ''}${g.paper ? ' sidebar__group--paper' : ''}`}>
-                <div className="sidebar__group-label">
-                  <span className="sidebar__icon">{g.icon}</span>
-                  {g.name && <b className="sidebar__group-name">{g.name}</b>}{g.label}
-                  {g.live && (g.real
-                    ? <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('Binance · GERÇEK')}</span>
-                    : <span className={`sidebar__live-badge${g.paper ? ' sidebar__live-badge--paper' : ''}`}>● {g.paper ? t('PAPER') : t('CANLI')}</span>)}
-                </div>
-                {g.modes.map((m) => (
-                  <NavLink key={m} to={`/${g.key}/${m}`} end className="sidebar__link sidebar__leaf">
-                    <span className={`sidebar__leaf-dot sidebar__leaf-dot--${m}`} />
-                    <span>{leafLabel[m]}</span>
-                  </NavLink>
-                ))}
-              </div>
-            ))}
+            {GROUPS.filter((g) => g.section === 'live').map(renderGroup)}
+
+            {/* Binance Pozisyonlar — real-money OPUS executor board */}
+            <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
+              <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Pozisyonlar')}</span>
+            </NavLink>
+
+            {/* Gold executor on Binance TESTNET (paper, not real money) — name self-masks */}
+            <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance-paper">
+              <span className="sidebar__icon"><IconLive /></span><span>{sd.name('midas')} · {t('Altın')}</span>
+              <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
+            </NavLink>
+
+            {/* İşlem Merkezi — per-user keys/risk/activation (active accounts only) */}
+            {isActive && (
+              <NavLink to="/trading" className="sidebar__link">
+                <span className="sidebar__icon"><IconGear /></span><span>{t('İşlem Merkezi')}</span>
+              </NavLink>
+            )}
+
+            {/* Yönetim — admin console */}
+            {isAdmin && (
+              <NavLink to="/admin" className="sidebar__link">
+                <span className="sidebar__icon"><IconShield /></span><span>{t('Yönetim')}</span>
+              </NavLink>
+            )}
+          </div>
+        )}
+
+        {/* ── BACKTEST — research-only streams (leaf links go to /:key/backtest) ── */}
+        <button
+          className="sidebar__section"
+          onClick={(e) => { e.stopPropagation(); toggleBacktest(); }}
+          aria-expanded={btOpen}
+          title={btOpen ? t('Gizle') : t('Göster')}
+        >
+          <span className="sidebar__icon"><IconStrategies /></span>
+          <span className="sidebar__section-label">BACKTEST</span>
+          <span className="sidebar__section-chev" aria-hidden="true">{btOpen ? '▾' : '▸'}</span>
+        </button>
+
+        {btOpen && (
+          <div className="sidebar__strategies">
+            {GROUPS.filter((g) => g.section === 'backtest').map(renderGroup)}
           </div>
         )}
 

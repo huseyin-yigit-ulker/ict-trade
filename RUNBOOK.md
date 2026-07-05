@@ -174,6 +174,14 @@ Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-sync.log`, `~/ict-exec.log
 `MIDAS_EXEC_NAME` (+ shares `LIVE_TRADING_ENABLED`, `BINANCE_TESTNET_API_KEY/SECRET`). Full list:
 `sync/midas_exec/.env.example`.
 
+**Multi-user layer (2026-07-04 — §8a):**
+- VM: `EXEC_PRIV_KEY_PATH` (RSA private PEM decrypting user API keys, `scripts/gen_exec_keypair.py`;
+  **never** in the repo), `EXEC_MULTI_USER` (false = legacy single-env account; flip to true ONLY in the
+  §8a Phase-5 cutover window — both OPUS and MIDAS-X executors read the same flag).
+- Render (frontend build): `VITE_EXEC_PUBKEY_B64` (the SPKI-b64 public key printed by the generator;
+  the browser RSA-OAEP-encrypts user-submitted Binance keys with it), optional `VITE_VM_EGRESS_IP`
+  (shown in the UI as the IP to whitelist on Binance keys).
+
 ---
 
 ## 7. Bring up the WHOLE system from a fresh clone
@@ -237,6 +245,48 @@ enabled) the OPUS executor trades real Binance Futures.
 - **Telegram volume:** MIDAS `--sl-step 0` = every trailing change; `0.5` = milestones; `--no-telegram` = mute.
 - **GitHub Action** `daily_run.yml` (01:00 UTC) exports yesterday's signals to `src/assets/data/*.json`
   and commits them (frontend's static snapshot) — independent of the VM cron.
+
+---
+
+## 8a. Multi-user (kayıt/giriş + kişisel API key + kullanıcı-bazlı execution)
+
+Shipped 2026-07-04. Signals stay CENTRAL (one emitter set); execution fans out per user.
+
+**Model:** Supabase Auth (GoTrue) e-posta+şifre; signup → `ict_trade.profiles` satırı `pending`
+(trigger `on_auth_user_created`) → admin `/admin`'den onaylar. Kullanıcı `/trading`'de Binance
+mainnet/testnet API anahtarlarını girer — tarayıcı **RSA-OAEP-SHA256** ile şifreler
+(`VITE_EXEC_PUBKEY_B64`), DB'ye SADECE ciphertext yazılır (`ict_trade.user_api_keys`, client'a
+SELECT yok; okuma sadece sanitize `user_api_keys_public` view'ı). VM her dakika doğrular
+(`sync/users/verify_keys.py`: bakiye, futures yetkisi, one-way mod; **withdrawal yetkili anahtar
+REDDEDİLİR**). Aktivasyon/risk/semboller `ict_trade.user_stream_settings` (OPUS mainnet+testnet,
+MIDAS testnet-only — DB CHECK + fee analizi, MIDAS.md §5). Sert kurallar DB trigger'ında
+(`tg_uss_guard`): geçerli anahtar şart, `risk×max_concurrent ≤ bakiye×%25`, hedge-mod reddi,
+sembol ⊆ `stream_universe`. Kill-switch (`kill_requested`) executor'ın ilk gate'i: flatten + disable.
+Günlük zarar limiti (`daily_loss_cap_usd`) aşılınca o gün yeni giriş yok. Kişisel bildirimler:
+executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push abonelikleri
+(`push_subscriptions.user_id`). Telegram = sadece owner/canonical kanal (değişmedi);
+`trading_signals` writeback'i de sadece `profiles.is_canonical=true` (owner) için akar.
+
+**Dosyalar:** `supabase/migrations/001..007` (idempotent; 005b+007 sıralı-fazlı), `sync/users/`
+(crypto/store/verify_keys/seed_owner/apply_sql), `scripts/gen_exec_keypair.py`; executor'lar
+çift-modlu (`EXEC_MULTI_USER=false` → bugünkü tek-hesap davranış birebir).
+
+**Kurulum sırası (fazlar; ayrıntı: plan dosyası + migration başlıkları):**
+1. ✅ `apply_sql.py --phase1` + `--seed-universe` (additive; 2026-07-04'te uygulandı).
+2. Supabase dashboard: Authentication → Sign In/Up → Email → **"Confirm email" KAPAT** (admin onayı
+   var; kapatılmazsa signup'lar mail onayına takılır). Site URL = Render domain, şifre min ≥10.
+3. Render env: `VITE_EXEC_PUBKEY_B64` ekle → deploy (git push zaten tetikler).
+4. Owner UI'dan kayıt olur → `seed_owner.py --email ugur_yigit@hotmail.com` (admin+canonical yapar,
+   .env anahtarlarını şifreli içeri alır, inline doğrular, bugünkü risk/sembol ayarlarını yazar).
+5. **Faz-5 cutover (≤10 dk, saat :05–:25):** `killswitch.py --halt` → `seed_owner.py --email ... --backfill`
+   → `apply_sql.py --file supabase/migrations/005b_user_scope_indexes.sql` → `.env EXEC_MULTI_USER=true`
+   → `LIVE_TRADING_ENABLED=true` geri aç → `~/ict-exec.log`'da 2 tick izle (owner pozisyonları AYNI
+   coid'lerle devam etmeli). Rollback: `EXEC_MULTI_USER=false`.
+6. Faz-6: frontend zaten JWT'yle okuyor → `apply_sql.py --file supabase/migrations/007_rls_tighten.sql`
+   (live_positions/midas_positions/account tabloları kullanıcıya-özel olur, anon push policy'leri düşer).
+
+**Cron ekleri (kurulu):** `verify_keys.py` (*/1 +40s) + `push_notify.py --drain` (*/1 +45s) → `~/ict-users.log`.
+**Kill:** kullanıcı UI'dan; admin `/admin`'den veya `killswitch.py --flatten --user <email>`.
 
 ---
 
@@ -321,6 +371,39 @@ enabled) the OPUS executor trades real Binance Futures.
   (showed +0.60R vs the real +0.30R). Set `CAP_R=8`, `SO.closeFrac=0.3`, and the header badge to
   `d30so8f3h7 · +8R · %30 TP1`. Verified against the live ETH RUNNER: `tp1_qty 0.04 / qty 0.135 = 29.6%`
   (≈30%), locked now +0.30R ($1.40) = the actual booked TP1 leg ($1.385, floor of 0.0405→0.04).
+
+### 2026-07-04 — MULTI-USER: kayıt/giriş, kişisel API key, kullanıcı-bazlı execution (§8a)
+- **Auth:** tek-şifreli soft gate → **Supabase Auth (GoTrue)**, raw REST (`src/utils/gotrue.js`,
+  `supa.js`); `AuthContext` rewrite (session+profil, proaktif refresh, PWA resume), LoginScreen'e
+  **Kayıt Ol** sekmesi; kayıt admin-onaylı (`profiles.status='pending'` → `/admin`).
+- **DB:** `supabase/migrations/001..007` — `profiles` (+`on_auth_user_created` trigger, `is_admin()`),
+  `audit_log` (+`tg_audit`), `user_api_keys` (client'a write-only; RSA-OAEP ciphertext; sanitize view),
+  `user_stream_settings` (+`tg_uss_guard`: valid-key/`%25`-bakiye/hedge-mod/universe sert kuralları;
+  MIDAS mainnet CHECK ile kilitli), `stream_universe`, `push_outbox`, `push_subscriptions.user_id`,
+  executor tablolarına `user_id`+`network` (005a additive ✅ uygulandı; 005b index/PK swap = Faz-5).
+- **Executor'lar çift-modlu:** `EXEC_MULTI_USER=false` (şu an) = bugünkü tek-hesap davranışı birebir;
+  `true` = `sync/users/store.load_exec_users` üzerinden kullanıcı başına fan-out (kendi anahtarı/riski/
+  sembolleri; per-user try/except izolasyon; `SharedTick` ile sinyal/kline/exchangeInfo tek sefer —
+  IP rate-limit koruması; coid formatı DEĞİŞMEDİ → owner pozisyonları cutover'da kesintisiz).
+  Kill-switch gate + günlük zarar limiti + kişisel push (`push_outbox`); Telegram ve `trading_signals`
+  writeback sadece canonical/owner. `killswitch.py --flatten --user <email>` eklendi.
+- **UI:** `/trading` İşlem Merkezi (anahtar ekle/rotate + doğrulama durumu, aktivasyon (mainnet yazılı
+  onay "GERÇEK PARA"), risk editörü (bakiye-uyarılı), sembol seçimi + backtest sıralaması), `/admin`
+  (onay/devre dışı/kill/audit), Sidebar **CANLI MODÜL** (OPUS·FABLE·MIDAS) / **BACKTEST** ayrımı,
+  MobileTabBar'a İşlem sekmesi, push aboneliği kullanıcıya bağlandı.
+- **Ops:** `sync/users/` paketi + `scripts/gen_exec_keypair.py` (keypair üretildi, `.env`
+  `EXEC_PRIV_KEY_PATH`/`EXEC_MULTI_USER=false`); cron +2 satır (`verify_keys`, `push_notify --drain`);
+  Faz-1 migration'lar + universe seed UYGULANDI; signup→pending-profil trigger'ı canlıda doğrulandı.
+  Kalan manuel adımlar + Faz-5 cutover: **§8a**.
+- **GİZLİLİK / strateji anonimleştirme (kullanıcı isteği):** admin dışındaki HERKES (login ekranı
+  dahil) akışları nötr kod adlarıyla görür — `src/utils/streamMask.js` haritası: OPUS→ATLAS,
+  FABLE→NOVA, MIDAS→SIRIUS, backtest ailesi→VEGA/LYRA/ORION/RIGEL/… Teknik etiketler, strateji
+  kartları (strategyInfo) ve XAU grafiğindeki referans çizgisinin gerçek adı (VWAP→**T-REF**) +
+  sinyal-koşul metinleri SADECE admin'de görünür ve `adminStreamInfo.js` lazy chunk'ından yüklenir —
+  ana bundle'da gerçek isim/mekanik string'i YOK. URL'ler kod adı slug'ı taşır (`/atlas/live`;
+  eski ham anahtarlar çalışmaya devam eder). Broadcast Web Push metinleri admin olmayan abonelere
+  `push_notify._mask_text` ile kod adlarına çevrilir (owner Telegram'ı değişmedi). Kod adı haritası
+  DEĞİŞTİRİLMEZ (kullanıcılar isme alışır); yeni akış = yeni kod adı ekle.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

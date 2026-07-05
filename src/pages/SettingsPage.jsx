@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTradeContext } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -12,7 +13,7 @@ const SettingsPage = () => {
   } = useTradeContext();
   const { t, lang, setLang } = useLang();
   const { theme, setTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, profile, isAdmin, logout } = useAuth();
   const [savedSymbols, setSavedSymbols] = useState(false);
 
   // Web Push (native phone notifications) — mirrors the Telegram alerts.
@@ -128,6 +129,20 @@ const SettingsPage = () => {
             <span>{t('Kullanıcı')}</span>
             <b>{user?.name || 'PUSU'}</b>
           </div>
+          <div className="settings-row">
+            <span>{t('E-posta')}</span>
+            <b>{user?.email || '—'}</b>
+          </div>
+          <div className="settings-row">
+            <span>{t('Durum')}</span>
+            <span className={`chip ${profile?.status === 'active' ? 'chip--ok' : profile?.status === 'disabled' ? 'chip--err' : 'chip--warn'}`}>
+              {profile?.status === 'active' ? t('Aktif')
+                : profile?.status === 'disabled' ? t('Devre dışı')
+                : t('Onay bekleniyor')}
+            </span>
+          </div>
+          <Link className="header-btn" to="/trading">{t('İşlem Merkezi')} →</Link>
+          {isAdmin && <Link className="header-btn" to="/admin">{t('Yönetim')} →</Link>}
           <button className="header-btn settings-logout" onClick={logout}>⏻ {t('Çıkış Yap')}</button>
         </section>
 
