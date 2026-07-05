@@ -3071,3 +3071,27 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
   .notif-pref { min-height: 44px; }
   .settings-select { max-width: 160px; }
 }
+
+/* ── Admin · Sistem Durumu + Duyuru (2026-07-05, migration 009) ─────────────── */
+.admin-ov-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.admin-globalkill { font-size: 12px; padding: 6px 12px; }
+.admin-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px; margin-top: 10px;
+}
+.admin-stat {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px;
+  border: 1px solid var(--border, #2a2f3a); border-radius: 10px;
+  background: var(--panel, rgba(255,255,255,0.02));
+}
+.admin-stat__label {
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.6;
+}
+.admin-stat b { font-size: 16px; }
+.admin-stat__sub { font-size: 11px; opacity: 0.65; }
+.admin-stat .chip { align-self: flex-start; }
+.admin-newuser select.tinput { min-width: 180px; }
+@media (max-width: 768px) {
+  .admin-stats { grid-template-columns: repeat(2, 1fr); }
+  .admin-ov-head { flex-wrap: wrap; }
+}

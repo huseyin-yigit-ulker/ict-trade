@@ -448,6 +448,27 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   `push_notify._mask_text` ile kod adlarına çevrilir (owner Telegram'ı değişmedi). Kod adı haritası
   DEĞİŞTİRİLMEZ (kullanıcılar isme alışır); yeni akış = yeni kod adı ekle.
 
+### 2026-07-05 (2) — Admin modülü genişletildi: sistem durumu, global kill, duyuru, e-posta onayı (migration 009 ✅)
+- **Migration `009_admin_tools.sql` (UYGULANDI):** `admin_list_users()` (profiles ⋈ auth.users:
+  e-posta onayı + son giriş), `admin_confirm_email(p_user)` (dashboard'sız onay — "Confirm email"
+  açıkken kullanıcı girişinin önünü admin açar), `admin_notify(p_title,p_body,p_user)` (tek
+  kullanıcıya veya tüm aktiflere push duyurusu; push_outbox → mevcut --drain cron'u), `admin_kill_all()`
+  (global acil durdurma, audit'li), `admin_user_stats()` (kullanıcı başına açık poz + bugün/toplam $),
+  `admin_overview()` (kullanıcı sayıları, executor kalp atışı per network, son sinyal, son anahtar
+  doğrulaması, bekleyen outbox, geçersiz anahtar, aktif akış sayısı). Hepsi `is_admin()` korumalı
+  security-definer; canlıda admin JWT ile uçtan uca doğrulandı.
+- **`tg_uss_guard` FİXİ (kritik):** arming-doğrulaması (geçerli anahtar / %25-bakiye / hedge-mod)
+  artık yalnız enable geçişinde veya risk/sembol/ağ DEĞİŞİMİNDE koşuyor — `kill_requested` gibi flag
+  güncellemeleri hiçbir koşulda bloklanamaz (önceki sürümde bakiye düşen kullanıcının KILL'i
+  trigger'a takılabilirdi).
+- **/admin UI:** "Sistem Durumu" kartı (kalp atışı tazelik renkleri, kullanıcı/pozisyon/akış sayaçları)
+  + **GLOBAL KILL** butonu (çift onay), kullanıcı tablosuna **Son Giriş / e-posta-onay çipi /
+  Açık Poz. / Bugün $** kolonları + **"E-postayı Onayla"** aksiyonu, **"Duyuru Gönder"** kartı
+  (hedef: tüm aktifler veya tek kullanıcı; strateji adı yazmama uyarısı). i18n TR/EN + CSS.
+- **Owner giriş sorunu çözüldü:** e-posta onayı sunucu tarafında işlendi + şifre yenilendi; giriş
+  GoTrue + RLS ile uçtan uca doğrulandı. Not: kullanıcı istatistik kolonları (Açık Poz./Bugün)
+  pozisyon satırları user_id'siz olduğundan Faz-5 backfill'e kadar '—' gösterir.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
