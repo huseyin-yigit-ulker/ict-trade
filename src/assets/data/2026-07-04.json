@@ -1,0 +1,172 @@
+{
+    "ict_signal": [
+        {
+            "id": 3814,
+            "symbol": "XAGUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T19:00:00+00:00",
+            "entry_price": 62.84,
+            "sl_price": 62.68953528153906,
+            "tp_price": 63.44185887384379,
+            "created_at": "2026-07-04T19:30:34.045143+00:00",
+            "status": "OPEN",
+            "signal_price": 62.84
+        },
+        {
+            "id": 3813,
+            "symbol": "XAGUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T19:00:00+00:00",
+            "entry_price": 62.84,
+            "sl_price": 62.68953528153906,
+            "tp_price": 63.74278831076569,
+            "created_at": "2026-07-04T19:30:31.644563+00:00",
+            "status": "OPEN",
+            "signal_price": 62.84
+        },
+        {
+            "id": 3812,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:30:00+00:00",
+            "entry_price": 7.086,
+            "sl_price": 7.000473234167515,
+            "tp_price": 7.42810706332994,
+            "created_at": "2026-07-04T18:30:41.810801+00:00",
+            "status": "OPEN",
+            "signal_price": 7.086
+        },
+        {
+            "id": 3797,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:30:00+00:00",
+            "entry_price": 63245.6,
+            "sl_price": 62874.17832954092,
+            "tp_price": 65474.13002275449,
+            "created_at": "2026-07-04T18:00:39.696166+00:00",
+            "status": "OPEN",
+            "signal_price": 63245.6
+        },
+        {
+            "id": 3811,
+            "symbol": "SUIUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:30:00+00:00",
+            "entry_price": 0.7812,
+            "sl_price": 0.7701161702994489,
+            "tp_price": 0.8255353188022044,
+            "created_at": "2026-07-04T18:00:47.137134+00:00",
+            "status": "OPEN",
+            "signal_price": 0.7812
+        },
+        {
+            "id": 3804,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:30:00+00:00",
+            "entry_price": 63245.6,
+            "sl_price": 62874.17832954092,
+            "tp_price": 64731.286681836325,
+            "created_at": "2026-07-04T18:00:40.493991+00:00",
+            "status": "OPEN",
+            "signal_price": 63245.6
+        },
+        {
+            "id": 3792,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:00:00+00:00",
+            "entry_price": 0.3451,
+            "sl_price": 0.33976346003147634,
+            "tp_price": 0.3664461598740948,
+            "created_at": "2026-07-04T17:30:30.090731+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3451
+        },
+        {
+            "id": 3793,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:00:00+00:00",
+            "entry_price": 0.3451,
+            "sl_price": 0.33976346003147634,
+            "tp_price": 0.3771192398111422,
+            "created_at": "2026-07-04T17:30:32.160622+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3451
+        },
+        {
+            "id": 3794,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T17:00:00+00:00",
+            "entry_price": 0.3451,
+            "sl_price": 0.33976346003147634,
+            "tp_price": 0.3664461598740948,
+            "created_at": "2026-07-04T17:30:38.596219+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3451
+        },
+        {
+            "id": 3789,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T15:00:00+00:00",
+            "entry_price": 8.066,
+            "sl_price": 7.9861980878249454,
+            "tp_price": 8.385207648700222,
+            "created_at": "2026-07-04T15:30:36.315771+00:00",
+            "status": "OPEN",
+            "signal_price": 8.066
+        },
+        {
+            "id": 3787,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T15:00:00+00:00",
+            "entry_price": 8.066,
+            "sl_price": 7.9861980878249454,
+            "tp_price": 8.54481147305033,
+            "created_at": "2026-07-04T15:30:35.869969+00:00",
+            "status": "OPEN",
+            "signal_price": 8.066
+        },
+        {
+            "id": 3784,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T14:30:00+00:00",
+            "entry_price": 0.1842,
+            "sl_price": 0.18044086009875906,
+            "tp_price": 0.20675483940744566,
+            "created_at": "2026-07-04T15:00:39.283380+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1842
+        },
+        {
+            "id": 3785,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T14:30:00+00:00",
+            "entry_price": 0.1842,
+            "sl_price": 0.18044086009875906,
+            "tp_price": 0.19923655960496378,
+            "created_at": "2026-07-04T15:00:41.443315+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1842
+        },
+        {
+            "id": 3782,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-04T14:00:00+00:00",
+            "entry_price": 0.1842,
+            "sl_price": 0.179036672972448,
+            "tp_price": 0.20485330811020805,
+            "created_at": "2026-07-04T15:00:36.841671+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1842
+        }
+    ]
+}
