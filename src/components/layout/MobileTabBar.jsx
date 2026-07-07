@@ -58,7 +58,9 @@ const MobileTabBar = () => {
       {/* İşlem Merkezi — per-user trading controls; admin kullanıcı-başına kapatabilir. */}
       {features?.trading !== false && (
         <NavLink to="/trading" className={cls} onClick={closeMobileNav}>
-          <IGear /><span>{t('İşlem')}</span>
+          {/* t('Trade'): TR override 'İşlem' — the bare 'İşlem' key translates to
+              'Trades' (table header) in EN, wrong for this nav tab. */}
+          <IGear /><span>{t('Trade')}</span>
         </NavLink>
       )}
       {features?.intelligence !== false && (

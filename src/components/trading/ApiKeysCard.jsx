@@ -134,6 +134,12 @@ const NetworkKeyCard = ({ net, row, onSubmitted }) => {
         <li>{t('Sadece Futures trade yetkisi verin.')}</li>
         <li>{t('Çekim (withdraw) yetkisi vermeyin.')}</li>
         <li>{t('IP kısıtı önerilir')}{VM_IP ? ` (VM IP: ${VM_IP})` : ''}</li>
+        <li>
+          <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" rel="noreferrer">
+            {t('Binance API yönetim sayfası')} ↗
+          </a>
+          {' · '}{t('adım adım kılavuz “Kurulum Rehberi” kartında.')}
+        </li>
       </ul>
     </section>
   );

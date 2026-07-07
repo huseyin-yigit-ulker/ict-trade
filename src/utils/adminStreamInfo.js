@@ -75,3 +75,10 @@ export const REAL_MIDAS_CONDS = {
   pullShort: "VWAP'a çekilme (high ≥ VWAP−0.25·ATR)",
   bear: 'düşen mum (close<open)',
 };
+
+// TOTAL page — admin-only research footnote. Names real streams (MAIN/OPUS/RANGE),
+// so the TEXT must live in this lazy chunk, never in the shared translation map.
+export const MARKETCAP_NOTE = {
+  tr: 'Tek başına temiz bir gate çıkmıyor: etkinin en güçlü olduğu MAIN/OPUS örneklem-dışı (2025) zaten net-negatif, tek istikrarlı kârlı akış RANGE’de dayanıklı bir kazanım yok. Bu yüzden bir lookup + monitör olarak kullanılır; bir akışa bağlamadan önce OOS kazanım göster. Kaynak: sync/marketcap.py + marketcap_analysis.py.',
+  en: 'No clean standalone gate emerges: MAIN/OPUS, where the effect is strongest, is already net-negative out-of-sample (2025), and RANGE, the one consistently profitable stream, shows no durable gain. So this serves as a lookup + monitor; show an OOS gain before wiring it to a stream. Source: sync/marketcap.py + marketcap_analysis.py.',
+};

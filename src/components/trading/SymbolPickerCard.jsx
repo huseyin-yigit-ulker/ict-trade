@@ -5,41 +5,12 @@ import { getJSON } from '../../utils/supa';
 import { useStreamDisplay } from '../../utils/useStreamDisplay';
 import {
   STREAM_ROWS, rowKey, netLabel, DEFAULTS, patchStreamSettings, upsertStreamSettings,
-  SETTINGS_EVT, emitSettingsChanged,
+  SETTINGS_EVT, emitSettingsChanged, fetchRanking,
 } from './streams';
 
 // Symbol selection per (stream, network) from the server-side stream_universe,
-// with the backtest ranking (SEPARATE backtest Supabase project — same fetch
-// pattern as utils/streamStats.js) as an informational side panel. Clicking a
-// ranking row toggles that symbol's chip.
-
-const BT_URL = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
-const BT_KEY = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-
-const rankCache = {};   // version -> rows sorted by total R desc (session cache)
-
-async function fetchRanking(version) {
-  if (rankCache[version]) return rankCache[version];
-  if (!BT_URL || !BT_KEY) throw new Error('config');
-  const res = await fetch(`${BT_URL}/rest/v1/rpc/backtest_symbol_metrics`, {
-    method: 'POST',
-    headers: {
-      apikey: BT_KEY,
-      Authorization: `Bearer ${BT_KEY}`,
-      'Accept-Profile': 'ict_trade',
-      'Content-Profile': 'ict_trade',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ p_version: version }),
-  });
-  if (!res.ok) throw new Error(`rpc ${res.status}`);
-  const rows = await res.json();
-  const sorted = (Array.isArray(rows) ? rows : [])
-    .slice()
-    .sort((a, b) => Number(b.total_r) - Number(a.total_r));
-  rankCache[version] = sorted;
-  return sorted;
-}
+// with the backtest ranking (shared fetchRanking in streams.js) as an
+// informational side panel. Clicking a ranking row toggles that symbol's chip.
 
 const fmtR = (v) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}R`;
 

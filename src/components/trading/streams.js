@@ -62,3 +62,38 @@ export const SETTINGS_EVT = 'pusu:stream-settings-changed';
 export function emitSettingsChanged() {
   try { window.dispatchEvent(new Event(SETTINGS_EVT)); } catch { /* ignore */ }
 }
+
+// ── Backtest per-symbol ranking (SEPARATE backtest Supabase project) ──
+// Shared by SymbolPickerCard (info panel) and TemplatesCard (symbol suggestions).
+// The version tag is SENT to the RPC, never displayed (anonymization).
+
+const BT_URL = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
+const BT_KEY = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+const rankCache = {};   // version -> rows sorted by total R desc (session cache)
+
+export async function fetchRanking(version) {
+  if (rankCache[version]) return rankCache[version];
+  if (!BT_URL || !BT_KEY) throw new Error('config');
+  const res = await fetch(`${BT_URL}/rest/v1/rpc/backtest_symbol_metrics`, {
+    method: 'POST',
+    headers: {
+      apikey: BT_KEY,
+      Authorization: `Bearer ${BT_KEY}`,
+      'Accept-Profile': 'ict_trade',
+      'Content-Profile': 'ict_trade',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_version: version }),
+  });
+  if (!res.ok) throw new Error(`rpc ${res.status}`);
+  const rows = await res.json();
+  const sorted = (Array.isArray(rows) ? rows : [])
+    .slice()
+    .sort((a, b) => Number(b.total_r) - Number(a.total_r));
+  rankCache[version] = sorted;
+  return sorted;
+}
+
+// Fallback symbol preference when the ranking RPC is unreachable: liquid majors first.
+export const MAJORS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];

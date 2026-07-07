@@ -677,6 +677,156 @@ const EN = {
   'Stop (zararı kes)': 'Stop (cut loss)',
   'Giriş/Çıkış anları': 'Entry/Exit markers',
 
+  // --- İşlem Merkezi: Kurulum Rehberi (new-user onboarding, 2026-07-07) ---
+  'Kurulum Rehberi': 'Setup Guide',
+  "Binance'te API anahtarı oluşturun": 'Create an API key on Binance',
+  'Binance hesabınızda (Futures açık olmalı) yalnız işlem yetkili bir API anahtarı oluşturun.':
+    'On your Binance account (Futures must be enabled), create an API key with trade-only permission.',
+  'Adım adım nasıl yapılır?': 'Step-by-step how-to',
+  'Binance’e girin →': 'Sign in to Binance →',
+  'Hesap → API Yönetimi': 'Account → API Management',
+  '“Create API” → “System generated” seçin, bir isim verin (örn. PUSU).':
+    'Choose “Create API” → “System generated” and give it a name (e.g. PUSU).',
+  'Güvenlik doğrulamalarını (e-posta/SMS/2FA) tamamlayın.':
+    'Complete the security verifications (email/SMS/2FA).',
+  '“Enable Futures” iznini işaretleyin.': 'Tick the “Enable Futures” permission.',
+  '“Enable Withdrawals” (çekim) iznini ASLA vermeyin': 'NEVER grant “Enable Withdrawals”',
+  'çekim yetkili anahtar sistem tarafından reddedilir.':
+    'keys with withdrawal permission are rejected by the system.',
+  '“Restrict access to trusted IPs only” seçin ve şu IP’yi ekleyin:':
+    'Choose “Restrict access to trusted IPs only” and add this IP:',
+  'IP adresi yöneticinizden': 'ask your administrator for the IP',
+  'API Key ve Secret’ı kopyalayın — Secret yalnız BİR KEZ gösterilir.':
+    'Copy the API Key and Secret — the Secret is shown only ONCE.',
+  'Futures hesabınız “One-way” pozisyon modunda olmalı (Hedge modu desteklenmez): Futures → Ayarlar → Position Mode.':
+    'Your Futures account must be in “One-way” position mode (Hedge mode is not supported): Futures → Settings → Position Mode.',
+  "Anahtarı PUSU'ya ekleyin": 'Add the key to PUSU',
+  'Aşağıdaki “API Anahtarı” kartından Key + Secret’ı gönderin. Anahtar tarayıcıda şifrelenir ve otomatik doğrulanır (≤1 dk).':
+    'Submit the Key + Secret from the “API Key” card below. The key is encrypted in your browser and verified automatically (≤1 min).',
+  'Hazır bir şablon seçin': 'Pick a ready-made template',
+  '“Hazır Şablonlar” kartından risk profilinize uygun bir paket uygulayın — semboller ve risk limitleri tek tıkla ayarlanır. İsterseniz aşağıdaki İnce Ayar kartlarından elle değiştirin.':
+    'Apply a package matching your risk profile from the “Quick Templates” card — symbols and risk limits are set in one click. You can still adjust them manually in the Fine-Tuning cards below.',
+  'Akışı etkinleştirin': 'Activate a stream',
+  '“Akış Aktivasyonu” kartından bir akışı açın. Paper (testnet) gerçek para riski taşımaz — önce onunla deneyin; GERÇEK PARA modu yazılı onay ister.':
+    'Enable a stream from the “Stream Activation” card. Paper (testnet) carries no real-money risk — try it first; REAL MONEY mode requires a typed confirmation.',
+  'Kurulum tamam — akışınız çalışıyor.': 'Setup complete — your stream is running.',
+  'Rehberi göster': 'Show guide',
+  'Binance API yönetim sayfası': 'Binance API management page',
+  'adım adım kılavuz “Kurulum Rehberi” kartında.': 'the step-by-step guide lives in the “Setup Guide” card.',
+
+  // --- İşlem Merkezi: Hazır Şablonlar (one-click presets, 2026-07-07) ---
+  'Hazır Şablonlar': 'Quick Templates',
+  'Sembol seti + risk limitlerini tek tıkla ayarlayan paketler. Uygulamak akışı BAŞLATMAZ — aktivasyon ayrı ve onaylı bir adımdır.':
+    'Packages that set the symbol list + risk limits in one click. Applying does NOT start the stream — activation is a separate, confirmed step.',
+  'Temkinli Başlangıç': 'Cautious Start',
+  'Küçük risk, az sembol — sistemi tanımak için.': 'Small risk, few symbols — to get to know the system.',
+  'Dengeli': 'Balanced',
+  'Orta risk, önerilen sembol seti — çoğu kullanıcı için.': 'Medium risk, the suggested symbol set — for most users.',
+  'Geniş Portföy': 'Wide Portfolio',
+  'Tüm sembol listesi, standart limitler — deneyimli kullanıcı için.': 'The full symbol list, standard limits — for experienced users.',
+  '“{name}” şablonu uygulandı — akışı “Akış Aktivasyonu” kartından açabilirsiniz.':
+    'Template “{name}” applied — you can enable the stream from the “Stream Activation” card.',
+  'Sembol önerisi backtest sıralamasından gelir; limitleri bakiyenize göre seçin — sunucu, toplam riskin bakiyenin %25’ini aşmasını engeller.':
+    'Symbol suggestions come from the backtest ranking; pick limits to match your balance — the server blocks total risk above 25% of it.',
+  'İnce Ayar': 'Fine-Tuning',
+  'İsteğe bağlı — şablonların ayarladığı risk ve sembolleri elle değiştirin.':
+    'Optional — manually adjust the risk and symbols the templates set.',
+
+  // --- i18n backfill (2026-07-07 audit): keys that fell back to Turkish in EN ---
+  // İşlem Merkezi intro
+  'Geçmiş ve backtest performansı gelecekteki getiriyi garanti etmez; canlı sonuçlar (kayma, komisyon, kısmi dolum) backtest’in altında kalır. Gerçek-para işlemleri tamamen kendi sorumluluğunuzdadır.':
+    'Past and backtest performance do not guarantee future returns; live results (slippage, fees, partial fills) fall short of the backtest. Real-money trading is entirely at your own risk.',
+  // Live position boards (Binance mainnet + gold)
+  'Açık Pozisyonlar': 'Open Positions',
+  'Açık pozisyon yok — sinyal bekleniyor.': 'No open positions — waiting for a signal.',
+  'Açık uPnL': 'Open uPnL',
+  'Cüzdan': 'Wallet',
+  'Kullanılabilir': 'Available',
+  'Miktar': 'Qty',
+  'Sonuç': 'Result',
+  'Sebep': 'Reason',
+  'Son Kapananlar': 'Recently Closed',
+  'Güncellendi': 'Updated',
+  'Geri Sayım': 'Countdown',
+  'Funding (açık)': 'Funding (open)',
+  'Veri alınamadı': 'Failed to load data',
+  'Supabase ayarları eksik.': 'Supabase settings missing.',
+  'Snapshot 5 dk’dan eski — executor cron çalışmıyor olabilir.':
+    'Snapshot older than 5 min — the executor cron may be down.',
+  'Canlı tablolara erişim yok — anon SELECT grant uygulanmalı (sync/live_exec/schema.sql).':
+    'No access to the live tables — apply the anon SELECT grant (sync/live_exec/schema.sql).',
+  'Canlı tablolara erişim yok — anon SELECT grant uygulanmalı (sync/midas_exec/schema.sql).':
+    'No access to the live tables — apply the anon SELECT grant (sync/midas_exec/schema.sql).',
+  'AÇILMADI': 'NOT OPENED',
+  'EMİR AÇILDI': 'ORDER OPENED',
+  'Kapı': 'Gate',
+  'Kayıp-sonrası kapı': 'After-loss gate',
+  'kapı öncesi': 'pre-gate',
+  'Sinyaller · Kapı Kararları': 'Signals · Gate Decisions',
+  'Yalnız aynı fx-gününün önceki işlemi zararla kapandıysa emir açılır; günün ilk sinyali ve kazanç-sonrası sinyaller atlanır. Sinyal akışı etkilenmez.':
+    'An order opens only if the previous trade of the same fx-day closed at a loss; the day’s first signal and post-win signals are skipped. The signal stream itself is unaffected.',
+  'Paper Sonucu': 'Paper Result',
+  'İlk SL': 'Initial SL',
+  'açık': 'open',
+  'doldu': 'filled',
+  'toplam': 'total',
+  'dk önce': 'min ago',
+  'sa önce': 'h ago',
+  'sn önce': 's ago',
+  // Session status (Topbar + SessionInfo)
+  'Seanslar': 'Sessions',
+  'Seans Durumu': 'Session Status',
+  'Seans Durumu (Kripto / ABD Hisse / Metaller)': 'Session Status (Crypto / US Stocks / Metals)',
+  'ABD Borsa Tatilleri (NYSE)': 'US Market Holidays (NYSE)',
+  'ABD hisse sinyalleri ŞU AN aktif': 'US stock signals are ACTIVE now',
+  'ABD hisse sinyalleri ŞU AN pasif': 'US stock signals are INACTIVE now',
+  'Bugün tatil — ABD hisse sinyali yok': 'Holiday today — no US stock signals',
+  'Yaklaşan tatil yok': 'No upcoming holidays',
+  'Sinyaller bu seansa göre filtrelenir': 'Signals are filtered by this session',
+  'ABD hisse-perp’leri yalnızca pre-market + regular seansında (04:00–16:00 ET, hafta içi, tatil hariç) sinyal üretir — dışında dayanak işlem görmez, gürültüdür. Metaller (~24/5) ve kripto (7/24) gate’lenmez.':
+    'US stock-perps only generate signals during pre-market + regular hours (04:00–16:00 ET, weekdays, holidays excluded) — outside that window the underlying doesn’t trade and it’s noise. Metals (~24/5) and crypto (24/7) are not gated.',
+  // Settings page: notifications + account
+  'Bildirim ayarlanamadı': 'Could not set up notifications',
+  'Bildirim izni reddedildi (tarayıcı/telefon ayarından siteye izin verin).':
+    'Notification permission denied (allow the site in your browser/phone settings).',
+  'Bu tarayıcı/ortam bildirimi desteklemiyor. HTTPS gerekir; iOS’ta önce uygulamayı Ana Ekrana ekleyin.':
+    'This browser/environment does not support notifications. HTTPS is required; on iOS add the app to the Home Screen first.',
+  'Oturum bulunamadı — çıkıp tekrar giriş yapın.': 'No session found — sign out and back in.',
+  'bilinmeyen hata': 'unknown error',
+  'Sinyal Bildirim Listesi': 'Signal Watchlist',
+  'Seçtiğin strateji + sembollerde sinyal oluşunca telefon bildirimi gelir. Hiçbir sembol seçmezsen tüm sinyaller gelir (eski davranış).':
+    'You get a phone notification when a signal fires for your chosen streams + symbols. If you pick no symbols, all signals come through (the old behaviour).',
+  'Aktif izleme: {n} sembol': 'Watching: {n} symbols',
+  'Bildirim listesi kaydedildi.': 'Watchlist saved.',
+  // Chart modal
+  'Kısmi': 'Partial',
+  'Ters Onay': 'Reverse Confirm',
+  'Sinyal (UTC)': 'Signal (UTC)',
+  'Sinyalin üretildiği an (1h bar kapanışı), UTC': 'When the signal was generated (1h bar close), UTC',
+  // TOTAL / market-cap page
+  'TOTAL · Piyasa Genişliği': 'TOTAL · Market Breadth',
+  'Kripto toplam market cap’i üç katmanda: TOTAL (tüm piyasa), TOTAL2 (BTC hariç), TOTAL3 (BTC+ETH hariç = saf altcoin iştahı). Canlı değerler CoinGecko /global’den kesin; geçmiş grafikler ve genişlik rejimi Binance fiyat × arz proxy’sinden (stable hariç). Salt piyasa verisi — sinyal/backtest değil.':
+    'Crypto total market cap in three layers: TOTAL (whole market), TOTAL2 (ex-BTC), TOTAL3 (ex-BTC+ETH = pure altcoin appetite). Live values are exact from CoinGecko /global; the history charts and breadth regime use a Binance price × supply proxy (stables excluded). Pure market data — no signals/backtest.',
+  'Toplam': 'Total',
+  'tüm market cap': 'all market cap',
+  'dominasyon': 'dominance',
+  'yükleniyor…': 'loading…',
+  'proxy · 4h · ~90g': 'proxy · 4h · ~90d',
+  'Genişlik rejimi': 'Breadth regime',
+  'ER bandı': 'ER band',
+  'Akış': 'Stream',
+  'Akış × genişlik rejimi — toplam R': 'Stream × breadth regime — total R',
+  'ER bandı × genişlik rejimi — ortalama R': 'ER band × breadth regime — average R',
+  'Analiz verisi hesaplanıyor…': 'Computing analysis…',
+  'Analiz · Genişlik rejimi işe yarıyor mu?': 'Analysis · Does the breadth regime add value?',
+  'örneklem-içi': 'in-sample',
+  'Backtest R’ı, sinyal anındaki ER bandı × TOTAL3 genişlik rejimine göre gruplanır. Rejim ER’den bağımsız bilgi taşıyorsa, aynı bant içinde sütunlar farklılaşmalı.':
+    'Backtest R is grouped by the ER band at signal time × the TOTAL3 breadth regime. If the regime carries information beyond ER, the columns should differ within the same band.',
+  'Bulgu: genişlik (TOTAL3) rejimi ER bandından bağımsız bilgi taşıyor. En çok R kazandığımız HAFİF bantta, hızlı yükselen TOTAL3 (risk-on coşkusu) hem 2026 hem 2025’te tutarlı biçimde ZARARLI; nötr/risk-off ise kârlı — “risk-on’da al” sezgisinin tersi.':
+    'Finding: the breadth (TOTAL3) regime carries information beyond the ER band. In the LIGHT band where we earn most of our R, a fast-rising TOTAL3 (risk-on euphoria) is consistently HARMFUL in both 2026 and 2025, while neutral/risk-off is profitable — the opposite of the “buy risk-on” intuition.',
+  // (the admin-only research footnote that names real streams lives in
+  //  adminStreamInfo.MARKETCAP_NOTE — the lazy chunk — NOT in this map)
+
   // --- weekday names returned by the SQL RPC (Turkish) ---
   'Pazartesi': 'Monday', 'Sali': 'Tuesday', 'Carsamba': 'Wednesday',
   'Persembe': 'Thursday', 'Cuma': 'Friday', 'Cumartesi': 'Saturday', 'Pazar': 'Sunday',
@@ -698,6 +848,7 @@ const EN = {
 const TR = {
   // --- English leftovers shown in the TR UI ---
   'Live': 'Canlı',
+  'Trade': 'İşlem',
   'Default': 'Varsayılan',
   'Entry': 'Giriş',
   'Timeframe': 'Zaman Dilimi',

@@ -54,10 +54,10 @@ const compute = (candles) => {
   });
   const a = atr15(candles);
   const slope = candles.map((c, i) => (i >= SLOPE_N ? vw[i] - vw[i - SLOPE_N] : NaN));
-  const vwapData = []; const bandU = []; const bandL = []; const markers = [];
+  const refData = []; const bandU = []; const bandL = []; const markers = [];
   for (let i = 0; i < candles.length; i += 1) {
     const c = candles[i]; const v = vw[i];
-    vwapData.push({ time: c.time, value: v });
+    refData.push({ time: c.time, value: v });
     if (Number.isFinite(a[i])) { const tol = TOUCH_TOL * a[i]; bandU.push({ time: c.time, value: v + tol }); bandL.push({ time: c.time, value: v - tol }); }
     const utch = new Date(c.time * 1000).getUTCHours();
     const sessOk = !(utch >= SKIP_START && utch < SKIP_END);
@@ -76,13 +76,13 @@ const compute = (candles) => {
   const utch = new Date(lb.time * 1000).getUTCHours();
   const cond = {
     sessOk: !(utch >= SKIP_START && utch < SKIP_END),
-    aboveVWAP: lb.close > v, belowVWAP: lb.close < v,
+    above: lb.close > v, below: lb.close < v,
     slopeUp: slp > 0, slopeDn: slp < 0,
     pullLong: lb.low <= v + tol, pullShort: lb.high >= v - tol,
     bull: lb.close > lb.open, bear: lb.close < lb.open,
   };
-  const last = { price: lb.close, vwap: v, slope: slp, atr: aa, tol, cond, time: lb.time };
-  return { vwapData, bandU, bandL, markers, last };
+  const last = { price: lb.close, ref: v, slope: slp, atr: aa, tol, cond, time: lb.time };
+  return { refData, bandU, bandL, markers, last };
 };
 
 // When a `trades` list is given (backtest day): HIGHLIGHT the signals that actually OPENED a trade —
@@ -164,13 +164,13 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: '#0ECB81', downColor: '#F6465D', borderVisible: false, wickUpColor: '#0ECB81', wickDownColor: '#F6465D',
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 } });
-    const vwap = chart.addSeries(LineSeries, { color: '#3B82F6', lineWidth: 2, title: REF, lastValueVisible: true,
+    const refSeries = chart.addSeries(LineSeries, { color: '#3B82F6', lineWidth: 2, title: REF, lastValueVisible: true,
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 }, crosshairMarkerVisible: false });
     const bandOpts = { color: 'rgba(59,130,246,0.35)', lineWidth: 1, lineStyle: 2, lastValueVisible: false,
       priceLineVisible: false, crosshairMarkerVisible: false, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } };
     const bandU = chart.addSeries(LineSeries, bandOpts);
     const bandL = chart.addSeries(LineSeries, bandOpts);
-    seriesRef.current = { candle, vwap, bandU, bandL };
+    seriesRef.current = { candle, refSeries, bandU, bandL };
 
     let cancelled = false;
     const load = async () => {
@@ -199,8 +199,8 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
         if (cancelled || !chartRef.current) return;
         if (!raw.length) { setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
-        const { vwapData, bandU: bu, bandL: bl, markers, last: lm } = compute(candles);
-        candle.setData(candles); vwap.setData(vwapData); bandU.setData(bu); bandL.setData(bl);
+        const { refData, bandU: bu, bandL: bl, markers, last: lm } = compute(candles);
+        candle.setData(candles); refSeries.setData(refData); bandU.setData(bu); bandL.setData(bl);
         // markers = ALL signal-formation moments (dimmed) + the trades that opened (entry arrow + exit)
         const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
         finalMarkers.sort((a, b) => a.time - b.time);
@@ -229,8 +229,8 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
   const c = last?.cond;
-  const longReady = c && c.sessOk && c.aboveVWAP && c.slopeUp && c.pullLong && c.bull;
-  const shortReady = c && c.sessOk && c.belowVWAP && c.slopeDn && c.pullShort && c.bear;
+  const longReady = c && c.sessOk && c.above && c.slopeUp && c.pullLong && c.bull;
+  const shortReady = c && c.sessOk && c.below && c.slopeDn && c.pullShort && c.bear;
 
   const Pill = ({ ok, label }) => (
     <span style={{ padding: '2px 7px', borderRadius: 6, fontSize: 11, whiteSpace: 'nowrap',
@@ -255,8 +255,8 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
           ? new Date(endMs).toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
           : 'CANLI'}</strong>
         <span>Fiyat <b>{fmt(last?.price)}</b></span>
-        <span style={{ color: '#3B82F6' }}>{REF} <b>{fmt(last?.vwap)}</b></span>
-        <span>fiyat−{REF} <b>{last ? fmt(last.price - last.vwap) : '—'}</b></span>
+        <span style={{ color: '#3B82F6' }}>{REF} <b>{fmt(last?.ref)}</b></span>
+        <span>fiyat−{REF} <b>{last ? fmt(last.price - last.ref) : '—'}</b></span>
         <span>eğim(60) <b>{fmt(last?.slope, 2)}</b></span>
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
@@ -267,14 +267,14 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
           <span style={{ color: '#848E9C', fontSize: 10, letterSpacing: '0.04em' }}>SİNYAL KOŞULLARI (anlık · hepsi ✓ olunca sinyal oluşur)</span>
           <Row side="AL" ready={longReady} color="#0ECB81" items={[
             { ok: c.slopeUp, label: CONDS.slopeUp },
-            { ok: c.aboveVWAP, label: CONDS.above },
+            { ok: c.above, label: CONDS.above },
             { ok: c.pullLong, label: CONDS.pullLong },
             { ok: c.bull, label: CONDS.bull },
             { ok: c.sessOk, label: CONDS.sess },
           ]} />
           <Row side="SAT" ready={shortReady} color="#F6465D" items={[
             { ok: c.slopeDn, label: CONDS.slopeDn },
-            { ok: c.belowVWAP, label: CONDS.below },
+            { ok: c.below, label: CONDS.below },
             { ok: c.pullShort, label: CONDS.pullShort },
             { ok: c.bear, label: CONDS.bear },
             { ok: c.sessOk, label: CONDS.sess },

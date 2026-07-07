@@ -637,6 +637,35 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - Dosyalar: src/components/layout/Sidebar.jsx, src/components/ExecGate.jsx,
   src/context/LanguageContext.jsx.
 
+### 2026-07-07 (7) — İşlem Merkezi yeni-kullanıcı sadeleştirmesi: Kurulum Rehberi + Hazır Şablonlar + i18n backfill
+- **Kurulum Rehberi kartı** (`SetupGuideCard`, İşlem Merkezi'nin tepesinde, tam genişlik): 4 adımlı
+  otomatik-işaretli onboarding — (1) Binance'te API anahtarı oluştur (katlanabilir adım-adım kılavuz:
+  API Management linki, Enable Futures, ÇEKİM YETKİSİ YASAK, IP kısıtı `VITE_VM_EGRESS_IP`, one-way mod),
+  (2) anahtarı ekle/doğrulat, (3) şablon seç, (4) akışı etkinleştir. Durumlar kullanıcının kendi
+  `user_api_keys_public` + `user_stream_settings` satırlarından okunur; 4/4 olunca tek satıra katlanır.
+- **Hazır Şablonlar kartı** (`TemplatesCard`): 3 preset (Temkinli Başlangıç $2×2 / Dengeli $5×3 /
+  Geniş Portföy $5×5) — sembol önerisi backtest sıralaması ∩ stream_universe (RPC düşerse majors
+  fallback), risk alanlarıyla birlikte tek tıkla upsert; akışı ASLA otomatik açmaz. `fetchRanking`
+  streams.js'e taşındı (SymbolPickerCard ile ortak). Şablon metinleri yalnız risk dili — strateji
+  mekaniği anlatılmaz (anonimleştirme sınırı korunur).
+- **Sayfa akışı sadeleşti:** Rehber → API Anahtarları → Şablonlar → Aktivasyon → "İNCE AYAR" ayracı →
+  Risk + Sembol Seçimi (ileri düzey). ApiKeysCard'a Binance API yönetim sayfası linki eklendi.
+- **Anonimleştirme sıkılaştırması:** TOTAL sayfasındaki "Akış × genişlik rejimi" tablosu (satır adları
+  gerçek akış adları MAIN/OPUS/RANGE) artık YALNIZ admin'e render edilir; MAIN/OPUS/RANGE geçen
+  araştırma dipnotu ortak çeviri haritasından çıkarılıp `adminStreamInfo.MARKETCAP_NOTE` lazy chunk'ına
+  taşındı (`useStreamDisplay().marketcapNote()`); MidasLiveChart'taki bundle'da hayatta kalan
+  `aboveVWAP/belowVWAP/vwapData/vwap` property adları nötrleştirildi (`above/below/refData/ref`).
+  Doğrulama: ana bundle'da Donchian/VWAP/breakout/MAIN-OPUS **0 eşleşme** (yalnız admin chunk'ında).
+- **TR/EN i18n backfill:** `t()` anahtarı ↔ EN sözlüğü denetimi (scratchpad script) 90 eksik buldu;
+  ~75 gerçek eksik çevrildi (canlı pano, seans durumu, TOTAL sayfası, bildirim/ayarlar, grafik modal
+  + tüm yeni modül adları: Setup Guide / Quick Templates / Fine-Tuning). Kalan 15 kasıtlı
+  İngilizce-anahtar (TP/SL/Win Rate... EN'de anahtarın kendisi). MobileTabBar "İşlem" sekmesi EN'de
+  yanlışlıkla "Trades" gösteriyordu → `t('Trade')` + TR override. `npm run build` PASS.
+- Dosyalar: src/components/trading/{SetupGuideCard,TemplatesCard}.jsx (yeni), streams.js,
+  SymbolPickerCard.jsx, ApiKeysCard.jsx, src/pages/{TradingSettingsPage,MarketCapPage}.jsx,
+  src/components/{MidasLiveChart,layout/MobileTabBar}.jsx, src/utils/{adminStreamInfo,useStreamDisplay}.js,
+  src/context/LanguageContext.jsx, src/assets/css/style.css.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

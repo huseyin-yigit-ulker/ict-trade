@@ -188,7 +188,11 @@ const MarketCapPage = () => {
                 </table>
               </div>
 
-              {/* separation: total R by stream x breadth regime */}
+              {/* separation: total R by stream x breadth regime — ADMIN ONLY: the
+                  row names are REAL stream names (MAIN/OPUS/RANGE), which the
+                  anonymization boundary must not show to regular users. */}
+              {sd.isAdmin && (
+              <>
               <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 6px' }}>
                 {t('Akış × genişlik rejimi — toplam R')}
               </div>
@@ -226,15 +230,19 @@ const MarketCapPage = () => {
                   </tbody>
                 </table>
               </div>
+              </>
+              )}
             </>
           )}
 
           <p style={{ fontSize: 12, lineHeight: 1.55, opacity: 0.8, margin: '14px 0 4px' }}>
             {t('Bulgu: genişlik (TOTAL3) rejimi ER bandından bağımsız bilgi taşıyor. En çok R kazandığımız HAFİF bantta, hızlı yükselen TOTAL3 (risk-on coşkusu) hem 2026 hem 2025’te tutarlı biçimde ZARARLI; nötr/risk-off ise kârlı — “risk-on’da al” sezgisinin tersi.')}
           </p>
-          {sd.isAdmin && (
+          {/* Research footnote names REAL streams — text ships only in the admin
+              lazy chunk (adminStreamInfo.MARKETCAP_NOTE), never in the main bundle. */}
+          {sd.marketcapNote() && (
             <p style={{ fontSize: 10.5, lineHeight: 1.5, opacity: 0.5, margin: 0 }}>
-              {t('Tek başına temiz bir gate çıkmıyor: etkinin en güçlü olduğu MAIN/OPUS örneklem-dışı (2025) zaten net-negatif, tek istikrarlı kârlı akış RANGE’de dayanıklı bir kazanım yok. Bu yüzden bir lookup + monitör olarak kullanılır; bir akışa bağlamadan önce OOS kazanım göster. Kaynak: sync/marketcap.py + marketcap_analysis.py.')}
+              {sd.marketcapNote()}
             </p>
           )}
         </div>

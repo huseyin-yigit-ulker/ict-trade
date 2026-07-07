@@ -40,6 +40,8 @@ export function useStreamDisplay() {
     info: (key, l = lang) => (adm ? adm.infoFor(key, l) : null),
     /** Chart anchor-line tag (XAU). */
     refline: () => adm?.REAL_REFLINE || REFLINE_LABEL,
+    /** TOTAL page research footnote (names real streams) — admin only, else null. */
+    marketcapNote: (l = lang) => adm?.MARKETCAP_NOTE?.[l] || adm?.MARKETCAP_NOTE?.tr || null,
     /** XAU signal-condition pill labels — real for admin, neutral otherwise. */
     midasConds: () => adm?.REAL_MIDAS_CONDS || {
       slopeUp: 'Koşul A', above: 'Koşul B', pullLong: 'Koşul C', bull: 'Koşul D', sess: 'Koşul E',

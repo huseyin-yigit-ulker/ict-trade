@@ -2962,6 +2962,61 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 .seg--rows { width: 100%; }
 .seg--rows button { flex: 1 1 0; }
 
+/* --- Kurulum Rehberi (new-user onboarding checklist) --- */
+.setup-guide .summary-title { display: flex; align-items: center; gap: 10px; }
+.setup-progress { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+.setup-bar { height: 4px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.setup-bar span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.25s ease; }
+.setup-steps { display: grid; gap: 14px; }
+.setup-step { display: flex; gap: 12px; align-items: flex-start; }
+.setup-step__num {
+  flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px;
+  font-weight: 800; color: var(--muted); border: 1px solid var(--border); background: var(--panel-2);
+}
+.setup-step__num--done { color: var(--win); border-color: var(--win); background: var(--win-soft); }
+.setup-step--done .setup-step__title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--border); }
+.setup-step__body { display: grid; gap: 8px; min-width: 0; }
+.setup-step__title { font-weight: 700; font-size: 13px; color: var(--text); }
+.setup-step__desc { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.55; max-width: 720px; }
+.setup-howto { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 12px; color: var(--muted); line-height: 1.55; }
+.setup-howto a { color: var(--accent); }
+.setup-ip {
+  font-family: var(--mono); font-size: 11.5px; color: var(--accent); padding: 1px 6px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--panel-2); user-select: all;
+}
+.setup-done-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.setup-done-row .setup-step__num { width: 22px; height: 22px; }
+.setup-done-row .header-btn { margin-left: auto; }
+
+/* --- Hazır Şablonlar (one-click symbol+risk presets) --- */
+.tpl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tpl-card {
+  display: grid; gap: 10px; align-content: start; padding: 14px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2);
+}
+.tpl-card__name { font-weight: 800; font-size: 13px; letter-spacing: 0.03em; color: var(--text); }
+.tpl-card__desc { font-size: 11.5px; color: var(--muted); line-height: 1.5; min-height: 34px; }
+.tpl-card__meta { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.tpl-card__meta li { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.tpl-card__meta b { font-family: var(--mono); color: var(--text); }
+.tpl-card__syms { display: flex; flex-wrap: wrap; gap: 5px; }
+.tpl-sym {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 2px 7px;
+  border-radius: 999px; border: 1px solid var(--border); color: var(--text); background: var(--panel);
+}
+.tpl-sym--ghost { color: var(--muted); border-style: dashed; }
+
+/* full-width divider between the setup funnel and the fine-tuning cards */
+.settings-sep {
+  grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--border-soft);
+}
+.settings-sep span {
+  font-weight: 600; letter-spacing: 0.08em; font-size: 11px; text-transform: uppercase; color: var(--muted);
+}
+.settings-sep small { font-size: 11.5px; color: var(--muted); opacity: 0.8; }
+
 /* symbol picker: chips (left) + backtest ranking (right) */
 .sympick { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; align-items: start; }
 .sympick__pick, .sympick__rank { display: grid; gap: 10px; align-content: start; }
