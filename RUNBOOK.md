@@ -19,13 +19,15 @@ A quantitative crypto/FX **trading research + live signal system**:
   AFTER-LOSS gate). Everything else is **paper** (signals + Telegram + dashboard only).
 - **Telegram** alerts on formations / trade lifecycle.
 
-Two streams are surfaced live (**OPUS + MIDAS**, user decision 2026-07-07); FABLE and the rest of the
-"Donchian book" are backtest-only research (opt-in lab surfaces).
+Three streams are surfaced live (**OPUS + MIDAS** real-money capable, user decision 2026-07-07;
+**TALOS** paper-only, added later the same day); FABLE and the rest of the "Donchian book" are
+backtest-only research (opt-in lab surfaces).
 
 | Stream | What | Live? | Money |
 |---|---|---|---|
 | **OPUS** (`d30so8f3h7`) | Donchian 30m breakout + 4h confirm, scale-out (60% @ +1R, runner +8R cap / BE / 7d) | ✅ | **REAL** (Binance Futures) |
 | **MIDAS** (`midas`) | Gold-only (XAUUSDT) 1m VWAP-trend pullback + 3.5×ATR trailing (paper signal feed) | ✅ | paper feed |
+| **TALOS** (`talos`) | Gold-only (XAUUSDT) 1m Keltner-trend: DEEP pullback to the 15m EMA20±0.75·ATR band + the same 3.5×ATR trailing engine as MIDAS (shared code) | ✅ | paper feed (no executor) |
 | **MIDAS-X** (`midasx`) | MIDAS as real Binance orders (maker GTX entry + exchange-side trailing SL + after-loss gate) | ✅ | **REAL mainnet** since 2026-07-07 ($3 risk; wallet shared with OPUS) |
 | **FABLE** (`d30so8f3vg`) | OPUS twin, only taken when daily volume is contracting (vch<0.9) | backtest-only (live emit retired 2026-07-07) | — |
 | Donchian book (`donchianc`, `d1h_so*`, `d30so*`, …) | breakout families, various exits | backtest-only | — |
@@ -64,6 +66,8 @@ ict-trade/
 │   ├── donchian/            Donchian strategy: strategy.py, canli.py (live emit), scaleout*.py,
 │   │                        portfolio_backfill.py, volgate_backfill.py (FABLE), …
 │   ├── midas/               MIDAS gold stream: strategy.py, backfill.py, canli.py   → see MIDAS.md
+│   ├── talos/               TALOS gold stream (Keltner sibling of MIDAS; PAPER-only): strategy.py
+│   │                        (imports the MIDAS walk/trailing engine), backfill.py, canli.py
 │   ├── midas_exec/          MIDAS-X gold executor (testnet-first): executor.py, config.py, state.py,
 │   │                        schema.sql, safety_sweep.py, killswitch.py, parity_report.py → see MIDAS.md §5
 │   ├── live_exec/           REAL-MONEY Binance executor (OPUS): executor.py, safety_sweep.py,
@@ -129,6 +133,8 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
 | `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh (live emit retired 2026-07-07; re-enable command in the crontab comment) |
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
+| `* * * * *` (+30s) | `talos/canli.py --emit --lookback-min 3 --sl-step 0` | **TALOS** emit + trailing track + Telegram |
+| `40 1 * * *` | `talos/backfill.py --apply` | TALOS backtest refresh |
 | `*/2 * * * *` | `live_exec/executor.py` | **REAL-MONEY** OPUS reconciler |
 | `*/5 * * * *` | `live_exec/safety_sweep.py` | executor safety guard |
 | `* * * * *` | `midas_exec/executor.py` | **MIDAS-X** reconciler (**REAL-MONEY mainnet** since 2026-07-07) |
@@ -136,8 +142,8 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `* * * * *` (+40s) | `users/verify_keys.py` | multi-user API-key verification |
 | `* * * * *` (+45s) | `push_notify.py --drain` | personal Web-Push outbox drain |
 
-Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-midas-exec.log`, `~/ict-sync.log`,
-`~/ict-exec.log`, `~/ict-users.log`.
+Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-talos.log`, `~/ict-midas-exec.log`,
+`~/ict-sync.log`, `~/ict-exec.log`, `~/ict-users.log`.
 
 ---
 
@@ -769,6 +775,29 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - Kullanıcı isteği: LoginScreen (`boot-sub`) ve IntroPage (`intro-sub`) alt başlık satırları silindi;
   logo/başlık ("PUSU") duruyor. Footer'lardaki "© 2026 PUSU · Likidite Avı" ile PWA manifest
   adı/açıklaması dokunulmadı. `npm run build` PASS.
+
+### 2026-07-07 (11) — TALOS: 3. canlı akış (altın Keltner-trend, PAPER) — sync + cron + DB + UI uçtan uca
+- **Ne:** "MIDAS'tan iyi XAU" taramasının (MIDAS.md changelog 2026-07-07) kazanan adayı KELT075,
+  **TALOS** adıyla (kod adı **ANTARES**) 3. canlı akış olarak ürünleşti. Kullanıcı kararı: paper
+  live + 2026 backtest + cron + Telegram + grafikler; isim seçimi bana bırakıldı.
+- **Strateji:** XAUUSDT 1m; 15m EMA(20) trend (4-bar eğim), giriş = EMA∓0.75×ATR(20,15m) Keltner
+  bandına DERİN sarkıp in-trend kapanış; iskelet MIDAS'la birebir (1.5×ATR stop, sabit hedef yok,
+  3.5×ATR iz-süren, 8s, seans-düz, Londra 07-13 skip, m120) ve **kod paylaşımlı** (sync/talos/strategy.py
+  MIDAS'ın walk/track_open/seans motorunu import eder; yalnız signals() farklı). Hacim kullanmaz.
+  2026: +87.7R/323tr/PF 1.53 (DB'ye yazıldı); PAXG çok-yıllık OOS 3yıl +39.2R vs MIDAS-repro −183R.
+- **Parçalar:** `sync/talos/{strategy,backfill,canli}.py` (backfill 01:40 nightly, canli her dk +30s
+  Telegram ON formasyon+trailing+çıkış); migration **013** (user_signal_watch CHECK'e 'talos' +
+  stream_universe'e (talos,XAUUSDT)) UYGULANDI; `push_notify` maske (TALOS→ANTARES, Keltner→K-BANT)
+  + mode→stream haritası; UI: streamMask CODENAMES/LIVE_STREAM_KEYS, adminStreamInfo (REAL_NAMES/
+  LABELS + REAL_TALOS_CONDS), strategyInfo kartı (tr/en), streamStats, Sidebar canlı bölümü,
+  TradeContext (version/mode/ltf + trailing özel-durumları midas|talos), ChartModal (trailing set),
+  Dashboard (isTrailing + seans kartı + canlı grafik), **MidasLiveChart `variant="talos"`**
+  (15m Keltner bandı + AL/SAT işaretleri + koşul pill'leri — VWAP yerine Keltner çizer),
+  SignalWatchCard (talos evreni). İşlem Merkezi/executor kasten YOK (paper-only;
+  user_stream_settings CHECK'i opus/midas kaldı).
+- **Doğrulama:** backfill dry-run 2026 +87.7R (araştırma taramasıyla uyumlu), canli --emit koştu
+  (0 setup, in-position kilidi çalışıyor), crontab kuruldu, prod build temiz (TALOS/Keltner ana
+  bundle'a sızmıyor — yalnız REAL_TALOS_CONDS özellik adı, REAL_MIDAS_CONDS ile aynı desen).
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

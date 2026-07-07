@@ -61,6 +61,8 @@ _MASK_MAP = [
     ("OPUS", "ATLAS"),
     ("FABLE", "NOVA"),
     ("MIDAS", "SIRIUS"),
+    ("TALOS", "ANTARES"),
+    ("Keltner", "K-BANT"),
     ("DONCHIAN", "TREND"),
     ("Donchian", "TREND"),
     ("VWAP", "T-REF"),
@@ -113,6 +115,7 @@ _MODE_TO_STREAM = {
     "dch30_4h": "d30so8f3h7",    # OPUS
     # "dch30_4hvg" (FABLE) emekli 2026-07-07 — canli emit'i kaldirildi, backtest-only.
     "midas": "midas",            # MIDAS / SIRIUS
+    "talos": "talos",            # TALOS / ANTARES (3. canlı PAPER akışı, 2026-07-07)
 }
 
 

@@ -16,7 +16,7 @@ import { fetchWatch, saveWatch } from '../../utils/signalWatch';
 // version key -> stream_universe bucket (executor vocab: opus/midas).
 // (d30so8f3vg/NOVA 2026-07-07'de canlıdan çıktı — LIVE_STREAM_KEYS'ten düştüğü için burada
 // listelenmez; eski kayıtlı izleme satırları zararsız şekilde pasif kalır.)
-const UNI_BUCKET = { d30so8f3h7: 'opus', midas: 'midas' };
+const UNI_BUCKET = { d30so8f3h7: 'opus', midas: 'midas', talos: 'talos' };
 
 export default function SignalWatchCard() {
   const { t } = useLang();

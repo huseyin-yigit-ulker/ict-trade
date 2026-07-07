@@ -13,6 +13,7 @@ export const REAL_NAMES = {
   d30so8f3h7: 'OPUS',
   d30so8f3vg: 'FABLE',
   midas: 'MIDAS',
+  talos: 'TALOS',
   donchianc: 'DONCHIAN 1h',
   d1h_so4c: 'DONCHIAN 1h·WR 4R',
   d1h_so6c: 'DONCHIAN 1h·WR 6R',
@@ -38,6 +39,7 @@ export const REAL_LABELS = {
   d30so8f3h7: 'OPUS · DONCHIAN 30m+4h·WR 8R ·b30·7g',
   d30so8f3vg: 'FABLE · DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9',
   midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing)',
+  talos: 'TALOS · ALTIN Keltner-Trend (XAU 1m·trailing)',
   donchianc: 'DONCHIAN 1h ·0.5R',
   d1h_so4c: 'DONCHIAN 1h·WR 4R ·0.5R',
   d1h_so6c: 'DONCHIAN 1h·WR 6R ·0.5R',
@@ -73,6 +75,19 @@ export const REAL_MIDAS_CONDS = {
   slopeDn: 'eğim<0 (aşağı trend)',
   below: 'fiyat < VWAP',
   pullShort: "VWAP'a çekilme (high ≥ VWAP−0.25·ATR)",
+  bear: 'düşen mum (close<open)',
+};
+
+// TALOS live chart's signal-condition checklist — REAL rule text (admin only).
+export const REAL_TALOS_CONDS = {
+  slopeUp: '15m-EMA20 eğim>0 (yukarı trend)',
+  above: 'fiyat > alt Keltner bandı',
+  pullLong: 'banda derin çekilme (low ≤ bant+0.25·ATR)',
+  bull: 'yükselen mum (close>open)',
+  sess: 'seans uygun (07-13 UTC dışı)',
+  slopeDn: '15m-EMA20 eğim<0 (aşağı trend)',
+  below: 'fiyat < üst Keltner bandı',
+  pullShort: 'banda derin çekilme (high ≥ bant−0.25·ATR)',
   bear: 'düşen mum (close<open)',
 };
 

@@ -651,6 +651,13 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - Scriptler (scratchpad, commit edilmez): `fx_gold/strategies2.py`, `scan2{,b,c,d}.py`,
   `validate_kelt.py`, `kelt_overlap_july.py`.
 
+### 2026-07-07 (2) — Tarama kazananı KELT075 SHIP EDİLDİ → yeni akış TALOS (ANTARES)
+- Yukarıdaki taramanın kazanan adayı kullanıcı kararıyla 3. canlı akış oldu: **TALOS** (paper-only,
+  executor yok) — `sync/talos/` (MIDAS'ın walk/trailing/seans motorunu import eder, yalnız giriş
+  metriği farklı: 15m Keltner alt/üst bandına derin pullback). 2026 backtest version='talos'
+  (+87.7R/323tr/PF1.53), canlı mode='talos' her dk (+30s) Telegram ON, nightly backfill 01:40,
+  migration 013, UI uçtan uca (canlı Keltner grafiği dahil). Detay: RUNBOOK.md changelog 2026-07-07 (11).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

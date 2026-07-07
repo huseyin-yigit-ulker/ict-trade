@@ -170,6 +170,33 @@ export const STRATEGY_INFO = {
       caveat: 'COST IS CRITICAL: this is an FX model ($0.50/oz ≈ ECN spread). On Binance taker fees (~10 bps ≈ $4/oz) the full set turns NEGATIVE → run with maker entries + the AFTER-LOSS gate (2026 @taker: +53.6R PF1.37 gated). REAL MONEY on MAINNET via MIDAS-X since 2026-07-07: $3 risk/trade, auto-leverage (OPUS rule), the trailing stop rides exchange-side as a resting STOP_MARKET. The paper feed + nightly backtest remain the authoritative book. Multi-year OOS is negative (the edge may be 2026-regime) — small size, watch the book.',
     },
   },
+
+  // 🥇 TALOS — gold-only intraday KELTNER-trend (MIDAS'ın iskeletinde VWAP-dışı kardeş akış).
+  talos: {
+    icon: '🥇', accent: '#B87333',
+    tr: {
+      title: 'TALOS · ALTIN Keltner-Trend', tagline: 'Sadece XAUUSDT · 1m · trend yönünde 15m Keltner bandına DERİN çekilmeyi al, 3.5×ATR trailing ile koştur',
+      summary: '"MIDAS\'tan iyi XAU stratejisi" taramasının (2026-07-07, 30+ aile / ~90 varyant) tek sağlam VWAP-dışı kazananı. MIDAS ile aynı iskelet (1.5×ATR stop, sabit hedef YOK, 3.5×ATR iz-süren stop, 8s, seans-sonu düz, FX-altın saatleri) ama giriş metriği farklı: 15m EMA(20) trendi tanımlar, fiyat EMA−0.75×ATR(20) alt bandına DERİN sarkıp in-trend kapanışla dönünce girer (MIDAS\'ın VWAP dokunuşundan daha derin bir iskonto). Hacim kullanmaz (yalnız EMA/ATR) — rejim dayanıklılığı için ship edildi: PAXG çok-yıllık OOS\'ta MIDAS\'tan belirgin üstün.',
+      sections: [
+        { h: 'Giriş (LONG)', t: '15m-EMA20 eğimi 4-bar (1s) yukarı + bu 1m bar ALT Keltner bandına sarktı (low ≤ bant+0.25·ATR15) + bandın üstünde boğa kapanış (close>open, close>bant). SHORT üst bantta simetrik. Karar bar KAPANIŞINDA, giriş SONRAKİ bar açılışında (lookahead yok). Londra 07-13 UTC atlanır + fx-günü ilk 120dk girilmez (MIDAS filtreleri).' },
+        { h: 'Çıkış & risk', t: 'MIDAS ile birebir aynı motor (kod paylaşımlı): başlangıç stop 1.5×ATR(15m) (1R), SABİT HEDEF YOK — 3.5×ATR iz-süren stop VEYA 8 saat VEYA seans-sonu düz. Tek pozisyon, gecelik yok.' },
+        { h: 'Sonuçlar (2026-H1, $0.50/oz maliyet)', t: '+87.5R · 314 işlem · PF 1.54 · WR %38 · maxDD −8.3R (MIDAS: +142.6R ama DD −18). IS +55.9 / OOS +31.6. Parametre platosu düz (kmult .625-.875 × trail 3.5-4.0 → +75..+88), random-null P=0.000 (~3σ).' },
+        { h: 'Asıl kozu: çok-yıllık dayanıklılık', t: 'PAXG (1oz altın token) vekil OOS: 2024 −168.8 / 2025 +114.5 (PF 1.33) / 2026 +93.5 (PF 1.55) = 3 yıl +39.2R — aynı testte MIDAS-repro −183.0R. 2025\'te MIDAS\'ı ezer, 2024 kaybı yarısı. MIDAS ile günlük R korelasyonu 0.396 → portföy 2026-H1 +230.1R / DD −21.1, her ay yeşil.' },
+      ],
+      caveat: 'PAPER akış — executor\'u YOK (aynı FX-maliyet modeli; Binance taker\'da MIDAS gibi ölür). 2024 tarzı başarısız-kırılım rejiminde MIDAS ile BİRLİKTE kaybeder (çeşitlendirme kısmi — aynı trend-devam ailesi, farklı ölçüm). Otorite kitap = gece backtest\'i (version=talos); canlı akış PAPER sinyal + iz-süren stop takibidir.',
+    },
+    en: {
+      title: 'TALOS · GOLD Keltner-Trend', tagline: 'XAUUSDT only · 1m · buy the DEEP pullback to the 15m Keltner band in the trend, ride a 3.5×ATR trailing stop',
+      summary: 'The one robust non-VWAP winner of the 2026-07-07 "better than MIDAS" scan (30+ families / ~90 variants). Same skeleton as MIDAS (1.5×ATR stop, NO fixed target, 3.5×ATR trailing, 8h cap, session-close flat, FX-gold hours) but a different entry metric: the 15m EMA(20) defines the trend and entries fire on a DEEP dip to the EMA−0.75×ATR(20) lower band that closes back in-trend — a deeper discount than MIDAS\'s VWAP touch. Volume-free (EMA/ATR only); shipped for its regime robustness: clearly beats MIDAS on multi-year PAXG OOS.',
+      sections: [
+        { h: 'Entry (LONG)', t: '15m-EMA20 slope up over 4 bars (1h) + this 1m bar dipped to the LOWER Keltner band (low ≤ band+0.25·ATR15) + bullish close back above the band. SHORT symmetric on the upper band. Decided at bar CLOSE, filled next-bar OPEN (no lookahead). London 07-13 UTC skipped + no entries in the fx-day\'s first 120min (MIDAS filters).' },
+        { h: 'Exit & risk', t: 'Identical engine to MIDAS (shared code): initial stop 1.5×ATR(15m) (1R), NO fixed target — 3.5×ATR trailing stop OR 8h OR session-close flat. One position, no overnight.' },
+        { h: 'Results (2026-H1, $0.50/oz cost)', t: '+87.5R · 314 trades · PF 1.54 · WR 38% · maxDD −8.3R (MIDAS: +142.6R but DD −18). IS +55.9 / OOS +31.6. Flat parameter plateau (kmult .625-.875 × trail 3.5-4.0 → +75..+88), random-entry null P=0.000 (~3σ).' },
+        { h: 'Its real edge: multi-year robustness', t: 'PAXG proxy OOS: 2024 −168.8 / 2025 +114.5 (PF 1.33) / 2026 +93.5 (PF 1.55) = 3yr +39.2R — vs MIDAS-repro −183.0R on the same test. Crushes MIDAS in 2025, half the 2024 loss. Daily-R correlation with MIDAS 0.396 → the portfolio does +230.1R / DD −21.1 in 2026-H1, every month green.' },
+      ],
+      caveat: 'PAPER stream — NO executor (same FX-cost model; dies on Binance taker like MIDAS). In a 2024-style failed-breakout regime it loses TOGETHER with MIDAS (diversification is partial — same trend-continuation family, different metric). The authoritative book is the nightly backtest (version=talos); the live feed is a PAPER signal + trailing-stop tracker.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {

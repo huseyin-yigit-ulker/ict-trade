@@ -18,6 +18,7 @@ export const CODENAMES = {
   d30so8f3h7: 'ATLAS',
   d30so8f3vg: 'NOVA',
   midas: 'SIRIUS',
+  talos: 'ANTARES',
   // 1h ailesi (backtest-only)
   donchianc: 'VEGA',
   d1h_so4c: 'LYRA',
@@ -46,7 +47,8 @@ export const CODENAMES = {
 // (ya da admin'in user_features.backtest=true ile açıkça yetki verdiği kullanıcıya) görünür.
 // 2026-07-07: NOVA (d30so8f3vg) canlıdan çıkarıldı — backtest-only araştırma varyantı artık
 // (canlı emit'i de emekli; nightly volgate_backfill backtest'ini tazelemeye devam eder).
-export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'midas'];
+// 2026-07-07: TALOS (talos/ANTARES) eklendi — 3. canlı akış, PAPER-only (executor'u yok).
+export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'midas', 'talos'];
 
 /** True = backtest-only araştırma varyantı (canlı olmayan herhangi bir codename). */
 export const isResearchStream = (key) => !!CODENAMES[key] && !LIVE_STREAM_KEYS.includes(key);

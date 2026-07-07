@@ -47,5 +47,10 @@ export function useStreamDisplay() {
       slopeUp: 'Koşul A', above: 'Koşul B', pullLong: 'Koşul C', bull: 'Koşul D', sess: 'Koşul E',
       slopeDn: 'Koşul A', below: 'Koşul B', pullShort: 'Koşul C', bear: 'Koşul D',
     },
+    /** TALOS (Keltner) variant of the same checklist. */
+    talosConds: () => adm?.REAL_TALOS_CONDS || {
+      slopeUp: 'Koşul A', above: 'Koşul B', pullLong: 'Koşul C', bull: 'Koşul D', sess: 'Koşul E',
+      slopeDn: 'Koşul A', below: 'Koşul B', pullShort: 'Koşul C', bear: 'Koşul D',
+    },
   };
 }

@@ -31,8 +31,9 @@ export const STREAMS = [
   S('d30so4f3', 'scaleout'), S('d30so6f3', 'scaleout'), S('d30so8f3', 'scaleout'),
   S('d30so8f3h7', 'scaleout'),   // canlı gerçek-para akışı (OPUS)
   S('d30so8f3vg', 'scaleout'),   // 2026-07-07: backtest-only'ye indirildi (canlı emit emekli)
-  // ── altın akışı ──
+  // ── altın akışları ──
   S('midas', 'full'),
+  S('talos', 'full'),
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

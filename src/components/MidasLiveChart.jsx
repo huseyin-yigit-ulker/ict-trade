@@ -8,8 +8,11 @@ import { useStreamDisplay } from '../utils/useStreamDisplay';
 //   • ±0.25·ATR(15m) pullback band around VWAP  — the "touched VWAP" trigger zone
 //   • LONG/SHORT markers where the core rule fires (close vs VWAP + VWAP-slope + pullback + bar dir,
 //     London 07-13 UTC skipped) — same conditions as the backend (market-hours filter approximate).
+// variant='talos': same shell, but the reference metric is the 15m Keltner channel
+// (EMA20 midline, ±0.75x ATR(20,15m) bands; trend = 4-bar EMA slope) — mirrors sync/talos/strategy.
 const SYMBOL = 'XAUUSDT';
 const SLOPE_N = 60, ATR_N = 14, TOUCH_TOL = 0.25, ATR_INIT = 1.5, SKIP_START = 7, SKIP_END = 13;
+const K_EMA_N = 20, K_MULT = 0.75, K_SLOPE_BARS = 4;   // TALOS Keltner params (15m)
 
 // UTC ms of the most recent 18:00 America/New_York at/before ms — the FX session open / VWAP anchor.
 // Scans back hour-by-hour so it's DST-correct.
@@ -42,6 +45,70 @@ const atr15 = (candles) => {
     byBucket.set(b.t, atr);
   }
   return candles.map((c) => byBucket.get(Math.floor(c.time / 900) * 900));
+};
+
+// 15m Keltner (EMA20 midline, ATR20 band, 4-bar slope) mapped back to each 1m bar — the TALOS
+// reference metric. Left-labelled buckets like atr15 (visual; backend uses right-closed resample).
+const keltner15 = (candles) => {
+  const buckets = []; let cur = null;
+  for (const c of candles) {
+    const b = Math.floor(c.time / 900) * 900;
+    if (!cur || cur.t !== b) { if (cur) buckets.push(cur); cur = { t: b, h: c.high, l: c.low, c: c.close }; }
+    else { cur.h = Math.max(cur.h, c.high); cur.l = Math.min(cur.l, c.low); cur.c = c.close; }
+  }
+  if (cur) buckets.push(cur);
+  const aE = 2 / (K_EMA_N + 1); const aA = 1 / K_EMA_N;
+  let ema = null; let katr = null;
+  const emaArr = []; const byBucket = new Map();
+  for (let i = 0; i < buckets.length; i += 1) {
+    const b = buckets[i]; const pc = i > 0 ? buckets[i - 1].c : b.c;
+    const tr = Math.max(b.h - b.l, Math.abs(b.h - pc), Math.abs(b.l - pc));
+    ema = ema == null ? b.c : ema + aE * (b.c - ema);
+    katr = katr == null ? tr : katr + aA * (tr - katr);
+    emaArr.push(ema);
+    const slope = i >= K_SLOPE_BARS ? ema - emaArr[i - K_SLOPE_BARS] : NaN;
+    byBucket.set(b.t, { ema, katr, slope });
+  }
+  return candles.map((c) => byBucket.get(Math.floor(c.time / 900) * 900));
+};
+
+// TALOS: midline = 15m EMA20 (ref line), band = EMA ± 0.75·ATR(20,15m); LONG fires on a deep dip
+// to the LOWER band (low ≤ band+0.25·ATR15) reclaimed with a bullish close (sync/talos/strategy).
+const computeTalos = (candles) => {
+  const k = keltner15(candles);
+  const a = atr15(candles);
+  const refData = []; const bandU = []; const bandL = []; const markers = [];
+  for (let i = 0; i < candles.length; i += 1) {
+    const c = candles[i]; const kk = k[i];
+    if (!kk || !Number.isFinite(kk.ema)) continue;
+    const bLo = kk.ema - K_MULT * kk.katr; const bHi = kk.ema + K_MULT * kk.katr;
+    refData.push({ time: c.time, value: kk.ema });
+    bandU.push({ time: c.time, value: bHi }); bandL.push({ time: c.time, value: bLo });
+    const utch = new Date(c.time * 1000).getUTCHours();
+    const sessOk = !(utch >= SKIP_START && utch < SKIP_END);
+    if (Number.isFinite(a[i]) && a[i] > 0 && Number.isFinite(kk.slope) && sessOk) {
+      const tol = TOUCH_TOL * a[i];
+      if (kk.slope > 0 && c.close > bLo && c.low <= bLo + tol && c.close > c.open) {
+        markers.push({ time: c.time, position: 'belowBar', shape: 'arrowUp', color: '#0ECB81', text: 'AL', size: 1 });
+      } else if (kk.slope < 0 && c.close < bHi && c.high >= bHi - tol && c.close < c.open) {
+        markers.push({ time: c.time, position: 'aboveBar', shape: 'arrowDown', color: '#F6465D', text: 'SAT', size: 1 });
+      }
+    }
+  }
+  const i = candles.length - 1;
+  const lb = candles[i]; const kk = k[i] || {}; const aa = a[i];
+  const bLo = kk.ema - K_MULT * kk.katr; const bHi = kk.ema + K_MULT * kk.katr;
+  const tol = Number.isFinite(aa) ? TOUCH_TOL * aa : NaN;
+  const utch = new Date(lb.time * 1000).getUTCHours();
+  const cond = {
+    sessOk: !(utch >= SKIP_START && utch < SKIP_END),
+    above: lb.close > bLo, below: lb.close < bHi,
+    slopeUp: kk.slope > 0, slopeDn: kk.slope < 0,
+    pullLong: lb.low <= bLo + tol, pullShort: lb.high >= bHi - tol,
+    bull: lb.close > lb.open, bear: lb.close < lb.open,
+  };
+  const last = { price: lb.close, ref: kk.ema, slope: kk.slope, atr: aa, tol, cond, time: lb.time };
+  return { refData, bandU, bandL, markers, last };
 };
 
 const compute = (candles) => {
@@ -123,13 +190,14 @@ const highlightMarkers = (coreMarkers, trades, candles) => {
 
 // Live (default): anchor→now, polls every 30s. Static (startMs+endMs given): a fixed historical day
 // window (e.g. a backtest day), no polling — same VWAP/band/markers, fit to the whole window.
-export default function MidasLiveChart({ startMs = null, endMs = null, trades = null }) {
+export default function MidasLiveChart({ variant = 'midas', startMs = null, endMs = null, trades = null }) {
   const isStatic = Number.isFinite(startMs) && Number.isFinite(endMs);
   // PRIVACY: the anchor line + the rule checklist render under neutral tags for
   // everyone except the admin (whose real labels lazy-load from adminStreamInfo).
   const sd = useStreamDisplay();
-  const REF = sd.refline();
-  const CONDS = sd.midasConds();
+  const isTalos = variant === 'talos';
+  const REF = isTalos ? (sd.isAdmin ? 'K-EMA20' : 'T-REF') : sd.refline();
+  const CONDS = isTalos ? sd.talosConds() : sd.midasConds();
   const tradesRef = useRef(trades);
   tradesRef.current = trades;                              // latest trades without re-running the effect
   const containerRef = useRef(null);
@@ -199,7 +267,7 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
         if (cancelled || !chartRef.current) return;
         if (!raw.length) { setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
-        const { refData, bandU: bu, bandL: bl, markers, last: lm } = compute(candles);
+        const { refData, bandU: bu, bandL: bl, markers, last: lm } = (isTalos ? computeTalos : compute)(candles);
         candle.setData(candles); refSeries.setData(refData); bandU.setData(bu); bandL.setData(bl);
         // markers = ALL signal-formation moments (dimmed) + the trades that opened (entry arrow + exit)
         const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
@@ -225,7 +293,7 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     });
     ro.observe(containerRef.current);
     return () => { cancelled = true; if (id) clearInterval(id); ro.disconnect(); chart.remove(); chartRef.current = null; };
-  }, [startMs, endMs, REF]);
+  }, [startMs, endMs, REF, variant]);
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
   const c = last?.cond;
@@ -251,13 +319,13 @@ export default function MidasLiveChart({ startMs = null, endMs = null, trades = 
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0B0E11', color: '#EAECEF' }}>
       <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', flexWrap: 'wrap', padding: '10px 14px',
         borderBottom: '1px solid #1E2329', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
-        <strong style={{ color: '#F0B90B' }}>{sd.name('midas')} · XAUUSDT {last?.interval || '1m'} · {isStatic
+        <strong style={{ color: '#F0B90B' }}>{sd.name(variant)} · XAUUSDT {last?.interval || '1m'} · {isStatic
           ? new Date(endMs).toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
           : 'CANLI'}</strong>
         <span>Fiyat <b>{fmt(last?.price)}</b></span>
         <span style={{ color: '#3B82F6' }}>{REF} <b>{fmt(last?.ref)}</b></span>
         <span>fiyat−{REF} <b>{last ? fmt(last.price - last.ref) : '—'}</b></span>
-        <span>eğim(60) <b>{fmt(last?.slope, 2)}</b></span>
+        <span>eğim({isTalos ? '4×15m' : '60'}) <b>{fmt(last?.slope, 2)}</b></span>
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
       </div>

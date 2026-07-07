@@ -190,9 +190,9 @@ const Dashboard = () => {
   const soCapR = soCapFromStrategy(strategy);
   const soConservative = isConfirmStrategy(strategy);
   const soBookFrac = soBookFromStrategy(strategy);
-  // MIDAS (trailing-stop, no fixed TP/SL R:R): cards show Entry + Exit + the realised result only —
+  // MIDAS/TALOS (trailing-stop, no fixed TP/SL R:R): cards show Entry + Exit + the realised result only —
   // no R:R pill, no Hedef/Risk row, no risk/reward bar (those imply a fixed target that doesn't exist).
-  const isTrailing = strategy === 'midas';
+  const isTrailing = strategy === 'midas' || strategy === 'talos';
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -1041,7 +1041,7 @@ const Dashboard = () => {
                       }));
                       return (
                         <div style={{ height: 460, marginBottom: 16, border: '1px solid #1E2329', borderRadius: 10, overflow: 'hidden' }}>
-                          <MidasLiveChart startMs={startMs} endMs={endMs} trades={dayTrades} />
+                          <MidasLiveChart variant={strategy} startMs={startMs} endMs={endMs} trades={dayTrades} />
                         </div>
                       );
                     })()}
@@ -1073,7 +1073,7 @@ const Dashboard = () => {
       {renderMidasSessions()}
       {isTrailing && mode === 'live' && (
         <div style={{ height: 560, marginBottom: 16, border: '1px solid #1E2329', borderRadius: 10, overflow: 'hidden' }}>
-          <MidasLiveChart />
+          <MidasLiveChart variant={strategy} />
         </div>
       )}
       {filteredSignals.length === 0 && (
