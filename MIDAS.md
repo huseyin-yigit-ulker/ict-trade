@@ -534,6 +534,23 @@ real maker fill-rate/slippage study, not mainnet P&L.
   07-07 00:31 ilk-işlem SKIP, 07-03 06:05 kazanç-sonrası SKIP, 07-06 02:00 PASS; flag=false → no-op);
   armed testnet tick temiz (açık pozisyon #46 trail takibi sürüyor).
 
+### 2026-07-07 (2) — Kapı kararları görünür: context.exec_gate + Telegram bildirimi + live sayfa tablosu
+- **Executor (`_mark_gate`):** kapı kararı artık paper sinyal satırına yazılıyor —
+  `context.exec_gate = {skipped, reason, at}`, atomik `jsonb ||` merge + `? 'exec_gate'` guard'ı
+  (sinyal 15 dk giriş penceresinde kaldığı için dedup şart; ilk işaretleyen tek Telegram/push atar).
+  SKIP → 🚧 Telegram (owner) + kişisel push (`kind='system'`); PASS → sadece işaret (giriş alert'i
+  zaten var). Dry-run yolu DB'ye yazmaz (eski davranış). canli `_track_open_positions`'ın
+  read-modify-write'ı ile çakışma cron ofsetleri (:20s vs :35s) sayesinde pratikte yok; en kötü
+  ihtimal bir kez yeniden işaretleme = 1 duplike alert.
+- **UI (`MidasXLivePage`):** başlığa "🚧 Kayıp-sonrası kapı" rozeti (tooltip'te kural) + yeni
+  **"Sinyaller · Kapı Kararları"** tablosu: son 10 mode='midas' sinyali — kapı hükmü (AÇILMADI /
+  EMİR AÇILDI / kapı öncesi), sebep, ve **Paper Sonucu** kolonu (atlanan işlemin paper R'si =
+  kapının kaçırdığı/kurtardığı canlı canlı izlenir — karşı-olgu takibi).
+- Doğrulama: `_mark_gate` SQL'i gerçek satırda transaction+ROLLBACK ile test edildi (ilk mark yazar,
+  ikincisi dedup None), py_compile + esbuild temiz; Telegram kanalı raw API ile teyit (200 ok).
+  Aktivasyon duyurusu kanala gönderildi. 2026-07-07 14:36 sinyali kasıtlı "kapı öncesi" kalır
+  (pozisyon #46 kapıdan önce girildi — sahte tarih yazılmadı).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

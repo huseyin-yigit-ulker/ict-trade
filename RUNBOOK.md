@@ -564,6 +564,13 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - Dosyalar: sync/midas_exec/config.py (flag), sync/midas_exec/executor.py (`_after_loss_gate`,
   `_fx_day_open_utc`, retry), MIDAS.md changelog. Cron değişikliği yok (executor zaten */1 koşuyor).
 
+### 2026-07-07 (2) — MIDAS-X kapı kararları: Telegram bildirimi + live sayfada görünürlük
+- Executor kapı hükmünü sinyal satırına yazar (`context.exec_gate`, atomik merge + dedup); atlanan
+  her sinyal için BİR kez Telegram (owner) + kişisel push (`kind='system'`). `MidasXLivePage`'e
+  "🚧 Kayıp-sonrası kapı" rozeti + "Sinyaller · Kapı Kararları" tablosu (hüküm, sebep, atlanan
+  işlemin paper R'si). Dosyalar: sync/midas_exec/executor.py, src/pages/MidasXLivePage.jsx,
+  MIDAS.md. Frontend build Render'da (push tetikler); cron değişikliği yok.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

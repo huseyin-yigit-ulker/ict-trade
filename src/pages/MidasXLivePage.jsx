@@ -73,6 +73,7 @@ export default function MidasXLivePage() {
   const [positions, setPositions] = useState([]);
   const [snap, setSnap] = useState(null);      // the XAUUSDT snapshot row
   const [account, setAccount] = useState(null);
+  const [gateSigs, setGateSigs] = useState([]); // recent paper signals + exec_gate decisions
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -82,15 +83,19 @@ export default function MidasXLivePage() {
   const load = useCallback(async () => {
     if (!SUPA_URL || !SUPA_KEY) { setErr(t('Supabase ayarları eksik.')); setLoading(false); return; }
     try {
-      const [pos, snaps, acc] = await Promise.all([
+      const [pos, snaps, acc, sigs] = await Promise.all([
         getJSON('midas_positions?select=*&order=updated_at.desc&limit=60'),
         getJSON('live_account_snapshot?select=*&symbol=eq.XAUUSDT'),
         getJSON('live_account?select=*'),
+        // Paper signals + the executor's AFTER-LOSS gate verdict (context.exec_gate, written by
+        // sync/midas_exec/executor._mark_gate). Shows WHY a paper signal did/didn't become an order.
+        getJSON('signals?select=signal_time,direction,entry,context&mode=eq.midas&order=signal_time.desc&limit=10'),
       ]);
       const xau = snaps[0] || null;
       const net = xau?.network || 'testnet';
       setPositions(pos);
       setSnap(xau);
+      setGateSigs(sigs);
       setAccount(acc.find((a) => a.network === net) || acc[0] || null);
       setErr('');
       setUpdatedAt(new Date());
@@ -140,6 +145,9 @@ export default function MidasXLivePage() {
         <span className="livex__badge">{sd.isAdmin
           ? `${sd.name('midas')}-X · XAU 1m · iz-süren · PAPER`
           : `${sd.name('midas')} · PAPER`}</span>
+        <span className="livex__badge" title={t('Yalnız aynı fx-gününün önceki işlemi zararla kapandıysa emir açılır; günün ilk sinyali ve kazanç-sonrası sinyaller atlanır. Sinyal akışı etkilenmez.')}>
+          🚧 {t('Kayıp-sonrası kapı')}
+        </span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(snap?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>
@@ -207,6 +215,51 @@ export default function MidasXLivePage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* paper signals + AFTER-LOSS gate verdicts (context.exec_gate, executor._mark_gate) */}
+      {gateSigs.length > 0 && (
+        <>
+          <h2 className="livex__h2">{t('Sinyaller · Kapı Kararları')}</h2>
+          <div className="livex__tablewrap">
+            <table className="livex__table">
+              <thead>
+                <tr>
+                  <th>{t('Sinyal')}</th><th>{t('Yön')}</th><th>{t('Giriş')}</th>
+                  <th>{t('Kapı')}</th><th>{t('Sebep')}</th><th>{t('Paper Sonucu')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gateSigs.map((s) => {
+                  const ctx = s.context || {};
+                  const g = ctx.exec_gate;
+                  const lng = (s.direction || '').toUpperCase() === 'LONG';
+                  const paperR = ctx.pos === 'closed' ? ctx.pnl_r : null;
+                  return (
+                    <tr key={s.signal_time}>
+                      <td className="mono livex__cardhead" data-label={t('Sinyal')}>{ago(s.signal_time, t)}</td>
+                      <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                      <td className="mono" data-label={t('Giriş')}>{fmtPx(s.entry)}</td>
+                      <td data-label={t('Kapı')}>
+                        {g == null
+                          ? <span className="st st-wait">{t('kapı öncesi')}</span>
+                          : g.skipped
+                            ? <span className="st st-cancel">{t('AÇILMADI')}</span>
+                            : <span className="st st-active">{t('EMİR AÇILDI')}</span>}
+                      </td>
+                      <td className="dim" data-label={t('Sebep')}>
+                        {g?.skipped ? (g.reason || '').replace('after-loss gate: ', '') : '—'}
+                      </td>
+                      <td className={`mono ${paperR == null ? 'dim' : Number(paperR) >= 0 ? 'pos' : 'neg'}`} data-label={t('Paper Sonucu')}>
+                        {paperR == null ? (ctx.pos === 'closed' ? '—' : t('açık')) : fmtR(paperR)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* recently closed */}

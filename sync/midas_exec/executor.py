@@ -336,6 +336,38 @@ def _after_loss_gate(cfg, live_conn, sig) -> str | None:
     return None
 
 
+def _mark_gate(cfg, live_conn, sig, now, *, skipped: bool, reason: str | None) -> None:
+    """Persist the gate decision onto the paper signal row (context.exec_gate) and, on a SKIP,
+    Telegram/push-alert ONCE per signal. The atomic jsonb merge guarded by `? 'exec_gate'` is the
+    dedup: the signal sits in the 15-min entry window and would otherwise re-alert every tick.
+    The UI (MidasXLivePage 'Kapı Kararları') renders this same key, so one write feeds both.
+    NB: canli's _track_open_positions does a read-modify-write of the whole context; its cron
+    offset (:20s vs our :35s) makes a clobber unlikely, and the `?` guard simply re-marks (worst
+    case one duplicate alert) — harmless."""
+    payload = {"exec_gate": {"skipped": skipped, "reason": reason,
+                             "at": str(pd.Timestamp(now).floor("s"))}}
+    cur = live_conn.cursor()
+    cur.execute("""
+        UPDATE ict_trade.signals
+        SET context = COALESCE(context,'{}'::jsonb) || %s::jsonb
+        WHERE mode='midas' AND symbol=%s AND signal_time=%s
+          AND NOT (COALESCE(context,'{}'::jsonb) ? 'exec_gate')
+        RETURNING id
+    """, (json.dumps(payload), sig["symbol"], pd.Timestamp(sig["signal_time"]).to_pydatetime()))
+    first_mark = cur.fetchone() is not None
+    live_conn.commit()
+    cur.close()
+    if skipped and first_mark:
+        d = str(sig["direction"]).upper()
+        arrow = "🟢 LONG ▲" if d == "LONG" else "🔴 SHORT ▼"
+        _alert(cfg, live_conn,
+               f"🚧 <b>{cfg.exec_name}</b> · <b>{sig['symbol']}</b> {arrow} sinyali <b>AÇILMADI</b>\n"
+               f"Sebep: {reason}\n"
+               f"<i>Kayıp-sonrası kapısı: yalnız aynı fx-gününün önceki işlemi zararla kapandıysa "
+               f"emir açılır. Paper akışı bu işlemi izlemeye devam ediyor.</i>",
+               title="Kapı: sinyal atlandı", kind="system")
+
+
 # ------------------------------------------------------------------ exchange order legs (armed)
 def _market_close(cfg, client, conn, pos, qty, *, leg) -> dict | None:
     qty = float(qty or 0)
@@ -786,7 +818,10 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
             gate_skip = _after_loss_gate(cfg, live, sigs[0])
             if gate_skip:
                 print(f"  · {cfg.symbol} SKIP: {gate_skip}")
+                _mark_gate(cfg, live, sigs[0], now, skipped=True, reason=gate_skip)
             else:
+                if cfg.after_loss_only:
+                    _mark_gate(cfg, live, sigs[0], now, skipped=False, reason=None)
                 _create(cfg, xi, live, sigs[0], now, shared)    # single position: newest fresh signal only
         for pos in st.fetch_open(live, sym_filter, user_id=uid, network=net if uid else None):
             try:
