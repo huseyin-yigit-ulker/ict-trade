@@ -617,6 +617,40 @@ real maker fill-rate/slippage study, not mainnet P&L.
   ayıklasın) korunuyor.**
 - Scriptler (scratchpad, commit edilmez): `flip_analysis.py`, `flip_variants_bt.py`, `regime_analysis.py`.
 
+### 2026-07-07 — "MIDAS'tan iyi XAU stratejisi" taraması: 30+ aile, kazanan aday KELT075 (Keltner alt-bant pullback) — SHIP edilmedi, portföy adayı
+- **Soru (kullanıcı):** MIDAS gibi iz-süren stoplu ama VWAP dışı metriklerle, 2026 XAU'da MIDAS'tan
+  daha başarılı strateji bul; literatür/blog/YouTube tara.
+- **Yöntem:** 2 web-araştırma ajanı (akademik: Gao/Jin ITSM, Zarattini Noise-Area/ORB, Kaminski–Lo
+  stop literatürü; pratisyen: Asya-range, EMA-pullback, Supertrend/UT-Bot/chandelier aileleri) +
+  4 tur backtest taraması (~90 varyant), hepsi MIDAS iskeletiyle (1.5×ATR stop, 3.5×ATR trail,
+  8h cap, sabit TP yok, $0.50/oz, shipped seans maskesi + m120, engine.py, no-lookahead).
+  Benchmark repro: +142.6R/390tr ≈ shipped +145R/396tr ✓.
+- **Elenenler (2026-H1 XAU, totR):** EMA/KAMA-pullback +5..+27 (VWAP→EMA ikamesi edge'i öldürüyor
+  — MIDAS edge'i VWAP'a özgü), Supertrend flip/pullback −21..+2, PSAR −34..−2, Donchian-1m
+  −50..−9 (gövde-kalite filtresi de kurtarmıyor), ORB (NY/LDN/FX-open) −23..+12, önceki-gün H/L
+  −13, Asya-range −18..+6 (kalite kapılı hiç sinyal üretmedi), TSM/ITSM −35..+26, Zarattini
+  Noise-Area −21..+20, haber/PM-fix devam −23..−16, TTM-squeeze +11..+20, Fib golden-pocket +9..+89
+  (IS-ağır), Hull +4..+7. Sweep-reclaim'in ilk +99R/PF7.4 sonucu fx-günü sarmalı LOOKAHEAD çıktı
+  (22-23 UTC barları gelecekteki Asya kutusunu görüyordu); düzeltince +8R/12tr.
+  Vol-ratio kapısı (seans-içi kümTR / 14-gün aynı-dakika ort — literatürün "yüksek-vol günü" koşulu)
+  PF'yi 1.68→1.86 yükseltiyor ama totR'yi kırpıyor (+142.6→+87.5..+113.8) — bilinen filtre paterni.
+- **Kazanan aday: KELT075** = 15m Keltner(EMA20, ATR20) alt/üst bandına (kmult 0.75) derin pullback,
+  trend=15m EMA20 4-bar slope, giriş=banda değip in-trend kapanış (c>o), MIDAS filtreleriyle
+  (skip 07-13 UTC + m120). 2026-H1: **+87.5R/314tr, PF 1.54, DD −8.3** (MIDAS +142.6/DD −18.0).
+  Plateau düz (kmult .625-.875 × trail 3.5-4.0 → +75..+88), random-null P=0.000 (~3σ),
+  IS +55.9 / OOS +31.6.
+- **Çok-yıllık PAXG OOS (asıl koz):** KELT 2024 −168.8 / 2025 **+114.5 (PF 1.33)** / 2026 +93.5
+  (PF 1.55, DD −9.7) = 3-yıl **+39.2R** vs MIDAS-repro −298.3 / +20.6 / +94.7 = **−183.0R**.
+  KELT hacim kullanmadığından PAXG'de tutarlı; 2025'te MIDAS'ı ezip geçiyor, 2024 kaybı yarısı.
+- **Portföy:** zaman-çakışma %80 ama günlük R korelasyonu 0.396; MIDAS+KELT 2026-H1
+  **+230.1R, DD −21.1**, her ay +26..+50. Temmuz 1-6 mini-OOS anlamsız küçük (KELT −3.2/9tr,
+  MIDAS +1.5/10tr).
+- **Karar: SHIP edilmedi.** Tek başına KELT 2026 totR'de MIDAS'ı geçemiyor; "daha başarılı" tek
+  konfigürasyon MIDAS+KELT portföyü (+%61 R, DD +%17) + çok-yıllık dayanıklılık KELT'te.
+  İstenirse sonraki adım: `sync/kelt/` paper stream (MIDAS şablonundan) + UI.
+- Scriptler (scratchpad, commit edilmez): `fx_gold/strategies2.py`, `scan2{,b,c,d}.py`,
+  `validate_kelt.py`, `kelt_overlap_july.py`.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
