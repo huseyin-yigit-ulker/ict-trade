@@ -5,10 +5,12 @@ import { useStreamDisplay } from '../utils/useStreamDisplay';
 import './LivePositionsPage.css';
 
 // MIDAS-X — the gold (XAUUSDT) VWAP-trend executor (sync/midas_exec), read straight from the LIVE
-// Supabase via PostgREST. This is the PAPER/TESTNET sibling of the real-money OPUS "Binance Canlı" page:
+// Supabase via PostgREST. MAINNET since 2026-07-07 (real money, $3 risk, after-loss gate) — the gold
+// sibling of the OPUS "Binance Canlı" page. All labels resolve from the DATA (snapshot/position
+// network), so the page renders truthfully during the testnet→mainnet drain and on any rollback:
 //   ict_trade.midas_positions        — the managed MIDAS positions (state machine + chandelier stop)
-//   ict_trade.live_account_snapshot  — the real Binance XAUUSDT mark / uPnL, refreshed by the executor
-//   ict_trade.live_account           — wallet / available / total uPnL, one row per network (testnet)
+//   ict_trade.live_account_snapshot  — the real Binance XAUUSDT mark / uPnL, per network
+//   ict_trade.live_account           — wallet / available / total uPnL, one row per network
 // Browser never signs a Binance request; it only reads what the executor snapshotted. No fixed TP —
 // MIDAS-X rides a 3.5*ATR chandelier trailing stop to an 8h / session exit (cur_sl ratchets in profit).
 
@@ -71,7 +73,8 @@ export default function MidasXLivePage() {
   const { t } = useLang();
   const sd = useStreamDisplay();   // stream identity masked for non-admins
   const [positions, setPositions] = useState([]);
-  const [snap, setSnap] = useState(null);      // the XAUUSDT snapshot row
+  const [snap, setSnap] = useState(null);      // the primary XAUUSDT snapshot row (mainnet-first)
+  const [allSnaps, setAllSnaps] = useState([]); // every network's XAUUSDT snapshot (drain overlap)
   const [account, setAccount] = useState(null);
   const [gateSigs, setGateSigs] = useState([]); // recent paper signals + exec_gate decisions
   const [err, setErr] = useState('');
@@ -91,10 +94,13 @@ export default function MidasXLivePage() {
         // sync/midas_exec/executor._mark_gate). Shows WHY a paper signal did/didn't become an order.
         getJSON('signals?select=signal_time,direction,entry,context&mode=eq.midas&order=signal_time.desc&limit=10'),
       ]);
-      const xau = snaps[0] || null;
-      const net = xau?.network || 'testnet';
+      // Mainnet-first: during the testnet→mainnet drain both networks snapshot XAUUSDT;
+      // the page headlines the real-money account and tags the leftover paper rows below.
+      const xau = snaps.find((s) => s.network === 'mainnet') || snaps[0] || null;
+      const net = xau?.network || 'mainnet';
       setPositions(pos);
       setSnap(xau);
+      setAllSnaps(snaps);
       setGateSigs(sigs);
       setAccount(acc.find((a) => a.network === net) || acc[0] || null);
       setErr('');
@@ -117,8 +123,12 @@ export default function MidasXLivePage() {
 
   const open = positions.filter((p) => OPEN_STATES.includes(p.state));
   const closed = positions.filter((p) => p.state === 'CLOSED' || p.state === 'CANCELLED').slice(0, 12);
-  const net = snap?.network || account?.network || 'testnet';
+  const net = snap?.network || account?.network || 'mainnet';
+  const real = net === 'mainnet';
   const stale = snap && (Date.now() - new Date(snap.updated_at).getTime() > 5 * 60 * 1000);
+  // Per-position snapshot: mark/uPnL must come from the position's OWN network (a draining
+  // testnet row must not read the mainnet account's uPnL).
+  const snapFor = (p) => allSnaps.find((s) => s.network === (p.network || net)) || snap;
 
   // Live R/USD for a MIDAS-X trailing position: risk0 = |signal_entry − signal_sl| (no confirm buf,
   // no TP1 booking — a single position rides one ratcheting stop). liveR = open uPnL / (risk0×qty);
@@ -127,7 +137,8 @@ export default function MidasXLivePage() {
     const qty = Number(p.qty) || 0;
     const risk0 = Number(p.risk0) || Math.abs(Number(p.signal_entry) - Number(p.signal_sl));
     const oneRusd = risk0 * qty;
-    const upnl = snap && snap.symbol === p.symbol && snap.unrealized_pnl != null ? Number(snap.unrealized_pnl) : null;
+    const ps = snapFor(p);
+    const upnl = ps && ps.symbol === p.symbol && ps.unrealized_pnl != null ? Number(ps.unrealized_pnl) : null;
     return {
       oneRusd,
       upnl,
@@ -139,12 +150,12 @@ export default function MidasXLivePage() {
   return (
     <div className="livex">
       <div className="livex__head">
-        <h1>{t('Binance Paper · Altın')}</h1>
+        <h1>{real ? `Binance ${t('Canlı')} · ${t('Altın')}` : `Binance Paper · ${t('Altın')}`}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
         {/* Admin sees the executor detail; everyone else just the codename. */}
         <span className="livex__badge">{sd.isAdmin
-          ? `${sd.name('midas')}-X · XAU 1m · iz-süren · PAPER`
-          : `${sd.name('midas')} · PAPER`}</span>
+          ? `${sd.name('midas')}-X · XAU 1m · iz-süren · ${real ? t('GERÇEK') : 'PAPER'}`
+          : `${sd.name('midas')} · ${real ? t('GERÇEK') : 'PAPER'}`}</span>
         <span className="livex__badge" title={t('Yalnız aynı fx-gününün önceki işlemi zararla kapandıysa emir açılır; günün ilk sinyali ve kazanç-sonrası sinyaller atlanır. Sinyal akışı etkilenmez.')}>
           🚧 {t('Kayıp-sonrası kapı')}
         </span>
@@ -153,7 +164,9 @@ export default function MidasXLivePage() {
       </div>
 
       <div className="livex__warn">
-        {t('{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).', { name: sd.name('midas') })}
+        {real
+          ? t('{name} altın akışı — Binance MAINNET (gerçek para). İşlem başına sabit risk; çıkış iz-süren stopla borsa tarafında korunur.', { name: sd.name('midas') })
+          : t('{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).', { name: sd.name('midas') })}
       </div>
       {stale && (
         <div className="livex__warn">{t('Snapshot 5 dk’dan eski — executor cron çalışmıyor olabilir.')}</div>
@@ -194,19 +207,21 @@ export default function MidasXLivePage() {
                 const lc = liveCalc(p);
                 return (
                   <tr key={p.id}>
-                    <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
+                    <td className="mono livex__cardhead" data-label={t('Sembol')}>
+                      {p.symbol}{p.network === 'testnet' && real && <span className="st st-wait"> PAPER</span>}
+                    </td>
                     <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                     <td data-label={t('Durum')}><span className={`st ${sb.cls}`}>{sb.label}</span></td>
                     <td className="mono" data-label={t('Giriş')}>{fmtPx(p.eff_entry || p.signal_entry)}</td>
-                    <td className="mono" data-label={t('Mark')}>{fmtPx(snap?.mark_price)}</td>
+                    <td className="mono" data-label={t('Mark')}>{fmtPx(snapFor(p)?.mark_price)}</td>
                     <td className="mono dim" data-label={t('İlk SL')}>{fmtPx(p.signal_sl)}</td>
                     <td className="mono" data-label={t('İz-Süren SL')}>{fmtPx(p.cur_sl || p.signal_sl)}</td>
                     <td className={`mono ${Number(lc?.lockedR) >= 0 ? 'pos' : 'dim'}`} data-label={t('Kilitli R')}>{fmtR(lc?.lockedR)}</td>
                     <td className="mono" data-label={t('Miktar')}>{p.qty ?? '—'}</td>
                     <td className={`mono ${Number(lc?.upnl) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı K/Z')}>{fmtUsd(lc?.upnl)}</td>
                     <td className={`mono ${Number(lc?.liveR) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı R')}>{fmtR(lc?.liveR)}</td>
-                    <td className={`mono ${Number(snap?.funding_fee) > 0 ? 'pos' : Number(snap?.funding_fee) < 0 ? 'neg' : 'dim'}`} data-label="Funding">
-                      {snap?.funding_fee == null ? '—' : (Number(snap.funding_fee) >= 0 ? '+' : '−') + '$' + Math.abs(Number(snap.funding_fee)).toFixed(2)}
+                    <td className={`mono ${Number(snapFor(p)?.funding_fee) > 0 ? 'pos' : Number(snapFor(p)?.funding_fee) < 0 ? 'neg' : 'dim'}`} data-label="Funding">
+                      {snapFor(p)?.funding_fee == null ? '—' : (Number(snapFor(p).funding_fee) >= 0 ? '+' : '−') + '$' + Math.abs(Number(snapFor(p).funding_fee)).toFixed(2)}
                     </td>
                     <td className="mono dim" data-label={t('Geri Sayım')}>{cd || '—'}</td>
                   </tr>

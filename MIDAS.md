@@ -551,6 +551,41 @@ real maker fill-rate/slippage study, not mainnet P&L.
   Aktivasyon duyurusu kanala gönderildi. 2026-07-07 14:36 sinyali kasıtlı "kapı öncesi" kalır
   (pozisyon #46 kapıdan önce girildi — sahte tarih yazılmadı).
 
+### 2026-07-07 (3) — 🔴 MIDAS-X MAINNET'E ALINDI: $3 risk + oto-kaldıraç + borsa-tarafı iz-süren stop
+- **KULLANICI KARARI** (soru-cevapla teyit: kaldıraç=oto/25x cap, giriş=maker GTX, arm=evet):
+  MIDAS-X artık Binance MAINNET'te GERÇEK PARA işler. Araştırma kaydı değişmedi — çok-yıllı OOS
+  negatif, 2026 @taker after-loss kapısıyla +53.6R PF1.37; küçük boyut + kitap takibi şart.
+- **Konfig**: `MIDAS_RISK_PER_TRADE_USD=3` (kullanıcı: "$3 SL"), `MIDAS_MAKER_ENTRY=true`
+  (kullanıcı tercihi; taker+taker doğrulanmış sete karşı maker'ın koşucu-kaçırma riski kabul edildi),
+  `MIDAS_BINANCE_TESTNET=false`, `MIDAS_EXEC_AFTER_LOSS_ONLY=true` (değişmedi).
+- **Oto-kaldıraç (kullanıcı isteği, OPUS kuralı)**: `MIDAS_AUTO_LEVERAGE=true`, işlem başına
+  `L = min(MIDAS_LEVERAGE_MAX=25, floor(0.5/SL%))` — likidasyon her zaman SL'in ≥2 katı uzakta;
+  altının küçük SL%'si fiilen 25x'e sabitler = paylaşılan cüzdanda asgari marj. `executor._place_entry`
+  girişten önce `set_leverage` çağırır, hata halinde `MIDAS_LEVERAGE=20` sabitine düşer; pozisyon
+  satırına `leverage` yazılır, GİRİŞ Telegram'ına "· {lev}x (oto)" eklendi.
+- **İz-süren SL mainnet'te borsa tarafında**: mevcut `_place_protective_stop` / `_update_trailing`
+  yolu (resting `STOP_MARKET(closePosition)` + dead-band'li cancel/replace) artık aktif — testnet'in
+  sentetik modelinden farkı bu; kod değişikliği gerekmedi, sadece ağ değişti.
+- **Kilit açma**: migration `012_midas_mainnet.sql` (`midas_testnet_only` CHECK düştü, UYGULANDI) +
+  `sync/users/store.py` testnet hard-lock kaldırıldı. `tg_uss_guard` taban korumaları aynen (geçerli
+  anahtar, bakiye %25 tavanı: $3×1 ≤ $111×%25 ✓, one-way, universe).
+- **Satırlar**: owner `user_stream_settings` midas/mainnet EKLENDİ (enabled, risk 3, mc 1,
+  max_total 3, XAUUSDT); midas/testnet satırı `enabled=false` → DRAIN (açık #46 LONG kapanana dek
+  yönetilir — `has_open` yüklemeyi sürdürür — yeni giriş açılmaz, sonra satır kendiliğinden düşer).
+- **Mainnet hazırlık doğrulaması**: TradFi-Perps mainnet hesapta zaten kabul — uzak-fiyatlı post-only
+  prob emri KABUL (status=NEW) edilip temiz iptal edildi; bracket tier-1 100x/50k (25x serbest);
+  XAUUSDT mainnet TRADING/TRADIFI_PERPETUAL, tick 0.01 / minQty 0.001 / minNotional $5.
+- **İlk armed tick teyidi**: `ARMED (LIVE ORDERS) | MAINNET | risk $3` — 2 satır yükleniyor
+  (mainnet giriş-açık + testnet drain), safety sweep iki ağda 0 breach, snapshot'lar per-network.
+- **UI**: MidasXLivePage artık AĞ-DİNAMİK (mainnet-öncelikli snapshot; başlık/rozet/uyarı GERÇEK↔PAPER
+  veriden; drain'deki testnet satırı "PAPER" etiketiyle, mark/uPnL kendi ağının snapshot'ından).
+  Sidebar: altın panosu "Binance · Altın ● GERÇEK", MIDAS grubu real rozetli. İşlem Merkezi:
+  midas mainnet satırı eklendi (yazılı GERÇEK PARA onayı akışı OPUS'la aynı). strategyInfo caveat
+  güncellendi. Cüzdan notu: mainnet $111 OPUS'la paylaşılıyor — geniş-ATR günlerinde marj yetmezse
+  giriş atlanır (fail-safe), gerekirse bakiye ekle.
+- Geri alma: `user_stream_settings` midas/mainnet `enabled=false` (aç pozisyon varsa drain) veya
+  `killswitch.py --flatten`; `.env` `MIDAS_BINANCE_TESTNET=true` + testnet satırını enable et.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

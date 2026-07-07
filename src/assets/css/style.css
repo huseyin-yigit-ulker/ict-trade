@@ -2168,10 +2168,11 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
   border-radius: 6px; padding: 1px 6px; animation: livePulse 2s ease-in-out infinite; }
 @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 .sidebar__group--live .sidebar__leaf-dot--live { background: var(--win); box-shadow: 0 0 6px var(--win); }
-/* Strategy display name (OPUS / FABLE) prepended above the technical label. */
+/* Strategy display name (OPUS / MIDAS) prepended above the technical label. */
 .sidebar__group-name { font-family: var(--mono); font-weight: 800; letter-spacing: 0.14em; font-size: 11px;
   color: var(--win); margin-right: 7px; }
-/* FABLE = paper (volume-gate twin), not real Binance money → amber accents instead of green. */
+/* paper group accent (amber) — kept for any future paper stream; 2026-07-07'den beri
+   canlı modülde paper akış yok (FABLE backtest'e indi, MIDAS mainnet'e çıktı). */
 .sidebar__group--paper { border-left-color: var(--accent);
   background: linear-gradient(90deg, rgba(245,185,66,0.10), rgba(245,185,66,0.02)); }
 .sidebar__group--paper .sidebar__group-label { color: var(--accent); }
@@ -2857,7 +2858,7 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
 /* Binance Canlı link pinned directly above the strategies — Binance-gold accent. */
 .sidebar__link--binance { color: #F0B90B; font-weight: 600; }
 .sidebar__link--binance .sidebar__icon { color: #F0B90B; }
-/* Binance Paper · Altın (MIDAS-X testnet) — amber PAPER accent, distinct from the gold real-money link. */
+/* (legacy) amber PAPER accent — the gold board is real-money since 2026-07-07 and uses --binance. */
 .sidebar__link--binance-paper { color: var(--accent); font-weight: 600; }
 .sidebar__link--binance-paper .sidebar__icon { color: var(--accent); }
 .sidebar__link--binance-paper .sidebar__live-badge { margin-left: auto; }

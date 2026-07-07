@@ -61,7 +61,9 @@ class MidasExecCfg:
     # ---- instrument / sizing / risk ----
     symbol: str                    # MIDAS_SYMBOL (XAUUSDT)
     risk_usd: float                # MIDAS_RISK_PER_TRADE_USD — USD lost if the 1.5*ATR stop hits
-    leverage: int                  # MIDAS_LEVERAGE — fixed (clamped to the TradFi bracket by the exchange)
+    leverage: int                  # MIDAS_LEVERAGE — fixed fallback when auto_leverage is off/errors
+    auto_leverage: bool            # MIDAS_AUTO_LEVERAGE — per-trade leverage from the SL distance (OPUS rule)
+    leverage_max: int              # MIDAS_LEVERAGE_MAX — hard cap on the auto leverage
     margin_type: str               # MIDAS_MARGIN_TYPE — ISOLATED | CROSSED
     max_concurrent: int            # MIDAS_MAX_CONCURRENT — hard 1 (also enforced by the unique index)
     # ---- entry (maker-first) ----
@@ -128,6 +130,8 @@ def load_cfg() -> MidasExecCfg:
         symbol=str(env.get("MIDAS_SYMBOL", "XAUUSDT")).strip().upper(),
         risk_usd=_f(env, "MIDAS_RISK_PER_TRADE_USD", 2.0),
         leverage=_i(env, "MIDAS_LEVERAGE", 5),
+        auto_leverage=_b(env, "MIDAS_AUTO_LEVERAGE", False),
+        leverage_max=_i(env, "MIDAS_LEVERAGE_MAX", 25),
         margin_type=str(env.get("MIDAS_MARGIN_TYPE", "ISOLATED")).strip().upper(),
         max_concurrent=_i(env, "MIDAS_MAX_CONCURRENT", 1),
         maker_entry=_b(env, "MIDAS_MAKER_ENTRY", True),

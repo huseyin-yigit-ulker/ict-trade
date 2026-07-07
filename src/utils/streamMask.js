@@ -41,10 +41,12 @@ export const CODENAMES = {
 };
 
 // ── ürün sınırı: CANLI (işlem açılabilir) akışlar vs backtest-only araştırma varyantları ──
-// Bu 3 akış canlı sinyal + kendi track record'unu taşır ve HERKESE görünür; CODENAMES'teki
+// Bu 2 akış canlı sinyal + kendi track record'unu taşır ve HERKESE görünür; CODENAMES'teki
 // diğer HER kod, shipe edilmemiş bir backtest-only araştırma varyantıdır ve yalnız admin'e
 // (ya da admin'in user_features.backtest=true ile açıkça yetki verdiği kullanıcıya) görünür.
-export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'd30so8f3vg', 'midas'];
+// 2026-07-07: NOVA (d30so8f3vg) canlıdan çıkarıldı — backtest-only araştırma varyantı artık
+// (canlı emit'i de emekli; nightly volgate_backfill backtest'ini tazelemeye devam eder).
+export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'midas'];
 
 /** True = backtest-only araştırma varyantı (canlı olmayan herhangi bir codename). */
 export const isResearchStream = (key) => !!CODENAMES[key] && !LIVE_STREAM_KEYS.includes(key);

@@ -26,9 +26,7 @@ const EN = {
   'Likidite Avı': 'Liquidity Ambush',
   'Sembol': 'Symbols',
   'Mod': 'Mode',
-  'Live': 'Live',
   'Backtest': 'Backtest',
-  'Default': 'Default',
   'Sinyal yok.': 'No signals.',
   'Seçilmedi': 'None',
   'Ayarlar': 'Settings',
@@ -128,7 +126,6 @@ const EN = {
   'Kapat': 'Close',
   'KAPAT': 'CLOSE',
   'Giriş': 'Entry',
-  'Entry': 'Entry',
   'Hedef': 'Target',
   'Risk': 'Risk',
   'Stop': 'Stop',
@@ -144,7 +141,6 @@ const EN = {
   'Runner Cap (+{cap}R)': 'Runner Cap (+{cap}R)',
   'Runner Cap +{cap}R': 'Runner Cap +{cap}R',
   '+{cap}R cap · breakeven · {hor}g': '+{cap}R cap · breakeven · {hor}d',
-  'CANLI': 'LIVE',
   'Pozisyon Durumu': 'Position state',
   'SL · tüm pozisyon (+1R görülmedi)': 'SL · full position (+1R not reached)',
   'Ters sinyal · erken kapanış (+1R yok)': 'Reverse signal · early close (no +1R)',
@@ -234,18 +230,15 @@ const EN = {
   'Sadece bu piyasayı seç': 'Select only this market',
   'Backtest R’ye göre en iyi 5 sembol': 'Top 5 symbols by backtest R',
   'Backtest R’ye göre en kötü 5 sembol': 'Worst 5 symbols by backtest R',
-  'Timeframe': 'Timeframe',
   'Tarih': 'Date',
   'Yön': 'Direction',
   'Tümü': 'All',
   'PnL': 'PnL',
   'P/L': 'P/L',
   'TP/SL': 'TP/SL',
-  'Win Rate': 'Win Rate',
   'Toplam R': 'Total R',
   'Toplam PnL': 'Total PnL',
   'Beklenti': 'Expectancy',
-  'Profit Factor': 'Profit Factor',
 
   // --- Dashboard: KPI / cards ---
   'R Dağılımı': 'R Distribution',
@@ -268,7 +261,6 @@ const EN = {
   'Yıllar': 'Years',
   'Aylar': 'Months',
   'Günler': 'Days',
-  'işlem': 'trades',
   'Aylara Dön': 'Back to Months',
   'Yıllara Dön': 'Back to Years',
   'Backtest Kilidi': 'Backtest Lock',
@@ -280,9 +272,7 @@ const EN = {
   'BEKLEMEDE': 'PENDING',
   'BEKLİYOR': 'WAITING',
   'AKTİF': 'ACTIVE',
-  'AKTIF': 'ACTIVE',
   'İPTAL': 'CANCEL',
-  'IPTAL': 'CANCELLED',
   'TP+SL': 'TP+SL',
 
   // --- time-ago / duration ---
@@ -297,7 +287,6 @@ const EN = {
   // --- Chart ---
   'Süre': 'Duration',
   'Süre (canlı)': 'Duration (live)',
-  'Risk-Reward': 'Risk-Reward',
   'Anlık Fiyat': 'Last Price',
   "Entry'ye Uzaklık": 'Distance to Entry',
   'Canlı Durum': 'Live Status',
@@ -310,8 +299,6 @@ const EN = {
   // --- Summary ---
   'Başarı Paneli': 'Performance Panel',
   'Günlük, haftalık, aylık ve yıllık performans analizi.': 'Daily, weekly, monthly and yearly performance analysis.',
-  'Sembol Filtre': 'Symbol Filter',
-  'Durum Filtre': 'Status Filter',
   'Genel Özet': 'Overview',
   'Toplam İşlem': 'Total Trades',
   'Başarı': 'Success',
@@ -326,23 +313,18 @@ const EN = {
   'Yıllık': 'Yearly',
   'Asimetri': 'Asymmetry',
   'DÜŞÜK İSABET · YÜKSEK GETİRİ': 'LOW HIT-RATE · HIGH PAYOFF',
-  'Kazanç (Win Rate)': 'Win Rate',
   "En iyi 5 işlem toplam brüt kârın %{share}'ini taşıyor — az kazanır, büyük kazanır; sistem böyle tasarlandı.":
     'The top 5 trades carry {share}% of total gross profit — wins rarely, wins big; the system is designed this way.',
   'En Büyük Kazançlar': 'Biggest Wins',
   'SQL Analiz Özeti': 'SQL Summary',
-  'Expectancy': 'Expectancy',
   'Ortalama Süre': 'Avg Duration',
-  'TP / SL / Cancel': 'TP / SL / Cancel',
   'SQL Sembol Analizi': 'SQL Symbol Analysis',
   'SQL Zaman Analizi': 'SQL Time Analysis',
 
   // --- Stats / ticker ---
   'PORTFÖY KARNESİ': 'PORTFOLIO SCORECARD',
   'Canlı fiyatlar bağlanıyor…': 'Connecting to live prices…',
-  'CANLI · FUTURES': 'LIVE · FUTURES',
   'CANLI': 'LIVE',
-  'FUTURES': 'FUTURES',
 
   // --- sidebar mode + sidebar toggle ---
   'Menüyü Göster': 'Show menu',
@@ -354,7 +336,6 @@ const EN = {
   // --- Equity panel ---
   'Sermaye Eğrisi (R)': 'Equity Curve (R)',
   'Tepe': 'Peak',
-  'Max DD': 'Max DD',
   'en büyük {n} kazanç': 'top {n} wins',
 
   // --- Intelligence: strategy comparison surface ---
@@ -512,10 +493,12 @@ const EN = {
   'Otonom işlem akışı · detaylar gizli': 'Autonomous trading stream · details private',
   'Bu akışın kuralları tescillidir ve görüntülenmez. Performansı Live/Backtest sekmelerinden izleyebilirsiniz.':
     "This stream's rules are proprietary and not displayed. You can follow its performance in the Live/Backtest tabs.",
-  '{name} yalnız paper (testnet) çalışır; gerçek-para modu sunucu tarafından reddedilir.':
-    '{name} runs paper (testnet) only; real-money mode is rejected server-side.',
+  '{name} artık mainnet (gerçek para) destekliyor — küçük sabit riskle başlayın; paper (testnet) modu deneme için açık.':
+    '{name} now supports mainnet (real money) — start with a small fixed risk; paper (testnet) mode stays open for trials.',
   '{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).':
     '{name} gold stream — Binance testnet (paper, NOT real money).',
+  '{name} altın akışı — Binance MAINNET (gerçek para). İşlem başına sabit risk; çıkış iz-süren stopla borsa tarafında korunur.':
+    '{name} gold stream — Binance MAINNET (real money). Fixed risk per trade; the exit is protected exchange-side by a trailing stop.',
 
   // --- İşlem Merkezi: intro + API keys ---
   'Sinyaller merkezî olarak üretilir; emirler kendi Binance hesabınızda, kendi anahtarınızla çalışır.':
@@ -684,6 +667,15 @@ const EN = {
   // --- weekday names returned by the SQL RPC (Turkish) ---
   'Pazartesi': 'Monday', 'Sali': 'Tuesday', 'Carsamba': 'Wednesday',
   'Persembe': 'Thursday', 'Cuma': 'Friday', 'Cumartesi': 'Saturday', 'Pazar': 'Sunday',
+
+  // --- TR-labelled keys that need a REAL English rendering (the TR map above only
+  // polishes the Turkish side; these must not fall back to the Turkish key) ---
+  'Kazanç (Win Rate)': 'Win Rate',
+  'CANLI · FUTURES': 'LIVE · FUTURES',
+  'AKTIF': 'ACTIVE',
+  'IPTAL': 'CANCELLED',
+  'Durum Filtre': 'Status Filter',
+  'Sembol Filtre': 'Symbol Filter',
 };
 
 // TR overrides — the key is already the Turkish string, so this map only fixes

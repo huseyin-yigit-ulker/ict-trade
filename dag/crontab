@@ -1,6 +1,8 @@
-# PUSU live cron — DONCHIAN-ONLY (2026-06-16). Apply on VM: crontab dag/crontab (verify: crontab -l)
-# All other streams retired (UI + DB + live): MAIN(:01), IMPULSE(:02), halftp_monitor(*/5)
-# removed — see sync/donchian/RETIRED_STREAMS_REPORT.md.
+# PUSU live cron. Apply on VM: crontab dag/crontab (verify: crontab -l)
+# 2026-07-07 posture: LIVE strategies = OPUS (Donchian 30m+4h scale-out, Binance mainnet) +
+# MIDAS (gold VWAP-trend paper feed + MIDAS-X mainnet executor). Everything else is
+# backtest-only research; the silent emits below only feed the nightly resolves.
+# History: DONCHIAN-ONLY cutover 2026-06-16 (MAIN/IMPULSE/halftp retired — RETIRED_STREAMS_REPORT.md).
 #
 # Emit ONLY at the BAR CLOSE (+10s) — no more */10 re-scan. The 1h stream runs on the hour (:00),
 # the 30m streams on :00/:30. The signal forms at the bar close so a boundary run catches it; the
@@ -11,22 +13,22 @@
 # bar if a run is late/missed; canli.py dedups on (symbol, signal_time, direction, mode).
 #
 # DONCHIAN 1h live emit — on the HOUR (:00:10): Donchian(55) 1h breakout, ER>=0.35 gate
-#   (mode='donchian'). Telegram ON: alerts EVERY 1h signal at formation (user wants 1h signal pings).
-0 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit >> $HOME/ict-donchian.log 2>&1
-# DONCHIAN 30m+4h HYBRID live emit — on :00/:30 (+10s): 30m breakout confirmed by 4h trend
+#   (mode='donchian'). Telegram OFF (2026-07-07: user wants pings from OPUS + MIDAS ONLY); the emit
+#   itself stays because the nightly sync_daily resolve builds donchianc from these live rows.
+0 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --no-telegram >> $HOME/ict-donchian.log 2>&1
+# OPUS — DONCHIAN 30m+4h HYBRID live emit — on :00/:30 (+10s): 30m breakout confirmed by 4h trend
 #   (mode='dch30_4h'). Best stream overall + the one the live executor trades. Telegram ON for ALL
-#   symbols at formation (signal heads-up); the live-traded set (FET/SUSDT/SOL) additionally gets full
-#   entry/exit detail from the executor. (6R below stays silent — it's a DUPLICATE of these breakouts.)
+#   symbols at formation (signal heads-up); the live-traded set (BTC/ETH/SOL/FET/ARB) additionally
+#   gets full entry/exit detail from the executor. (6R below stays silent — DUPLICATE breakouts.)
+#   2026-07-07: Telegram pings = OPUS + MIDAS ONLY (1h muted, FABLE emit retired).
 0,30 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --name OPUS >> $HOME/ict-donchian.log 2>&1
 # DONCHIAN 30m+4h · 6R live emit — on :00/:30 (+10s): same hybrid signals, wider 6R target
 #   (mode='dch30_4h6'). MFE-validated: ~2x R/trade vs 4R, OOS-robust across 2024-26.
 0,30 * * * * sleep 10 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --rr 6 --no-telegram >> $HOME/ict-donchian.log 2>&1
-# DONCHIAN 30m+4h · VOLUME-GATE live emit — on :00/:30 (+15s): same hybrid signals, but only those
-#   whose symbol's daily volume is CONTRACTING (vch<0.9) at signal time (mode='dch30_4hvg'). The
-#   live-monitored (paper) twin of d30so8f3h7 -> backtest version='d30so8f3vg' (volgate_backfill.py).
-#   Robustly lower SL-rate + worst-month / higher WR (fewer trades). NOT traded on Binance (executor
-#   still trades only ungated dch30_4h). Telegram ON as FABLE (volume-gate = its confirmation).
-0,30 * * * * sleep 15 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --volume-gate 0.9 --name FABLE >> $HOME/ict-donchian.log 2>&1
+# FABLE (dch30_4hvg) live emit RETIRED 2026-07-07 — user decision: only OPUS + MIDAS run live.
+#   FABLE is now BACKTEST-ONLY: version='d30so8f3vg' keeps refreshing nightly at 01:20
+#   (volgate_backfill.py below, independent of any live emit). Re-enable by restoring:
+#   0,30 * * * * sleep 15 && cd $HOME/ict-trade && .venv/bin/python sync/donchian/canli.py --emit --tf 30m --confirm-htf 4h --volume-gate 0.9 --name FABLE
 # CRON HEALTH-CHECK — DISABLED 2026-06-24 (user: no unnecessary Telegram). The 6h "I'm alive" ping
 #   was pure noise now that the executor pings only on real trades. Re-enable by uncommenting.
 # 0 */6 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/donchian/heartbeat.py >> $HOME/ict-donchian.log 2>&1
@@ -53,8 +55,8 @@
 # fresh VWAP-trend setups (real FX-gold hours + session filter: Asia/Overlap/NY, London 07-13 UTC
 # skipped, Fri flat 16:00 ET, no weekend); (2) replays every OPEN position's trailing stop and pushes
 # a Telegram alert on EVERY trailing-stop change (--sl-step 0: trade + stop detail each ratchet) and on
-# exit. TELEGRAM ON (same bot as OPUS/FABLE). Set --sl-step 0.5 for milestone-only; --no-telegram to mute.
-# Executor NOT touched; nightly backtest below is the authoritative book.
+# exit. TELEGRAM ON (same bot as OPUS). Set --sl-step 0.5 for milestone-only; --no-telegram to mute.
+# Nightly backtest below is the authoritative paper book; MIDAS-X (below) executes for real.
 * * * * * sleep 20 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas/canli.py --emit --lookback-min 3 --sl-step 0 >> $HOME/ict-midas.log 2>&1
 # 01:30 — MIDAS backtest refresh (END OF DAY): rebuild version='midas' from XAUUSDT 1m for 2026 each
 #   night (DELETE + re-upsert, idempotent), so the MIDAS backtest view extends as the year accrues.
@@ -80,12 +82,15 @@
 # anahtar durumu) o kullanıcının push aboneliklerine gönderir. Broadcast push davranışı değişmedi.
 * * * * * sleep 45 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/push_notify.py --drain >> $HOME/ict-users.log 2>&1
 
-# --- MIDAS-X LIVE EXECUTION (Binance TRADIFI_PERPETUAL XAUUSDT; TESTNET/dry-run first) ---
-# MIDAS's real-money-capable bridge: reads the SAME mode='midas' signals (paper feed above), places a
-# POST-ONLY maker LIMIT entry, then rides the 3.5*ATR chandelier trailing stop (sync/midas/strategy.
-# track_open) to an 8h/session exit. Records real fills under version='midasx' (distinct from the paper
-# 'midas' the nightly backfill rewrites). SEPARATE tables/env/killswitch from OPUS (never cross-flatten).
-# ⚠️ MIDAS dies on Binance taker fees (+142R FX -> -92R taker) — a Binance-fee sim gates any mainnet arm.
+# --- MIDAS-X LIVE EXECUTION (Binance TRADIFI_PERPETUAL XAUUSDT; MAINNET 2026-07-07) ---
+# MIDAS's real-money bridge: reads the SAME mode='midas' signals (paper feed above), places a
+# POST-ONLY maker LIMIT entry (owner choice), then rides the 3.5*ATR chandelier trailing stop
+# (sync/midas/strategy.track_open) as a RESTING exchange-side STOP_MARKET, cancel/replaced on each
+# ratchet, to an 8h/session exit. Records real fills under version='midasx'. SEPARATE tables/env/
+# killswitch from OPUS (never cross-flatten). MAINNET since 2026-07-07 (owner decision): $3 risk,
+# AFTER-LOSS gate ON, auto-leverage (OPUS rule, cap 25x); multi-user rows carry network+risk
+# (owner=mainnet enabled, testnet row draining). ⚠️ taker+taker 2026 = +53.6R PF1.37 w/ gate, but
+# multi-year OOS is negative — small-size, watch the book.
 # BOTH lines no-op while LIVE_TRADING_ENABLED=false OR MIDAS_EXEC_ENABLED=false OR MIDAS_EXEC_DRY_RUN=true.
 # Executor every minute (matches the 1m chandelier), offset +35s off the :20s canli emit.
 * * * * * sleep 35 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/executor.py     >> $HOME/ict-midas-exec.log 2>&1

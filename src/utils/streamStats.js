@@ -29,8 +29,8 @@ export const STREAMS = [
   S('d30_4h_soc', 'scaleout'), S('d30so6c', 'scaleout'), S('d30so8c', 'scaleout'),
   S('d30so4cm', 'scaleout'), S('d30so6cm', 'scaleout'), S('d30so8cm', 'scaleout'),
   S('d30so4f3', 'scaleout'), S('d30so6f3', 'scaleout'), S('d30so8f3', 'scaleout'),
-  S('d30so8f3h7', 'scaleout'),   // canlı gerçek-para akışı
-  S('d30so8f3vg', 'scaleout'),   // canlı paper ikizi
+  S('d30so8f3h7', 'scaleout'),   // canlı gerçek-para akışı (OPUS)
+  S('d30so8f3vg', 'scaleout'),   // 2026-07-07: backtest-only'ye indirildi (canlı emit emekli)
   // ── altın akışı ──
   S('midas', 'full'),
 ];

@@ -571,6 +571,28 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   işlemin paper R'si). Dosyalar: sync/midas_exec/executor.py, src/pages/MidasXLivePage.jsx,
   MIDAS.md. Frontend build Render'da (push tetikler); cron değişikliği yok.
 
+### 2026-07-07 (3) — CANLI SET = OPUS + MIDAS: FABLE backtest'e indi, Telegram sadeleşti, 🔴 MIDAS-X MAINNET
+- **Kullanıcı kararı**: canlıda yalnız OPUS + MIDAS çalışır ve Telegram atar; FABLE (d30so8f3vg)
+  backtest bölümüne indirildi; MIDAS-X mainnet'e alındı ($3 risk + oto-kaldıraç + borsa-tarafı
+  iz-süren stop — tüm detay MIDAS.md 2026-07-07 (3)).
+- **Cron (KURULDU: `crontab dag/crontab`)**: FABLE emit satırı EMEKLİ (yorumda geri-alma komutu);
+  1h Donchian emit'e `--no-telegram` (emit kaldı — nightly `sync_daily` donchianc'yi bu canlı
+  satırlardan çözer); 6R emit zaten sessizdi; MIDAS canli + OPUS emit Telegram'ı değişmedi.
+  01:20 `volgate_backfill` kaldı → FABLE backtest'i gece tazelenmeye devam eder (canlı emit'ten
+  bağımsız). `push_notify._MODE_TO_STREAM`'den `dch30_4hvg` düşüldü.
+- **UI**: `streamMask.LIVE_STREAM_KEYS` → ['d30so8f3h7','midas'] (NOVA artık araştırma-varyantı:
+  Intro/Login vitrinlerinden ve sinyal-izleme listesinden otomatik düşer, yalnız admin/backtest-yetkili
+  görür). Sidebar: NOVA backtest bölümüne (yalnız Backtest yaprağı); MIDAS grubu ● Binance · GERÇEK;
+  altın panosu "Binance · Altın ● GERÇEK". IntroPage: araştırma kartlarında Live düğmesi gizlendi
+  (sidebar'la tutarlı). İşlem Merkezi: midas mainnet aktivasyon satırı. MidasXLivePage ağ-dinamik.
+- **Mobil/QA**: LanguageContext'te 19 duplicate çeviri anahtarı temizlendi (davranış birebir korunarak;
+  EN'de gerçek karşılığı olan 6 anahtar EN map sonuna taşındı), tüm düzenlenen dosyalar esbuild'den
+  temiz, `main.jsx` tam-bundle smoke PASS; mobil kart-reflow `data-label`'ları korunuyor.
+- Dosyalar: dag/crontab, sync/users/store.py, sync/push_notify.py, sync/midas_exec/{config,executor}.py,
+  supabase/migrations/012_midas_mainnet.sql, src/utils/{streamMask,streamStats,strategyInfo}.js,
+  src/components/layout/Sidebar.jsx, src/components/trading/{streams.js,SignalWatchCard,StreamActivationCard}.jsx,
+  src/pages/{MidasXLivePage,IntroPage}.jsx, src/context/LanguageContext.jsx, src/assets/css/style.css.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

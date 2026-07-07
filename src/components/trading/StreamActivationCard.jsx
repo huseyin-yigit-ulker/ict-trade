@@ -6,11 +6,11 @@ import {
   STREAM_ROWS, rowKey, netLabel, patchStreamSettings, SETTINGS_EVT, emitSettingsChanged,
 } from './streams';
 
-// Per-user stream activation — one real-money row (typed confirmation) + two paper
-// (testnet) rows. Stream names resolve through useStreamDisplay (codenames for
-// non-admins). Enable/disable updates the user's user_stream_settings row; the DB
-// trigger is the real gate (valid key, one-way mode, risk ≤ 25% of balance) and its
-// exception text is surfaced VERBATIM.
+// Per-user stream activation — real-money rows (typed confirmation; 2026-07-07'den beri
+// altın da mainnet destekler) + paper (testnet) rows. Stream names resolve through
+// useStreamDisplay (codenames for non-admins). Enable/disable updates the user's
+// user_stream_settings row; the DB trigger is the real gate (valid key, one-way mode,
+// risk ≤ 25% of balance) and its exception text is surfaced VERBATIM.
 
 const CONFIRM_PHRASE = 'GERÇEK PARA';
 
@@ -174,7 +174,7 @@ export default function StreamActivationCard() {
       })}
 
       <div className="form-note">
-        {t('{name} yalnız paper (testnet) çalışır; gerçek-para modu sunucu tarafından reddedilir.', { name: sd.name('midas') })}
+        {t('{name} artık mainnet (gerçek para) destekliyor — küçük sabit riskle başlayın; paper (testnet) modu deneme için açık.', { name: sd.name('midas') })}
       </div>
     </section>
   );

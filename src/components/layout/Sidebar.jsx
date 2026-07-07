@@ -99,11 +99,11 @@ const IconShield = () => (
 // strings live in a separate lazy chunk — see utils/streamMask.js). Leaf URLs use
 // the codename slug (slugFor) so raw stream keys never appear in the address bar.
 const GROUPS = [
-  // ── canlı modül: 1 gerçek-para akışı + 2 paper akış ──
+  // ── canlı modül: 2 gerçek-para akışı (2026-07-07: yalnız OPUS + MIDAS canlı; MIDAS-X mainnet) ──
   { key: 'd30so8f3h7', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
-  { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true, section: 'live' },
-  { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true, section: 'live' },
-  // ── backtest-only araştırma akışları ──
+  { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
+  // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07'de canlıdan buraya indi) ──
+  { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'donchianc',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd1h_so4c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd1h_so6c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
@@ -248,10 +248,10 @@ const Sidebar = () => {
               <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
             </NavLink>
 
-            {/* Paper — Binance TESTNET boards (gold executor; not real money) */}
-            <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance-paper">
-              <span className="sidebar__icon"><IconLive /></span><span>{t('Paper')} · {t('Altın')}</span>
-              <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
+            {/* Binance · Altın — MIDAS-X gold executor board (MAINNET since 2026-07-07) */}
+            <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance">
+              <span className="sidebar__icon"><IconLive /></span><span>Binance · {t('Altın')}</span>
+              <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
             </NavLink>
 
             {/* İşlem Merkezi — per-user keys/risk/activation (active accounts only;

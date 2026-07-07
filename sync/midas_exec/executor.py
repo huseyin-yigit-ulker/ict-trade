@@ -462,6 +462,27 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
 def _place_entry(cfg, client, conn, xi, pos, now) -> None:
     sym = pos["symbol"]
     _ensure_account(cfg, client, sym)
+    # Auto-leverage (OPUS rule, 2026-07-07): per-trade leverage from the SL distance so the
+    # liquidation sits ~2x the SL distance beyond entry (1/L ≈ 2*SL%) — liquidation can NEVER
+    # precede the −1R stop, so the loss stays $risk_usd. Capped at leverage_max. Risk is fixed
+    # by qty (risk_usd/|entry−sl|); leverage only sets the margin + liquidation distance.
+    # Gold's tiny SL% (~0.1-0.4%) means this effectively pins the cap — which is the point:
+    # minimum margin per entry on the shared wallet.
+    lev = cfg.leverage
+    if cfg.armed and cfg.auto_leverage:
+        entry_ref = float(pos["signal_entry"])
+        slpct = (abs(entry_ref - float(pos["signal_sl"])) / entry_ref) if entry_ref else 0.0
+        if slpct > 0:
+            lev = max(1, min(cfg.leverage_max, int(0.5 / slpct)))
+        try:
+            client.set_leverage(sym, lev)
+        except BinanceError as e:
+            _alert(cfg, conn, f"⚠️ <b>{sym}</b> set_leverage({lev}) hata: {e} — {cfg.leverage}x'e düşüldü",
+                   kind="system")
+            lev = cfg.leverage
+        if lev != int(pos.get("leverage") or 0):
+            st.patch(conn, pos["id"], leverage=lev)
+            pos["leverage"] = lev
     qty = float(pos["qty"])
     coid = st.coid(pos["id"], "entry", 0)
     params = dict(symbol=sym, side=_side(pos["direction"]), quantity=qty, newClientOrderId=coid)
@@ -511,8 +532,10 @@ def _enter_open(cfg, client, conn, xi, pos, avg: float, fill_time, resp, now) ->
     if _place_protective_stop(cfg, client, conn, xi, pos, float(pos["signal_sl"])):
         ctx["placed_sl"] = float(pos["signal_sl"])
         st.patch(conn, pos["id"], context=ctx)
+    lev = int(pos.get("leverage") or cfg.leverage)
     _alert(cfg, conn, f"✅ <b>GİRİŞ</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                      f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g}\n"
+                      f"giriş {avg:g} · {float(pos['qty']):g} adet (${float(pos['qty'])*avg:.0f}) · risk ${cfg.risk_usd:g}"
+                      f" · {lev}x{' (oto)' if cfg.auto_leverage else ''}\n"
                       f"SL {float(pos['signal_sl']):g} (−1R · 1.5·ATR) · 3.5·ATR iz-süren · 8s/seans "
                       f"({'borsa STOP' if not cfg.testnet else 'sentetik'}) — {_tag(cfg)}", kind="entry")
     print(f"  ✅ {sym} ENTERED @ {avg:g} · SL {float(pos['signal_sl']):g}")

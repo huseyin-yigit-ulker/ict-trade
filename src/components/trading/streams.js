@@ -1,6 +1,6 @@
 // Shared constants + PostgREST helpers for the İşlem Merkezi (per-user trading) cards.
-// The three activatable (stream, network) combos — the gold stream's mainnet mode is
-// DB-rejected, so it is never offered here.
+// The activatable (stream, network) combos. 2026-07-07: the gold stream's MAINNET mode is
+// OPEN (migration 012 dropped the testnet-only CHECK) — both streams now offer real + paper.
 //
 // NO display names live here (stream anonymization): `maskKey` is the stream key the
 // components resolve through useStreamDisplay() — codename for users, real name for
@@ -12,6 +12,7 @@ import { authedFetch } from '../../utils/supa';
 export const STREAM_ROWS = [
   { stream: 'opus',  network: 'mainnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: true },
   { stream: 'opus',  network: 'testnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: false },
+  { stream: 'midas', network: 'mainnet', maskKey: 'midas',      version: 'midas',      real: true },
   { stream: 'midas', network: 'testnet', maskKey: 'midas',      version: 'midas',      real: false },
 ];
 

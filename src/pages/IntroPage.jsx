@@ -20,8 +20,8 @@ const IntroPage = () => {
   const { isAdmin, features } = useAuth();
 
   // Ürün sınırı: araştırma varyantları opt-in — yetkisiz kullanıcı (admin değil ve
-  // backtest yüzeyi kapalı) yalnız 3 CANLI akımı görür. Hub'daki tüm sayaç/sıralama/
-  // kartlar bu havuzdan türer, böylece 18 backtest-only akım genel bakışta görünmez.
+  // backtest yüzeyi kapalı) yalnız 2 CANLI akımı görür (OPUS + MIDAS; NOVA 2026-07-07'de
+  // araştırmaya indi). Hub'daki tüm sayaç/sıralama/kartlar bu havuzdan türer.
   const pool = useMemo(
     () => STREAMS.filter((s) => isAdmin || features?.backtest === true || !isResearchStream(s.key)),
     [isAdmin, features],
@@ -289,9 +289,12 @@ const IntroPage = () => {
                 )}
 
                 <div className="intro-card__foot">
-                  <button className="intro-go intro-go--live" onClick={() => navigate(`/${slugFor(s.key)}/live`)}>
-                    <span className="intro-go__dot" /> {t('Live')}
-                  </button>
+                  {/* Araştırma varyantları backtest-only (sidebar'la tutarlı) — Live yalnız canlı akışlarda. */}
+                  {!isResearchStream(s.key) && (
+                    <button className="intro-go intro-go--live" onClick={() => navigate(`/${slugFor(s.key)}/live`)}>
+                      <span className="intro-go__dot" /> {t('Live')}
+                    </button>
+                  )}
                   <button className="intro-go" onClick={() => navigate(`/${slugFor(s.key)}/backtest`)}>
                     {t('Backtest')}
                   </button>

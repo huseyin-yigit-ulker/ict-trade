@@ -10,7 +10,8 @@ keys decrypted here (sync/users/crypto.py). Selection semantics:
     is honored even after disabling;
   * `entries_allowed` is the executor's gate for NEW entries (enabled + active + no
     kill/drain);
-  * MIDAS is hard-locked to testnet here too (defense in depth on top of the table CHECK).
+  * 2026-07-07: the MIDAS testnet hard-lock is REMOVED (migration 012 dropped the table
+    CHECK too) — MIDAS mainnet is an owner decision (AFTER-LOSS gate + $3 risk, MIDAS.md).
 
 Rows whose key fails to decrypt (rotated PEM?) or is missing are skipped with a log line —
 the executor alerts the admin but never crashes the whole tick over one user.
@@ -64,7 +65,7 @@ class ExecUser:
 
 def load_exec_users(conn, stream: str) -> list[ExecUser]:
     pos_table, open_states = _POS_TABLES[stream]
-    net_lock = "and s.network = 'testnet'" if stream == "midas" else ""
+    net_lock = ""   # 2026-07-07: MIDAS mainnet unlocked (was: testnet hard-lock; see migration 012)
     sql = f"""
         select s.id, s.user_id::text, p.email, p.is_canonical, s.network,
                s.enabled, s.risk_usd, s.max_concurrent, s.max_total_risk_usd,

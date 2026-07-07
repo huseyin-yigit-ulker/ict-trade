@@ -95,7 +95,7 @@ def _admin_user_ids(conn) -> set:
 # signals.mode (scanner discriminator) -> anonim akış KEY'i (user_signal_watch.strategy).
 _MODE_TO_STREAM = {
     "dch30_4h": "d30so8f3h7",    # OPUS
-    "dch30_4hvg": "d30so8f3vg",  # FABLE (volume-gated twin)
+    # "dch30_4hvg" (FABLE) emekli 2026-07-07 — canli emit'i kaldirildi, backtest-only.
     "midas": "midas",            # MIDAS / SIRIUS
 }
 
