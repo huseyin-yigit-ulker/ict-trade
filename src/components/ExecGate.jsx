@@ -58,7 +58,7 @@ export default function ExecGate({ network, children }) {
     </div></div>;
   }
 
-  const netLabel = network === 'mainnet' ? t('Binance Mainnet')
+  const netLabel = network === 'mainnet' ? t('Binance Canlı')
     : network === 'testnet' ? `${t('Paper')} (${t('testnet')})` : t('Canlı işlem');
   const head = state === 'pending' ? t('Hesabınız hazırlanıyor')
     : state === 'noact' ? t('Akış ve sembol aktifleştirin')

@@ -624,6 +624,19 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   src/components/layout/{Sidebar,MobileTabBar}.jsx, src/pages/LivePositionsPage.jsx, src/App.jsx,
   src/context/LanguageContext.jsx.
 
+### 2026-07-07 (6) — Sidebar amaç-bazlı yeniden düzenlendi, bölüm adları standartlaştı
+- Yeni düzen (yukarıdan aşağı): Genel Bakış → **STRATEJİLER** (canlı akışlar; eski "CANLI MODÜL")
+  → **İŞLEM** (Binance Canlı/Paper panoları — kişisel aktivasyona bağlı — + İşlem Merkezi; eski
+  "CANLI İŞLEMLER") → **PİYASA** (YENİ bölüm: Rejim Haritası + TOTAL + İstihbarat, eskiden dağınık
+  düz linklerdi) → **ARAŞTIRMA** (opt-in lab; eski "BACKTEST") → ayraç → Ayarlar + Yönetim
+  (Yönetim İŞLEM içinden alta, Ayarlar'ın yanına taşındı — sistem yönetimi işlem değil).
+- Ad standardizasyonu: "Binance Mainnet" linki → "Binance Canlı" (sayfa başlığıyla aynı; ExecGate
+  metni de eşitlendi). EN: STRATEGIES / TRADING / MARKET / RESEARCH / Binance Live.
+- PİYASA bölümü katlanabilir (pusu.navMarket, varsayılan açık); diğer bölümlerin localStorage
+  anahtarları değişmedi. `npm run build` PASS.
+- Dosyalar: src/components/layout/Sidebar.jsx, src/components/ExecGate.jsx,
+  src/context/LanguageContext.jsx.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

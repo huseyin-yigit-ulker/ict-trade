@@ -485,6 +485,12 @@ const EN = {
   'Canlı işlem verilerinizi görmek için önce {net} için kendi Binance API anahtarınızı eklemelisiniz. Başkasının hesap verisi burada gösterilmez.': 'To see your live trading data you must first add your own Binance API key for {net}. No one else\'s account data is shown here.',
   '{net} anahtarınız doğrulanıyor — birkaç dakika içinde hesabınız açılır. Burada yalnızca KENDİ verileriniz gösterilir, başka hesabın verisi asla.': 'Your {net} key is being verified — your account opens within a few minutes. Only YOUR data is shown here, never another account\'s.',
   'CANLI İŞLEMLER': 'LIVE TRADING',
+  // --- 2026-07-07 sidebar standardization (purpose-grouped sections) ---
+  'STRATEJİLER': 'STRATEGIES',
+  'İŞLEM': 'TRADING',
+  'PİYASA': 'MARKET',
+  'ARAŞTIRMA': 'RESEARCH',
+  'Binance Canlı': 'Binance Live',
   'Binance Mainnet': 'Binance Mainnet',
   'Paper': 'Paper',
   'GERÇEK': 'REAL',

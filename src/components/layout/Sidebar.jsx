@@ -144,15 +144,20 @@ const Sidebar = () => {
     return l.startsWith(`${n} · `) ? l.slice(n.length + 3) : l;
   };
 
-  // Three collapsible nav sections: CANLI MODÜL — ONLY the live strategy streams —
-  // default OPEN; CANLI İŞLEMLER — the Binance mainnet/paper position boards + the
-  // per-user trading controls — default OPEN; BACKTEST — the research-only streams —
-  // default COLLAPSED. Collapse state persists like the other PUSU prefs.
+  // Collapsible nav sections, purpose-ordered (2026-07-07 standardization):
+  //   STRATEJİLER — the live strategy streams — default OPEN
+  //   İŞLEM       — Binance boards (per-user activation) + İşlem Merkezi — default OPEN
+  //   PİYASA      — market context (Rejim Haritası / TOTAL / İstihbarat) — default OPEN
+  //   ARAŞTIRMA   — the backtest-only lab streams (opt-in) — default COLLAPSED
+  // Collapse state persists like the other PUSU prefs (legacy localStorage keys kept).
   const [liveOpen, setLiveOpen] = useState(() => {
     try { return localStorage.getItem('pusu.navLive') !== '0'; } catch { return true; }
   });
   const [execOpen, setExecOpen] = useState(() => {
     try { return localStorage.getItem('pusu.navExec') !== '0'; } catch { return true; }
+  });
+  const [marketOpen, setMarketOpen] = useState(() => {
+    try { return localStorage.getItem('pusu.navMarket') !== '0'; } catch { return true; }
   });
   const [btOpen, setBtOpen] = useState(() => {
     try { return localStorage.getItem('pusu.navBacktest') === '1'; } catch { return false; }
@@ -170,6 +175,11 @@ const Sidebar = () => {
   const toggleBacktest = () => setBtOpen((o) => {
     const next = !o;
     try { localStorage.setItem('pusu.navBacktest', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
+  const toggleMarket = () => setMarketOpen((o) => {
+    const next = !o;
+    try { localStorage.setItem('pusu.navMarket', next ? '1' : '0'); } catch { /* ignore */ }
     return next;
   });
 
@@ -212,7 +222,7 @@ const Sidebar = () => {
           <span className="sidebar__icon"><IconHome /></span><span>{t('Genel Bakış')}</span>
         </NavLink>
 
-        {/* ── CANLI MODÜL — ONLY the live strategy streams ── */}
+        {/* ── STRATEJİLER — ONLY the live strategy streams ── */}
         <button
           className="sidebar__section"
           onClick={(e) => { e.stopPropagation(); toggleLive(); }}
@@ -220,7 +230,7 @@ const Sidebar = () => {
           title={liveOpen ? t('Gizle') : t('Göster')}
         >
           <span className="sidebar__icon"><IconImpulse /></span>
-          <span className="sidebar__section-label">{t('CANLI MODÜL')}</span>
+          <span className="sidebar__section-label">{t('STRATEJİLER')}</span>
           <span className="sidebar__section-chev" aria-hidden="true">{liveOpen ? '▾' : '▸'}</span>
         </button>
 
@@ -230,7 +240,7 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* ── CANLI İŞLEMLER — Binance mainnet/paper position boards + per-user controls ── */}
+        {/* ── İŞLEM — Binance position boards (per-user activation) + trading controls ── */}
         <button
           className="sidebar__section"
           onClick={(e) => { e.stopPropagation(); toggleExec(); }}
@@ -238,7 +248,7 @@ const Sidebar = () => {
           title={execOpen ? t('Gizle') : t('Göster')}
         >
           <span className="sidebar__icon"><IconLive /></span>
-          <span className="sidebar__section-label">{t('CANLI İŞLEMLER')}</span>
+          <span className="sidebar__section-label">{t('İŞLEM')}</span>
           <span className="sidebar__section-chev" aria-hidden="true">{execOpen ? '▾' : '▸'}</span>
         </button>
 
@@ -249,7 +259,7 @@ const Sidebar = () => {
                 "diğer türlü boş olsun". İşlem Merkezi her zaman durur (aktivasyon orada yapılır). */}
             {act.mainnet && (
               <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
-                <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Mainnet')}</span>
+                <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Canlı')}</span>
                 <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
               </NavLink>
             )}
@@ -271,20 +281,41 @@ const Sidebar = () => {
                 <span className="sidebar__icon"><IconGear /></span><span>{t('İşlem Merkezi')}</span>
               </NavLink>
             )}
+          </div>
+        )}
 
-            {/* Yönetim — admin console */}
-            {isAdmin && (
-              <NavLink to="/admin" className="sidebar__link">
-                <span className="sidebar__icon"><IconShield /></span><span>{t('Yönetim')}</span>
+        {/* ── PİYASA — market context views (regime map / marketcap breadth / intel) ── */}
+        <button
+          className="sidebar__section"
+          onClick={(e) => { e.stopPropagation(); toggleMarket(); }}
+          aria-expanded={marketOpen}
+          title={marketOpen ? t('Gizle') : t('Göster')}
+        >
+          <span className="sidebar__icon"><IconRegime /></span>
+          <span className="sidebar__section-label">{t('PİYASA')}</span>
+          <span className="sidebar__section-chev" aria-hidden="true">{marketOpen ? '▾' : '▸'}</span>
+        </button>
+
+        {marketOpen && (
+          <div className="sidebar__strategies">
+            <NavLink to="/trend" className="sidebar__link">
+              <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
+            </NavLink>
+            <NavLink to="/total" className="sidebar__link">
+              <span className="sidebar__icon"><IconTotal /></span><span>TOTAL</span>
+            </NavLink>
+            {features?.intelligence !== false && (
+              <NavLink to="/intelligence" className="sidebar__link">
+                <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
               </NavLink>
             )}
           </div>
         )}
 
-        {/* ── BACKTEST — research-only streams (leaf links go to /:key/backtest).
+        {/* ── ARAŞTIRMA — backtest-only lab streams (leaf links go to /:key/backtest).
               OPT-IN: yalnız admin, ya da admin'in backtest yüzeyini açtığı kullanıcı görür
-              (18 araştırma varyantı = laboratuvar, ürün değil). Canlı akışların kendi
-              backtest sekmesi CANLI MODÜL'de, bu bölümden bağımsız. ── */}
+              (19 araştırma varyantı = laboratuvar, ürün değil). Canlı akışların kendi
+              backtest sekmesi STRATEJİLER'de, bu bölümden bağımsız. ── */}
         {(isAdmin || features?.backtest === true) && (
           <>
             <button
@@ -294,7 +325,7 @@ const Sidebar = () => {
               title={btOpen ? t('Gizle') : t('Göster')}
             >
               <span className="sidebar__icon"><IconStrategies /></span>
-              <span className="sidebar__section-label">BACKTEST</span>
+              <span className="sidebar__section-label">{t('ARAŞTIRMA')}</span>
               <span className="sidebar__section-chev" aria-hidden="true">{btOpen ? '▾' : '▸'}</span>
             </button>
 
@@ -307,20 +338,15 @@ const Sidebar = () => {
         )}
 
         <div className="sidebar__navsep" />
-        <NavLink to="/trend" className="sidebar__link">
-          <span className="sidebar__icon"><IconRegime /></span><span>{t('Rejim Haritası')}</span>
-        </NavLink>
-        <NavLink to="/total" className="sidebar__link">
-          <span className="sidebar__icon"><IconTotal /></span><span>{t('TOTAL')}</span>
-        </NavLink>
-        {features?.intelligence !== false && (
-          <NavLink to="/intelligence" className="sidebar__link">
-            <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
-          </NavLink>
-        )}
         <NavLink to="/settings" className="sidebar__link">
           <span className="sidebar__icon"><IconSettings /></span><span>{t('Ayarlar')}</span>
         </NavLink>
+        {/* Yönetim — admin console (sistem/hesap yönetimi → Ayarlar'ın yanında) */}
+        {isAdmin && (
+          <NavLink to="/admin" className="sidebar__link">
+            <span className="sidebar__icon"><IconShield /></span><span>{t('Yönetim')}</span>
+          </NavLink>
+        )}
       </nav>
 
       <div className="sidebar__foot">
