@@ -14,20 +14,20 @@ A quantitative crypto/FX **trading research + live signal system**:
 - **Live emitters** (cron, every bar) detect fresh signals and write them to a live DB.
 - A **React/Vite dashboard** reads both DBs (live feed + backtest drill-down Year→Month→Day, with
   TradingView-style charts).
-- A **real-money Binance Futures executor** trades exactly one stream on mainnet (**OPUS**); everything
-  else is **paper** (signals + Telegram + dashboard only). A second executor, **MIDAS-X**
-  (`sync/midas_exec/`), can place real gold orders but runs **TESTNET / dry-run only** until a
-  Binance-fee simulation clears it for mainnet.
+- **Two real-money Binance Futures executors**: **OPUS** (`sync/live_exec/`) and — since 2026-07-07 —
+  **MIDAS-X** (`sync/midas_exec/`, gold, $3 risk, maker GTX entry, exchange-side trailing stop,
+  AFTER-LOSS gate). Everything else is **paper** (signals + Telegram + dashboard only).
 - **Telegram** alerts on formations / trade lifecycle.
 
-Three streams are surfaced live; the rest of the "Donchian book" is backtest-only research.
+Two streams are surfaced live (**OPUS + MIDAS**, user decision 2026-07-07); FABLE and the rest of the
+"Donchian book" are backtest-only research (opt-in lab surfaces).
 
 | Stream | What | Live? | Money |
 |---|---|---|---|
 | **OPUS** (`d30so8f3h7`) | Donchian 30m breakout + 4h confirm, scale-out (60% @ +1R, runner +8R cap / BE / 7d) | ✅ | **REAL** (Binance Futures) |
-| **FABLE** (`d30so8f3vg`) | OPUS twin, only taken when daily volume is contracting (vch<0.9) | ✅ | paper |
-| **MIDAS** (`midas`) | Gold-only (XAUUSDT) 1m VWAP-trend pullback + 3.5×ATR trailing | ✅ | paper |
-| **MIDAS-X** (`midasx`) | MIDAS as real Binance orders (maker entry + chandelier trailing) | ✅ | **TESTNET** (dry-run first; mainnet gated on a fee sim) |
+| **MIDAS** (`midas`) | Gold-only (XAUUSDT) 1m VWAP-trend pullback + 3.5×ATR trailing (paper signal feed) | ✅ | paper feed |
+| **MIDAS-X** (`midasx`) | MIDAS as real Binance orders (maker GTX entry + exchange-side trailing SL + after-loss gate) | ✅ | **REAL mainnet** since 2026-07-07 ($3 risk; wallet shared with OPUS) |
+| **FABLE** (`d30so8f3vg`) | OPUS twin, only taken when daily volume is contracting (vch<0.9) | backtest-only (live emit retired 2026-07-07) | — |
 | Donchian book (`donchianc`, `d1h_so*`, `d30so*`, …) | breakout families, various exits | backtest-only | — |
 
 Deep dives: **[MIDAS.md](MIDAS.md)** (gold stream), [STRATEJI-RAPORU.md](STRATEJI-RAPORU.md) &
@@ -120,22 +120,24 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 
 | Schedule | Job | Stream |
 |---|---|---|
-| `0 * * * *` | `donchian/canli.py --emit` (1h breakout) | Donchian 1h |
+| `0 * * * *` | `donchian/canli.py --emit --no-telegram` (1h breakout, silent — feeds nightly `donchianc` resolve) | Donchian 1h |
 | `0,30 * * * *` | `donchian/canli.py --emit --tf 30m --confirm-htf 4h --name OPUS` | **OPUS** emit |
 | `0,30 * * * *` | `… --rr 6 --no-telegram` | 6R twin (silent) |
-| `0,30 * * * *` | `… --volume-gate 0.9 --name FABLE` | **FABLE** emit |
 | `* * * * *` | `midas/canli.py --emit --lookback-min 3 --sl-step 0` | **MIDAS** emit + trailing track + Telegram |
 | `30 0 * * *` | `sync_daily.py --stream all` | nightly resolve (all streams) |
 | `45 0 * * *` | `sync_daily.py --stream d30_4h_so` (cap 6) | scale-out 6R |
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
-| `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh |
+| `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh (live emit retired 2026-07-07; re-enable command in the crontab comment) |
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `*/2 * * * *` | `live_exec/executor.py` | **REAL-MONEY** OPUS reconciler |
 | `*/5 * * * *` | `live_exec/safety_sweep.py` | executor safety guard |
-| `* * * * *` | `midas_exec/executor.py` | **MIDAS-X** reconciler (testnet; no-op until armed) |
+| `* * * * *` | `midas_exec/executor.py` | **MIDAS-X** reconciler (**REAL-MONEY mainnet** since 2026-07-07) |
 | `*/3 * * * *` | `midas_exec/safety_sweep.py` | MIDAS-X safety guard (XAUUSDT-scoped) |
+| `* * * * *` (+40s) | `users/verify_keys.py` | multi-user API-key verification |
+| `* * * * *` (+45s) | `push_notify.py --drain` | personal Web-Push outbox drain |
 
-Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-sync.log`, `~/ict-exec.log`.
+Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-midas-exec.log`, `~/ict-sync.log`,
+`~/ict-exec.log`, `~/ict-users.log`.
 
 ---
 
@@ -167,11 +169,13 @@ Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-sync.log`, `~/ict-exec.log
 `MAX_CONCURRENT_POSITIONS`, `LEVERAGE`/`LEVERAGE_MAX`/`AUTO_LEVERAGE`, `MARGIN_TYPE`, `LIVE_ENTRY_MODE`,
 `CLOSE_FRAC`, `HORIZON_DAYS`, `RUNNER_CAP_R`, `DCH_ENTRY_AT_CONFIRM`, `DCH_SO_RUNNER_CAP`.
 
-**MIDAS-X gold executor only** (testnet-first; leave unset on a paper box): `MIDAS_EXEC_ENABLED`,
-`MIDAS_EXEC_DRY_RUN`, `MIDAS_BINANCE_TESTNET` (MIDAS's own network flag, independent of `BINANCE_TESTNET`),
-`MIDAS_RISK_PER_TRADE_USD`, `MIDAS_LEVERAGE`, `MIDAS_MARGIN_TYPE`, `MIDAS_MAKER_ENTRY`,
-`MIDAS_ENTRY_TIMEOUT_SEC`, `MIDAS_ENTRY_MAX_SLIP_R`, `MIDAS_SL_DEADBAND_TICKS`, `MIDAS_EXEC_VERSION`,
-`MIDAS_EXEC_NAME` (+ shares `LIVE_TRADING_ENABLED`, `BINANCE_TESTNET_API_KEY/SECRET`). Full list:
+**MIDAS-X gold executor only** (leave unset on a paper box): `MIDAS_EXEC_ENABLED`,
+`MIDAS_EXEC_DRY_RUN`, `MIDAS_BINANCE_TESTNET` (MIDAS's own network flag, independent of `BINANCE_TESTNET`;
+**false = mainnet real money since 2026-07-07**), `MIDAS_RISK_PER_TRADE_USD` (mainnet: 3),
+`MIDAS_LEVERAGE`/`MIDAS_AUTO_LEVERAGE`/`MIDAS_LEVERAGE_MAX`, `MIDAS_MARGIN_TYPE`, `MIDAS_MAKER_ENTRY`,
+`MIDAS_ENTRY_TIMEOUT_SEC`, `MIDAS_ENTRY_MAX_SLIP_R`, `MIDAS_SL_DEADBAND_TICKS`,
+`MIDAS_EXEC_AFTER_LOSS_ONLY` (enter only if the previous same-fx-day paper trade closed negative),
+`MIDAS_EXEC_VERSION`, `MIDAS_EXEC_NAME` (+ shares `LIVE_TRADING_ENABLED`, Binance key pairs). Full list:
 `sync/midas_exec/.env.example`.
 
 **Multi-user layer (2026-07-04 — §8a):**
@@ -233,12 +237,16 @@ enabled) the OPUS executor trades real Binance Futures.
   **exchange-side** (algo SL/TP placed at entry). Gated by `.env LIVE_TRADING_ENABLED`; per-trade $ risk,
   max concurrent, max total risk, auto-leverage all from `.env`. **Read `sync/live_exec/README.md` before
   enabling.**
-- **MIDAS-X gold executor (testnet-first):** `sync/midas_exec/` — `executor.py` (reconciler, every min),
-  `safety_sweep.py` (*/3, XAUUSDT-scoped), `killswitch.py` (`--status/--flatten/--halt`; `--halt` flips
-  `MIDAS_EXEC_ENABLED` only — OPUS untouched). Separate DB tables + `MIDAS_*` env; testnet uses a
-  synthetic bracket. Gated by `LIVE_TRADING_ENABLED` **and** `MIDAS_EXEC_ENABLED` **and**
-  `MIDAS_EXEC_DRY_RUN=false`. **Do NOT set `MIDAS_BINANCE_TESTNET=false` (mainnet) until the Binance-fee
-  simulation passes** — MIDAS is −92R on taker. See MIDAS.md §5.
+- **MIDAS-X gold executor (REAL-MONEY mainnet since 2026-07-07):** `sync/midas_exec/` — `executor.py`
+  (reconciler, every min), `safety_sweep.py` (*/3, XAUUSDT-scoped), `killswitch.py`
+  (`--status/--flatten/--halt`; `--halt` flips `MIDAS_EXEC_ENABLED` only — OPUS untouched). Separate DB
+  tables + `MIDAS_*` env. Gated by `LIVE_TRADING_ENABLED` **and** `MIDAS_EXEC_ENABLED` **and**
+  `MIDAS_EXEC_DRY_RUN=false`. Mainnet config (user decision, MIDAS.md 2026-07-07 (3)): $3 risk,
+  maker GTX entry, auto-leverage (25x cap), exchange-side STOP_MARKET trailing (cancel/replace),
+  AFTER-LOSS gate (`MIDAS_EXEC_AFTER_LOSS_ONLY=true`); wallet shared with OPUS — if margin is short the
+  entry is skipped (fail-safe). Economics caveat: taker+taker 2026 ≈ +27R/PF1.09 (after-loss +54R) and
+  multi-year OOS is negative — this is a deliberately small-risk live experiment, not a proven edge.
+  Rollback: `user_stream_settings` midas/mainnet `enabled=false` or `MIDAS_BINANCE_TESTNET=true`.
 - **Deploy an update (this VM):** `git pull` → if UI changed `npm run build` → if cron changed
   `crontab dag/crontab` → push code with `GITHUB_TOKEN`
   (`git push "https://x-access-token:$TOKEN@github.com/huseyin-yigit-ulker/ict-trade.git" HEAD:main`).
@@ -665,6 +673,25 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   SymbolPickerCard.jsx, ApiKeysCard.jsx, src/pages/{TradingSettingsPage,MarketCapPage}.jsx,
   src/components/{MidasLiveChart,layout/MobileTabBar}.jsx, src/utils/{adminStreamInfo,useStreamDisplay}.js,
   src/context/LanguageContext.jsx, src/assets/css/style.css.
+
+### 2026-07-07 (8) — Push bildirimlerine mizah katmanı + PWA oto-güncelleme + mobil yatay taşma düzeltmesi
+- **Mizah katmanı** (`sync/users/push_flair.py`, kullanıcı isteği): telefon (Web Push) bildirimi
+  gövdesinin SONUNA kind'e göre kısa espri satırı — entry ("Pusu kuruldu — şimdi bekleme sanatı 🎯"),
+  skip/iptal, exit (işaretli-R'den kazanç/kayıp sezilir: "Kasa gülümsüyor 😎" / "Stop dostumuzdur 🛡️"),
+  milestone, signal ("Radar öttü 📡"). `kind='system'` ASLA espri almaz; Telegram/owner kanalı ve
+  başlıklar değişmez; espriler strateji-nötr (anonimleştirme). Kapatma: `.env PUSH_FLAIR=0`.
+  Entegrasyon: `users/store.py push_user` (executor kişisel push'ları) + `push_notify.py`
+  send_push/push_signal_watchers (sinyal broadcast/izleme). venv import + kind-matrisi test edildi.
+- **PWA oto-güncelleme** (src/main.jsx): `controllerchange` → tek seferlik `location.reload()`
+  (ilk-kurulum guard'lı). sw.js zaten skipWaiting+clients.claim yapıyordu; artık yeni deploy,
+  uygulama açıkken SW devri olur olmaz kendini gösterir — kullanıcının elle yenilemesi/yeniden
+  kurması gerekmez (PWA kendi kendine güncellenir, mağaza/Chrome "indir" adımı yok).
+- **Mobil "soldan kayma"** (kullanıcı ekran görüntüsü, Genel Bakış): `html, body { overflow-x: clip }`
+  — sayfa düzeyi yatay pan kökten kapandı (dekoratif mutlak elemanlar/geniş içerik kendi kabında
+  kırpılır/kayar). `clip` seçildi (`hidden` değil) → scroll container oluşmaz, sticky topbar bozulmaz.
+  Headless-chromium harness ile 360/412px'te intro klonu ölçüldü (docScrollWidth ≤ viewport PASS).
+- Dosyalar: sync/users/push_flair.py (yeni), sync/users/store.py, sync/push_notify.py,
+  src/main.jsx, src/assets/css/style.css. `npm run build` PASS.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

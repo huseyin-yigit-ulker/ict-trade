@@ -191,6 +191,11 @@ def push_user(conn, user_id: str, title: str, body: str, *,
     try:
         if not push_allowed(conn, user_id, kind):
             return
+        try:  # mizah katmanı — yalnız push gövdesi; 'system' ve bilinmeyen kind dokunulmaz
+            import push_flair
+            body = push_flair.spice(kind, body)
+        except Exception:  # noqa: BLE001
+            pass
         payload = json.dumps({"title": title, "body": body, "tag": tag, "url": url})
         with conn.cursor() as cur:
             cur.execute("insert into ict_trade.push_outbox (user_id, payload) values (%s, %s::jsonb)",

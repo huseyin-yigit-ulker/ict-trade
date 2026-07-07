@@ -45,6 +45,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The page itself NEVER pans horizontally (mobile "soldan kayma" fix, 2026-07-07):
+   decorative absolutes / wide content must clip or scroll inside their own
+   containers. `clip` — not `hidden` — so no scroll container is created and
+   position:sticky (topbar) keeps working. */
+html, body { overflow-x: clip; }
+
 #root {
   min-height: 100vh;
 }

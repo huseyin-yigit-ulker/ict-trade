@@ -30,7 +30,23 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parent))   # sync/
+sys.path.insert(0, str(_HERE.parent / "users"))   # sync/users -> push_flair
 import trade_sync_common as tsc          # noqa: E402
+
+try:
+    import push_flair                     # mizah katmanı (best-effort, opsiyonel)
+except Exception:  # noqa: BLE001
+    push_flair = None
+
+
+def _spice_signal(body: str) -> str:
+    """Sinyal push gövdesine espri satırı (PUSH_FLAIR=0 kapatır). Best-effort."""
+    if push_flair is None:
+        return body
+    try:
+        return push_flair.spice("signal", body)
+    except Exception:  # noqa: BLE001
+        return body
 
 _SELECT = "SELECT id, endpoint, p256dh, auth, user_id FROM ict_trade.push_subscriptions"
 _DELETE = "DELETE FROM ict_trade.push_subscriptions WHERE id = %s"
@@ -132,6 +148,7 @@ def send_push(title: str, body: str, url: str = "/", tag: str | None = None) -> 
         except Exception:
             return 0  # pywebpush not installed yet — silent no-op
 
+        body = _spice_signal(body)   # espri strateji-nötr — maskeden etkilenmez
         payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag})
         payload_masked = json.dumps({"title": _mask_text(title), "body": _mask_text(body),
                                      "url": url, "tag": tag})
@@ -211,6 +228,7 @@ def push_signal_watchers(mode: str, symbol: str, title: str, body: str,
                 return 0
             muted = _signal_muted_user_ids(conn)
             admins = _admin_user_ids(conn)
+            body = _spice_signal(body)   # espri strateji-nötr — maskeden etkilenmez
             queued = 0
             for uid in watchers:
                 if uid in muted:                    # sinyal yayınları kapalı -> atla
