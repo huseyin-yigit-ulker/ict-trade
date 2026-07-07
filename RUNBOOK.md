@@ -593,6 +593,18 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   src/components/layout/Sidebar.jsx, src/components/trading/{streams.js,SignalWatchCard,StreamActivationCard}.jsx,
   src/pages/{MidasXLivePage,IntroPage}.jsx, src/context/LanguageContext.jsx, src/assets/css/style.css.
 
+### 2026-07-07 (4) — Altın panosu Binance Mainnet sayfasına katıldı (ayrı sidebar linki kaldırıldı)
+- Kullanıcı: "live trading binance gold kaldır … binance mainnet de olur zaten" → ayrı
+  "Binance · Altın" sidebar linki KALDIRILDI (MIDAS-X mainnet executor'a DOKUNULMADI — işlem sürüyor).
+- `/binance` (Binance Mainnet) sayfasına "Altın · MIDAS" bölümü eklendi: açık altın pozisyonları
+  (giriş/mark/iz-süren SL/kilitli R/canlı K-Z-R/geri sayım) + son kapananlar, `midas_positions`
+  network=mainnet'ten (best-effort fetch — tablo/grant yoksa sayfa bozulmaz); "Açık Pozisyon" KPI'ı
+  artık OPUS+altın toplamı. Bölüm başlığındaki "Detay →" `/binance-altin`'a gider (route + detay
+  sayfası DURUYOR, sadece sidebar'dan çıktı). Mobil kart-reflow `data-label`'ları tam.
+- 3 yeni EN çevirisi (İz-Süren SL / Kilitli R / boş-durum metni); `npm run build` PASS.
+- Dosyalar: src/pages/LivePositionsPage.{jsx,css}, src/components/layout/Sidebar.jsx,
+  src/context/LanguageContext.jsx.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

@@ -248,11 +248,9 @@ const Sidebar = () => {
               <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
             </NavLink>
 
-            {/* Binance · Altın — MIDAS-X gold executor board (MAINNET since 2026-07-07) */}
-            <NavLink to="/binance-altin" className="sidebar__link sidebar__link--binance">
-              <span className="sidebar__icon"><IconLive /></span><span>Binance · {t('Altın')}</span>
-              <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
-            </NavLink>
+            {/* 2026-07-07: ayrı "Binance · Altın" linki kaldırıldı (kullanıcı: "Binance Mainnet'te
+                de olur zaten") — altın pozisyonları artık /binance sayfasının Altın bölümünde;
+                /binance-altin detay sayfası oradaki "Detay →" linkiyle erişilir. */}
 
             {/* İşlem Merkezi — per-user keys/risk/activation (active accounts only;
                 admin user_features.trading ile kullanıcı-başına kapatabilir) */}

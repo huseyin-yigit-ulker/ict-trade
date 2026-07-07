@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
 import { authedFetch } from '../utils/supa';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
@@ -9,11 +10,14 @@ import './LivePositionsPage.css';
 //   ict_trade.live_account_snapshot — the REAL Binance state per symbol (mark / uPnL), refreshed
 //                                     by the executor every ~2 min
 //   ict_trade.live_account          — wallet / available / total uPnL, one row per network
+//   ict_trade.midas_positions       — the MAINNET gold (MIDAS-X) positions (2026-07-07: the whole
+//                                     mainnet account lives on ONE page; /binance-altin = detail)
 // Browser never signs a Binance request; it only reads what the executor snapshotted.
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 const OPEN_STATES = ['PENDING_ENTRY', 'ENTRY_WORKING', 'OPEN_FULL', 'RUNNER', 'CLOSING'];
+const MIDAS_OPEN_STATES = ['PENDING_ENTRY', 'ENTRY_WORKING', 'OPEN'];
 const REFRESH_MS = 30000;
 // Live stream = OPUS d30so8f3h7 (.env EXEC_VERSION): books CLOSE_FRAC=0.3 (30%) at +1R, runner rides to
 // RUNNER_CAP_R=8. Keep CAP_R + SO.closeFrac below in sync with .env RUNNER_CAP_R / CLOSE_FRAC.
@@ -31,6 +35,16 @@ const STATE_BADGE = {
 const EXIT_LABEL = {
   sl: 'SL −1R', tp1_be: 'TP1+BE', breakeven: 'Breakeven', cap: `CAP +${CAP_R}R`,
   time_stop: '3g Zaman', entry_expired: 'Giriş Dolmadı', reversed: 'Ters Döndü', killswitch: 'Killswitch',
+};
+// Gold (MIDAS-X) state/exit vocab — the trailing-stop executor's states differ from the scale-out's.
+const MIDAS_BADGE = {
+  PENDING_ENTRY: { label: 'GİRİŞ BEKLİYOR', cls: 'st-wait' },
+  ENTRY_WORKING: { label: 'GİRİŞ EMRİ', cls: 'st-wait' },
+  OPEN: { label: 'AÇIK · İZ-SÜREN', cls: 'st-active' },
+};
+const MIDAS_EXIT = {
+  'trail/stop': 'İz-Süren Stop', time: '8s Zaman', session: 'Seans Sonu',
+  slipped: 'Fiyat Kaçtı', unfilled: 'Dolmadı', closed_externally: 'Borsa Kapanışı', killswitch: 'Killswitch',
 };
 
 // User-JWT fetch (utils/supa authedFetch) — RLS scopes the rows to the logged-in user.
@@ -87,6 +101,7 @@ export default function LivePositionsPage() {
   const capLabel = sd.isAdmin ? `Cap +${CAP_R}R` : t('Hedef');
   const exitLabel = (r) => (r === 'cap' && !sd.isAdmin ? t('Hedef') : EXIT_LABEL[r] || r || '—');
   const [positions, setPositions] = useState([]);
+  const [gold, setGold] = useState([]);          // MIDAS-X mainnet positions (gold)
   const [snaps, setSnaps] = useState({});
   const [account, setAccount] = useState(null);
   const [err, setErr] = useState('');
@@ -98,12 +113,15 @@ export default function LivePositionsPage() {
   const load = useCallback(async () => {
     if (!SUPA_URL || !SUPA_KEY) { setErr(t('Supabase ayarları eksik.')); setLoading(false); return; }
     try {
-      const [pos, snap, acc] = await Promise.all([
+      const [pos, snap, acc, au] = await Promise.all([
         getJSON('live_positions?select=*&order=updated_at.desc&limit=60'),
         getJSON('live_account_snapshot?select=*&network=eq.mainnet'),
         getJSON('live_account?select=*'),
+        // Gold (MIDAS-X) mainnet rows — best-effort: a missing table/grant must not blank the page.
+        getJSON('midas_positions?select=*&network=eq.mainnet&order=updated_at.desc&limit=20').catch(() => []),
       ]);
       setPositions(pos);
+      setGold(au);
       setSnaps(Object.fromEntries(snap.map((s) => [s.symbol, s])));
       // OPUS is the real-money MAINNET stream. The MIDAS-X paper bridge writes a second, testnet
       // live_account row into this shared table, so prefer the mainnet row (fall back to the single
@@ -129,6 +147,19 @@ export default function LivePositionsPage() {
 
   const open = positions.filter((p) => OPEN_STATES.includes(p.state));
   const closed = positions.filter((p) => p.state === 'CLOSED' || p.state === 'CANCELLED').slice(0, 12);
+  const goldOpen = gold.filter((p) => MIDAS_OPEN_STATES.includes(p.state));
+  const goldClosed = gold.filter((p) => p.state === 'CLOSED' || p.state === 'CANCELLED').slice(0, 6);
+  // Gold live R: single trailing position — risk0=|entry−sl|, uPnL from the XAU snapshot,
+  // locked_r = the R already secured if the trailing stop were hit now.
+  const goldCalc = (p) => {
+    const qty = Number(p.qty) || 0;
+    const risk0 = Number(p.risk0) || Math.abs(Number(p.signal_entry) - Number(p.signal_sl));
+    const oneR = risk0 * qty;
+    const s = snaps[p.symbol];
+    const upnl = s && s.unrealized_pnl != null ? Number(s.unrealized_pnl) : null;
+    return { upnl, liveR: upnl == null || !oneR ? null : upnl / oneR,
+             lockedR: p.locked_r != null ? Number(p.locked_r) : null };
+  };
   // Funding paid/received on the CURRENTLY-open positions (snapshot funding_fee summed since entry;
   // negative = we paid). Binance settles perp funding every 8h — this is the live carry cost.
   const openFunding = open.reduce((a, p) => a + (Number(snaps[p.symbol]?.funding_fee) || 0), 0);
@@ -189,7 +220,7 @@ export default function LivePositionsPage() {
           <span>{t('Açık uPnL')}</span>
           <b className={Number(account?.total_unrealized) >= 0 ? 'pos' : 'neg'}>{fmtUsd(account?.total_unrealized)}</b>
         </div>
-        <div className="livex__kpi"><span>{t('Açık Pozisyon')}</span><b>{open.length}</b></div>
+        <div className="livex__kpi"><span>{t('Açık Pozisyon')}</span><b>{open.length + goldOpen.length}</b></div>
         <div className="livex__kpi">
           <span>{t('Funding (açık)')}</span>
           <b className={openFunding >= 0 ? 'pos' : 'neg'}>{open.length ? fmtUsdSigned(openFunding) : '—'}</b>
@@ -257,6 +288,85 @@ export default function LivePositionsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* ── Gold · MIDAS-X (mainnet) — the account's second real-money stream (2026-07-07:
+            the standalone /binance-altin board left the sidebar; detail deep-link kept) ── */}
+      {(goldOpen.length > 0 || goldClosed.length > 0) && (
+        <>
+          <h2 className="livex__h2">
+            {t('Altın')} · {sd.name('midas')}{' '}
+            <Link to="/binance-altin" className="livex__detail-link">{t('Detay')} →</Link>
+          </h2>
+          {goldOpen.length === 0
+            ? <div className="livex__empty">{t('Açık altın pozisyonu yok — sinyal bekleniyor.')}</div>
+            : (
+            <div className="livex__tablewrap">
+              <table className="livex__table">
+                <thead>
+                  <tr>
+                    <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Durum')}</th>
+                    <th>{t('Giriş')}</th><th>{t('Mark')}</th><th>{t('İz-Süren SL')}</th>
+                    <th>{t('Kilitli R')}</th><th>{t('Miktar')}</th><th>{t('Canlı K/Z')}</th><th>{t('Canlı R')}</th><th>{t('Geri Sayım')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {goldOpen.map((p) => {
+                    const lng = (p.direction || '').toUpperCase() === 'LONG';
+                    const sb = MIDAS_BADGE[p.state] || { label: p.state, cls: 'st-wait' };
+                    const pre = p.state !== 'OPEN';
+                    const cd = countdown(pre ? p.entry_deadline : p.time_stop_at, t);
+                    const gc = goldCalc(p);
+                    return (
+                      <tr key={`g${p.id}`}>
+                        <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
+                        <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                        <td data-label={t('Durum')}><span className={`st ${sb.cls}`}>{sb.label}</span></td>
+                        <td className="mono" data-label={t('Giriş')}>{fmtPx(p.eff_entry || p.signal_entry)}</td>
+                        <td className="mono" data-label={t('Mark')}>{fmtPx(snaps[p.symbol]?.mark_price)}</td>
+                        <td className="mono" data-label={t('İz-Süren SL')}>{fmtPx(p.cur_sl || p.signal_sl)}</td>
+                        <td className={`mono ${Number(gc.lockedR) >= 0 ? 'pos' : 'dim'}`} data-label={t('Kilitli R')}>{fmtR(gc.lockedR)}</td>
+                        <td className="mono" data-label={t('Miktar')}>{p.qty ?? '—'}</td>
+                        <td className={`mono ${Number(gc.upnl) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı K/Z')}>{fmtUsd(gc.upnl)}</td>
+                        <td className={`mono ${Number(gc.liveR) >= 0 ? 'pos' : 'neg'}`} data-label={t('Canlı R')}>{fmtR(gc.liveR)}</td>
+                        <td className="mono dim" data-label={t('Geri Sayım')}>{cd || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {goldClosed.length > 0 && (
+            <div className="livex__tablewrap">
+              <table className="livex__table">
+                <thead>
+                  <tr>
+                    <th>{t('Sembol')}</th><th>{t('Yön')}</th><th>{t('Sonuç')}</th>
+                    <th>R</th><th>{t('USD')}</th><th>{t('Çıkış')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {goldClosed.map((p) => {
+                    const lng = (p.direction || '').toUpperCase() === 'LONG';
+                    const win = Number(p.realized_r) >= 0;
+                    const cancelled = p.state === 'CANCELLED';
+                    return (
+                      <tr key={`gc${p.id}`}>
+                        <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
+                        <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
+                        <td data-label={t('Sonuç')}><span className={`st ${cancelled ? 'st-cancel' : (win ? 'st-done' : 'st-sl')}`}>{MIDAS_EXIT[p.exit_reason] || p.exit_reason || '—'}</span></td>
+                        <td className={`mono ${win ? 'pos' : 'neg'}`} data-label="R">{p.realized_r == null ? '—' : fmtR(p.realized_r)}</td>
+                        <td className={`mono ${win ? 'pos' : 'neg'}`} data-label={t('USD')}>{p.realized_usd == null ? '—' : fmtUsd(p.realized_usd)}</td>
+                        <td className="mono dim" data-label={t('Çıkış')}>{ago(p.exit_time, t)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {/* recently closed */}
