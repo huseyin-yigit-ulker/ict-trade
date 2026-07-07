@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useTradeContext } from '../../context/TradeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LanguageContext';
+import { useExecActivation } from '../../utils/execActivation';
 
 // Native-app-style bottom navigation (Binance-like) — phone only (CSS-gated to
 // ≤768px). Five slots: the 4 primary destinations + a "Menü" that opens the full
@@ -40,16 +41,20 @@ const MobileTabBar = () => {
   const { mobileNavOpen, toggleMobileNav, closeMobileNav } = useTradeContext();
   const { features } = useAuth();
   const { t } = useLang();
+  const act = useExecActivation();   // "Canlı" sekmesi kişisel aktivasyona bağlı (2026-07-07)
   const cls = ({ isActive }) => `mtab${isActive ? ' is-active' : ''}`;
+  const liveTo = act.mainnet ? '/binance' : act.testnet ? '/binance-paper' : null;
 
   return (
     <nav className="mobile-tabbar" aria-label="primary">
       <NavLink to="/" end className={cls} onClick={closeMobileNav}>
         <IHome /><span>{t('Genel')}</span>
       </NavLink>
-      <NavLink to="/binance" className={cls} onClick={closeMobileNav}>
-        <ILive /><span>{t('Canlı')}</span>
-      </NavLink>
+      {liveTo && (
+        <NavLink to={liveTo} className={cls} onClick={closeMobileNav}>
+          <ILive /><span>{t('Canlı')}</span>
+        </NavLink>
+      )}
       {/* İşlem Merkezi — per-user trading controls; admin kullanıcı-başına kapatabilir. */}
       {features?.trading !== false && (
         <NavLink to="/trading" className={cls} onClick={closeMobileNav}>

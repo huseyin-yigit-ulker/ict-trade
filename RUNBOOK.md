@@ -605,6 +605,25 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - Dosyalar: src/pages/LivePositionsPage.{jsx,css}, src/components/layout/Sidebar.jsx,
   src/context/LanguageContext.jsx.
 
+### 2026-07-07 (5) — Pano görünürlüğü KİŞİSEL AKTİVASYONA bağlandı ("diğer türlü boş olsun")
+- Kullanıcı kuralı: paper anahtar + sembol aktifleştiren PAPER panosunu, mainnet anahtar + sembol
+  aktifleştiren CANLI panoyu görür; hiçbiri yoksa bu yüzeyler boş/CTA.
+- Yeni `src/utils/execActivation.js` (useExecActivation): aktivasyon = o ağda GEÇERLİ API anahtarı
+  (user_api_keys_public) VE enabled+sembollü akış satırı (user_stream_settings) — her iki sorgu
+  `user_id=eq.<uid>` ile daralır (RLS admin'e tüm satırları açtığından şart), İşlem Merkezi'nin
+  SETTINGS_EVT'iyle canlı tazelenir, modül-cache'li.
+- Sidebar + MobileTabBar: "Binance Mainnet" linki yalnız mainnet-aktif, YENİ "Binance Paper" linki
+  (route `/binance-paper`) yalnız testnet-aktif kullanıcıya; mobil "Canlı" sekmesi aynı kurala göre
+  hedef seçer/gizlenir. İşlem Merkezi her zaman görünür (aktivasyon orada yapılır).
+- `LivePositionsPage` artık `network` prop'lu (mainnet/testnet aynı pano, ağ-kapsamlı sorgular;
+  live_positions'ta tüm satırlar network'lü — NULL yok, doğrulandı). `/binance-altin` kapısı
+  `network="any"` (ağ-dinamik detay).
+- ExecGate genişledi: anahtar + AKTİF AKIŞ ikisi birden aranır; anahtar var ama akış kapalıysa yeni
+  "Akış ve sembol aktifleştirin" boş-durumu → /trading. `npm run build` PASS.
+- Dosyalar: src/utils/execActivation.js (yeni), src/components/ExecGate.jsx,
+  src/components/layout/{Sidebar,MobileTabBar}.jsx, src/pages/LivePositionsPage.jsx, src/App.jsx,
+  src/context/LanguageContext.jsx.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

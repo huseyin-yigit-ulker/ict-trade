@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useTradeContext } from '../../context/TradeContext';
 import { useStreamDisplay } from '../../utils/useStreamDisplay';
 import { slugFor } from '../../utils/streamMask';
+import { useExecActivation } from '../../utils/execActivation';
 import PusuLogo from '../PusuLogo';
 
 const IconCommand = () => (
@@ -130,6 +131,7 @@ const Sidebar = () => {
   const { theme, setTheme } = useTheme();
   const { closeMobileNav } = useTradeContext();
   const sd = useStreamDisplay();   // codenames for everyone; real names lazy-load for admins
+  const act = useExecActivation(); // ağ-bazlı kişisel aktivasyon: pano linkleri buna göre görünür
 
   const leafLabel = { live: t('Live'), backtest: t('Backtest') };
 
@@ -242,14 +244,24 @@ const Sidebar = () => {
 
         {execOpen && (
           <div className="sidebar__strategies">
-            {/* Binance Mainnet — real-money executor board */}
-            <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
-              <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Mainnet')}</span>
-              <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
-            </NavLink>
+            {/* Pano linkleri KİŞİSEL aktivasyona bağlı (2026-07-07): bir ağın linki ancak
+                kullanıcı o ağda geçerli anahtar + aktif akış/sembol kurduysa görünür —
+                "diğer türlü boş olsun". İşlem Merkezi her zaman durur (aktivasyon orada yapılır). */}
+            {act.mainnet && (
+              <NavLink to="/binance" className="sidebar__link sidebar__link--binance">
+                <span className="sidebar__icon"><IconLive /></span><span>{t('Binance Mainnet')}</span>
+                <span className="sidebar__live-badge sidebar__live-badge--binance">● {t('GERÇEK')}</span>
+              </NavLink>
+            )}
+            {act.testnet && (
+              <NavLink to="/binance-paper" className="sidebar__link sidebar__link--binance-paper">
+                <span className="sidebar__icon"><IconLive /></span><span>Binance Paper</span>
+                <span className="sidebar__live-badge sidebar__live-badge--paper">● {t('PAPER')}</span>
+              </NavLink>
+            )}
 
             {/* 2026-07-07: ayrı "Binance · Altın" linki kaldırıldı (kullanıcı: "Binance Mainnet'te
-                de olur zaten") — altın pozisyonları artık /binance sayfasının Altın bölümünde;
+                de olur zaten") — altın pozisyonları artık pano sayfasının Altın bölümünde;
                 /binance-altin detay sayfası oradaki "Detay →" linkiyle erişilir. */}
 
             {/* İşlem Merkezi — per-user keys/risk/activation (active accounts only;

@@ -92,7 +92,10 @@ function countdown(iso, t) {
   return h < 24 ? `${h}sa ${Math.floor((s % 3600) / 60)}dk` : `${Math.floor(h / 24)}g ${h % 24}sa`;
 }
 
-export default function LivePositionsPage() {
+// network prop (2026-07-07): '/binance' = mainnet, '/binance-paper' = testnet — the SAME board
+// scoped to one network. RLS zaten satırları kullanıcıya kilitler; bu prop yalnız hangi ağın
+// hesabının/pozisyonlarının gösterileceğini seçer.
+export default function LivePositionsPage({ network = 'mainnet' }) {
   const { t } = useLang();
   const sd = useStreamDisplay();   // stream identity masked for non-admins
   // The runner-cap column/exit labels reveal the stream's R economics — admin only;
@@ -114,19 +117,17 @@ export default function LivePositionsPage() {
     if (!SUPA_URL || !SUPA_KEY) { setErr(t('Supabase ayarları eksik.')); setLoading(false); return; }
     try {
       const [pos, snap, acc, au] = await Promise.all([
-        getJSON('live_positions?select=*&order=updated_at.desc&limit=60'),
-        getJSON('live_account_snapshot?select=*&network=eq.mainnet'),
+        getJSON(`live_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=60`),
+        getJSON(`live_account_snapshot?select=*&network=eq.${network}`),
         getJSON('live_account?select=*'),
-        // Gold (MIDAS-X) mainnet rows — best-effort: a missing table/grant must not blank the page.
-        getJSON('midas_positions?select=*&network=eq.mainnet&order=updated_at.desc&limit=20').catch(() => []),
+        // Gold (MIDAS-X) rows — best-effort: a missing table/grant must not blank the page.
+        getJSON(`midas_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=20`).catch(() => []),
       ]);
       setPositions(pos);
       setGold(au);
       setSnaps(Object.fromEntries(snap.map((s) => [s.symbol, s])));
-      // OPUS is the real-money MAINNET stream. The MIDAS-X paper bridge writes a second, testnet
-      // live_account row into this shared table, so prefer the mainnet row (fall back to the single
-      // row on a testnet-only box) — otherwise acc[0] could be MIDAS-X's stale testnet account.
-      setAccount(acc.find((a) => a.network === 'mainnet') || acc[0] || null);
+      // Both networks write into the shared live_account table — show ONLY this board's network.
+      setAccount(acc.find((a) => a.network === network) || null);
       setErr('');
       setUpdatedAt(new Date());
     } catch (e) {
@@ -136,7 +137,7 @@ export default function LivePositionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, network]);
 
   useEffect(() => {
     load();
@@ -163,7 +164,7 @@ export default function LivePositionsPage() {
   // Funding paid/received on the CURRENTLY-open positions (snapshot funding_fee summed since entry;
   // negative = we paid). Binance settles perp funding every 8h — this is the live carry cost.
   const openFunding = open.reduce((a, p) => a + (Number(snaps[p.symbol]?.funding_fee) || 0), 0);
-  const net = account?.network || 'testnet';
+  const net = network;
   const stale = account && (Date.now() - new Date(account.updated_at).getTime() > 5 * 60 * 1000);
 
   // Per-trade live R/USD breakdown, matching the executor's R convention (realized_r =
@@ -196,7 +197,7 @@ export default function LivePositionsPage() {
   return (
     <div className="livex">
       <div className="livex__head">
-        <h1>{t('Binance Canlı')}</h1>
+        <h1>{net === 'mainnet' ? t('Binance Canlı') : 'Binance Paper'}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
         {/* Admin sees the plan economics; everyone else just the codename. The name comes
             from useStreamDisplay so no raw stream key ships as a visible literal. */}

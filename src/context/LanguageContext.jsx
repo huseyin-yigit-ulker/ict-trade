@@ -476,6 +476,10 @@ const EN = {
   'Binance Pozisyonlar': 'Binance Positions',
   'Kendi API anahtarınızı ekleyin': 'Add your own API key',
   'Hesabınız hazırlanıyor': 'Your account is being set up',
+  'Akış ve sembol aktifleştirin': 'Activate a stream and symbols',
+  'Canlı işlem': 'Live trading',
+  'Anahtarınız hazır ama {net} için henüz aktif bir akış/sembol seçiminiz yok. İşlem Merkezi’nden bir akışı açıp sembollerinizi seçince panonuz burada belirir.':
+    'Your key is ready, but you have no active stream/symbol selection for {net} yet. Enable a stream and pick your symbols in the Trading Hub and your board will appear here.',
   'API Anahtarı Ekle': 'Add API Key',
   'testnet': 'testnet',
   'Canlı işlem verilerinizi görmek için önce {net} için kendi Binance API anahtarınızı eklemelisiniz. Başkasının hesap verisi burada gösterilmez.': 'To see your live trading data you must first add your own Binance API key for {net}. No one else\'s account data is shown here.',

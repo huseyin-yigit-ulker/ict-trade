@@ -30,8 +30,9 @@ function App() {
                   <Route index element={<IntroPage />} />
                   <Route path="/trend" element={<TrendPage />} />
                   <Route path="/total" element={<MarketCapPage />} />
-                  <Route path="/binance" element={<RequireActive><ExecGate network="mainnet"><LivePositionsPage /></ExecGate></RequireActive>} />
-                  <Route path="/binance-altin" element={<RequireActive><ExecGate network="testnet"><MidasXLivePage /></ExecGate></RequireActive>} />
+                  <Route path="/binance" element={<RequireActive><ExecGate network="mainnet"><LivePositionsPage network="mainnet" /></ExecGate></RequireActive>} />
+                  <Route path="/binance-paper" element={<RequireActive><ExecGate network="testnet"><LivePositionsPage network="testnet" /></ExecGate></RequireActive>} />
+                  <Route path="/binance-altin" element={<RequireActive><ExecGate network="any"><MidasXLivePage /></ExecGate></RequireActive>} />
                   <Route path="/trading" element={<RequireActive><RequireFeature k="trading"><TradingSettingsPage /></RequireFeature></RequireActive>} />
                   <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
