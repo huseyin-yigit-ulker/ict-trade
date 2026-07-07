@@ -765,6 +765,11 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - Ayrıca MIDAS.md'ye 2026-07-07 (4) araştırma girdisi eklendi (flip/whipsaw + rejim incelemesi —
   filtre ship edilmedi; detay orada).
 
+### 2026-07-07 (10) — "Liquidity Ambush Intelligence" sloganı login + Genel Bakış'tan kaldırıldı
+- Kullanıcı isteği: LoginScreen (`boot-sub`) ve IntroPage (`intro-sub`) alt başlık satırları silindi;
+  logo/başlık ("PUSU") duruyor. Footer'lardaki "© 2026 PUSU · Likidite Avı" ile PWA manifest
+  adı/açıklaması dokunulmadı. `npm run build` PASS.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

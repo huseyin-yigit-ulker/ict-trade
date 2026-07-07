@@ -287,7 +287,6 @@ const LoginScreen = () => {
           <div className="boot-reticle"><PusuLogo size={68} animated /></div>
           <div className="boot-text">
             <div className="boot-title">PUSU</div>
-            <div className="boot-sub">Liquidity Ambush Intelligence</div>
           </div>
           <TrackRecord />
         </section>

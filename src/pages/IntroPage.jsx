@@ -157,7 +157,6 @@ const IntroPage = () => {
           <div className="intro-hero__content">
             <div className="intro-reticle"><PusuLogo size={72} animated /></div>
             <h1 className="intro-title">PUSU</h1>
-            <div className="intro-sub">Liquidity Ambush Intelligence</div>
             <p className="intro-manifesto">{t('{n} işlem akımı, tek bir likidite avı felsefesi — kurumsal süpürmeleri yakala, disiplinli çıkışla yönet.', { n: pool.length })}</p>
 
             <div className="intro-leaders">
