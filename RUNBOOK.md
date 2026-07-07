@@ -553,6 +553,17 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   pages/SettingsPage.jsx, assets/css/style.css, sync/push_notify.py, sync/donchian/canli.py, sync/midas/canli.py.
   (commit: pending)
 
+### 2026-07-07 — MIDAS-X: AFTER-LOSS exec-kapısı + realized_r race düzeltmesi (detay MIDAS.md)
+- **Kapı:** `MIDAS_EXEC_AFTER_LOSS_ONLY=true` (.env'de AÇIK; yedek `~/env.backup.pre-afterloss-20260707`)
+  — executor yalnızca aynı fx-gününün önceki settled paper işlemi NEGATİF kapandıysa pozisyon açar
+  (günün ilk sinyali / kazanç-sonrası sinyaller SKIP). Exec-only overlay: paper feed (mode='midas'),
+  backfill, UI değişmedi. Gerekçe: 2026 backtest'te taker ekonomisini +27.1R/PF1.09 → **+53.6R/PF1.37**'ye
+  taşıyor; ⚠️ rejim kalkanı değil (2024/25 çok-yıllık hâlâ negatif) — mainnet kapalı, testnet veri topluyor.
+- **Düzeltme:** `_finalize`'daki `realized_r=0.000` kalıcı yanlış-yazımı (userTrades'in exit fill'inden
+  önce sorgulanması / sessiz BinanceError) → 3×2s retry + hata logu. Ölçüm-only.
+- Dosyalar: sync/midas_exec/config.py (flag), sync/midas_exec/executor.py (`_after_loss_gate`,
+  `_fx_day_open_utc`, retry), MIDAS.md changelog. Cron değişikliği yok (executor zaten */1 koşuyor).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

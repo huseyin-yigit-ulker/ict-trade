@@ -510,6 +510,30 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - Cutover MIDAS için ayrı adım gerektirmez: OPUS'un Faz-5 penceresindeki `005b` index swap'i midas
   tablolarını da kapsar, aynı `EXEC_MULTI_USER` bayrağı iki executor'ı birlikte çevirir.
 
+### 2026-07-07 — AFTER-LOSS exec-kapısı (MIDAS_EXEC_AFTER_LOSS_ONLY) + realized_r race düzeltmesi
+- **Kapı (exec-only overlay):** executor artık `MIDAS_EXEC_AFTER_LOSS_ONLY=true` iken yalnızca **aynı
+  fx-gününün önceki settled paper işlemi negatif kapandıysa** pozisyon açıyor (`_after_loss_gate` +
+  `_fx_day_open_utc`, DST-güvenli +6h konvansiyonu). Günün ilk sinyali ve kazanç-sonrası sinyaller
+  SKIP loglanır; **paper feed'e (mode='midas') dokunulmadı** — "önceki işlem" tanımını zaten paper akışı
+  sağlıyor. Dry-run intent yolu da aynı kapıyı gösterir. Multi-user'da `cfg_for_user` → `dataclasses.replace`
+  ile tüm hesaplara taşınır. `.env`'de AÇIK (yedek: `~/env.backup.pre-afterloss-20260707`).
+- **Neden (2026-07-07 backtest, oturum harness'i):** 2026 Binance-vol setinde kapı = 204 işlem,
+  $0.50'de +113.7R/PF 2.08; **taker 10bp'de +53.6R/PF 1.37** (tam set +27.1R/PF 1.09'un ~2 katı),
+  taker IS +32.9 / OOS +20.7 ikisi de pozitif; runner yakalama 26/41 (+146/+222R). Gevşek tanım
+  (herhangi pnl_r<0; session/time negatifleri dahil) katı "sadece SL≤−0.8R" tanımından İYİ (o: taker
+  IS +4.3). ⚠️ **Rejim kalkanı DEĞİL:** HistData çok-yıllık testte 2024 −16.9R / 2025 −19.7R ($0.50,
+  TWAP; tam set −66.6/−28.3'ten yumuşak ama hâlâ negatif); taker'da kötü rejim ~−18R/ay kanar.
+  Temmuz-2026'da kural −4.9R (ayın runner'ı +3.63R günün İLK işlemiydi → kaçtı). Mainnet kararı
+  değişmedi: **testnet'te veri topluyoruz**, mainnet kapalı.
+- **realized_r=0.000 düzeltmesi:** `_finalize` exit MARKET emrinden hemen sonra `userTrades`'i
+  sorguladığında fill henüz düşmemiş olabiliyor ve `_realized_since` hem gecikmede hem `BinanceError`'da
+  sessizce 0.0 dönüyordu → pozisyon #3/#6 kalıcı `realized_r=0.000` yazıldı (2026-07-03/06). Şimdi:
+  walk breakeven demiyorsa (|res_pnl_r|>0.02) 3×2s retry + `BinanceError` artık loglanıyor. Ölçüm-only;
+  emir yoluna dokunulmadı.
+- Doğrulama: `py_compile` temiz; kapı canlı DB'de 4/4 bilinen vakayla test edildi (07-06 01:06 PASS,
+  07-07 00:31 ilk-işlem SKIP, 07-03 06:05 kazanç-sonrası SKIP, 07-06 02:00 PASS; flag=false → no-op);
+  armed testnet tick temiz (açık pozisyon #46 trail takibi sürüyor).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

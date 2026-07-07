@@ -27,6 +27,7 @@ from __future__ import annotations
 import re
 import sys
 import json
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -234,7 +235,8 @@ def _realized_since(client, sym, since) -> float:
         start_ms = int(pd.Timestamp(since).timestamp() * 1000)
         return sum(float(t.get("realizedPnl", 0) or 0)
                    for t in client.user_trades(sym, limit=200, start_ms=start_ms))
-    except BinanceError:
+    except BinanceError as e:
+        print(f"  ! {sym} userTrades error (realized=0 varsayıldı): {e}")
         return 0.0
 
 
@@ -283,6 +285,55 @@ def _in_session(now) -> bool:
         return True if df.empty else bool(df["open_mkt"].iloc[-1])
     except Exception:  # noqa: BLE001
         return True
+
+
+def _fx_day_open_utc(ts: pd.Timestamp) -> pd.Timestamp:
+    """UTC instant of the fx-day open (18:00 ET) that `ts` belongs to. Same DST-safe (+6h)
+    convention as strategy._fx_day: the 6h span 18:00->midnight never crosses the 02:00 jump."""
+    et = pd.Timestamp(ts).tz_convert("America/New_York")
+    day0 = (et + pd.Timedelta(hours=6)).normalize()          # fx-day id (midnight of the shifted day)
+    return (day0 - pd.Timedelta(hours=6)).tz_convert("UTC")  # back to the 18:00 ET wall-clock open
+
+
+def _after_loss_gate(cfg, live_conn, sig) -> str | None:
+    """AFTER-LOSS exec gate (MIDAS_EXEC_AFTER_LOSS_ONLY; 2026-07-07 backtest — MIDAS.md changelog).
+    Enter ONLY when the SAME fx-day's previous SETTLED paper trade (mode='midas') closed NEGATIVE:
+    the day's first signal and after-a-win signals are skipped. Exec-only overlay — the paper feed
+    keeps trading everything, which is exactly what makes "previous trade" well-defined here.
+    2026 (Binance-vol): 204tr +53.6R PF1.37 @taker vs full 398tr +27.1R PF1.09; loose definition
+    (any pnl_r<0, incl. session/time exits) tested BETTER than strict SL-only. ⚠️ NOT a regime
+    shield: 2024/2025 multi-year OOS stays negative (softer, not positive).
+    Returns None to trade, else a human-readable skip reason. Fail-CLOSED on malformed rows
+    (an unreadable previous trade means the premise is unverifiable -> skip)."""
+    if not cfg.after_loss_only:
+        return None
+    st_time = pd.Timestamp(sig["signal_time"])
+    day_open = _fx_day_open_utc(st_time)
+    cur = live_conn.cursor()
+    cur.execute("""
+        SELECT context FROM ict_trade.signals
+        WHERE mode='midas' AND symbol=%s AND signal_time >= %s AND signal_time < %s
+        ORDER BY signal_time DESC LIMIT 1
+    """, (sig["symbol"], day_open.to_pydatetime(), st_time.to_pydatetime()))
+    row = cur.fetchone()
+    cur.close()
+    if row is None:
+        return "after-loss gate: günün ilk işlemi (bu fx-gününde önceki işlem yok)"
+    ctx = row[0]
+    if isinstance(ctx, str):
+        try:
+            ctx = json.loads(ctx)
+        except ValueError:
+            ctx = {}
+    ctx = ctx or {}
+    if ctx.get("pos") != "closed":
+        return "after-loss gate: önceki işlem henüz kapanmamış görünüyor"
+    r = ctx.get("pnl_r")
+    if r is None:
+        return "after-loss gate: önceki işlemin pnl_r kaydı yok"
+    if float(r) >= 0:
+        return f"after-loss gate: önceki işlem kazançlı kapandı ({float(r):+.2f}R)"
+    return None
 
 
 # ------------------------------------------------------------------ exchange order legs (armed)
@@ -467,6 +518,16 @@ def _finalize(cfg, client, conn, bt, pos, *, reason, exit_px, exit_time, res_pnl
     risk0 = float(pos["risk0"]); qty = float(pos.get("qty") or 0)
     if cfg.armed:
         realized_usd = _realized_since(client, sym, pos.get("entry_fill_time"))
+        # userTrades can LAG the just-sent exit MARKET order by a beat, and _realized_since returns
+        # 0.0 both on lag and on BinanceError — a premature read was written back permanently as
+        # realized_r=0.000 (seen on positions #3/#6, 2026-07-03/06). If the walk says the position
+        # was NOT breakeven but the income sum reads 0, retry briefly before accepting it.
+        if realized_usd == 0.0 and qty > 0 and abs(res_pnl_r or 0) > 0.02:
+            for _ in range(3):
+                time.sleep(2)
+                realized_usd = _realized_since(client, sym, pos.get("entry_fill_time"))
+                if realized_usd != 0.0:
+                    break
         denom = risk0 * qty
         realized_r = (realized_usd / denom) if denom else res_pnl_r
     else:
@@ -714,11 +775,19 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
 
     if not armed:
         for sig in sigs:
+            gate_skip = _after_loss_gate(cfg, live, sig)
+            if gate_skip:
+                print(f"  · {sig['symbol']:<9} {sig['direction'].upper():<5} SKIP: {gate_skip}")
+                continue
             _log_intent(cfg, xi, sig, now)
     else:
         if (entries_ok and sigs
                 and st.count_open(live, sym_filter, user_id=uid, network=net if uid else None) == 0):
-            _create(cfg, xi, live, sigs[0], now, shared)    # single position: newest fresh signal only
+            gate_skip = _after_loss_gate(cfg, live, sigs[0])
+            if gate_skip:
+                print(f"  · {cfg.symbol} SKIP: {gate_skip}")
+            else:
+                _create(cfg, xi, live, sigs[0], now, shared)    # single position: newest fresh signal only
         for pos in st.fetch_open(live, sym_filter, user_id=uid, network=net if uid else None):
             try:
                 _reconcile(cfg, client, live, bt_conn, xi, pos, now, shared)

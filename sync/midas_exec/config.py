@@ -68,6 +68,10 @@ class MidasExecCfg:
     maker_entry: bool              # MIDAS_MAKER_ENTRY — post-only LIMIT (GTX); false => MARKET (testnet only)
     entry_timeout_sec: int         # MIDAS_ENTRY_TIMEOUT_SEC — cancel an unfilled maker entry after this
     entry_max_slip_r: float        # MIDAS_ENTRY_MAX_SLIP_R — abandon if price ran this many R past the ref
+    # after-loss gate (2026-07-07 backtest, MIDAS.md): enter ONLY when the SAME fx-day's previous
+    # SETTLED paper trade closed negative. 2026: 204tr +53.6R PF1.37 @taker vs full set +27.1R/1.09.
+    # ⚠️ NOT a regime shield — 2024/2025 stay negative (softer); it's a fee-economics overlay only.
+    after_loss_only: bool          # MIDAS_EXEC_AFTER_LOSS_ONLY — skip first-of-day / after-win signals
     # ---- trailing (mainnet resting-stop cancel/replace) ----
     sl_deadband_ticks: int         # MIDAS_SL_DEADBAND_TICKS — only replace the stop past this many ticks
     # ---- writeback / notify ----
@@ -129,6 +133,7 @@ def load_cfg() -> MidasExecCfg:
         maker_entry=_b(env, "MIDAS_MAKER_ENTRY", True),
         entry_timeout_sec=_i(env, "MIDAS_ENTRY_TIMEOUT_SEC", 120),
         entry_max_slip_r=_f(env, "MIDAS_ENTRY_MAX_SLIP_R", 0.25),
+        after_loss_only=_b(env, "MIDAS_EXEC_AFTER_LOSS_ONLY", False),
         sl_deadband_ticks=_i(env, "MIDAS_SL_DEADBAND_TICKS", 2),
         exec_version=str(env.get("MIDAS_EXEC_VERSION", "midasx")).strip(),
         exec_name=str(env.get("MIDAS_EXEC_NAME", "MIDAS-X")).strip(),
