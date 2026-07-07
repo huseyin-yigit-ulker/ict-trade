@@ -227,6 +227,56 @@ crontab -l | grep -E "canli|backfill|executor"                                  
 Result: live emitters fire each bar, the dashboard shows live + backtest, Telegram alerts flow, and (if
 enabled) the OPUS executor trades real Binance Futures.
 
+**Fresh DATABASE too? (not just a fresh box)** The two Supabase DBs are external and normally persist —
+a machine move does NOT touch them. Only if you are standing up a brand-new Supabase project as well:
+1. Live DB: apply `supabase/migrations/001..012` **in order** via
+   `.venv/bin/python sync/users/apply_sql.py --file supabase/migrations/<f>.sql` (001–005a, 008–012 are
+   additive; 005b+007 are the Phase-5/6 cutover pair — see §8a), then `apply_sql.py --seed-universe`,
+   plus `supabase/push_subscriptions_schema.sql`, `sync/live_exec/schema.sql`, `sync/midas_exec/schema.sql`.
+2. Backtest DB: `ict_trade.trading_signals` per `supabase/` schema; then re-run the §7-step-4 backfills.
+3. Recreate the owner: sign up in the UI → `sync/users/seed_owner.py --email <owner>` (admin+canonical+keys).
+
+---
+
+## 7a. MIGRATE the system to a NEW machine (cutover checklist)
+
+Everything durable lives OFF the box (Supabase DBs, GitHub repo, Render frontend, Telegram) — the VM is
+**stateless except `.env`, the RSA private key, and the crontab**. A move is therefore: bring up the new
+box (§7), copy the secrets, swap the cron. ~15 min of executor downtime, no data loss.
+
+```bash
+# ON THE OLD BOX ─ freeze real-money activity first
+.venv/bin/python sync/live_exec/killswitch.py --status         # note open positions (they stay open on
+.venv/bin/python sync/midas_exec/killswitch.py --status        #  Binance — exchange-side SL protects them)
+crontab -l > /tmp/crontab.old && crontab -r                    # STOP the loop (executors, emitters, all)
+
+# COPY the secrets the repo does NOT carry:
+#   1. .env                (repo root — all §6 keys)
+#   2. the RSA private key (path in .env EXEC_PRIV_KEY_PATH — decrypts user API keys; NOT recoverable
+#                           from the DB. If lost: regenerate keypair + every user re-enters keys)
+scp .env $NEW:~/ict-trade/.env
+scp <EXEC_PRIV_KEY_PATH> $NEW:<same path as in .env>
+
+# ON THE NEW BOX ─ §7 steps 0–5 (clone, .env in place, setup_vm.sh, smoke-test emitters dry-run)
+# ⚠️ the new box's egress IP must be EU/Binance-reachable AND whitelisted on the Binance API keys
+#    (owner keys + every multi-user key: users re-whitelist or temporarily drop the IP restriction).
+#    Update the Render env VITE_VM_EGRESS_IP so the UI shows users the new IP to whitelist.
+.venv/bin/python sync/live_exec/executor.py                    # one manual tick: must reconcile the
+.venv/bin/python sync/midas_exec/executor.py                   #  open positions noted via --status above
+crontab dag/crontab                                            # start the loop on the NEW box
+
+# DECOMMISSION the old box: watch new-box logs for 2 clean ticks → old box stays cron-less → terminate.
+```
+
+Notes:
+- **Never let both boxes run cron simultaneously** — two reconcilers on one Binance account will fight
+  (duplicate orders / double cancels). `crontab -r` on the old box BEFORE arming the new one is the hard rule.
+- Open positions survive the move: protection is exchange-side (algo SL / STOP_MARKET), and the executors
+  rebuild state from DB + Binance on their first tick (coid-based reconcile).
+- The dashboard (Render), both DBs, and the GitHub Action are untouched by a VM move.
+- Nothing points AT the VM (no inbound service) — only its outbound egress IP matters
+  (Binance whitelist + `VITE_VM_EGRESS_IP`).
+
 ---
 
 ## 8. Operations & safety
@@ -692,6 +742,28 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   Headless-chromium harness ile 360/412px'te intro klonu ölçüldü (docScrollWidth ≤ viewport PASS).
 - Dosyalar: sync/users/push_flair.py (yeni), sync/users/store.py, sync/push_notify.py,
   src/main.jsx, src/assets/css/style.css. `npm run build` PASS.
+
+### 2026-07-07 (8) — Runbook tazeleme + §7a "yeni makineye taşıma" cutover prosedürü (kod değişikliği YOK)
+- **Kullanıcı isteği:** "sistemi komple başka ortama taşımamı sağlayan .md — clone edip kur deyince
+  live/backtest/cron/DB hazır olsun, ve dosya değişikliklerle güncel tutulsun." Bu dosya (RUNBOOK.md)
+  zaten o dosya; bu turda güncel duruma eşitlendi + taşıma prosedürü eklendi. Güncel-tutma disiplini
+  değişmedi: **her değişiklikte tarihli changelog girdisi + kurulum bölümleri güncellenir** (sistem →
+  RUNBOOK.md, MIDAS → MIDAS.md).
+- **§7a eklendi — MIGRATE to a NEW machine:** VM'in durum taşımayan yapısı ( kalıcı her şey dışarıda;
+  kutuda yalnız `.env` + RSA private key + crontab), eski kutuda killswitch --status → `crontab -r`,
+  secret kopyalama, yeni kutuda §7 + manuel executor tick'i + `crontab dag/crontab`, çift-cron yasağı,
+  borsa-tarafı SL sayesinde açık pozisyonların taşınmadan hayatta kalması, Binance IP whitelist +
+  `VITE_VM_EGRESS_IP` güncellemesi.
+- **§7'ye "fresh DATABASE" notu:** sıfır Supabase projesi kurulacaksa migration sırası
+  (001..012 + seed-universe + push/exec schema'ları) ve owner seed adımı.
+- **Bayat bölümler güncellendi (2026-07-07 (3) sonrası):** §1 akış tablosu (canlı set = OPUS+MIDAS;
+  MIDAS-X 🔴 mainnet GERÇEK; FABLE backtest-only), §5 cron tablosu kurulu crontab'la birebir
+  eşitlendi (FABLE emit emekli, 1h emit sessiz, verify_keys + push_notify satırları ve
+  `~/ict-midas-exec.log`/`~/ict-users.log` eklendi), §6 MIDAS-X env listesi
+  (`MIDAS_EXEC_AFTER_LOSS_ONLY`, auto-leverage), §8 MIDAS-X bölümü (mainnet config + ekonomi
+  uyarısı + rollback).
+- Ayrıca MIDAS.md'ye 2026-07-07 (4) araştırma girdisi eklendi (flip/whipsaw + rejim incelemesi —
+  filtre ship edilmedi; detay orada).
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```

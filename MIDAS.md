@@ -586,6 +586,37 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - Geri alma: `user_stream_settings` midas/mainnet `enabled=false` (aç pozisyon varsa drain) veya
   `killswitch.py --flatten`; `.env` `MIDAS_BINANCE_TESTNET=true` + testnet satırını enable et.
 
+### 2026-07-07 (4) — ARAŞTIRMA (kod değişikliği YOK): flip/whipsaw + rejim incelemesi — filtre SHIP EDİLMEDİ
+- **Soru 1 (kullanıcı): "AL/SAT eşiği çok ince, AL deyip hemen SAT diyebiliyor — nasıl daha valid olur?"**
+  Kök neden: trend yönü `sign(vwap − vwap.shift(60))` ve ölü-bant yok (`strategy.py` signals);
+  flat-VWAP'ta işaret bar-bar döner, giriş şartı da fiyatı tam o bölgeye ister.
+  **Empirik sonuç (2026 Oca–Tem, 397 işlem, gerçek yeniden-yürütme):** hızlı flip'ler KÂRLI —
+  çıkış→ters-giriş ≤60dk olan 86 işlem toplam +43R (ort +0.50R). Denenen tüm sağlamlaştırıcılar
+  toplam R'yi düşürdü: ölü-bant |slope|≥k·ATR (k=0.05→+117R, 0.15→+64R vs base +143.5R),
+  histerezis/Schmitt per-day-reset (k=0.20→+107R), dwell M-bar (15→+135R, 60→+89R).
+  Tek makul aday: **60dk ters-yön cooldown** → +122.2R/PF1.65, ≤60dk flip=0 (yapısal),
+  IS +50/OOS +73 (base OOS +62'den İYİ); maliyet ~%15 R, tamamı IS'te. SHIP edilmedi
+  (istenirse lab varyantı veya UI/push flip-etiketi olabilir).
+  **Literatür (deep-research, 20 kaynak):** ölü-bant/histerezis klasik whipsaw reçetesi
+  (BLL 1992 %1 band; STW 1998 katalog; US Patent 7,496,534 "break penalty" + 15dk min-dwell)
+  AMA (a) whipsaw trend-takibin yapısal maliyeti, son whipsaw'ları silmek için ayar = overfitting;
+  (b) intraday FX'te optimal band ≈ işlem maliyeti ve net edge'i kurtarmıyor (Neely–Weller 1999);
+  (c) edge trend-anlamlılığıyla lineer büyür ama t≳1.8–2 üstü trendler DÖNER (Schmidhuber 2020) —
+  agresif eğim filtresi ters teper; (d) Shannon AVWAP pratiği: flat VWAP = nötr 3. durum,
+  "buy strength after the dip" (bizim `c>o` confirm mumu bunun mekanize hali).
+- **Soru 2 (kullanıcı): "rejim trend olunca / geçiş durumuna göre incele."**
+  **Concurrent teşhis (tam-gün bilgisi):** edge'in TAMAMI trend günlerinde — day-ER üst tercile
+  +143.6R (≈toplamın %100'ü), RANGE günleri −6.8R; gün yönüyle uyumlu işlemler +232R / ters −88.5R;
+  en iyi 10 gün toplamın %66'sı. **Predictive (sinyal anında bilinen) — hiçbiri filtre olacak güçte
+  değil** (tüm Spearman |ρ|≤0.10): slope-flip'ten ≤60dk sonraki "GEÇİŞ" girişleri EN İYİ bucket
+  (n=166, ort +0.45R, PF 1.78, IS+OOS pozitif — "geçişte sinyal şüpheli" sezgisinin tersi);
+  er240 düşük tercile iyi (sakin piyasadan doğan trende erken giriş); ADX orta-bant (19–28) iyi ama
+  non-monotonik; eğim dikliği bilgisiz; "dün RANGE'di → girme" filtresi +19.8R atar → net kayıp.
+  Sonuç: rejim edge'i eşzamanlı yaşıyor, önceden yakalanamıyor (Donchian regime-timing-fails'in
+  MIDAS kopyası). **Hiçbir rejim filtresi ship edilmedi; mevcut yapı (her pullback'i al, trailing
+  ayıklasın) korunuyor.**
+- Scriptler (scratchpad, commit edilmez): `flip_analysis.py`, `flip_variants_bt.py`, `regime_analysis.py`.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
