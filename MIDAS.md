@@ -751,6 +751,13 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **Ders:** "confluence" ritüelinin çekirdeği trend+lokasyon = zaten MIDAS; ekstra katmanlar R kırpan
   dekor (entry-filtre taramasının 3. teyidi). Karmaşıklık ≠ edge. Canlı dokunulmadı.
 
+### 2026-07-08 (7) — ui: canlı grafik seans çipine TR saati eklendi
+- **Şikayet (kullanıcı):** canlı grafikte "seans uygun (07-13 UTC dışı)" — UTC, TR kullanıcısı için
+  kafa karıştırıcı (07-13 UTC = 10-16 TR).
+- **Düzeltme:** `src/utils/adminStreamInfo.js` REAL_MIDAS_CONDS.sess + REAL_TALOS_CONDS.sess etiketi
+  → "seans uygun (07-13 UTC = 10-16 TR dışı)". Mantık değişmedi (filtre zaten UTC ile doğru
+  çalışıyor); yalnız görünen metin. Dist Render'da main'den derlenir.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
