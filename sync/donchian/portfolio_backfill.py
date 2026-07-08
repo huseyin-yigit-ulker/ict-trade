@@ -42,6 +42,11 @@ from trade_sync_common import _net_r                 # noqa: E402
 DEFAULT_START = pd.Timestamp("2024-01-01", tz="UTC")
 MARGIN_MIN = 0.25                                    # OOS-robust breakout-clearance filter (ATR units)
 SYMBOLS = list(strat.SYMBOLS)                        # full universe (40); no-data symbols skip
+# CRYPTO-only universe (the 18 crypto perps; drops XAU/XAG + the 20 stock-perps). 2026-07-08 owner
+# decision: OPUS (d30so8f3h7 — the live real-money stream) trades crypto ONLY, so its backtest book
+# must mirror that universe. Gold has its own streams (MIDAS paper / TALOS-ICHI-X real money).
+CRYPTO_SYMBOLS = tuple(s for s in strat.SYMBOLS[:strat.SYMBOLS.index("XAUUSDT")])
+_SYMBOLS_OVERRIDE = None                             # set by --symbols (testing); beats st.symbols
 
 # Bounded LRU of 1m frames so reverse re-resolves don't pin every symbol's full-span 1m in RAM
 # at once (7GB box). build_events loads-and-drops; reverses reload from the warm pkl cache.
@@ -73,6 +78,7 @@ class Stream:
     margin: bool = False    # require margin >= MARGIN_MIN
     close_frac: Optional[float] = None  # scale-out: fraction booked at TP1 (None -> so.CLOSE_FRAC=0.6)
     horizon_days: Optional[int] = None  # scale-out: runner/whole-trade time limit (None -> so.HORIZON=3d)
+    symbols: Optional[tuple] = None     # restrict the universe (None -> full SYMBOLS). OPUS = crypto-only.
 
 
 STREAMS = {
@@ -99,7 +105,9 @@ STREAMS = {
     "d30so6f3": Stream("d30so6f3", "30m", "4h", "scaleout", cap=6.0, close_frac=0.3),
     "d30so8f3": Stream("d30so8f3", "30m", "4h", "scaleout", cap=8.0, close_frac=0.3),
     # ── d30so8f3 + 7-day time-stop (runner gets more room before the mark-to-market exit) ──
-    "d30so8f3h7": Stream("d30so8f3h7", "30m", "4h", "scaleout", cap=8.0, close_frac=0.3, horizon_days=7),
+    # OPUS = the live real-money stream: CRYPTO-ONLY universe (2026-07-08 owner decision).
+    "d30so8f3h7": Stream("d30so8f3h7", "30m", "4h", "scaleout", cap=8.0, close_frac=0.3,
+                         horizon_days=7, symbols=CRYPTO_SYMBOLS),
 }
 
 
@@ -280,12 +288,15 @@ def to_rows(realized, st: Stream):
 
 def run_stream(name, w_start, w_end, apply):
     st = STREAMS[name]
+    # universe: CLI --symbols (testing) > per-stream restriction (OPUS = crypto-only) > full SYMBOLS
+    syms = _SYMBOLS_OVERRIDE or (list(st.symbols) if st.symbols else SYMBOLS)
     print(f"\n=== [{name}] {st.tf}{'+'+st.confirm_htf if st.confirm_htf else ''} "
           f"{st.exit}{(' cap'+str(int(st.cap))+'R') if st.cap else (' RR'+str(int(st.rr)))}"
           f"{' margin>=%.2f'%MARGIN_MIN if st.margin else ''} "
-          f"| [{w_start.date()}..{w_end.date()}) | {len(SYMBOLS)} symbols ===", flush=True)
+          f"| [{w_start.date()}..{w_end.date()}) | {len(syms)} symbols"
+          f"{' (CRYPTO-ONLY)' if st.symbols else ''} ===", flush=True)
     events = []
-    for sym in SYMBOLS:
+    for sym in syms:
         try:
             ev = build_events(sym, st, w_start, w_end)
             events += ev
@@ -333,8 +344,9 @@ def main():
     ap.add_argument("--symbols", nargs="*", default=None, help="restrict universe (testing)")
     args = ap.parse_args()
     if args.symbols:
-        global SYMBOLS
+        global SYMBOLS, _SYMBOLS_OVERRIDE
         SYMBOLS = [s.upper() for s in args.symbols]
+        _SYMBOLS_OVERRIDE = SYMBOLS                  # also beat a stream's own universe restriction
     w_start = pd.Timestamp(args.start, tz="UTC") if args.start else DEFAULT_START
     w_end = pd.Timestamp(args.end, tz="UTC") if args.end else pd.Timestamp.now(tz="UTC")
     names = ALL_ORDER if args.stream == "all" else [args.stream]

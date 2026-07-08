@@ -827,6 +827,21 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   TALOS_EXEC_* bloğu (VM); cron: executor her dk +42s, safety sweep */3 +55s → ~/ict-talos-exec.log.
   Dry-run + ARMED ilk koşu + safety sweep temiz (0 sinyal penceresi, testnet erişimi OK).
 
+### 2026-07-08 — OPUS (d30so8f3h7) KRİPTO-ONLY: backtest evreni 40 → 18 sembole daraltıldı
+- **Karar (kullanıcı):** "OPUS'u sadece crypto için çalıştır, diğerlerine gerek yok — backtest'te de
+  canlıda da." Canlı executor zaten kripto-only (`EXEC_ENABLED_SYMBOLS=BTC/ETH/SOL/FET/ARB`); bayat olan
+  BACKTEST kitabıydı (40 sembol: 18 kripto + XAU/XAG + 20 hisse-perp).
+- **Kod:** `sync/donchian/portfolio_backfill.py` — `CRYPTO_SYMBOLS` (18) + `Stream.symbols` alanı;
+  yalnız `d30so8f3h7` kriptoya bağlandı (diğer streamler tam evrende kalır). `run_stream` evren seçimi:
+  CLI `--symbols` (test) > stream kısıtı > tam evren. Altının kendi akışları var (MIDAS paper / TALOS-ICHI-X).
+- **Yeniden backfill (--apply):** 3046 eski satır silindi → **2806 kripto satır**.
+- **Sonuç:** ÖNCE (40 sem) n=3046 +395.4R avgR 0.130 WR%54 · SONRA (18 kripto) n=2806 **+388.6R**
+  avgR **0.138** WR%54 PF 1.29. Kripto-dışı 19 sembol 263 işlemde yalnız +11.0R üretiyordu (gürültü) —
+  atılınca toplam R ~aynı, işlem-başı kalite arttı.
+- **Yıl bazında (hepsi pozitif, iyileşen):** 2024 +45.8 (WR52%) · 2025 +200.9 (WR54%) · 2026 +141.9 (WR58%).
+- **En iyi 5 sembol:** FET +62.2, ETH +48.1, SOL +33.9, ARB +30.7, ADA +26.1 — canlı 5'linin 4'ü
+  (FET/ETH/SOL/ARB) burada; canlı sembol seçimi backtest'le doğrulanıyor.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
