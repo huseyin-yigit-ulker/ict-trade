@@ -73,6 +73,18 @@
 #   (DELETE + re-upsert, idempotent). Engine: sync/talos/backfill.py ($0.50/oz FX-cost, gold-only).
 40 1 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos/backfill.py --apply >> $HOME/ict-talos.log 2>&1
 
+# --- TALOS-X LIVE EXECUTION (Binance TESTNET/paper; 2026-07-08) ---
+# MIDAS-X'in birebir kardeşi (sync/talos_exec/ — ayrı talos_positions/talos_orders tabloları,
+# ayrı killswitch; gerçek-para MIDAS-X koduna DOKUNULMADI). mode='talos' sinyallerini okur, maker
+# GTX giriş + 60sn maker→taker fallback; iz-süren stop TESTNET'te sentetik modelle her tick yeniden
+# hesaplanıp ADIM ADIM kaydırılır (cur_sl/trail_gen; testnet koşullu emir tipini -4120 ile reddettiği
+# için borsa-tarafı resting stop yerine tick-bazlı takip + tetikte MARKET-close; mainnet'e taşınırsa
+# cancel/replace hazır). Kapanış version='talosx' olarak trading_signals'a yazılır.
+# TALOS_BINANCE_TESTNET=true kilidi + migration 014 talos_testnet_only CHECK'i mainnet'i kapatır.
+* * * * * sleep 42 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_exec/executor.py     >> $HOME/ict-talos-exec.log 2>&1
+# Safety sweep: XAUUSDT-scoped orphan/freshness/clock-skew bekçisi (testnet hesabında).
+*/3 * * * * sleep 55 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_exec/safety_sweep.py >> $HOME/ict-talos-exec.log 2>&1
+
 # --- d30so8c LIVE EXECUTION (Binance USDⓈ-M; testnet/mainnet via .env BINANCE_TESTNET) ---
 # Reconciler (cron #1): reads the SAME dch30_4h signals, drives real orders reproducing
 # scaleout (entry +0.5R / SL / TP1 +1R 60% / runner +6R cap·BE·3d). Offset off the :00/:30

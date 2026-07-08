@@ -27,7 +27,8 @@ backtest-only research (opt-in lab surfaces).
 |---|---|---|---|
 | **OPUS** (`d30so8f3h7`) | Donchian 30m breakout + 4h confirm, scale-out (60% @ +1R, runner +8R cap / BE / 7d) | ✅ | **REAL** (Binance Futures) |
 | **MIDAS** (`midas`) | Gold-only (XAUUSDT) 1m VWAP-trend pullback + 3.5×ATR trailing (paper signal feed) | ✅ | paper feed |
-| **TALOS** (`talos`) | Gold-only (XAUUSDT) 1m Keltner-trend: DEEP pullback to the 15m EMA20±0.75·ATR band + the same 3.5×ATR trailing engine as MIDAS (shared code) | ✅ | paper feed (no executor) |
+| **TALOS** (`talos`) | Gold-only (XAUUSDT) 1m Keltner-trend: DEEP pullback to the 15m EMA20±0.75·ATR band + the same 3.5×ATR trailing engine as MIDAS (shared code) | ✅ | paper feed |
+| **TALOS-X** (`talosx`) | TALOS as real Binance TESTNET orders (maker GTX + 60s taker fallback; tick-level step-by-step trailing stop) | ✅ | **paper** (testnet-locked: env + DB CHECK) |
 | **MIDAS-X** (`midasx`) | MIDAS as real Binance orders (maker GTX entry + exchange-side trailing SL + after-loss gate) | ✅ | **REAL mainnet** since 2026-07-07 ($3 risk; wallet shared with OPUS) |
 | **FABLE** (`d30so8f3vg`) | OPUS twin, only taken when daily volume is contracting (vch<0.9) | backtest-only (live emit retired 2026-07-07) | — |
 | Donchian book (`donchianc`, `d1h_so*`, `d30so*`, …) | breakout families, various exits | backtest-only | — |
@@ -66,8 +67,10 @@ ict-trade/
 │   ├── donchian/            Donchian strategy: strategy.py, canli.py (live emit), scaleout*.py,
 │   │                        portfolio_backfill.py, volgate_backfill.py (FABLE), …
 │   ├── midas/               MIDAS gold stream: strategy.py, backfill.py, canli.py   → see MIDAS.md
-│   ├── talos/               TALOS gold stream (Keltner sibling of MIDAS; PAPER-only): strategy.py
+│   ├── talos/               TALOS gold stream (Keltner sibling of MIDAS): strategy.py
 │   │                        (imports the MIDAS walk/trailing engine), backfill.py, canli.py
+│   ├── talos_exec/          TALOS-X testnet executor (verbatim sibling of midas_exec/: own
+│   │                        talos_positions/talos_orders tables + killswitch; testnet-locked)
 │   ├── midas_exec/          MIDAS-X gold executor (testnet-first): executor.py, config.py, state.py,
 │   │                        schema.sql, safety_sweep.py, killswitch.py, parity_report.py → see MIDAS.md §5
 │   ├── live_exec/           REAL-MONEY Binance executor (OPUS): executor.py, safety_sweep.py,
@@ -135,6 +138,8 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `* * * * *` (+30s) | `talos/canli.py --emit --lookback-min 3 --sl-step 0` | **TALOS** emit + trailing track + Telegram |
 | `40 1 * * *` | `talos/backfill.py --apply` | TALOS backtest refresh |
+| `* * * * *` (+42s) | `talos_exec/executor.py` | **TALOS-X** reconciler (Binance **TESTNET**/paper) |
+| `*/3 * * * *` (+55s) | `talos_exec/safety_sweep.py` | TALOS-X safety guard (XAUUSDT-scoped, testnet) |
 | `*/2 * * * *` | `live_exec/executor.py` | **REAL-MONEY** OPUS reconciler |
 | `*/5 * * * *` | `live_exec/safety_sweep.py` | executor safety guard |
 | `* * * * *` | `midas_exec/executor.py` | **MIDAS-X** reconciler (**REAL-MONEY mainnet** since 2026-07-07) |
@@ -143,7 +148,7 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `* * * * *` (+45s) | `push_notify.py --drain` | personal Web-Push outbox drain |
 
 Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-talos.log`, `~/ict-midas-exec.log`,
-`~/ict-sync.log`, `~/ict-exec.log`, `~/ict-users.log`.
+`~/ict-talos-exec.log`, `~/ict-sync.log`, `~/ict-exec.log`, `~/ict-users.log`.
 
 ---
 
@@ -174,6 +179,11 @@ Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-talos.log`, `~/ict-midas-e
 (`EXEC_NAME/VERSION/ENABLED_SYMBOLS/DRY_RUN`), `RISK_PER_TRADE_USD`, `MAX_TOTAL_RISK_USD`,
 `MAX_CONCURRENT_POSITIONS`, `LEVERAGE`/`LEVERAGE_MAX`/`AUTO_LEVERAGE`, `MARGIN_TYPE`, `LIVE_ENTRY_MODE`,
 `CLOSE_FRAC`, `HORIZON_DAYS`, `RUNNER_CAP_R`, `DCH_ENTRY_AT_CONFIRM`, `DCH_SO_RUNNER_CAP`.
+
+**TALOS-X testnet executor** (namespaced `TALOS_*`, mirrors the `MIDAS_*` set): `TALOS_EXEC_ENABLED`,
+`TALOS_EXEC_DRY_RUN`, `TALOS_BINANCE_TESTNET` (**stays true — mainnet is double-locked**: this env
+default + migration 014's `talos_testnet_only` CHECK), `TALOS_RISK_PER_TRADE_USD` (5), plus the same
+entry/trailing knobs (`TALOS_ENTRY_TAKER_FALLBACK_SEC` etc.).
 
 **MIDAS-X gold executor only** (leave unset on a paper box): `MIDAS_EXEC_ENABLED`,
 `MIDAS_EXEC_DRY_RUN`, `MIDAS_BINANCE_TESTNET` (MIDAS's own network flag, independent of `BINANCE_TESTNET`;
@@ -798,6 +808,24 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - **Doğrulama:** backfill dry-run 2026 +87.7R (araştırma taramasıyla uyumlu), canli --emit koştu
   (0 setup, in-position kilidi çalışıyor), crontab kuruldu, prod build temiz (TALOS/Keltner ana
   bundle'a sızmıyor — yalnız REAL_TALOS_CONDS özellik adı, REAL_MIDAS_CONDS ile aynı desen).
+
+### 2026-07-08 (2) — TALOS-X: TALOS emirleri Binance TESTNET'e (paper) + adım-adım iz-süren stop
+- **Kullanıcı isteği:** "talos emirlerini paper accounta gönder, iz süren SL de adım adım kaydırılsın."
+- **Ne:** `sync/talos_exec/` — MIDAS-X'in birebir kopyası (sed-rename), **gerçek-para MIDAS-X koduna
+  dokunulmadı**. mode='talos' sinyallerini okur, maker GTX giriş + 60sn maker→taker fallback (dünkü
+  düzeltme kopyada da var), çıkış = `sync/talos/strategy.track_open` chandelier'ı. TESTNET'te iz-süren
+  stop SENTETİK modelle her dakika yeniden hesaplanıp adım adım kaydırılır (cur_sl/locked_r/trail_gen
+  satırda; testnet koşullu emirleri -4120 ile reddettiği için borsa-tarafı resting stop yok — tetikte
+  MARKET-close; mainnet'e taşınırsa cancel/replace kodu hazır). Kapanış version='talosx' →
+  trading_signals (dashboard'a düşer), Telegram giriş/stop/çıkış bildirimleri executor'dan da gelir.
+- **Guardrail'ler:** TALOS mainnet ÇİFT kilitli — `TALOS_BINANCE_TESTNET=true` env + migration **014**
+  `talos_testnet_only` CHECK (user_stream_settings'te talos+mainnet satırı açılamaz). Kendi
+  `talos_positions/talos_orders` tabloları (multi-user user_id/network + user-scoped unique indeksler
+  doğuştan), kendi killswitch/safety-sweep'i — OPUS/MIDAS-X ile çapraz müdahale imkânsız.
+- **DB/ops:** talos_exec/schema.sql UYGULANDI; migration 014 UYGULANDI (stream CHECK'e 'talos' +
+  owner'a talos/testnet enabled satırı, $5 risk); store.py _POS_TABLES'a talos eklendi; .env'e
+  TALOS_EXEC_* bloğu (VM); cron: executor her dk +42s, safety sweep */3 +55s → ~/ict-talos-exec.log.
+  Dry-run + ARMED ilk koşu + safety sweep temiz (0 sinyal penceresi, testnet erişimi OK).
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
