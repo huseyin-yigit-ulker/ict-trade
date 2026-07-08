@@ -762,6 +762,31 @@ real maker fill-rate/slippage study, not mainnet P&L.
     girişi engellediği (açık pozisyon trailing ile koşar), backtest+canlının aynı signals()
     fonksiyonunu paylaştığı. Dist Render'da main'den derlenir.
 
+### 2026-07-08 (8) — feat: TALOS-ICHI araştırma/PAPER akışı SHIP EDİLDİ (TALOS + Ichimoku Kumo yön filtresi)
+- **İstek (kullanıcı):** "talosu direkt ichimoku ile live backtest cron paper account olarak güncelle;
+  sadece TALOS olan stratejiyi research'e ekle; backtestde MIDAS kuralları (tek pozisyon) geçerli."
+- **Ne:** yeni araştırma/paper akışı `talos_ichi` (public kod adı MENKAR). TALOS'un birebir aynısı
+  (deep Keltner pullback + MIDAS motoru: 1.5×ATR stop, sabit hedef yok, 3.5×ATR trailing, 8h, seans-
+  düz, tek pozisyon) + Ichimoku Kumo-rengi YÖN filtresi: LONG yalnız bulut yeşil (Senkou A>B), SHORT
+  yalnız kırmızı. Senkou span +26 ileri kaydırık → bulut ≥26 bar geçmişten (lookahead yok).
+- **Neden:** 2026-07-08 araştırması (bkz [[TALOS-Ichimoku]] hafıza + scratchpad/fx_gold/ichimoku_xau.py):
+  Kumo filtresi TALOS'ta 3-yıl OOS'ta (XAU-2026 + PAXG-2024/25) avgR/WR/PF'i HER yıl yükseltti, 2024
+  zararını yarıya indirdi (3-yıl +35.6R→+118.3R). MIDAS'ta AYNI filtre 2025'te tersine döndü → yalnız
+  TALOS varyantı. Doğrulama (aynı taze veri): TALOS 325tr/+85.6R/PF1.51 → TALOS-ICHI 230tr/+111.7R/PF2.00.
+- **Backend (yeni, sync/talos_ichi/):** strategy.py (TALOS'u import edip signals()'i Kumo ile süzer),
+  backfill.py (version='talos_ichi', gece 01:50), canli.py (mode='talos_ichi' paper emit, +45s, Telegram+
+  WebPush). Executor YOK — gerçek para YOK.
+- **DB:** migration 015 uygulandı (user_signal_watch CHECK += 'talos_ichi', stream_universe +XAUUSDT).
+  Backfill --apply ile 230 satır yazıldı (backtest DB).
+- **UI (research/backtest bölümü, LIVE değil):** streamMask CODENAMES (MENKAR, LIVE_STREAM_KEYS'e
+  EKLENMEDİ = admin/features.backtest-only), adminStreamInfo REAL_NAMES/LABELS/REAL_TALOS_ICHI_CONDS,
+  strategyInfo talos_ichi kartı (tr+en), streamStats, Sidebar backtest GROUPS, TradeContext (3 dict +
+  trailing kontrolleri), Dashboard/ChartModal isTrailing, MidasLiveChart isTalos (Keltner görselleri
+  paylaşımlı; Kumo çipi backend-tarafı, canlı-grafik pill'i sonraki geliştirme). Prod build PASS.
+- **Cron:** VM'e kuruldu (canli her dk +45s, backfill 01:50), log $HOME/ict-talos-ichi.log.
+- **ÇEKİNCE:** tam ship bataryasından (Ichimoku periyot platosu 9/26/52, random-null, aylık) HENÜZ
+  geçmedi → laboratuvar/paper varyantı, canlı ürün DEĞİL. Otorite kitap = gece backtest'i.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

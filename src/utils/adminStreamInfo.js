@@ -14,6 +14,7 @@ export const REAL_NAMES = {
   d30so8f3vg: 'FABLE',
   midas: 'MIDAS',
   talos: 'TALOS',
+  talos_ichi: 'TALOS-ICHI',
   donchianc: 'DONCHIAN 1h',
   d1h_so4c: 'DONCHIAN 1h·WR 4R',
   d1h_so6c: 'DONCHIAN 1h·WR 6R',
@@ -40,6 +41,7 @@ export const REAL_LABELS = {
   d30so8f3vg: 'FABLE · DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9',
   midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing)',
   talos: 'TALOS · ALTIN Keltner-Trend (XAU 1m·trailing)',
+  talos_ichi: 'TALOS-ICHI · ALTIN Keltner+Ichimoku (XAU 1m·trailing·araştırma)',
   donchianc: 'DONCHIAN 1h ·0.5R',
   d1h_so4c: 'DONCHIAN 1h·WR 4R ·0.5R',
   d1h_so6c: 'DONCHIAN 1h·WR 6R ·0.5R',
@@ -89,6 +91,21 @@ export const REAL_TALOS_CONDS = {
   below: 'fiyat < üst Keltner bandı',
   pullShort: 'banda derin çekilme (high ≥ bant−0.25·ATR)',
   bear: 'düşen mum (close<open)',
+};
+
+// TALOS-ICHI live chart's checklist — TALOS + Ichimoku Kumo-colour direction gate (admin only).
+export const REAL_TALOS_ICHI_CONDS = {
+  slopeUp: '15m-EMA20 eğim>0 (yukarı trend)',
+  above: 'fiyat > alt Keltner bandı',
+  pullLong: 'banda derin çekilme (low ≤ bant+0.25·ATR)',
+  bull: 'yükselen mum (close>open)',
+  kumoLong: 'Ichimoku bulut YEŞİL (Senkou A > B · yavaş trend yukarı)',
+  sess: 'seans uygun · Londra dışı (07:00 ≤ UTC < 13:00 · TR 10:00 ≤ saat < 16:00 · yalnız yeni giriş)',
+  slopeDn: '15m-EMA20 eğim<0 (aşağı trend)',
+  below: 'fiyat < üst Keltner bandı',
+  pullShort: 'banda derin çekilme (high ≥ bant−0.25·ATR)',
+  bear: 'düşen mum (close<open)',
+  kumoShort: 'Ichimoku bulut KIRMIZI (Senkou A < B · yavaş trend aşağı)',
 };
 
 // TOTAL page — admin-only research footnote. Names real streams (MAIN/OPUS/RANGE),

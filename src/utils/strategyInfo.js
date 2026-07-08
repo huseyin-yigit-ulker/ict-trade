@@ -197,6 +197,37 @@ export const STRATEGY_INFO = {
       caveat: 'PAPER stream — NO executor (same FX-cost model; dies on Binance taker like MIDAS). In a 2024-style failed-breakout regime it loses TOGETHER with MIDAS (diversification is partial — same trend-continuation family, different metric). The authoritative book is the nightly backtest (version=talos); the live feed is a PAPER signal + trailing-stop tracker.',
     },
   },
+
+  // 🔬 TALOS-ICHI — TALOS + Ichimoku Kumo-colour direction filter (RESEARCH / PAPER).
+  talos_ichi: {
+    icon: '🔬', accent: '#5B8DEF',
+    tr: {
+      title: 'TALOS-ICHI · Keltner + Ichimoku',
+      tagline: 'Araştırma/paper · TALOS ne zaman gireceğine karar verir, Ichimoku bulut rengi yön (long/short) onayı verir',
+      summary: 'TALOS\'un birebir aynısı (15m Keltner alt/üst bandına derin çekilme, 1.5×ATR stop, sabit hedef YOK, 3.5×ATR iz-süren stop, 8s, seans-sonu düz, FX-altın saatleri) + bir YÖN FİLTRESİ: 15m Ichimoku bulutu (Kumo). LONG yalnız bulut YEŞİL iken (Senkou A > B, yavaş orta-vade trend yukarı), SHORT yalnız bulut KIRMIZI iken alınır. Bu, TALOS\'un daha büyük trende karşı açılan derin-çekilme ("düşen bıçak") girişlerini eler — kötü rejimlerde kanayan popülasyon tam olarak budur. Senkou span\'ları +26 İLERİ kaydırıldığı için bulut ≥26 bar geçmişten türetilir (lookahead yok). ARAŞTIRMA/PAPER akışı — executor YOK.',
+      sections: [
+        { h: 'Fikir (kullanıcı)', t: 'Ichimoku short/long tercihini yapar, gold-trend (TALOS) ne zaman girileceğine karar verir. Yani zamanlama TALOS\'ta, yön onayı bulutta. MIDAS\'ın kendi VWAP-eğim kapısı zaten sığ girişini hizaladığı için AYNI filtre MIDAS\'ta tutmadı (2025 tersine döndü); TALOS\'un derin girişinde tuttu.' },
+        { h: 'Giriş (LONG)', t: 'TALOS koşulları (15m-EMA20 eğim yukarı + alt Keltner bandına derin çekilme + boğa kapanış) VE Ichimoku Kumo YEŞİL (Senkou A > Senkou B). SHORT üst bantta + Kumo KIRMIZI. Karar bar KAPANIŞINDA, giriş SONRAKİ bar açılışında. Londra 07-13 UTC + ilk 120dk seans-olgunluk filtreleri aynen.' },
+        { h: 'Çıkış & risk', t: 'MIDAS/TALOS ile birebir aynı motor (kod paylaşımlı): başlangıç stop 1.5×ATR(15m) (1R), SABİT HEDEF YOK — 3.5×ATR iz-süren stop VEYA 8 saat VEYA seans-sonu düz. Tek pozisyon, gecelik yok.' },
+        { h: 'Sonuçlar (aynı taze veri, 2026, $0.50/oz)', t: 'TALOS (filtresiz) 325 işlem +85.6R WR%41 PF1.51 → TALOS-ICHI 230 işlem +111.7R WR%43 PF2.00. Filtre 95 işlemi eler, toplam R\'ı ve PF\'i yükseltir.' },
+        { h: 'Çok-yıl OOS (PAXG vekil) — asıl gerekçe', t: 'Kumo filtresi avgR/WR/PF\'i HER üç yılda da yükseltti ve en kötü yılın (2024) zararını yarıya indirdi: 2024 −167.7→−61.1R, 2025 +117.2→+89.7R (avgR 0.196→0.293), 2026 +86.1→+89.6R. 3-yıl birleşik +35.6R→+118.3R (elenen kitap −80.0R). MIDAS\'ta aynı filtre 2025\'te tersine döner — bu yüzden yalnız TALOS varyantı.' },
+      ],
+      caveat: 'ARAŞTIRMA/PAPER akışı — executor YOK, gerçek para YOK. Tam ship bataryasından (Ichimoku periyot platosu 9/26/52 komşuluğu, random-null, aylık istikrar) HENÜZ geçmedi; bu yüzden TALOS\'un yanında bir laboratuvar varyantı olarak durur, canlı ürün değildir. Otorite kitap = gece backtest\'i (version=talos_ichi); canlı besleme PAPER sinyal + iz-süren stop takibidir. 3-filtreli aramanın kazananı (CLOUD/TK tutarsızdı) ama Kumo 3 bağımsız yılda tutarlı = gerçek OOS.',
+    },
+    en: {
+      title: 'TALOS-ICHI · Keltner + Ichimoku',
+      tagline: 'Research/paper · TALOS decides WHEN to enter, the Ichimoku cloud colour confirms the direction (long/short)',
+      summary: 'Identical to TALOS (deep pullback to the 15m Keltner band, 1.5×ATR stop, NO fixed target, 3.5×ATR trailing, 8h cap, session-close flat, FX-gold hours) PLUS a DIRECTION filter: the 15m Ichimoku cloud (Kumo). A LONG is taken only when the cloud is GREEN (Senkou A > B, slow medium-term trend up), a SHORT only when RED. This removes TALOS\'s deep-pullback ("falling-knife") entries that fight the larger trend — exactly the population that bleeds in bad regimes. Senkou spans are shifted +26 FORWARD so the cloud is derived from ≥26 bars in the PAST (no lookahead). RESEARCH/PAPER stream — NO executor.',
+      sections: [
+        { h: 'The idea', t: 'Ichimoku sets the long/short bias, TALOS (gold trend) decides the timing. The same filter did NOT hold on MIDAS (2025 reversed) because MIDAS\'s VWAP-slope gate already aligns its shallow entry; it held on TALOS\'s deeper entry.' },
+        { h: 'Entry (LONG)', t: 'TALOS conditions (15m-EMA20 slope up + deep dip to the lower Keltner band + bullish close) AND Ichimoku Kumo GREEN (Senkou A > Senkou B). SHORT on the upper band + Kumo RED. Decided at bar CLOSE, filled next-bar OPEN. Same London 07-13 UTC + first-120min filters.' },
+        { h: 'Exit & risk', t: 'Identical engine to MIDAS/TALOS (shared code): initial stop 1.5×ATR(15m) (1R), NO fixed target — 3.5×ATR trailing OR 8h OR session-close flat. One position, no overnight.' },
+        { h: 'Results (same fresh data, 2026, $0.50/oz)', t: 'TALOS (unfiltered) 325 trades +85.6R WR41% PF1.51 → TALOS-ICHI 230 trades +111.7R WR43% PF2.00. The filter drops 95 trades and raises total R and PF.' },
+        { h: 'Multi-year OOS (PAXG proxy) — the real rationale', t: 'The Kumo filter improved avgR/WR/PF in ALL three years and halved the worst-year (2024) loss: 2024 −167.7→−61.1R, 2025 +117.2→+89.7R (avgR 0.196→0.293), 2026 +86.1→+89.6R. 3-year combined +35.6R→+118.3R (removed book −80.0R). On MIDAS the same filter reverses in 2025 — hence TALOS-only.' },
+      ],
+      caveat: 'RESEARCH/PAPER stream — NO executor, NO real money. Has NOT yet passed the full ship battery (Ichimoku period plateau 9/26/52, random-null, monthly stability); it sits as a lab variant beside TALOS, not a live product. Authoritative book = nightly backtest (version=talos_ichi); the live feed is a PAPER signal + trailing-stop tracker. Winner of a 3-filter search (CLOUD/TK were inconsistent) but Kumo was consistent across 3 independent years = genuine OOS.',
+    },
+  },
 };
 
 export const infoFor = (strategy, lang) => {

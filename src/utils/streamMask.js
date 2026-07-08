@@ -19,6 +19,7 @@ export const CODENAMES = {
   d30so8f3vg: 'NOVA',
   midas: 'SIRIUS',
   talos: 'ANTARES',
+  talos_ichi: 'MENKAR',
   // 1h ailesi (backtest-only)
   donchianc: 'VEGA',
   d1h_so4c: 'LYRA',

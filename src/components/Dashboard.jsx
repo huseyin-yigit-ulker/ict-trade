@@ -192,7 +192,7 @@ const Dashboard = () => {
   const soBookFrac = soBookFromStrategy(strategy);
   // MIDAS/TALOS (trailing-stop, no fixed TP/SL R:R): cards show Entry + Exit + the realised result only —
   // no R:R pill, no Hedef/Risk row, no risk/reward bar (those imply a fixed target that doesn't exist).
-  const isTrailing = strategy === 'midas' || strategy === 'talos';
+  const isTrailing = strategy === 'midas' || strategy === 'talos' || strategy === 'talos_ichi';
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.

@@ -73,6 +73,13 @@
 #   (DELETE + re-upsert, idempotent). Engine: sync/talos/backfill.py ($0.50/oz FX-cost, gold-only).
 40 1 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos/backfill.py --apply >> $HOME/ict-talos.log 2>&1
 
+# TALOS-ICHI live emit + trailing track — ARAŞTIRMA/PAPER (mode='talos_ichi'). EVERY MINUTE (+45s,
+# TALOS :30'dan ayrık). TALOS + Ichimoku Kumo-rengi yön filtresi. Executor YOK (paper-only).
+* * * * * sleep 45 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi/canli.py --emit --lookback-min 3 --sl-step 0 >> $HOME/ict-talos-ichi.log 2>&1
+# 01:50 — TALOS-ICHI backtest refresh: rebuild version='talos_ichi' from XAUUSDT 1m for 2026 nightly
+#   (DELETE + re-upsert, idempotent). Engine: sync/talos_ichi/backfill.py ($0.50/oz FX-cost, gold-only).
+50 1 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi/backfill.py --apply >> $HOME/ict-talos-ichi.log 2>&1
+
 # --- TALOS-X LIVE EXECUTION (Binance TESTNET/paper; 2026-07-08) ---
 # MIDAS-X'in birebir kardeşi (sync/talos_exec/ — ayrı talos_positions/talos_orders tabloları,
 # ayrı killswitch; gerçek-para MIDAS-X koduna DOKUNULMADI). mode='talos' sinyallerini okur, maker

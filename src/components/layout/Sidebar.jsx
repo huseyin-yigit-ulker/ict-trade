@@ -105,6 +105,7 @@ const GROUPS = [
   { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
   { key: 'talos',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, section: 'live' },
   // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07'de canlıdan buraya indi) ──
+  { key: 'talos_ichi', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'donchianc',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd1h_so4c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },

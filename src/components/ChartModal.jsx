@@ -74,7 +74,7 @@ const ChartModal = () => {
   // MIDAS (trailing-stop, NO fixed TP/SL R:R): the exit is a 3.5×ATR trailing stop, not a planned
   // target. Render ENTRY + EXIT + the realised result only — no phantom green-TP / red-SL target
   // lines, no Hedef / Stop / Risk-Reward rows, no Sinyal marker. The zone spans entry→actual exit.
-  const isTrailing = strategy === 'midas' || strategy === 'talos';
+  const isTrailing = strategy === 'midas' || strategy === 'talos' || strategy === 'talos_ichi';
 
   // Use the CURRENT DB row for this trade (pnl_r / exit / status) rather than the possibly-stale
   // bulk-loaded backtest set — so a re-backfill is reflected the moment the chart opens, without a

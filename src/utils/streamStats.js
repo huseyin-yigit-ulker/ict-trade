@@ -34,6 +34,7 @@ export const STREAMS = [
   // ── altın akışları ──
   S('midas', 'full'),
   S('talos', 'full'),
+  S('talos_ichi', 'full'),   // araştırma/paper: TALOS + Ichimoku Kumo yön filtresi
 ];
 
 // Session cache, shared across the login showcase and the intro hub.

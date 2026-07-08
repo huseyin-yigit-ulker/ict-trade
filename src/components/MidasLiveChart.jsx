@@ -195,7 +195,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
   // PRIVACY: the anchor line + the rule checklist render under neutral tags for
   // everyone except the admin (whose real labels lazy-load from adminStreamInfo).
   const sd = useStreamDisplay();
-  const isTalos = variant === 'talos';
+  const isTalos = variant === 'talos' || variant === 'talos_ichi';   // talos_ichi reuses Keltner visuals; Kumo gate is applied backend-side
   const REF = isTalos ? (sd.isAdmin ? 'K-EMA20' : 'T-REF') : sd.refline();
   const CONDS = isTalos ? sd.talosConds() : sd.midasConds();
   const tradesRef = useRef(trades);
