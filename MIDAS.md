@@ -751,12 +751,16 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **Ders:** "confluence" ritüelinin çekirdeği trend+lokasyon = zaten MIDAS; ekstra katmanlar R kırpan
   dekor (entry-filtre taramasının 3. teyidi). Karmaşıklık ≠ edge. Canlı dokunulmadı.
 
-### 2026-07-08 (7) — ui: canlı grafik seans çipine TR saati eklendi
-- **Şikayet (kullanıcı):** canlı grafikte "seans uygun (07-13 UTC dışı)" — UTC, TR kullanıcısı için
-  kafa karıştırıcı (07-13 UTC = 10-16 TR).
-- **Düzeltme:** `src/utils/adminStreamInfo.js` REAL_MIDAS_CONDS.sess + REAL_TALOS_CONDS.sess etiketi
-  → "seans uygun (07-13 UTC = 10-16 TR dışı)". Mantık değişmedi (filtre zaten UTC ile doğru
-  çalışıyor); yalnız görünen metin. Dist Render'da main'den derlenir.
+### 2026-07-08 (7) — ui: Londra-penceresi bilgilendirmesi detaylandı (TR saati + kesin sınırlar)
+- **Şikayet (kullanıcı):** canlı grafikte "seans uygun (07-13 UTC dışı)" — TR kullanıcısı için
+  belirsiz (07-13 UTC = 10-16 TR); ardından kesin sınır gösterimi istendi (07:00 ≤ saat < 13:00).
+- **Düzeltme (2 dosya, mantık değişmedi — filtre zaten UTC ile doğru):**
+  - `adminStreamInfo.js` REAL_MIDAS_CONDS.sess + REAL_TALOS_CONDS.sess çipi →
+    "seans uygun · Londra dışı (07:00 ≤ UTC < 13:00 · TR 10:00 ≤ saat < 16:00 · yalnız yeni giriş)".
+  - `strategyInfo.js` MIDAS "Evren & saat" (tr+en) + TALOS "Giriş" (tr+en): kesin sınır anlambilimi
+    (06:59 UTC kapanışlı bar sinyal verebilir, 13:00'ten itibaren açık), pencerenin yalnız YENİ
+    girişi engellediği (açık pozisyon trailing ile koşar), backtest+canlının aynı signals()
+    fonksiyonunu paylaştığı. Dist Render'da main'den derlenir.
 
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
