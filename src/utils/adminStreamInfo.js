@@ -39,9 +39,9 @@ export const REAL_NAMES = {
 export const REAL_LABELS = {
   d30so8f3h7: 'OPUS · DONCHIAN 30m+4h·WR 8R ·b30·7g',
   d30so8f3vg: 'FABLE · DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9',
-  midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing)',
+  midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing·paper)',
   talos: 'TALOS · ALTIN Keltner-Trend (XAU 1m·trailing·backtest)',
-  talos_ichi: 'TALOS-ICHI · ALTIN Keltner+Ichimoku (XAU 1m·trailing·canlı PAPER)',
+  talos_ichi: 'TALOS-ICHI · ALTIN Keltner+Ichimoku (XAU 1m·trailing·MAINNET gerçek-para)',
   donchianc: 'DONCHIAN 1h ·0.5R',
   d1h_so4c: 'DONCHIAN 1h·WR 4R ·0.5R',
   d1h_so6c: 'DONCHIAN 1h·WR 6R ·0.5R',

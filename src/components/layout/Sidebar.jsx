@@ -100,10 +100,10 @@ const IconShield = () => (
 // strings live in a separate lazy chunk — see utils/streamMask.js). Leaf URLs use
 // the codename slug (slugFor) so raw stream keys never appear in the address bar.
 const GROUPS = [
-  // ── canlı modül: OPUS + MIDAS (gerçek-para) + TALOS (paper altın Keltner, 2026-07-07) ──
+  // ── canlı modül: OPUS + TALOS-ICHI (gerçek-para) + MIDAS (paper altın; 2026-07-08 MIDAS-X emekli) ──
   { key: 'd30so8f3h7', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
-  { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
-  { key: 'talos_ichi', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, section: 'live' },
+  { key: 'talos_ichi', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
+  { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true, section: 'live' },
   // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07, talos 2026-07-08 canlıdan buraya indi) ──
   { key: 'talos',      icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
