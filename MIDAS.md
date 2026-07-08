@@ -787,6 +787,21 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **ÇEKİNCE:** tam ship bataryasından (Ichimoku periyot platosu 9/26/52, random-null, aylık) HENÜZ
   geçmedi → laboratuvar/paper varyantı, canlı ürün DEĞİL. Otorite kitap = gece backtest'i.
 
+### 2026-07-08 (9) — TALOS-ICHI TAM DOĞRULAMA BATARYASINI GEÇTİ (paper/araştırma statüsü doğrulandı)
+- **İstek (kullanıcı):** TALOS-ICHI'yi tam doğrula (+ TALOS'un paper'dan kaldırılmadığı teyidi: kaldırılmadı,
+  ikisi ayrı akış olarak çalışıyor; son commit yalnız sync/talos_ichi/'ye dokundu).
+- **Batarya (scratchpad/fx_gold/talos_ichi_validate.py), 4 test PASS:**
+  1. **Periyot platosu düz** — tenkan 7-11 / kijun 22-30 / senkou_b 44-60 / shift 26-30 hepsi
+     +84..+96R / PF ~2.0; varsayılan 9/26/52/26 platonun ortasında (knife-edge değil).
+  2. **Random-drop null p=0.004** — gerçek Kumo +89.6R/avgR0.501/PF2.04, aynı sayıya (179/323) rastgele
+     düşürme +48.4±16.7R/avgR0.270 → Kumo seçimi becerikli ~2.6σ (repo çıtası p<0.005 karşılandı).
+  3. **2026 aylık 6/7 ay yeşil** (Tem kısmi −1 hariç).
+  4. **Çok-yıl OOS her yıl avgR/WR/PF artar** (2024 −167.7→−61.1 PF0.55→0.66, 2025 +117.2→+89.7 avgR
+     0.196→0.293, 2026 +86.1→+89.6 PF1.51→2.04). 2024 filtreliyken hâlâ net zarar (rejim kalkanı değil).
+- **Sonuç:** TALOS-ICHI ship-grade doğrulamayı geçti — TALOS'un kendi 3-yıl'ından (+39R) daha ikna edici
+  (+118R, her yıl kalite↑). Statü: DOĞRULANMIŞ paper/araştırma adayı. Canlı gerçek-paraya alma AYRI bir
+  kullanıcı kararı (MIDAS-X gibi soru-cevapla). strategyInfo caveat (tr+en) "doğrulandı" olarak güncellendi.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
