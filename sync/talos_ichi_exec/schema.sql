@@ -127,3 +127,11 @@ grant usage on schema ict_trade to anon, authenticated;
 grant select on ict_trade.talos_ichi_positions        to anon, authenticated;
 grant select on ict_trade.live_account_snapshot   to anon, authenticated;
 grant select on ict_trade.live_account            to anon, authenticated;
+
+-- RLS: a user sees only their OWN positions (admin sees all) — mirrors midas_positions.mp_select_own.
+-- Without this, multi-user would leak every account's rows to any authenticated reader.
+alter table ict_trade.talos_ichi_positions enable row level security;
+drop policy if exists ti_select_own on ict_trade.talos_ichi_positions;
+create policy ti_select_own on ict_trade.talos_ichi_positions
+  for select to authenticated
+  using ((user_id = auth.uid()) or ict_trade.is_admin());

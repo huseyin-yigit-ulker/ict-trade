@@ -860,6 +860,16 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - ⚠️ FX-maliyet modeli: çok-yıl taker OOS negatif (2026-rejim riski); $3 küçük risk, kitabı izle. `.env`
   commit edilmez (gitignored). Geri-alma: MIDAS.md/crontab yorumlarında.
 
+### 2026-07-08 (14) — ui: gerçek-para rozetleri güncellendi (TALOS-ICHI = Binance canlı altın; MIDAS = paper)
+- **İstek (kullanıcı):** takas sonrası bayat rozetleri güncelle (Binance gerçek-para / VWAP / MIDAS).
+- **Değişenler:** streams.js STREAM_ROWS: gerçek-para gold satırı midas→talos_ichi (MIDAS executor'suz,
+  aktivasyon tablosundan düştü). strategyInfo caveat'ları: MIDAS "🔵 PAPER (MIDAS-X emekli)", talos_ichi
+  "🔴 MAINNET GERÇEK PARA (MIDAS-X'in yerine, $3)". /binance-altin canlı board (MidasXLivePage) +
+  LivePositionsPage: pozisyon tablosu midas_positions→talos_ichi_positions, paper mode midas→talos_ichi.
+- **Güvenlik:** talos_ichi_positions'a RLS + `ti_select_own` policy eklendi (user_id=auth.uid() OR admin) —
+  eksikti (RLS=False), multi-user'da tüm satırları sızdırırdı; schema.sql'e kalıcı + DB'ye uygulandı.
+- Prod build PASS. Canlı gerçek-para board artık TALOS-ICHI-X pozisyonlarını gösterir.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

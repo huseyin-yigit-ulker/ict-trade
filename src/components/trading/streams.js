@@ -1,6 +1,7 @@
 // Shared constants + PostgREST helpers for the İşlem Merkezi (per-user trading) cards.
 // The activatable (stream, network) combos. 2026-07-07: the gold stream's MAINNET mode is
-// OPEN (migration 012 dropped the testnet-only CHECK) — both streams now offer real + paper.
+// OPEN (migration 012). 2026-07-08: the gold real-money stream is now TALOS-ICHI (migration 016);
+// MIDAS-X was retired and MIDAS is PAPER-only (no executor) so it left this activation table.
 //
 // NO display names live here (stream anonymization): `maskKey` is the stream key the
 // components resolve through useStreamDisplay() — codename for users, real name for
@@ -10,10 +11,10 @@
 import { authedFetch } from '../../utils/supa';
 
 export const STREAM_ROWS = [
-  { stream: 'opus',  network: 'mainnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: true },
-  { stream: 'opus',  network: 'testnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: false },
-  { stream: 'midas', network: 'mainnet', maskKey: 'midas',      version: 'midas',      real: true },
-  { stream: 'midas', network: 'testnet', maskKey: 'midas',      version: 'midas',      real: false },
+  { stream: 'opus',       network: 'mainnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: true },
+  { stream: 'opus',       network: 'testnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: false },
+  { stream: 'talos_ichi', network: 'mainnet', maskKey: 'talos_ichi', version: 'talos_ichi', real: true },
+  { stream: 'talos_ichi', network: 'testnet', maskKey: 'talos_ichi', version: 'talos_ichi', real: false },
 ];
 
 export const rowKey = (d) => `${d.stream}:${d.network}`;

@@ -10,8 +10,8 @@ import './LivePositionsPage.css';
 //   ict_trade.live_account_snapshot — the REAL Binance state per symbol (mark / uPnL), refreshed
 //                                     by the executor every ~2 min
 //   ict_trade.live_account          — wallet / available / total uPnL, one row per network
-//   ict_trade.midas_positions       — the MAINNET gold (MIDAS-X) positions (2026-07-07: the whole
-//                                     mainnet account lives on ONE page; /binance-altin = detail)
+//   ict_trade.talos_ichi_positions  — the MAINNET gold (TALOS-ICHI-X) positions (2026-07-08: took
+//                                     MIDAS-X's place; /binance-altin = detail)
 // Browser never signs a Binance request; it only reads what the executor snapshotted.
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -120,8 +120,9 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         getJSON(`live_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=60`),
         getJSON(`live_account_snapshot?select=*&network=eq.${network}`),
         getJSON('live_account?select=*'),
-        // Gold (MIDAS-X) rows — best-effort: a missing table/grant must not blank the page.
-        getJSON(`midas_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=20`).catch(() => []),
+        // Gold (TALOS-ICHI-X, mainnet real money since 2026-07-08) rows — best-effort: a missing
+        // table/grant must not blank the page.
+        getJSON(`talos_ichi_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=20`).catch(() => []),
       ]);
       setPositions(pos);
       setGold(au);

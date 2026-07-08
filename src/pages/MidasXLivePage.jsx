@@ -4,15 +4,15 @@ import { authedFetch } from '../utils/supa';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
 import './LivePositionsPage.css';
 
-// MIDAS-X — the gold (XAUUSDT) VWAP-trend executor (sync/midas_exec), read straight from the LIVE
-// Supabase via PostgREST. MAINNET since 2026-07-07 (real money, $3 risk, after-loss gate) — the gold
-// sibling of the OPUS "Binance Canlı" page. All labels resolve from the DATA (snapshot/position
-// network), so the page renders truthfully during the testnet→mainnet drain and on any rollback:
-//   ict_trade.midas_positions        — the managed MIDAS positions (state machine + chandelier stop)
+// TALOS-ICHI-X — the gold (XAUUSDT) Keltner+Ichimoku executor (sync/talos_ichi_exec), read straight
+// from the LIVE Supabase via PostgREST. MAINNET since 2026-07-08 (real money, $3 risk) — replaced
+// MIDAS-X as the gold real-money stream (MIDAS is now PAPER). The gold sibling of the OPUS "Binance
+// Canlı" page. All labels resolve from the DATA (snapshot/position network):
+//   ict_trade.talos_ichi_positions   — the managed TALOS-ICHI positions (state machine + chandelier)
 //   ict_trade.live_account_snapshot  — the real Binance XAUUSDT mark / uPnL, per network
 //   ict_trade.live_account           — wallet / available / total uPnL, one row per network
 // Browser never signs a Binance request; it only reads what the executor snapshotted. No fixed TP —
-// MIDAS-X rides a 3.5*ATR chandelier trailing stop to an 8h / session exit (cur_sl ratchets in profit).
+// rides a 3.5*ATR chandelier trailing stop to an 8h / session exit (cur_sl ratchets in profit).
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -87,12 +87,12 @@ export default function MidasXLivePage() {
     if (!SUPA_URL || !SUPA_KEY) { setErr(t('Supabase ayarları eksik.')); setLoading(false); return; }
     try {
       const [pos, snaps, acc, sigs] = await Promise.all([
-        getJSON('midas_positions?select=*&order=updated_at.desc&limit=60'),
+        getJSON('talos_ichi_positions?select=*&order=updated_at.desc&limit=60'),
         getJSON('live_account_snapshot?select=*&symbol=eq.XAUUSDT'),
         getJSON('live_account?select=*'),
-        // Paper signals + the executor's AFTER-LOSS gate verdict (context.exec_gate, written by
-        // sync/midas_exec/executor._mark_gate). Shows WHY a paper signal did/didn't become an order.
-        getJSON('signals?select=signal_time,direction,entry,context&mode=eq.midas&order=signal_time.desc&limit=10'),
+        // Paper signals + the executor's exec-gate verdict (context.exec_gate). Shows WHY a paper
+        // signal did/didn't become an order (sync/talos_ichi_exec).
+        getJSON('signals?select=signal_time,direction,entry,context&mode=eq.talos_ichi&order=signal_time.desc&limit=10'),
       ]);
       // Mainnet-first: during the testnet→mainnet drain both networks snapshot XAUUSDT;
       // the page headlines the real-money account and tags the leftover paper rows below.
