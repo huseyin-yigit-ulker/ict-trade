@@ -738,6 +738,19 @@ real maker fill-rate/slippage study, not mainnet P&L.
   "exit is the lever" bulgusunun ML-aynası). Doğru birleştirme seviyesi PORTFÖY (düşük-korelasyonlu
   kitaplar: MIDAS+ML Mar-Tem +129.7R, corr 0.247), özellik-karışımı değil. Canlı dokunulmadı.
 
+### 2026-07-08 (6) — ARAŞTIRMA (kod değişikliği YOK): trader-tipi confluence HİBRİT — MIDAS varyantına çöküyor, yeni kitap YOK (ML-XAU-RAPORU.md §4e)
+- **Soru (kullanıcı):** ML'siz, trader'ların kompleks hibrit stratejilerinden bir sistem kur.
+- **Deney (`scratchpad/fx_gold/hybrid_xau.py`):** 5-katman checklist (HTF hiza / VWAP trend / bölge:
+  VWAP∪Keltner∪PDH-L / tetik mumu / hacim onayı) + seans disiplini, k-of-5 taraması, MIDAS trail
+  motoru vs sabit-2R; ayrıca kırılım+retest klasiği. 2026 IS/OOS, çift maliyet.
+- **Sonuç:** en iyi = tam checklist k5: 334tr +101.4R PF1.59 DD−15.3 her-ay-yeşil taker≈0 — ama
+  MIDAS'la günlük-R corr **0.732** (256/334 örtüşme) ve MIDAS'tan az (+143.1'e karşı) → bağımsız
+  kitap değil, süzülmüş MIDAS. Ablasyon: 5 katmandan yalnız C2-trend+C3-bölge bilgi taşıyor; tetik
+  mumu ÇIKARINCA iyileşiyor (+117.3), HTF/hacim nötr. Sabit-2R her k'da trail'den kötü (çıkış
+  dogması teyit). Kırılım-retest OOS −1.4 ölü.
+- **Ders:** "confluence" ritüelinin çekirdeği trend+lokasyon = zaten MIDAS; ekstra katmanlar R kırpan
+  dekor (entry-filtre taramasının 3. teyidi). Karmaşıklık ≠ edge. Canlı dokunulmadı.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

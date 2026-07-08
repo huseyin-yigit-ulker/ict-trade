@@ -121,6 +121,29 @@ Gain payı: piyasa %69, strateji sinyalleri **%6**, çapraz-varlık %25 (ama eko
 3. **Doğru birleştirme seviyesi PORTFÖY, özellik değil:** ML-TB (83tr +27.8R) MIDAS'a düşük-korelasyonlu (günlük 0.247, §4c) → Mar-Tem MIDAS+ML birleşik +129.7R. KELT075 portföy bulgusuyla (+230R MIDAS+KELT) aynı ders: düşük-korelasyonlu KİTAPLARI yan yana koy, sinyalleri aynı modele karıştırma.
 4. Çapraz-varlık özellikler importance kapıyor ama OOS ekonomi üretmiyor — tipik "önemli görünen ama para etmeyen" özellik; ayrıca veri Temmuz'da kesik. Tam-tarihli gümüş verisiyle tekrar bakılabilir ama öncelik değil.
 
+## 4e. Ek deney (2026-07-08): ML'siz — trader-tipi KOMPLEKS HİBRİT (confluence checklist) mekanizasyonu
+
+Soru: ML'yi bırak; trader'ların kullandığı kompleks hibrit stratejilerden bir sistem kur. (`scratchpad/fx_gold/hybrid_xau.py`)
+
+**Mimari (gerçek trader checklist'i, mekanize):** C1 HTF hiza (1h EMA50 eğim + 4h EMA20 tarafı) · C2 gün-içi trend (MIDAS VWAP tanımı) · C3 bölge (VWAP ∪ 15m Keltner bandı 0.75 ∪ önceki-gün H/L'ye 0.25×ATR dokunuş) · C4 tetik mumu (yön + üst-yarı kapanış) · C5 hacim onayı (z>0) · SEANS (shipped disiplin, her zaman). Giriş = seans + k-of-5; çıkış = denetlenmiş MIDAS motoru (1.5×ATR stop, 3.5×ATR trail, 8h) ve karşılaştırma için sabit-2R "trader hedefi". Ek klasik: kırılım+retest (önceki-gün H/L kır → 2h içinde retest tut → gir).
+
+| Sistem | n | totR | PF | DD | IS/OOS | taker |
+|---|---|---|---|---|---|---|
+| CONF k≥5 (tam checklist, trail) | 334 | **+101.4** | 1.59 | −15.3 | +59.5 / +41.9, **her ay yeşil** | +3.1 |
+| CONF k≥4 (trail) | 653 | +87.6 | 1.23 | −22.2 | +47.2 / +40.4 | −104 |
+| CONF k≥2 (trail) | 748 | +172.8 | 1.39 | −27.0 | Oca +111 tek-ay artefaktı | −243 |
+| aynıları sabit-2R hedefle | — | hepsi trail'den kötü (PF/OOS) | | | | |
+| KIRILIM-RETEST | 175 | +13.1 | 1.13 | −17.2 | OOS **−1.4** | −33 |
+| **MIDAS (benchmark)** | 396 | **+143.1** | 1.67 | −20.8 | +85 / +58 | +22.9 |
+
+**Ablasyon (k5'ten tek katman çıkar):** −C4 tetik → **+117.3R (İYİLEŞİYOR)**; −C1 HTF → +107.7; −C5 hacim → +97.3 (≈nötr); −C3 bölge → +56.7 (ÇÖKÜYOR). Yani 5 katmandan yalnız 2'si bilgi taşıyor: **gün-içi trend (C2) + bölge dokunuşu (C3)** — ki bu MIDAS'ın kendisidir. Nitekim CONF-k5, MIDAS kitabıyla 256/334 işlem örtüşüyor, günlük-R korelasyonu **0.732** → bağımsız kitap DEĞİL, MIDAS'ın süzülmüş bir varyantı; MIDAS'tan da az kazanıyor (+101 vs +143).
+
+**Yorumlar:**
+1. "Confluence" ritüelinin mekanize gerçeği: HTF hizası, tetik mumu ve hacim onayı — üç popüler katman — XAU 1m'de ya nötr ya ZARARLI. Trader checklist'inin çalışan çekirdeği trend+lokasyon; gerisi işlem sayısını (ve R'ı) kırpan dekor. MIDAS entry-filtre taramasının (hepsi red) üçüncü bağımsız teyidi.
+2. Sabit-2R hedef her k'da trail'den kötü — "altında çıkış dogması" (trailing dokunulmaz) bir kez daha doğrulandı.
+3. Kırılım+retest 2026'da ölü (OOS −1.4) — repo'nun kırılım-fade tarihçesiyle tutarlı.
+4. Pratik sonuç: kompleks hibrit YENİ kitap üretmedi; eldeki en iyi yapı hâlâ MIDAS + TALOS (+ belki ML-TB, §4c) düşük-korelasyonlu portföyü. Karmaşıklık başlı başına değer değil.
+
 ## 5. Sonraki adımlar (bu turda YAPILMADI)
 - **Aday B:** bağımsız 15m triple-barrier yön modeli (kill: OOS PF<1.1). Etiketleyici hazır (`labels.triple_barrier`).
 - **Aday C:** ancak bir aday pozitifse, aynı etiketlerde küçük GRU/TCN artık-değer testi (tek deney).
