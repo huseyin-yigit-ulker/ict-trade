@@ -699,6 +699,20 @@ real maker fill-rate/slippage study, not mainnet P&L.
   + `ML-XAU-RAPORU.md`. `.venv`'e sklearn 1.7.2+lightgbm 4.6.0+scipy kuruldu (requirements'a
   EKLENMEDİ — araştırma bağımlılığı). Canlı kod/DB/cron dokunulmadı.
 
+### 2026-07-08 (3) — ARAŞTIRMA (kod değişikliği YOK): büyük-frekans ML rejim-kapısı — ÇALIŞMIYOR (ML-XAU-RAPORU.md §4b)
+- **Soru (kullanıcı):** daha büyük frekansta bir model MIDAS'ın işlem açıp açmamasına kapı olabilir mi
+  (farklı model / ensemble serbest, önce 2026)?
+- **Deney (`gate_midas.py`):** 3-model ensemble (logistic+RF+LightGBM), purged-CV, 2026. V1 = fx-günü
+  kapısı, karar anchor+120dk (MATURE_MIN sayesinde ilk girişten önce biten kaçaksız ilk-2saat penceresi),
+  etiket=günün R toplamı>0. V2 = işlem-anı ama YALNIZ yüksek-TF bağlam (2h/6h/24h ER, çok-saat getiri/
+  aralık, vol rejimi) — sinyal-barı mikro özellikleri dışarıda.
+- **Sonuç:** V1 131 gün OOF AUC **0.475** (yazı-tura altı; null 0.530), corr(p,günR)=−0.085, her eşik
+  R kaybettiriyor; V2 AUC 0.531 ≈ gürültü, tüm eşikler AFTER-LOSS'tan kötü. Oracle tavanı +239R FX /
+  +179R taker — var ama ulaşılamıyor.
+- **Yorum:** 2026-07-07 rejim incelemesinin ML-teyidi: MIDAS'ın gün-tipi ex-ante öngörülemiyor; çalışan
+  tek kapı (AFTER-LOSS) rejim değil gün-İÇİ dizi etkisi. Edge yapısı "her gün dene, trend gününde koş" —
+  gün-kapısı arayışı yapıya ters. NO-SHIP, canlı dokunulmadı.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

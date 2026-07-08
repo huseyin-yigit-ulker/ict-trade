@@ -69,6 +69,15 @@ Mekanik **kesme (truncation) testi**: 60 örneklenmiş sinyal barı için TÜM �
 
 **Pozitif çıktılar:** (1) repo artık çalışan, denetlenmiş bir ML altyapısına sahip (purged-CV + truncation-audit + çift-maliyet değerlendirme şablonu); (2) AUC'nin yıllar/enstrümanlar arası taşınması, sinyal-anı özelliklerde gerçek yapı olduğunu gösteriyor — daha zayıf süzgeçli bir birincil stratejide (ör. KELT075 adayı) meta-labeling denemeye değer; (3) kötü-yıl kanaması −278→−53R'a inebiliyor: ileride "belirsiz rejimde boyut küçült" tarzı bir kullanım aday.
 
+## 4b. Ek deney (2026-07-08): büyük-frekans REJİM KAPISI — ÇALIŞMIYOR
+
+Soru: işlem-bazı meta yerine, daha büyük frekansta bir model "MIDAS bugün/bu saatlerde hiç işlem açsın mı?" kapısı olabilir mi? (`gate_midas.py`, 2026-only, 3-model ensemble: logistic+RF+LightGBM prob-ortalaması, purged-CV.)
+
+- **V1 fx-günü kapısı** — karar anı = anchor+120dk (MATURE_MIN sayesinde ilk girişten ÖNCE biten kaçaksız pencere); özellikler = ilk-2saat davranışı + önceki gün fiyat/kitap + 3-gün bağlam + DOW; etiket = günün MIDAS R toplamı>0. **131 işlemli gün, OOF AUC 0.475 (yazı-tura ALTINDA; null 0.530), corr(p, günR)=−0.085, kantiller monoton değil, her eşik totR kaybettiriyor** (p≥0.40: 143→131R). Oracle tavanı büyük (+239R FX / +179R taker) ama ulaşılamıyor.
+- **V2 işlem-anı, YALNIZ yüksek-TF bağlam** (2h/6h/24h ER, çok-saatlik getiri/aralık, vol rejimi, gün-içi konum, önceki-gün/gün-içi kitap R; sinyal-barı mikro özellikleri bilinçli dışarıda) — AUC 0.531 ≈ gürültü; tüm eşikler hem filtresizden hem AFTER-LOSS'tan kötü.
+
+**Yorum:** 2026-07-07 rejim incelemesinin ("edge trend günlerinde ama sinyal-anı hiçbir rejim ölçüsü prediktif değil, |ρ|≤0.10") ML-ensemble ile gün-frekansına genellenmiş teyidi: MIDAS'ın gün-tipi ex-ante ÖNGÖRÜLEMİYOR — ne günün ilk 2 saatinden, ne önceki günden. Çalışan tek kapı (AFTER-LOSS) bir rejim sinyali değil, gün-İÇİ dizi etkisi. Oracle-gerçek makası, edge'in "trend günü yakalama" değil "her gün küçük maliyetle deneyip trend gününde koşma" yapısında olduğunu doğruluyor — kapı arayışı bu yapıya ters. n=131 gün küçük (istatistiksel güç sınırlı) ama yön (AUC<0.5) hiçbir cesaret vermiyor; PAXG ile örnek büyütme ancak özellikle istenirse.
+
 ## 5. Sonraki adımlar (bu turda YAPILMADI)
 - **Aday B:** bağımsız 15m triple-barrier yön modeli (kill: OOS PF<1.1). Etiketleyici hazır (`labels.triple_barrier`).
 - **Aday C:** ancak bir aday pozitifse, aynı etiketlerde küçük GRU/TCN artık-değer testi (tek deney).
@@ -79,6 +88,7 @@ Mekanik **kesme (truncation) testi**: 60 örneklenmiş sinyal barı için TÜM �
 - `scratchpad/fx_gold/ml/labels.py` — meta-etiket + dizi-özellikleri + (Aday B için) triple-barrier
 - `scratchpad/fx_gold/ml/meta_midas.py` — ana pipeline (dataset + purged-CV + transfer + null + importance); `--rebuild`
 - `scratchpad/fx_gold/ml/combo_test.py` — AFTER-LOSS karşılaştırma/kombinasyon testi
+- `scratchpad/fx_gold/ml/gate_midas.py` — büyük-frekans rejim-kapısı deneyi (V1 gün / V2 yüksek-TF, ensemble; §4b)
 - `scratchpad/fx_gold/ml/lookahead_check_ml.py` — truncation no-lookahead denetimi (PASS)
 - `scratchpad/fx_gold/ml/dataset.pkl` — önbellek (2020 işlem; gitignore'lu pkl)
 - Ortam: `.venv`'e scikit-learn 1.7.2 + lightgbm 4.6.0 + scipy kuruldu (requirements'a EKLENMEDİ — araştırma bağımlılığı)
