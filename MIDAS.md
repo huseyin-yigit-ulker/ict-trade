@@ -819,6 +819,15 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **DOKUNULMADI:** backend strateji/backfill/canli (talos & talos_ichi) — yalnız üyelik/cron/grafik.
   TALOS-ICHI hâlâ PAPER (executor YOK); canlı gerçek-para ayrı karar.
 
+### 2026-07-08 (11) — ui: TALOS-ICHI canlı grafiğe Ichimoku bulut çizgileri (Senkou A/B) + aç-kapa toggle
+- **İstek (kullanıcı):** canlı grafiğe Ichimoku çizgilerini aç-kapa şekilde ekle; yalnız ilgili çizgiler.
+- **Ne (MidasLiveChart.jsx):** talos_ichi için grafiğe 2 çizgi serisi — Senkou A (yeşil) + Senkou B
+  (kırmızı) = Kumo filtresinin baktığı bulut sınırları (ilgili çizgiler; Tenkan/Kijun/Chikou çizilmez).
+  computeTalos km varken kumoAData/kumoBData döndürür (15m span'lar +26 ileri, no-lookahead). Seriler
+  gizli oluşturulur; header'daki "☁️ Kumo çizgileri açık/kapalı" butonu görünürlüğü toggle'lar (ayrı
+  useEffect, data-load effect'ini tetiklemeden — 30s poll'a dokunmaz). Yalnız talos_ichi'de görünür.
+  Backend/strateji dokunulmadı. Prod build PASS.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

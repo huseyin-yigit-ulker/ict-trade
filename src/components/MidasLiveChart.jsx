@@ -110,12 +110,17 @@ const computeTalos = (candles, km = null) => {
   const k = keltner15(candles);
   const a = atr15(candles);
   const refData = []; const bandU = []; const bandL = []; const markers = [];
+  const kumoAData = []; const kumoBData = [];          // Ichimoku cloud boundary lines (TALOS-ICHI)
   for (let i = 0; i < candles.length; i += 1) {
     const c = candles[i]; const kk = k[i];
     if (!kk || !Number.isFinite(kk.ema)) continue;
     const bLo = kk.ema - K_MULT * kk.katr; const bHi = kk.ema + K_MULT * kk.katr;
     refData.push({ time: c.time, value: kk.ema });
     bandU.push({ time: c.time, value: bHi }); bandL.push({ time: c.time, value: bLo });
+    if (km && Number.isFinite(km[i]?.spanA)) {
+      kumoAData.push({ time: c.time, value: km[i].spanA });
+      kumoBData.push({ time: c.time, value: km[i].spanB });
+    }
     const utch = new Date(c.time * 1000).getUTCHours();
     const sessOk = !(utch >= SKIP_START && utch < SKIP_END);
     const cloudBull = !km || (Number.isFinite(km[i]?.spanA) && km[i].spanA > km[i].spanB);
@@ -147,7 +152,7 @@ const computeTalos = (candles, km = null) => {
   };
   const cloud = km ? (Number.isFinite(kmL?.spanA) ? (cloudBull ? 'bull' : 'bear') : null) : null;
   const last = { price: lb.close, ref: kk.ema, slope: kk.slope, atr: aa, tol, cond, time: lb.time, cloud };
-  return { refData, bandU, bandL, markers, last };
+  return { refData, bandU, bandL, markers, last, kumoAData, kumoBData };
 };
 
 const compute = (candles) => {
@@ -247,6 +252,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
   const framedRef = useRef(false);
   const [status, setStatus] = useState('Yükleniyor…');
   const [last, setLast] = useState(null);
+  const [showKumo, setShowKumo] = useState(true);         // TALOS-ICHI: toggle the Ichimoku cloud lines
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -278,7 +284,13 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
       priceLineVisible: false, crosshairMarkerVisible: false, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } };
     const bandU = chart.addSeries(LineSeries, bandOpts);
     const bandL = chart.addSeries(LineSeries, bandOpts);
-    seriesRef.current = { candle, refSeries, bandU, bandL };
+    // TALOS-ICHI: the two Ichimoku cloud-boundary lines (Senkou A / B) — the metric the Kumo filter
+    // keys off. Created hidden; a visibility effect toggles them for talos_ichi (see showKumo).
+    const kOpts = { lineWidth: 1, lastValueVisible: false, priceLineVisible: false,
+      crosshairMarkerVisible: false, visible: false, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } };
+    const kumoA = chart.addSeries(LineSeries, { ...kOpts, color: 'rgba(14,203,129,0.9)', title: 'Senkou A' });
+    const kumoB = chart.addSeries(LineSeries, { ...kOpts, color: 'rgba(246,70,93,0.9)', title: 'Senkou B' });
+    seriesRef.current = { candle, refSeries, bandU, bandL, kumoA, kumoB };
 
     let cancelled = false;
     const load = async () => {
@@ -307,10 +319,11 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         if (cancelled || !chartRef.current) return;
         if (!raw.length) { setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
-        const { refData, bandU: bu, bandL: bl, markers, last: lm } = isTalos
+        const { refData, bandU: bu, bandL: bl, markers, last: lm, kumoAData, kumoBData } = isTalos
           ? computeTalos(candles, isIchi ? kumo15(candles) : null)
           : compute(candles);
         candle.setData(candles); refSeries.setData(refData); bandU.setData(bu); bandL.setData(bl);
+        if (isIchi && kumoAData) { kumoA.setData(kumoAData); kumoB.setData(kumoBData); }
         // markers = ALL signal-formation moments (dimmed) + the trades that opened (entry arrow + exit)
         const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
         finalMarkers.sort((a, b) => a.time - b.time);
@@ -336,6 +349,14 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
     ro.observe(containerRef.current);
     return () => { cancelled = true; if (id) clearInterval(id); ro.disconnect(); chart.remove(); chartRef.current = null; };
   }, [startMs, endMs, REF, variant]);
+
+  // Toggle the Ichimoku cloud lines on/off without re-running the data-load effect (TALOS-ICHI only).
+  useEffect(() => {
+    const s = seriesRef.current;
+    if (!s?.kumoA) return;
+    const vis = isIchi && showKumo;
+    try { s.kumoA.applyOptions({ visible: vis }); s.kumoB.applyOptions({ visible: vis }); } catch { /* chart torn down */ }
+  }, [showKumo, isIchi, last]);
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
   const c = last?.cond;
@@ -375,6 +396,14 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
               {last?.cloud === 'bull' ? '🟢 yeşil (yukarı)' : last?.cloud === 'bear' ? '🔴 kırmızı (aşağı)' : '—'}
             </b>
           </span>
+        )}
+        {isIchi && (
+          <button type="button" onClick={() => setShowKumo((v) => !v)}
+            style={{ cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, padding: '2px 8px', borderRadius: 6,
+              background: showKumo ? 'rgba(59,130,246,0.16)' : 'transparent', color: showKumo ? '#7FB0FF' : '#848E9C',
+              border: `1px solid ${showKumo ? 'rgba(59,130,246,0.5)' : 'rgba(122,132,141,0.35)'}` }}>
+            ☁️ Kumo çizgileri {showKumo ? 'açık' : 'kapalı'}
+          </button>
         )}
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
       </div>
