@@ -870,6 +870,64 @@ real maker fill-rate/slippage study, not mainnet P&L.
   eksikti (RLS=False), multi-user'da tüm satırları sızdırırdı; schema.sql'e kalıcı + DB'ye uygulandı.
 - Prod build PASS. Canlı gerçek-para board artık TALOS-ICHI-X pozisyonlarını gösterir.
 
+### 2026-07-08 (15) — TALOS-ICHI-X kaçan işlem post-mortem #2: GTX cross → taker eskalasyonu + fallback penceresi (pos#1)
+- **Şikayet (kullanıcı):** TALOS-ICHI sinyali fill olmadı.
+- **Teşhis (loglar + DB):** pos#1 XAUUSDT LONG (`signal_time` 14:08, `signal_entry` 4067.48, kayıt
+  14:09:50.33) → `state=CANCELLED`, `exit_reason='unfilled'` @ 14:11:50.71. Kritik kanıt:
+  **`entry_coid` ve `entry_order_id` NULL** — borsada hiçbir zaman emir DURMADI. "Dolmadı" değil,
+  "hiç gönderilemedi". İki bağımsız kusur üst üste bindi:
+- **Kusur 1 — GTX alış limiti ask'in üstünde, maker olamaz.** Sinyal barı kapanışı (14:08 C=4067.47)
+  ile executor'ün ilk tick'i (14:09:50) arasında fiyat aşağı kaydı (14:09 C=4066.32). 4067.48'e
+  post-only BUY = ask üstünde limit → anında eşleşir → Binance `-2010` → red. `_place_entry` bunu
+  yakalayıp `retry next tick` yazıp dönüyordu ve sonraki tick **aynı fiyatı** deniyordu →
+  deterministik no-op döngü. Keltner alt-bant pullback LONG'unda bu istisna DEĞİL, normal hal:
+  sinyal fiyat banda düşerken doğar, dolayısıyla execution anında ask genelde bar kapanışının
+  altındadır. Maker bacağı ancak fiyat sinyalin TERSİNE gitmişse kabul edilir — 07-02 maker
+  araştırmasının ve pos#47'nin aynı ters-seçilim tuzağı, bu kez red tarafından.
+- **Kusur 2 — maker→taker fallback penceresine sıfır tick düştü.** `entry_timeout_sec`=120,
+  `entry_taker_fallback_sec`=60, cron periyodu 60 sn — üçü de aynı saniyeye faz-kilitli (`sleep 48`).
+  Pencere `[created+60, deadline]` = `[14:10:50.256, 14:11:50.256]`; 14:10 tick'i ~14:10:49.9'da
+  (erken), 14:11 tick'i 14:11:50.714'te (deadline'ı geçmiş) koştu. Nominal 60 sn'lik pencerenin içine
+  hiç tick düşmedi; sonucu ~0.5 sn cron jitter'ı belirledi. Üstelik `expired` kontrolü fallback
+  bloğundan ÖNCE çalıştığı için geç gelen tick fallback yerine iptali seçti. Fiyat hiçbir an tolerans
+  dışına çıkmamıştı (`slip` = −1.18, LEHTE; `exit_reason` da `slipped` değil `unfilled`) — yani
+  fallback tetiklenmeli ve ~4064.7'den market girmeliydi.
+- **Düzeltme 1 (executor.py `_place_entry`):** `-2010/-5022` reddi artık `retry` değil **taker
+  eskalasyonu**. Red, kitabın zaten `signal_entry`'den iyi-veya-eşit olduğunu KANITLAR (LONG'da ask ≤
+  entry). GTX ancak fiyat sinyal aleyhine dönerse dinlenebilir, aynı fiyatı yeniden göndermek no-op.
+  `_manage_entry`'nin `slipped` guard'ı fiyatın toleransta olduğunu zaten tesis etmiş ve burada LEHTE
+  tarafta — al. `ctx.taker_fallback` işaretlenir (idempotent, tek atış), `talos_ichi_orders`'a
+  `action='reject'` forensic satırı + Telegram uyarısı yazılır, MARKET gönderilir. `taker=True`
+  yolunda `-2010` (ör. yetersiz teminat) genel hata dalına düşer → sonsuz özyineleme yok.
+- **Düzeltme 2 (executor.py `_manage_entry`):** sıralama `slipped → fallback → expired` oldu (eski:
+  `slipped|expired → fallback`). Tolerans dışına kaçan fiyat saatten bağımsız hâlâ iptal edilir
+  (kovalamak +0.5R sinyali −0.5R'a çevirir); ama fiyat toleranstayken geç gelen tick artık işlemi
+  DÜŞÜRMEZ, alır. Fallback ateşlendikten sonra deadline taker bacağını da sınırlar (MARKET dönmezse
+  bir sonraki tick `unfilled` iptal eder) → sınırsız değil.
+- **Düzeltme 3 (config.py):** `TALOS_ICHI_ENTRY_TAKER_FALLBACK_SEC` varsayılanı 60 → **45 sn**. Bu
+  değer bir cron periyodu (60 sn) ile `entry_timeout_sec` (120 sn) arasında, İKİ tarafta da marjla
+  durmalı; 45 sn t+60 tick'ine ~15 sn slack verir. Yorum satırına gerekçe yazıldı.
+- **Gözlenebilirlik:** giriş iptalleri (`slipped`/`unfilled`) ortak `_abandon_entry` yardımcısına
+  çıkarıldı ve artık `talos_ichi_orders`'a `action='cancel'` forensic satırı yazıyor. Önceden `-2010`
+  reddi HİÇBİR yere yazılmıyordu (ne DB ne Telegram) — bu yüzden olay 30 dk sessiz kaldı.
+- **Doğrulama:** pos#1'i birebir canlandıran 7 senaryoluk hedefli test (stub Binance client):
+  (1) pos#1 replay → GTX red → MARKET fill @4064.70 (sinyalden İYİ); (2) eski pencerede kaybolan
+  t+59.6 sn tick'i → fallback ateşler; (3) deadline'ı 0.4 sn geçen tick → iptal değil fallback;
+  (4) fiyat kaçtı (>0.25R) → hâlâ `slipped` iptal; (5) fallback ateşlemiş + MARKET dönmemiş →
+  deadline `unfilled` iptal (sınırlı); (6) GTX kabul (fiyat aleyhte) → dinlenir, eskalasyon yok;
+  (7) dinlenen GTX dolar → `_enter_open`, MARKET yok. 7/7 PASS. Ayrıca executor tam yolu koşturuldu.
+- **Bu olayın parası:** paper işlem −1.03R kapandı, yani bu kaçırma ~$3 KAZANDIRDI. Mekanizma
+  yön-kör olduğu için kazananları da aynı şekilde kaçırırdı — düzeltme yine de doğru.
+- **⚠️ Açık bulgu (düzeltilmedi, ayrı karar):** dört executor'ün de config'i
+  `env = {**os.environ, **tsc._read_env()}` yapıyor (`live_exec`, `midas_exec`, `talos_exec`,
+  `talos_ichi_exec`) — yorum "process env for cron overrides" dese de **`.env` process env'i EZİYOR**.
+  `.env`'de `TALOS_ICHI_EXEC_DRY_RUN=false` olduğu için executor.py docstring'inde BELGELENEN
+  `TALOS_ICHI_EXEC_DRY_RUN=true python sync/talos_ichi_exec/executor.py` komutu gerçek parayla ARMED
+  koşuyor. Gerçek-para köprüsünde ayak-silahı; `.env` düzenlemeden shell'den dry-run mümkün değil.
+- **Not:** `midas_exec` ve `talos_exec` aynı 60 sn faz-kilitli pencere hatasını taşımaya devam ediyor
+  (ikisi de cron'da EMEKLİ/yorumlu, gerçek para akmıyor). Yeniden armanmadan önce bu commit'teki
+  `_manage_entry` sıralaması + 45 sn varsayılan oraya da taşınmalı.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

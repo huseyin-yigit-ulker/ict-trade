@@ -75,6 +75,10 @@ class MidasExecCfg:
     # and the trade is missed entirely (research: passive maker loses 40-60% of runners = half the
     # edge; taker book is +53.6R w/ the after-loss gate). After this many seconds unfilled, if price
     # is STILL within entry_max_slip_r, cancel the GTX and take MARKET. 0 = old pure-maker behavior.
+    # Keep this STRICTLY between one cron period (60s) and entry_timeout_sec, with margin on BOTH
+    # sides: at 60s the fallback window [created+60, deadline] is phase-locked to the 60s tick and a
+    # few hundred ms of cron jitter can leave it with zero ticks inside (pos#1, 2026-07-08 — the
+    # entry was cancelled having never reached the exchange). 45s gives the t+60s tick ~15s of slack.
     entry_taker_fallback_sec: int  # TALOS_ICHI_ENTRY_TAKER_FALLBACK_SEC — maker→taker fallback delay (0=off)
     # after-loss gate (2026-07-07 backtest, TALOS-ICHI.md): enter ONLY when the SAME fx-day's previous
     # SETTLED paper trade closed negative. 2026: 204tr +53.6R PF1.37 @taker vs full set +27.1R/1.09.
@@ -143,7 +147,7 @@ def load_cfg() -> MidasExecCfg:
         maker_entry=_b(env, "TALOS_ICHI_MAKER_ENTRY", True),
         entry_timeout_sec=_i(env, "TALOS_ICHI_ENTRY_TIMEOUT_SEC", 120),
         entry_max_slip_r=_f(env, "TALOS_ICHI_ENTRY_MAX_SLIP_R", 0.25),
-        entry_taker_fallback_sec=_i(env, "TALOS_ICHI_ENTRY_TAKER_FALLBACK_SEC", 60),
+        entry_taker_fallback_sec=_i(env, "TALOS_ICHI_ENTRY_TAKER_FALLBACK_SEC", 45),
         after_loss_only=_b(env, "TALOS_ICHI_EXEC_AFTER_LOSS_ONLY", False),
         sl_deadband_ticks=_i(env, "TALOS_ICHI_SL_DEADBAND_TICKS", 2),
         exec_version=str(env.get("TALOS_ICHI_EXEC_VERSION", "talos_ichix")).strip(),
