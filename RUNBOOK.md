@@ -842,6 +842,20 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - **En iyi 5 sembol:** FET +62.2, ETH +48.1, SOL +33.9, ARB +30.7, ADA +26.1 — canlı 5'linin 4'ü
   (FET/ETH/SOL/ARB) burada; canlı sembol seçimi backtest'le doğrulanıyor.
 
+### 2026-07-08 — AÇIK İŞLEM ÖZETİ: 5 dakikada bir TEK Telegram mesajı (sync/positions_digest.py)
+- **İstek (sahip):** "5 dakikada bir açık işlemleri Telegram'a tek mesajda anlık durumlarıyla bildiren cron."
+- **Ne:** salt-okunur raporcu — **emir göndermez**. Tek `positionRisk` çağrısıyla borsadan ANLIK
+  mark/uPnL/liq/isolatedMargin/kaldıraç; `ict_trade.live_positions` (OPUS scale-out) +
+  `ict_trade.talos_ichi_positions` (TALOS-ICHI-X trailing) satırlarından state/risk0/SL/locked_r/süre.
+  Pozisyon başına: yön, akış, state (RUNNER'da "TP1 alındı"), giriş→anlık (lehte/aleyhte %), uPnL $ ve R,
+  SL (+kilitli R), süre, kaldıraç, marj, liq. Altta hesap: cüzdan / serbest / toplam uPnL.
+- **Spam koruması:** açık pozisyon yoksa **sessiz** çıkar. `--always` boşken de atar, `--dry-run` göndermeden
+  basar, `--testnet` testnet hesabını raporlar.
+- **R hesabı:** `R = (mark − eff_entry)·yön / risk0`. OPUS RUNNER'da ilk hedef (+1R) çoktan kısmen alınmıştır,
+  gösterilen R kalan bacağındır — mesajda "TP1 alındı" ibaresiyle işaretlenir.
+- **Cron:** `*/5 * * * * sleep 15` (boş offset), log `$HOME/ict-digest.log`. VM'e kuruldu, canlı test gönderildi
+  (3 pozisyon: ETH/FET OPUS-RUNNER + XAU TALOS-ICHI-X).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
