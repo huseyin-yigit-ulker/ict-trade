@@ -300,7 +300,14 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         // TWO FX-sessions (~26h apart) — too wide for a single 1500-bar 1m fetch — so PAGINATE the 1m
         // fetch (up to ~4 pages ≈ 4 days). Staying at 1m keeps ALL signal-formation markers accurate
         // (the non-traded ones only exist client-side, computed on 1m bars).
-        const anchor = fxAnchorMs(isStatic ? startMs : end);
+        // The VISIBLE window starts at the FX-session open (MIDAS) / static window start. But the
+        // Keltner (TALOS) and Ichimoku (TALOS-ICHI) are ROLLING indicators, NOT session-anchored:
+        // the Ichimoku Kumo needs ~20h of 15m history (52+26 buckets) before it exists. So for those
+        // variants we PULL EXTRA WARMUP history back of the visible start (fetched off-screen to the
+        // left), so the cloud lines are populated from the first visible bar, then continue live.
+        const displayStart = fxAnchorMs(isStatic ? startMs : end);
+        const warmupMs = isIchi ? 2.5 * 86400000 : (isTalos ? 86400000 : 0);
+        const anchor = warmupMs ? Math.min(displayStart, end - warmupMs) : displayStart;
         const page = async (from) => {
           const q = `symbol=${SYMBOL}&interval=1m&startTime=${from}&endTime=${end}&limit=1500`;
           let r = await (await fetch(`https://fapi.binance.com/fapi/v1/klines?${q}`)).json();
@@ -333,7 +340,9 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         if (!framedRef.current && candles.length) {
           const n = candles.length;
           try {
-            if (isStatic) chart.timeScale().fitContent();                                  // whole day
+            if (isStatic && warmupMs) {                                                    // warmup off-screen left -> frame only the requested window
+              chart.timeScale().setVisibleRange({ from: Math.floor(displayStart / 1000), to: Math.floor(end / 1000) });
+            } else if (isStatic) chart.timeScale().fitContent();                            // whole day
             else chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 240), to: n + 3 });  // live: last ~4h
           } catch { chart.timeScale().fitContent(); }
           framedRef.current = true;

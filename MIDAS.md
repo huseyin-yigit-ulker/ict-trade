@@ -828,6 +828,16 @@ real maker fill-rate/slippage study, not mainnet P&L.
   useEffect, data-load effect'ini tetiklemeden — 30s poll'a dokunmaz). Yalnız talos_ichi'de görünür.
   Backend/strateji dokunulmadı. Prod build PASS.
 
+### 2026-07-08 (12) — fix: TALOS-ICHI canlı grafiğinde Kumo çizgileri boştu → warmup geçmiş verisi eklendi
+- **Şikayet (kullanıcı):** "açınca görünmüyor" — Ichimoku çizgileri toggle açılınca çıkmıyor.
+- **Kök neden:** canlı grafik fx-seans açılışından veri çekiyordu; Ichimoku Kumo ~20h 15m geçmişi
+  (52+26 bucket) ister → seans yeniyse yeterli bucket yok → Senkou span NaN → kumoAData boş → çizgi yok.
+- **Düzeltme (MidasLiveChart.jsx):** Keltner/Ichimoku ROLLING gösterge (seans-anchored değil); talos_ichi
+  için anchor = end−2.5gün warmup (talos için 1gün), görünür pencere yine son ~4h (fazlası sola kaydırılır).
+  Static (backtest-günü) için warmup sola yüklenir, görünür aralık yalnız istenen gün (setVisibleRange).
+  MIDAS anchor (VWAP seans) dokunulmadı. Böylece çizgiler ilk görünür bardan itibaren dolu, sonra canlı
+  devam eder. Prod build PASS.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
