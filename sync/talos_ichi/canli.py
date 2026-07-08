@@ -149,6 +149,7 @@ def main():
     now = pd.Timestamp.now(tz="UTC")
     conn = None if args.dry_run else tsc.live_conn()
     has_open = False
+    exec_open = False                                      # a live TALOS-ICHI-X position blocks all emits
     if conn is not None:
         gcur = conn.cursor()
         gcur.execute("""SELECT 1 FROM ict_trade.signals WHERE mode=%s
@@ -156,6 +157,18 @@ def main():
                         AND signal_time >= %s LIMIT 1""",
                      (MODE, (now - pd.Timedelta(minutes=T.MAX_HOLD_MIN + 60)).to_pydatetime()))
         has_open = gcur.fetchone() is not None
+        # ALSO gate on the REAL executor position (2026-07-08 owner request): while TALOS-ICHI-X holds
+        # a live XAUUSDT position, emit NOTHING — no new setup row, no Telegram, no Web Push. The paper
+        # replay can decide a trade is over before the real one exits (fill/slippage divergence), and a
+        # fresh setup then fires alerts for a trade the executor cannot take (max_concurrent=1). Wait
+        # for the real position to close. Best-effort: a missing table must not break the paper feed.
+        try:
+            gcur.execute("""SELECT 1 FROM ict_trade.talos_ichi_positions
+                            WHERE state IN ('PENDING_ENTRY','ENTRY_WORKING','OPEN') LIMIT 1""")
+            exec_open = gcur.fetchone() is not None
+        except Exception:                                  # noqa: BLE001
+            conn.rollback(); exec_open = False
+        has_open = has_open or exec_open
         gcur.close()
     if has_open:
         sigs = []
@@ -163,7 +176,8 @@ def main():
         op = T.current_open(now)
         sigs = [op] if op is not None else T.latest_setup(now, lookback_min=int(args.lookback_min))
     print(f"=== TALOS-ICHI CANLI @ {now:%Y-%m-%d %H:%M}Z | XAUUSDT 1m | lookback={args.lookback_min:g}m | "
-          f"mode='{MODE}'{' · IN POSITION (no new emit)' if has_open else ''} ===", flush=True)
+          f"mode='{MODE}'{' · IN POSITION (no new emit)' if has_open else ''}"
+          f"{' · EXEC POSITION OPEN (canlı işlem açık — bildirim yok)' if exec_open else ''} ===", flush=True)
     for s in sigs:
         fire = s["signal_time"] + pd.Timedelta(minutes=1)
         print(f"  XAUUSDT {s['direction'].upper():<5} @ {fire:%m-%d %H:%M} "
@@ -214,7 +228,10 @@ def main():
                             )
         cur.close()
 
-    sl_msgs, exits = _track_open_positions(conn, now, args.no_telegram, step=args.sl_step)
+    # While TALOS-ICHI-X holds the REAL position it is the authoritative notifier (entry / SL-ratchet /
+    # exit). Keep replaying the paper trailing so the book's context stays correct, but stay SILENT —
+    # otherwise every ratchet fires twice (paper + executor). Owner request 2026-07-08.
+    sl_msgs, exits = _track_open_positions(conn, now, args.no_telegram or exec_open, step=args.sl_step)
     conn.close()
     print(f"  {inserted} new · {alerted} formation-alert · {sl_msgs} SL-update · {exits} exit (mode='{MODE}')")
 

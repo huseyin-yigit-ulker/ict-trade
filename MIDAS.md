@@ -974,6 +974,21 @@ real maker fill-rate/slippage study, not mainnet P&L.
   işlemler için istediği için **dokunulmadı**; kapanınca serbest kalır. Kural yalnız yeni girişlerde
   (giriş öncesi `set_leverage`). Serbest bakiye $55.7, OPUS kısıtlanmıyor.
 
+### 2026-07-08 (17) — canlı XAU pozisyonu açıkken paper feed SUSAR (yeni emit yok, Telegram/push yok)
+- **İstek (sahip):** "aktif XAU işlemi varsa TALOS yeni işlem almasın, kapanmasını beklesin, Telegram'a ve
+  app'e bildirim atmasın."
+- **Sorun:** `sync/talos_ichi/canli.py` yalnız KENDİ paper sinyal tablosuna bakıyordu. Paper trailing replay'i
+  (dolum/kayma farkı yüzünden) işlemi gerçek pozisyondan ÖNCE kapalı sayabilir → yeni setup yayınlar,
+  formation Telegram+WebPush atar, oysa executor `max_concurrent=1` ile o işlemi zaten alamaz. Ayrıca açık
+  işlemde paper tracker ile executor AYNI trailing/çıkış için ÇİFT Telegram atıyordu.
+- **Düzeltme (`canli.py`):** (1) `has_open` kapısına `ict_trade.talos_ichi_positions` (state ∈ PENDING_ENTRY/
+  ENTRY_WORKING/OPEN) kontrolü eklendi → gerçek pozisyon açıkken **hiç emit yok** ⇒ formation Telegram/push
+  da yok. (2) Tracker `no_telegram = args.no_telegram OR exec_open` ile çağrılıyor: paper trailing durumu
+  (context/pos) güncellenmeye devam eder ama SESSİZ — açık gerçek işlemin tek yetkili bildiricisi
+  TALOS-ICHI-X executor'dur. Tablo yoksa fail-safe (rollback, paper feed kırılmaz).
+- **Doğrulama (pos#22 açıkken):** canli → `IN POSITION · EXEC POSITION OPEN (canlı işlem açık — bildirim yok)`,
+  `0 fresh setup · 0 formation-alert · 0 SL-update · 0 exit`. Executor kendi trailing takibini sürdürüyor.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
