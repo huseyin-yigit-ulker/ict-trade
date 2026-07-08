@@ -78,6 +78,28 @@ Soru: işlem-bazı meta yerine, daha büyük frekansta bir model "MIDAS bugün/b
 
 **Yorum:** 2026-07-07 rejim incelemesinin ("edge trend günlerinde ama sinyal-anı hiçbir rejim ölçüsü prediktif değil, |ρ|≤0.10") ML-ensemble ile gün-frekansına genellenmiş teyidi: MIDAS'ın gün-tipi ex-ante ÖNGÖRÜLEMİYOR — ne günün ilk 2 saatinden, ne önceki günden. Çalışan tek kapı (AFTER-LOSS) bir rejim sinyali değil, gün-İÇİ dizi etkisi. Oracle-gerçek makası, edge'in "trend günü yakalama" değil "her gün küçük maliyetle deneyip trend gününde koşma" yapısında olduğunu doğruluyor — kapı arayışı bu yapıya ters. n=131 gün küçük (istatistiksel güç sınırlı) ama yön (AUC<0.5) hiçbir cesaret vermiyor; PAXG ile örnek büyütme ancak özellikle istenirse.
 
+## 4c. Ek deney (2026-07-08): BAĞIMSIZ ML sinyal üretimi — literatür aileleri 2026'da yarıştı; TEK pozitif = triple-barrier LightGBM
+
+Soru: kapıyı bırak, ML doğrudan sinyal üretsin; literatürdeki diğer yaklaşımları da 2026 özelinde değerlendir. (`ml_signal_xau.py` + `analyze_tb.py`; 15m barlar, aylık GENİŞLEYEN walk-forward Mar-Tem OOS, 1-gün purge, eşik = eğitim-olasılık kantili q90/q97 "selective classification", denetlenmiş engine ile ekonomi, random-giriş null bandı, çift maliyet.)
+
+| Model (literatür ailesi) | OOS AUC | q97 ekonomi (Mar-Tem, FX) | Yorum |
+|---|---|---|---|
+| **TB-LGBM** (triple-barrier + LightGBM, AFML) | **0.651** (aylar: 0.57→0.72 ↑) | **83tr +27.8R PF1.57 DD−10.3, taker +3.1** (null −5±8R ⇒ ~4σ) | TEK gerçek pozitif |
+| TB-LOGIT (linear baseline) | 0.625 | 146tr −6.7R | AUC var, para yok — sıralama ucu bozuk |
+| TB-MLP (özellik-girdili NN) | 0.606 | 150tr −18.5R | LGBM'in gerisinde |
+| FH-LGBM (sabit-ufuk yön = klasik makale hedefi) | 0.510 | 136tr −6.8R | yazı-tura — "ML altın yönü tahmin eder" ailesinin 2026 ampirik çürütmesi |
+| SEQ-MLP (ham gecikme-dizisi = "LSTM diyeti") | 0.504 | 271tr −36.2R | fiyat-geçmişi-tek-girdi NN hiçbir şey öğrenmiyor |
+| ENSEMBLE (3 TB modeli) | 0.634 | 38tr +12.8R PF1.57 | LGBM'i geçemiyor |
+
+**TB-LGBM derin analiz:** eşik platosu sağlıklı (q93-q98 hepsi +16..+28R; q99 ölüyor). Kırılımlar: kârın %77'si Mayıs'ta (+21.5R); short-taraf +23.2R vs long +4.6R; exit'ler 32 target / 47 stop / 3 time. Top özellikler: mins_in (0.22), atr_ratio, utc_hour, day_ret, dow — model büyük ölçüde SEANS YAPISI + vol rejimini yeniden keşfediyor, üstüne bir short-cebi ekliyor. MIDAS ile örtüşme: 83 işlemin 55'i açık bir MIDAS işlemine denk geliyor (34 aynı yön) ama günlük-R korelasyonu 0.247 (düşük) → kısmen bağımsız; Mar-Tem birleşik +129.7R vs MIDAS-yalnız +102.0R.
+
+**Yorumlar (kendi değerlendirmem):**
+1. **Etiket > model.** Aynı özellikler, aynı LightGBM: sabit-ufuk etiketle AUC 0.510, triple-barrier etiketle 0.651. Literatürün asıl dersi bu — modele değil, etiketin işlem-gerçekliğine yatırım yap (AFML tezinin 2026 doğrulaması).
+2. **"LSTM altın tahmini" ailesi 2026'da da boş.** Ham fiyat-geçmişi dizisi (SEQ-MLP) 0.504 + her eşikte negatif. Makalelerdeki parlak sonuçlar seviye-regresyon artefaktı/maliyetsizlik; sinyal fiyat-dizisinde değil, BAĞLAM özelliklerinde (seans, vol-rejim).
+3. **AUC ≠ para.** TB-LOGIT 0.625 AUC'ye rağmen para kaybediyor — dağılımın ucundaki seçim kalitesi ayrı bir şey; ekonomiyi her zaman engine ile ölç.
+4. **AUC ay geçtikçe yükseliyor** (0.57→0.72): model veri biriktikçe öğreniyor → PAXG 2024-25 ile eğitim büyütme doğal sonraki adım; ama meta-deneyde görülen rejim-kayması riski aynen geçerli (2024-25'in MIDAS-negatif rejimi TB dağılımını da kaydırabilir).
+5. **Ship çıtasının neresinde?** Tek yılın 5 OOS ayı; kâr Mayıs-yoğun; taker'da ≈0 (yine FX-cost akışı olur); n=83. Repo standardına göre henüz ship-grade DEĞİL — ama 30+ el-yapımı ailenin çoğundan iyi bir ilk-geçiş ve MIDAS'a düşük-korelasyonlu ek olma potansiyeli var. Sonraki kapı: PAXG çok-yıl OOS + parametre platosu (SL/TP/H geometrisi) + canlı-paper izleme.
+
 ## 5. Sonraki adımlar (bu turda YAPILMADI)
 - **Aday B:** bağımsız 15m triple-barrier yön modeli (kill: OOS PF<1.1). Etiketleyici hazır (`labels.triple_barrier`).
 - **Aday C:** ancak bir aday pozitifse, aynı etiketlerde küçük GRU/TCN artık-değer testi (tek deney).
@@ -89,6 +111,8 @@ Soru: işlem-bazı meta yerine, daha büyük frekansta bir model "MIDAS bugün/b
 - `scratchpad/fx_gold/ml/meta_midas.py` — ana pipeline (dataset + purged-CV + transfer + null + importance); `--rebuild`
 - `scratchpad/fx_gold/ml/combo_test.py` — AFTER-LOSS karşılaştırma/kombinasyon testi
 - `scratchpad/fx_gold/ml/gate_midas.py` — büyük-frekans rejim-kapısı deneyi (V1 gün / V2 yüksek-TF, ensemble; §4b)
+- `scratchpad/fx_gold/ml/ml_signal_xau.py` — bağımsız ML sinyal harness'ı (5 aile + ensemble, aylık WF; §4c)
+- `scratchpad/fx_gold/ml/analyze_tb.py` — TB-LGBM derin analizi (plato/kırılım/MIDAS-örtüşme/önem; §4c)
 - `scratchpad/fx_gold/ml/lookahead_check_ml.py` — truncation no-lookahead denetimi (PASS)
 - `scratchpad/fx_gold/ml/dataset.pkl` — önbellek (2020 işlem; gitignore'lu pkl)
 - Ortam: `.venv`'e scikit-learn 1.7.2 + lightgbm 4.6.0 + scipy kuruldu (requirements'a EKLENMEDİ — araştırma bağımlılığı)

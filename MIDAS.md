@@ -713,6 +713,19 @@ real maker fill-rate/slippage study, not mainnet P&L.
   tek kapı (AFTER-LOSS) rejim değil gün-İÇİ dizi etkisi. Edge yapısı "her gün dene, trend gününde koş" —
   gün-kapısı arayışı yapıya ters. NO-SHIP, canlı dokunulmadı.
 
+### 2026-07-08 (4) — ARAŞTIRMA (kod değişikliği YOK): bağımsız ML sinyal üretimi — tek pozitif TRIPLE-BARRIER LightGBM (ML-XAU-RAPORU.md §4c)
+- **Soru (kullanıcı):** kapıyı bırak, ML doğrudan XAU sinyali üretsin; literatür ailelerini 2026'da değerlendir.
+- **Düzenek (`ml_signal_xau.py`):** 15m barlar, aylık genişleyen walk-forward (OOS Mar-Tem), 1-gün purge,
+  eşik=eğitim-kantili (q90/q97), denetlenmiş engine ekonomisi, random-giriş null bandı, çift maliyet.
+  5 aile: TB-LGBM (AFML), FH-LGBM (klasik sabit-ufuk), TB-LOGIT, TB-MLP, SEQ-MLP ("LSTM diyeti") + ensemble.
+- **Sonuç:** TEK pozitif = **TB-LGBM: OOS AUC 0.651 (aylık 0.57→0.72↑), q97 83tr +27.8R PF1.57 DD−10.3,
+  taker +3.1, null −5±8R (~4σ)**; plato q93-q98 sağlıklı. FH etiketi AUC 0.510 (aynı model!) → etiket>model;
+  SEQ-MLP 0.504 → "LSTM altın tahmini" ailesi 2026'da ampirik çürük; TB-LOGIT AUC 0.625 ama para kaybediyor
+  (AUC≠para). Kâr Mayıs-yoğun (%77), short-taraf ağırlıklı; MIDAS ile 55/83 örtüşme ama günlük-R corr 0.247;
+  Mar-Tem birleşik +129.7R vs MIDAS-yalnız +102.0R.
+- **Karar:** ship-grade DEĞİL (tek yıl, 5 OOS ayı, Mayıs-yoğunluğu) ama ilk gerçek pozitif bağımsız ML sinyali.
+  Sonraki kapı: PAXG 2024-25 çok-yıl OOS + SL/TP/H geometri platosu + canlı-paper izleme. Canlı dokunulmadı.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
