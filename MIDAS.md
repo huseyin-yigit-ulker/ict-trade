@@ -658,6 +658,27 @@ real maker fill-rate/slippage study, not mainnet P&L.
   (+87.7R/323tr/PF1.53), canlı mode='talos' her dk (+30s) Telegram ON, nightly backfill 01:40,
   migration 013, UI uçtan uca (canlı Keltner grafiği dahil). Detay: RUNBOOK.md changelog 2026-07-07 (11).
 
+### 2026-07-08 — MIDAS-X kaçan işlem post-mortem: maker→taker fallback (pos#47)
+- **Şikayet (kullanıcı):** dünkü MIDAS sinyali Binance'te işlenmemiş.
+- **Teşhis (loglar):** mainnet cutover (07-07 18:11) sonrası 2 sinyal: (1) 07-08 00:05 LONG →
+  `after-loss gate` SKIP (fx-gününün ilk işlemi — TASARIM GEREĞİ, bug değil; paper'da −0.27R kapandı,
+  kapı doğru çalıştı); (2) 07-08 01:12 LONG → pozisyon #47 yaratıldı, maker GTX limit 4108.91'e
+  kondu, 01:14'te fiyat 0.25R toleransın ötesine kaçınca **"entry slipped — cancelled"** — işlem
+  tamamen KAÇTI (paper işlem koşarken Binance flat). Ayrıca 07-07 00:33 testnet SHORT'u da aynı
+  yoldan iptal olmuştu; 14:37 LONG testnet'te dolmuştu.
+- **Kök neden:** saf GTX giriş ters-seçilim tuzağı — pasif limit yalnız fiyat aleyhe DÖNÜNCE dolar;
+  kaçan fiyat = tam da edge'in yaşadığı runner. 2026-07-02 maker araştırmasının canlıdaki tezahürü
+  (pasif maker runner'ların %40-60'ını kaçırır; taker+kapı kitabı +53.6R).
+- **Düzeltme (executor.py + config.py):** **maker→taker fallback** — GTX
+  `MIDAS_ENTRY_TAKER_FALLBACK_SEC` (varsayılan 60 sn; 0=eski saf-maker) içinde dolmazsa VE fiyat
+  hâlâ `MIDAS_ENTRY_MAX_SLIP_R` (0.25R) toleransındaysa limit iptal + MARKET giriş (kendi coid
+  gen'i; cancel/fill yarışı MARKET'ten önce yeniden sorgulanır — dolmuşsa çift pozisyon açılmaz;
+  parsiyel dolumlar fallback dışı; fallback bir kez ateşlenir, sonraki retry'lar taker kalır).
+  Tolerans DIŞINA kaçan fiyatta davranış değişmedi (iptal — geç girmek başka bir işlemdir).
+  `_manage_entry` artık kayıtlı `entry_coid`'i okur; `_enter_open` gerçek fill'in coid'ini saklar.
+- Beklenen etki: giriş fiyatı sinyalin ≤0.25R yakınında garanti (backtest pariteye uygun), maker
+  indirimi fırsat varsa alınır, runner kaçırma biter. README + RUNBOOK env listesi güncellendi.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

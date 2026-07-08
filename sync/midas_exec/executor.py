@@ -423,7 +423,7 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
     sign = _sign(pos["direction"])
     signal_entry = float(pos["signal_entry"])
     risk0 = float(pos["risk0"])
-    coid = st.coid(pos["id"], "entry", 0)
+    coid = pos.get("entry_coid") or st.coid(pos["id"], "entry", 0)
     o = _get_order(client, sym, coid)
     status = (o or {}).get("status")
 
@@ -450,16 +450,43 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
         print(f"  ⏭️ {sym} entry {reason} — cancelled")
         return
 
+    # ---- maker→taker FALLBACK (2026-07-08, pos#47 post-mortem): the resting GTX only fills on an
+    # adverse comeback; if it's still unfilled after entry_taker_fallback_sec but price is STILL
+    # within the slip tolerance (checked above), missing the trade costs more than the taker fee —
+    # cancel the GTX and go MARKET. Partial fills are excluded (the partial leg is a real position;
+    # the normal FILLED/slip paths handle it). Cancel/fill race is re-checked before the MARKET send.
+    if (cfg.maker_entry and cfg.entry_taker_fallback_sec > 0 and dl is not None
+            and status != "PARTIALLY_FILLED" and not _ctx(pos).get("taker_fallback")):
+        created = pd.Timestamp(dl).tz_convert("UTC") - pd.Timedelta(seconds=cfg.entry_timeout_sec)
+        if now >= created + pd.Timedelta(seconds=cfg.entry_taker_fallback_sec):
+            if status == "NEW":
+                try:
+                    client.cancel_order(sym, client_order_id=coid)
+                except BinanceError:
+                    pass
+                o2 = _get_order(client, sym, coid)   # cancel/fill race: it may have JUST filled
+                if o2 and (o2.get("status") == "FILLED" or float(o2.get("executedQty") or 0) > 0):
+                    avg = float(o2.get("avgPrice") or 0) or signal_entry
+                    _enter_open(cfg, client, conn, xi, pos, avg, _order_fill_time(o2, now), o2, now)
+                    return
+            ctx = _ctx(pos); ctx["taker_fallback"] = True
+            st.patch(conn, pos["id"], context=ctx)
+            pos["context"] = ctx
+            print(f"  ⚡ {sym} maker→taker fallback ({cfg.entry_taker_fallback_sec}s dolmadı, fiyat toleransta)")
+            _place_entry(cfg, client, conn, xi, pos, now, taker=True)
+            return
+
     if status in ("NEW", "PARTIALLY_FILLED"):
         if pos["state"] != st.ENTRY_WORKING:
             st.patch(conn, pos["id"], state=st.ENTRY_WORKING, entry_coid=coid,
                      entry_order_id=(o or {}).get("orderId"))
         return
 
-    _place_entry(cfg, client, conn, xi, pos, now)
+    # once the fallback fired, any re-place stays TAKER (e.g. a rejected MARKET retried next tick)
+    _place_entry(cfg, client, conn, xi, pos, now, taker=bool(_ctx(pos).get("taker_fallback")))
 
 
-def _place_entry(cfg, client, conn, xi, pos, now) -> None:
+def _place_entry(cfg, client, conn, xi, pos, now, taker: bool = False) -> None:
     sym = pos["symbol"]
     _ensure_account(cfg, client, sym)
     # Auto-leverage (OPUS rule, 2026-07-07): per-trade leverage from the SL distance so the
@@ -484,9 +511,9 @@ def _place_entry(cfg, client, conn, xi, pos, now) -> None:
             st.patch(conn, pos["id"], leverage=lev)
             pos["leverage"] = lev
     qty = float(pos["qty"])
-    coid = st.coid(pos["id"], "entry", 0)
+    coid = st.coid(pos["id"], "entry", 1 if taker else 0)   # fallback MARKET gets its own coid gen
     params = dict(symbol=sym, side=_side(pos["direction"]), quantity=qty, newClientOrderId=coid)
-    if cfg.maker_entry:
+    if cfg.maker_entry and not taker:
         price = xi.round_price(sym, float(pos["signal_entry"]), mode="nearest")
         params.update(type="LIMIT", timeInForce="GTX", price=price)
     else:
@@ -518,7 +545,8 @@ def _place_entry(cfg, client, conn, xi, pos, now) -> None:
         _enter_open(cfg, client, conn, xi, pos, avg, now, resp, now)
     else:
         st.patch(conn, pos["id"], state=st.ENTRY_WORKING, entry_coid=coid, entry_order_id=resp.get("orderId"))
-        print(f"  ⏳ {sym} maker entry resting @ {params.get('price', 'MARKET')}")
+        print(f"  ⏳ {sym} {'taker (fallback) entry sent' if taker else 'maker entry resting'} @ "
+              f"{params.get('price', 'MARKET')}")
 
 
 def _enter_open(cfg, client, conn, xi, pos, avg: float, fill_time, resp, now) -> None:
@@ -527,7 +555,8 @@ def _enter_open(cfg, client, conn, xi, pos, avg: float, fill_time, resp, now) ->
     ctx = _ctx(pos)
     ctx.update(init_sl=float(pos["signal_sl"]), placed_sl=None, pos="open")
     st.patch(conn, pos["id"], state=st.OPEN, eff_entry=avg, entry_fill_time=fill_time, entry_fill_px=avg,
-             time_stop_at=time_stop, entry_coid=st.coid(pos["id"], "entry", 0),
+             time_stop_at=time_stop,
+             entry_coid=(resp or {}).get("clientOrderId") or st.coid(pos["id"], "entry", 0),
              entry_order_id=(resp or {}).get("orderId"), context=ctx)
     if _place_protective_stop(cfg, client, conn, xi, pos, float(pos["signal_sl"])):
         ctx["placed_sl"] = float(pos["signal_sl"])

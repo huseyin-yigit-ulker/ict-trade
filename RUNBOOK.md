@@ -179,7 +179,7 @@ Logs: `~/ict-donchian.log`, `~/ict-midas.log`, `~/ict-talos.log`, `~/ict-midas-e
 `MIDAS_EXEC_DRY_RUN`, `MIDAS_BINANCE_TESTNET` (MIDAS's own network flag, independent of `BINANCE_TESTNET`;
 **false = mainnet real money since 2026-07-07**), `MIDAS_RISK_PER_TRADE_USD` (mainnet: 3),
 `MIDAS_LEVERAGE`/`MIDAS_AUTO_LEVERAGE`/`MIDAS_LEVERAGE_MAX`, `MIDAS_MARGIN_TYPE`, `MIDAS_MAKER_ENTRY`,
-`MIDAS_ENTRY_TIMEOUT_SEC`, `MIDAS_ENTRY_MAX_SLIP_R`, `MIDAS_SL_DEADBAND_TICKS`,
+`MIDAS_ENTRY_TIMEOUT_SEC`, `MIDAS_ENTRY_MAX_SLIP_R`, `MIDAS_ENTRY_TAKER_FALLBACK_SEC` (maker→taker fallback, default 60; 0=kapalı), `MIDAS_SL_DEADBAND_TICKS`,
 `MIDAS_EXEC_AFTER_LOSS_ONLY` (enter only if the previous same-fx-day paper trade closed negative),
 `MIDAS_EXEC_VERSION`, `MIDAS_EXEC_NAME` (+ shares `LIVE_TRADING_ENABLED`, Binance key pairs). Full list:
 `sync/midas_exec/.env.example`.

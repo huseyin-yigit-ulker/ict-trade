@@ -13,8 +13,12 @@ then. The real-money default is fail-closed (`LIVE_TRADING_ENABLED` / `MIDAS_EXE
 
 ## What it does
 - Reads the `mode='midas'` live signals (`ict_trade.signals`) the paper feed already emits.
-- Places a **post-only maker LIMIT** entry at the pullback close (`GTX`); cancels/skips on timeout or
-  slip past `MIDAS_ENTRY_MAX_SLIP_R` (maker-only — never chases with a taker).
+- Places a **post-only maker LIMIT** entry at the pullback close (`GTX`); abandons on slip past
+  `MIDAS_ENTRY_MAX_SLIP_R` or timeout. **maker→taker fallback (2026-07-08):** if the GTX is still
+  unfilled after `MIDAS_ENTRY_TAKER_FALLBACK_SEC` (default 60; 0 = old pure-maker) and price is
+  still within the slip tolerance, it cancels the limit and enters MARKET — a resting GTX only
+  fills on an adverse comeback, so pure-maker silently skipped exactly the runners the edge lives
+  on (pos#47, 2026-07-08 01:12 LONG: entry cancelled, paper trade ran without us).
 - Manages the exit with `sync/midas/strategy.track_open` — the **same** 1.5×ATR init stop → 3.5×ATR
   chandelier trail → 8h cap → session flatten the paper `canli.py` drives (parity by construction).
 - **Testnet**: synthetic model — recompute the chandelier each tick, MARKET-close on the exit trigger
