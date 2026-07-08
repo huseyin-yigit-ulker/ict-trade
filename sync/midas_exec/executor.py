@@ -418,6 +418,26 @@ def _cancel_resting(cfg, client, sym: str) -> None:
 
 
 # ------------------------------------------------------------------ entry lifecycle
+def _abandon_entry(cfg, client, conn, pos, coid, status, reason: str, now) -> None:
+    """Cancel whatever entry leg is resting and mark the position CANCELLED. reason is 'slipped'
+    (price ran past entry_max_slip_r) or 'unfilled' (deadline hit with no fill and no taker
+    fallback left). Both are silent misses of a live signal, so they get a forensic order row."""
+    sym = pos["symbol"]
+    if status in ("NEW", "PARTIALLY_FILLED"):
+        try:
+            client.cancel_order(sym, client_order_id=coid)
+        except BinanceError:
+            pass
+    st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason=reason, exit_time=now)
+    st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="cancel",
+                 client_order_id=coid, payload={"reason": reason, "order_status": status},
+                 user_id=pos.get("user_id"))
+    _alert(cfg, conn, f"⏭️ <b>GİRİŞ İPTAL</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
+                      f"maker limit {'fiyat kaçtı (+%.2gR)' % cfg.entry_max_slip_r if reason == 'slipped' else 'dolmadı (süre doldu)'}"
+                      f" — {_tag(cfg)}", kind="entry")
+    print(f"  ⏭️ {sym} entry {reason} — cancelled")
+
+
 def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = None) -> None:
     sym = pos["symbol"]
     sign = _sign(pos["direction"])
@@ -436,18 +456,10 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
     slipped = last is not None and ((last - signal_entry) * sign) > cfg.entry_max_slip_r * risk0
     dl = pos.get("entry_deadline")
     expired = dl is not None and now > pd.Timestamp(dl).tz_convert("UTC")
-    if slipped or expired:
-        if status in ("NEW", "PARTIALLY_FILLED"):
-            try:
-                client.cancel_order(sym, client_order_id=coid)
-            except BinanceError:
-                pass
-        reason = "slipped" if slipped else "unfilled"
-        st.patch(conn, pos["id"], state=st.CANCELLED, exit_reason=reason, exit_time=now)
-        _alert(cfg, conn, f"⏭️ <b>GİRİŞ İPTAL</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
-                          f"maker limit {'fiyat kaçtı (+%.2gR)' % cfg.entry_max_slip_r if slipped else 'dolmadı (süre doldu)'}"
-                          f" — {_tag(cfg)}", kind="entry")
-        print(f"  ⏭️ {sym} entry {reason} — cancelled")
+    # Price ran past the tolerance — abandon regardless of the clock. Chasing is how a +0.5R
+    # signal turns into a −0.5R one.
+    if slipped:
+        _abandon_entry(cfg, client, conn, pos, coid, status, "slipped", now)
         return
 
     # ---- maker→taker FALLBACK (2026-07-08, pos#47 post-mortem): the resting GTX only fills on an
@@ -455,6 +467,13 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
     # within the slip tolerance (checked above), missing the trade costs more than the taker fee —
     # cancel the GTX and go MARKET. Partial fills are excluded (the partial leg is a real position;
     # the normal FILLED/slip paths handle it). Cancel/fill race is re-checked before the MARKET send.
+    #
+    # Evaluated BEFORE `expired` (2026-07-08, TALOS-ICHI-X pos#1 post-mortem, ported here):
+    # entry_timeout_sec, entry_taker_fallback_sec and the cron period are all 60s-aligned and
+    # phase-locked to the same second, so a tick can land a few hundred ms short of
+    # [created+fallback, deadline] and then trip `expired` on the next one — the nominally-60s
+    # window can catch ZERO ticks and the signal is cancelled having never reached the exchange.
+    # `slipped` is False here, so price is in tolerance: a late tick must still take the trade.
     if (cfg.maker_entry and cfg.entry_taker_fallback_sec > 0 and dl is not None
             and status != "PARTIALLY_FILLED" and not _ctx(pos).get("taker_fallback")):
         created = pd.Timestamp(dl).tz_convert("UTC") - pd.Timedelta(seconds=cfg.entry_timeout_sec)
@@ -475,6 +494,12 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
             print(f"  ⚡ {sym} maker→taker fallback ({cfg.entry_taker_fallback_sec}s dolmadı, fiyat toleransta)")
             _place_entry(cfg, client, conn, xi, pos, now, taker=True)
             return
+
+    # Deadline reached with no fallback left: it's disabled, it already fired (a MARKET that never
+    # came back), or a partial leg is resting. Bounds the taker attempt too.
+    if expired:
+        _abandon_entry(cfg, client, conn, pos, coid, status, "unfilled", now)
+        return
 
     if status in ("NEW", "PARTIALLY_FILLED"):
         if pos["state"] != st.ENTRY_WORKING:
@@ -521,8 +546,26 @@ def _place_entry(cfg, client, conn, xi, pos, now, taker: bool = False) -> None:
     try:
         resp = client.new_order(**params)
     except BinanceError as e:
-        if e.code in (-2010, -5022):                        # post-only would immediately match -> retry
-            print(f"  · {sym} maker entry would cross (post-only) — retry next tick")
+        if e.code in (-2010, -5022) and cfg.maker_entry and not taker:
+            # Post-only cross (2026-07-08, TALOS-ICHI-X pos#1 post-mortem, ported here). The
+            # rejection PROVES the book is already at-or-better than signal_entry — a BUY limit
+            # above the ask, a SELL below the bid. So the GTX can only ever come to rest once price
+            # has moved AGAINST the signal (the adverse-selection trap), and re-sending the identical
+            # price next tick is a deterministic no-op loop that burns the whole entry window.
+            # _manage_entry's `slipped` guard has already established price is inside tolerance, and
+            # here it is on the FAVOURABLE side of the reference. Take it.
+            ctx = _ctx(pos); ctx["taker_fallback"] = True
+            st.patch(conn, pos["id"], context=ctx)
+            pos["context"] = ctx
+            st.log_order(conn, position_id=pos["id"], symbol=sym, leg="entry", action="reject",
+                         client_order_id=coid,
+                         payload={"err": str(e), "code": e.code, "escalate": "taker",
+                                  "gtx_price": params.get("price")},
+                         user_id=pos.get("user_id"))
+            _alert(cfg, conn, f"⚡ <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}: maker limit piyasayı "
+                              f"keserdi (fiyat lehte) → taker girişe geçildi — {_tag(cfg)}", kind="entry")
+            print(f"  ⚡ {sym} GTX would cross (price favourable) — escalating to taker")
+            _place_entry(cfg, client, conn, xi, pos, now, taker=True)
             return
         if e.code == -4411:                                 # account hasn't accepted the TradFi-Perps agreement
             print(f"  ✋ {sym} gold trading blocked: sign the Binance 'TradFi-Perps agreement' on this "

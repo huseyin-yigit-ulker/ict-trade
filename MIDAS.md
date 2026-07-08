@@ -989,6 +989,43 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **Doğrulama (pos#22 açıkken):** canli → `IN POSITION · EXEC POSITION OPEN (canlı işlem açık — bildirim yok)`,
   `0 fresh setup · 0 formation-alert · 0 SL-update · 0 exit`. Executor kendi trailing takibini sürdürüyor.
 
+### 2026-07-08 (17) — MIDAS-X TESTNET/PAPER'da yeniden açıldı + pos#1 giriş düzeltmesi midas_exec'e taşındı
+- **İstek (kullanıcı):** "paper account'ta çalışsın midas".
+- **Durum tespiti:** MIDAS sinyali aslında paper FEED'de işleniyordu (17:31 SHORT emit → `mode='midas'`,
+  `pos='open'`, trailing takip, Telegram). İşlenmeyen şey Binance emriydi: MIDAS-X sabah emekli
+  edilmişti (cron yorumlu, `MIDAS_EXEC_ENABLED=false`, owner satırı `enabled=false`) — `midas_positions`'ın
+  en yeni satırı 01:12'deki #47. MIDAS'ın "PAPER"ı bir Binance hesabı değil, salt-DB simülasyondu.
+- **Yapılan (paper = TESTNET):** `.env` `MIDAS_EXEC_ENABLED=true` + **`MIDAS_BINANCE_TESTNET=true`** +
+  `MIDAS_EXEC_DRY_RUN=false` (yedek `~/env.backup.pre-midas-paper-20260708-174713`);
+  `user_stream_settings` midas/**testnet** `enabled=true` (midas/**mainnet** `enabled=false` KALDI);
+  `dag/crontab` midas_exec iki satırı yorumdan çıkarıldı + `crontab dag/crontab`
+  (yedek `~/crontab.backup.pre-midas-paper-*`). Doğrulama sırası: önce `MIDAS_EXEC_DRY_RUN=true` ile tek
+  el koşuldu (`DRY-RUN (no orders) | testnet`, testnet anahtarı çözüldü, `XAUUSDT tradable=True`,
+  risk $5 satırdan) → sonra arm. Canlı tick `ARMED (LIVE ORDERS) | testnet`, sweep `swept 0 | breaches=0`.
+- **Neden testnet gerçekten güvenli:** `cfg_for_user` ağı satırdan alır (`u.network`) ve anahtarlar
+  network-özel + çapraz-fallback YOK (strict separation). Testnet MIDAS-X, mainnet TALOS-ICHI-X'in
+  altınını GÖREMEZ → tek-executor/sembol kuralı bozulmaz. Doğrulandı: `talos_ichi_positions` #22 SHORT
+  açık kaldı, trailing SL ratchet'i sürdü, kendi sweep'i `swept 1 managed`.
+- **⚠️ Mainnet'e almak için `MIDAS_BINANCE_TESTNET=false` YETMEZ:** o an XAUUSDT'de İKİ executor olur ve
+  iki sweep birbirinin pozisyonunu ORPHAN sanıp market'ten kapatır (bugünün `6e4a201` post-mortem'i).
+  Önce TALOS-ICHI-X durdurulmalı. Crontab yorumuna da yazıldı.
+- **Kod: pos#1 giriş düzeltmesi midas_exec'e PORT EDİLDİ** (`0cd3733`'ün birebir eşi). Aksi halde paper
+  hesap tam olarak aynı "sinyal fill olmadı" arızasını üretirdi — `midas_exec/executor.py` düzeltme
+  öncesi `talos_ichi_exec` ile satır satır aynıydı. Üç değişiklik: (1) `-2010/-5022` post-only cross →
+  `retry next tick` yerine **taker eskalasyonu** (red, kitabın `signal_entry`'den iyi-veya-eşit olduğunu
+  kanıtlar; GTX ancak fiyat sinyal aleyhine dönerse dinlenebilir); (2) `_manage_entry` sıralaması
+  `slipped → fallback → expired` (60 sn faz-kilitli pencereye sıfır tick düşmesi sorunu); (3)
+  `MIDAS_ENTRY_TAKER_FALLBACK_SEC` varsayılanı 60 → **45 sn**. Ortak `_abandon_entry` yardımcısı
+  `midas_orders`'a `action='cancel'`, red ise `action='reject'` forensic satırı + Telegram yazar.
+- **Doğrulama:** aynı 7 senaryoluk stub-client testi midas_exec üzerinde **7/7 PASS** (pos#1 replay →
+  MARKET @4064.70; kayıp t+59.6sn tick'i → fallback; deadline+0.4sn → iptal değil fallback; slipped →
+  iptal; fallback sonrası deadline → iptal; GTX kabul → dinlenir; GTX dolar → `_enter_open`).
+- **Not:** açık paper SHORT (17:31) AYNALANMADI — 15 dk'lık `NEW_SIGNAL_LOOKBACK_MIN` tazelik penceresinin
+  dışında kalmıştı (`0 recent midas signal(s)`). MIDAS-X bir sonraki sinyalden itibaren işler; açık
+  işleme ortadan girmek paper/live pariteyi bozardı. `MIDAS_EXEC_AFTER_LOSS_ONLY=true` de AÇIK kaldı —
+  fx-gününün ilk sinyalini tasarım gereği atlar. `talos_exec` hâlâ eski (60 sn) pencereyi taşır; cron'da
+  emekli, yeniden armanmadan önce port edilmeli.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
