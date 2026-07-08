@@ -679,6 +679,26 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - Beklenen etki: giriş fiyatı sinyalin ≤0.25R yakınında garanti (backtest pariteye uygun), maker
   indirimi fırsat varsa alınır, runner kaçırma biter. README + RUNBOOK env listesi güncellendi.
 
+### 2026-07-08 (2) — ARAŞTIRMA (canlı kod değişikliği YOK): ML meta-labeling denemesi — NO-SHIP, rapor ML-XAU-RAPORU.md
+- **Soru:** DL/ML ile XAU sinyal modeli — literatürde ne çalışıyor + repo'nun ilk ML deneyi.
+- **Literatür karnesi (ML-XAU-RAPORU.md §1):** çalışan = meta-labeling (López de Prado/H&T),
+  GBM+tabular-özellik, triple-barrier+purged-CV, günlük DL-momentum (1m'e taşınmaz); çalışmayan =
+  "LSTM altın tahmini" ailesi (naif-gecikme/maliyetsiz), LOB-DL (maliyet-sonrası ölür), RL ajanlar.
+- **Deney (Aday A):** SHIP'li MIDAS sinyalleri üzerinde LightGBM meta-model P(R>0), 21 sinyal-anı
+  özellik, 2020 işlem (XAU26 396/+143R ✓ + PAXG24 860/−297R + PAXG25 764/+19R). Purged 5-fold
+  (1g embargo) OOF AUC 0.563; null-shuffle 0.511 ✓; transfer 24+25→26 AUC 0.572 (sinyal taşınıyor).
+  **No-lookahead truncation denetimi PASS (60 sinyal, fark 0.00e+00)** — `lookahead_check_ml.py`.
+- **Ekonomi = NO-SHIP:** deploy yönünde (24+25 eğit → 26 test) eşit-n'de meta +78.9R < canlıdaki
+  AFTER-LOSS kapısı +114.8R; kombinasyonlar kapıyı geçemedi (∨p≥0.60: +117.0 ≈ gürültü). Prob-
+  kantilleri 2026'da monoton değil (kalibrasyon rejim-kaymalı). Ters yön: kötü-yıl kanamasını
+  −278→−53R'a yumuşatıyor (AFTER-LOSS'tan iyi) ama pozitife çeviremiyor — rejim kalkanı DEĞİL.
+- **Yorum:** MIDAS'ın girişleri zaten 3 süzgeçli (London-skip+MATURE_MIN+AFTER-LOSS); meta'nın tüm
+  katkısı bu bilinen yapıya indirgeniyor (top özellikler: mins_in, dist_vwap, atr_ratio). Sonraki
+  adaylar raporda: 15m TB yön modeli, KELT075/TALOS üstünde meta (süzgeci zayıf birincil).
+- **Dosyalar:** `scratchpad/fx_gold/ml/{features,labels,meta_midas,combo_test,lookahead_check_ml}.py`
+  + `ML-XAU-RAPORU.md`. `.venv`'e sklearn 1.7.2+lightgbm 4.6.0+scipy kuruldu (requirements'a
+  EKLENMEDİ — araştırma bağımlılığı). Canlı kod/DB/cron dokunulmadı.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

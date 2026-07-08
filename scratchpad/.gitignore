@@ -9,3 +9,6 @@
 !fx_gold/
 fx_gold/*
 !fx_gold/*.py
+!fx_gold/ml/
+fx_gold/ml/*
+!fx_gold/ml/*.py
