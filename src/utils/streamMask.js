@@ -49,7 +49,9 @@ export const CODENAMES = {
 // 2026-07-07: NOVA (d30so8f3vg) canlıdan çıkarıldı — backtest-only araştırma varyantı artık
 // (canlı emit'i de emekli; nightly volgate_backfill backtest'ini tazelemeye devam eder).
 // 2026-07-07: TALOS (talos/ANTARES) eklendi — 3. canlı akış, PAPER-only (executor'u yok).
-export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'midas', 'talos'];
+// 2026-07-08: TALOS → araştırma/backtest'e indirildi; yerine TALOS-ICHI (talos_ichi/MENKAR) canlı
+// PAPER akışı geldi (Ichimoku Kumo yön filtreli TALOS; tam doğrulama bataryasını geçti). Executor YOK.
+export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'midas', 'talos_ichi'];
 
 /** True = backtest-only araştırma varyantı (canlı olmayan herhangi bir codename). */
 export const isResearchStream = (key) => !!CODENAMES[key] && !LIVE_STREAM_KEYS.includes(key);

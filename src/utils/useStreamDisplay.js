@@ -52,5 +52,10 @@ export function useStreamDisplay() {
       slopeUp: 'Koşul A', above: 'Koşul B', pullLong: 'Koşul C', bull: 'Koşul D', sess: 'Koşul E',
       slopeDn: 'Koşul A', below: 'Koşul B', pullShort: 'Koşul C', bear: 'Koşul D',
     },
+    /** TALOS-ICHI = TALOS checklist + the Ichimoku Kumo-colour direction gate. */
+    talosIchiConds: () => adm?.REAL_TALOS_ICHI_CONDS || {
+      slopeUp: 'Koşul A', above: 'Koşul B', pullLong: 'Koşul C', bull: 'Koşul D', kumoLong: 'Koşul F', sess: 'Koşul E',
+      slopeDn: 'Koşul A', below: 'Koşul B', pullShort: 'Koşul C', bear: 'Koşul D', kumoShort: 'Koşul F',
+    },
   };
 }

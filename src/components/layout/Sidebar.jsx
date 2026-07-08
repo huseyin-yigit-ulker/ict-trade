@@ -103,9 +103,9 @@ const GROUPS = [
   // ── canlı modül: OPUS + MIDAS (gerçek-para) + TALOS (paper altın Keltner, 2026-07-07) ──
   { key: 'd30so8f3h7', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
   { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
-  { key: 'talos',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, section: 'live' },
-  // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07'de canlıdan buraya indi) ──
-  { key: 'talos_ichi', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'talos_ichi', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, section: 'live' },
+  // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07, talos 2026-07-08 canlıdan buraya indi) ──
+  { key: 'talos',      icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'donchianc',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd1h_so4c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },

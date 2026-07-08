@@ -66,9 +66,9 @@
 # --- TALOS (gold-only intraday KELTNER-trend; 3. canlı akış, PAPER-only — 2026-07-07) ---
 # MIDAS'ın birebir kardeşi (iskelet/trailing motoru paylaşımlı; giriş = 15m Keltner bandına derin
 # pullback, VWAP-dışı). Executor'u YOK — paper sinyal + iz-süren stop takibi + gece backtest'i.
-# TALOS live emit + LIVE TRAILING TRACK — PAPER (mode='talos'). EVERY MINUTE (+30s, MIDAS :20'den
-# ayrık). Telegram ON: formasyon + her trailing-stop güncellemesi + çıkış (--sl-step 0).
-* * * * * sleep 30 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos/canli.py --emit --lookback-min 3 --sl-step 0 >> $HOME/ict-talos.log 2>&1
+# TALOS live emit — 2026-07-08 EMEKLİ (araştırma/backtest'e indirildi; yerine TALOS-ICHI canlı geldi).
+# Geri-almak için satırın başındaki '#'i kaldır. Nightly backtest (aşağıda) tazelemeye DEVAM eder.
+# * * * * * sleep 30 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos/canli.py --emit --lookback-min 3 --sl-step 0 >> $HOME/ict-talos.log 2>&1
 # 01:40 — TALOS backtest refresh: rebuild version='talos' from XAUUSDT 1m for 2026 each night
 #   (DELETE + re-upsert, idempotent). Engine: sync/talos/backfill.py ($0.50/oz FX-cost, gold-only).
 40 1 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos/backfill.py --apply >> $HOME/ict-talos.log 2>&1

@@ -802,6 +802,23 @@ real maker fill-rate/slippage study, not mainnet P&L.
   (+118R, her yıl kalite↑). Statü: DOĞRULANMIŞ paper/araştırma adayı. Canlı gerçek-paraya alma AYRI bir
   kullanıcı kararı (MIDAS-X gibi soru-cevapla). strategyInfo caveat (tr+en) "doğrulandı" olarak güncellendi.
 
+### 2026-07-08 (10) — TALOS-ICHI CANLI PAPER'a alındı (TALOS'un yerine); canlı grafikte Ichimoku metriği
+- **İstek (kullanıcı):** TALOS'u araştırma/backtest'e indir, TALOS-ICHI'yi onun yerine canlı paper yap,
+  canlı sinyal metriklerini Ichimoku tarafı dahil canlı göster.
+- **Üyelik takası (UI):** `streamMask.LIVE_STREAM_KEYS` talos→talos_ichi; Sidebar GROUPS: talos_ichi
+  live'a (modes live+backtest, section live), talos backtest'e (modes backtest, section backtest).
+  adminStreamInfo REAL_LABELS + strategyInfo caveat'ları (tr+en) güncellendi (talos_ichi=canlı PAPER,
+  talos=backtest-only). talos_ichi HERKESE görünür canlı akış oldu; talos admin/features.backtest-only.
+- **Cron:** TALOS canlı emit EMEKLİ (dag/crontab'ta '#'lendi, geri-alma notu; nightly backfill 01:40
+  DEVAM). TALOS-ICHI canlı emit (+45s) zaten aktifti — canlı akış artık o.
+- **Canlı grafikte Ichimoku (MidasLiveChart.jsx):** talos_ichi için `kumo15()` (15m Senkou A/B, +26
+  ileri kaydırık, no-lookahead) eklendi; `computeTalos(candles, km)` Kumo geçidi alır (long→bulut yeşil
+  A>B, short→kırmızı A<B); marker'lar + SİNYAL KOŞULLARI checklist'ine Kumo çipi (kumoLong/kumoShort)
+  + header'a canlı "Kumo 🟢yeşil/🔴kırmızı" göstergesi. useStreamDisplay.talosIchiConds() +
+  adminStreamInfo.REAL_TALOS_ICHI_CONDS (admin gerçek metin, diğerleri nötr "Koşul F"). Prod build PASS.
+- **DOKUNULMADI:** backend strateji/backfill/canli (talos & talos_ichi) — yalnız üyelik/cron/grafik.
+  TALOS-ICHI hâlâ PAPER (executor YOK); canlı gerçek-para ayrı karar.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

@@ -13,6 +13,7 @@ import { useStreamDisplay } from '../utils/useStreamDisplay';
 const SYMBOL = 'XAUUSDT';
 const SLOPE_N = 60, ATR_N = 14, TOUCH_TOL = 0.25, ATR_INIT = 1.5, SKIP_START = 7, SKIP_END = 13;
 const K_EMA_N = 20, K_MULT = 0.75, K_SLOPE_BARS = 4;   // TALOS Keltner params (15m)
+const ICHI_TENKAN = 9, ICHI_KIJUN = 26, ICHI_SENKOU_B = 52, ICHI_SHIFT = 26;   // TALOS-ICHI Ichimoku (15m)
 
 // UTC ms of the most recent 18:00 America/New_York at/before ms — the FX session open / VWAP anchor.
 // Scans back hour-by-hour so it's DST-correct.
@@ -72,9 +73,40 @@ const keltner15 = (candles) => {
   return candles.map((c) => byBucket.get(Math.floor(c.time / 900) * 900));
 };
 
+// 15m Ichimoku Kumo (Senkou A/B), projected +26 buckets FORWARD (cloud at bar i is derived from
+// bucket i-26 -> no lookahead), mapped back to each 1m bar. Left-labelled buckets like keltner15
+// (visual; backend uses right-closed resample + rolling max/min). Used by TALOS-ICHI only.
+const kumo15 = (candles) => {
+  const buckets = []; let cur = null;
+  for (const c of candles) {
+    const b = Math.floor(c.time / 900) * 900;
+    if (!cur || cur.t !== b) { if (cur) buckets.push(cur); cur = { t: b, h: c.high, l: c.low }; }
+    else { cur.h = Math.max(cur.h, c.high); cur.l = Math.min(cur.l, c.low); }
+  }
+  if (cur) buckets.push(cur);
+  const hh = (i, n) => { let m = -Infinity; for (let j = Math.max(0, i - n + 1); j <= i; j += 1) m = Math.max(m, buckets[j].h); return m; };
+  const ll = (i, n) => { let m = Infinity; for (let j = Math.max(0, i - n + 1); j <= i; j += 1) m = Math.min(m, buckets[j].l); return m; };
+  const spanA = []; const spanB = [];
+  for (let i = 0; i < buckets.length; i += 1) {
+    const tenkan = (hh(i, ICHI_TENKAN) + ll(i, ICHI_TENKAN)) / 2;
+    const kijun = (hh(i, ICHI_KIJUN) + ll(i, ICHI_KIJUN)) / 2;
+    spanA.push((tenkan + kijun) / 2);
+    spanB.push((hh(i, ICHI_SENKOU_B) + ll(i, ICHI_SENKOU_B)) / 2);
+  }
+  const byBucket = new Map();
+  for (let i = 0; i < buckets.length; i += 1) {
+    const src = i - ICHI_SHIFT;                            // cloud is derived from the bucket 26 back
+    byBucket.set(buckets[i].t, (src >= ICHI_SENKOU_B - 1)
+      ? { spanA: spanA[src], spanB: spanB[src] } : { spanA: NaN, spanB: NaN });
+  }
+  return candles.map((c) => byBucket.get(Math.floor(c.time / 900) * 900) || { spanA: NaN, spanB: NaN });
+};
+
 // TALOS: midline = 15m EMA20 (ref line), band = EMA ± 0.75·ATR(20,15m); LONG fires on a deep dip
 // to the LOWER band (low ≤ band+0.25·ATR15) reclaimed with a bullish close (sync/talos/strategy).
-const computeTalos = (candles) => {
+// `km` (per-bar Ichimoku Kumo) present == TALOS-ICHI: a signal also requires the cloud colour to
+// agree (long -> Senkou A>B green, short -> A<B red). km=null -> plain TALOS (gate always open).
+const computeTalos = (candles, km = null) => {
   const k = keltner15(candles);
   const a = atr15(candles);
   const refData = []; const bandU = []; const bandL = []; const markers = [];
@@ -86,11 +118,13 @@ const computeTalos = (candles) => {
     bandU.push({ time: c.time, value: bHi }); bandL.push({ time: c.time, value: bLo });
     const utch = new Date(c.time * 1000).getUTCHours();
     const sessOk = !(utch >= SKIP_START && utch < SKIP_END);
+    const cloudBull = !km || (Number.isFinite(km[i]?.spanA) && km[i].spanA > km[i].spanB);
+    const cloudBear = !km || (Number.isFinite(km[i]?.spanA) && km[i].spanA < km[i].spanB);
     if (Number.isFinite(a[i]) && a[i] > 0 && Number.isFinite(kk.slope) && sessOk) {
       const tol = TOUCH_TOL * a[i];
-      if (kk.slope > 0 && c.close > bLo && c.low <= bLo + tol && c.close > c.open) {
+      if (kk.slope > 0 && c.close > bLo && c.low <= bLo + tol && c.close > c.open && cloudBull) {
         markers.push({ time: c.time, position: 'belowBar', shape: 'arrowUp', color: '#0ECB81', text: 'AL', size: 1 });
-      } else if (kk.slope < 0 && c.close < bHi && c.high >= bHi - tol && c.close < c.open) {
+      } else if (kk.slope < 0 && c.close < bHi && c.high >= bHi - tol && c.close < c.open && cloudBear) {
         markers.push({ time: c.time, position: 'aboveBar', shape: 'arrowDown', color: '#F6465D', text: 'SAT', size: 1 });
       }
     }
@@ -100,14 +134,19 @@ const computeTalos = (candles) => {
   const bLo = kk.ema - K_MULT * kk.katr; const bHi = kk.ema + K_MULT * kk.katr;
   const tol = Number.isFinite(aa) ? TOUCH_TOL * aa : NaN;
   const utch = new Date(lb.time * 1000).getUTCHours();
+  const kmL = km ? km[i] : null;
+  const cloudBull = kmL ? (Number.isFinite(kmL.spanA) && kmL.spanA > kmL.spanB) : true;
+  const cloudBear = kmL ? (Number.isFinite(kmL.spanA) && kmL.spanA < kmL.spanB) : true;
   const cond = {
     sessOk: !(utch >= SKIP_START && utch < SKIP_END),
     above: lb.close > bLo, below: lb.close < bHi,
     slopeUp: kk.slope > 0, slopeDn: kk.slope < 0,
     pullLong: lb.low <= bLo + tol, pullShort: lb.high >= bHi - tol,
     bull: lb.close > lb.open, bear: lb.close < lb.open,
+    kumoLong: cloudBull, kumoShort: cloudBear,
   };
-  const last = { price: lb.close, ref: kk.ema, slope: kk.slope, atr: aa, tol, cond, time: lb.time };
+  const cloud = km ? (Number.isFinite(kmL?.spanA) ? (cloudBull ? 'bull' : 'bear') : null) : null;
+  const last = { price: lb.close, ref: kk.ema, slope: kk.slope, atr: aa, tol, cond, time: lb.time, cloud };
   return { refData, bandU, bandL, markers, last };
 };
 
@@ -195,9 +234,10 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
   // PRIVACY: the anchor line + the rule checklist render under neutral tags for
   // everyone except the admin (whose real labels lazy-load from adminStreamInfo).
   const sd = useStreamDisplay();
-  const isTalos = variant === 'talos' || variant === 'talos_ichi';   // talos_ichi reuses Keltner visuals; Kumo gate is applied backend-side
+  const isTalos = variant === 'talos' || variant === 'talos_ichi';   // both use the 15m Keltner visuals
+  const isIchi = variant === 'talos_ichi';                           // + Ichimoku Kumo-colour direction gate
   const REF = isTalos ? (sd.isAdmin ? 'K-EMA20' : 'T-REF') : sd.refline();
-  const CONDS = isTalos ? sd.talosConds() : sd.midasConds();
+  const CONDS = isIchi ? sd.talosIchiConds() : isTalos ? sd.talosConds() : sd.midasConds();
   const tradesRef = useRef(trades);
   tradesRef.current = trades;                              // latest trades without re-running the effect
   const containerRef = useRef(null);
@@ -267,7 +307,9 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         if (cancelled || !chartRef.current) return;
         if (!raw.length) { setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
-        const { refData, bandU: bu, bandL: bl, markers, last: lm } = (isTalos ? computeTalos : compute)(candles);
+        const { refData, bandU: bu, bandL: bl, markers, last: lm } = isTalos
+          ? computeTalos(candles, isIchi ? kumo15(candles) : null)
+          : compute(candles);
         candle.setData(candles); refSeries.setData(refData); bandU.setData(bu); bandL.setData(bl);
         // markers = ALL signal-formation moments (dimmed) + the trades that opened (entry arrow + exit)
         const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
@@ -297,8 +339,8 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
 
   const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '—');
   const c = last?.cond;
-  const longReady = c && c.sessOk && c.above && c.slopeUp && c.pullLong && c.bull;
-  const shortReady = c && c.sessOk && c.below && c.slopeDn && c.pullShort && c.bear;
+  const longReady = c && c.sessOk && c.above && c.slopeUp && c.pullLong && c.bull && (!isIchi || c.kumoLong);
+  const shortReady = c && c.sessOk && c.below && c.slopeDn && c.pullShort && c.bear && (!isIchi || c.kumoShort);
 
   const Pill = ({ ok, label }) => (
     <span style={{ padding: '2px 7px', borderRadius: 6, fontSize: 11, whiteSpace: 'nowrap',
@@ -327,6 +369,13 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         <span>fiyat−{REF} <b>{last ? fmt(last.price - last.ref) : '—'}</b></span>
         <span>eğim({isTalos ? '4×15m' : '60'}) <b>{fmt(last?.slope, 2)}</b></span>
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
+        {isIchi && (
+          <span>Kumo{' '}
+            <b style={{ color: last?.cloud === 'bull' ? '#0ECB81' : last?.cloud === 'bear' ? '#F6465D' : '#848E9C' }}>
+              {last?.cloud === 'bull' ? '🟢 yeşil (yukarı)' : last?.cloud === 'bear' ? '🔴 kırmızı (aşağı)' : '—'}
+            </b>
+          </span>
+        )}
         {status && <span style={{ color: '#F6465D' }}>{status}</span>}
       </div>
       {!isStatic && c && (
@@ -338,6 +387,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
             { ok: c.above, label: CONDS.above },
             { ok: c.pullLong, label: CONDS.pullLong },
             { ok: c.bull, label: CONDS.bull },
+            ...(isIchi ? [{ ok: c.kumoLong, label: CONDS.kumoLong }] : []),
             { ok: c.sessOk, label: CONDS.sess },
           ]} />
           <Row side="SAT" ready={shortReady} color="#F6465D" items={[
@@ -345,6 +395,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
             { ok: c.below, label: CONDS.below },
             { ok: c.pullShort, label: CONDS.pullShort },
             { ok: c.bear, label: CONDS.bear },
+            ...(isIchi ? [{ ok: c.kumoShort, label: CONDS.kumoShort }] : []),
             { ok: c.sessOk, label: CONDS.sess },
           ]} />
         </div>
