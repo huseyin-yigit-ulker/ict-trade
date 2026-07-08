@@ -726,6 +726,18 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **Karar:** ship-grade DEĞİL (tek yıl, 5 OOS ayı, Mayıs-yoğunluğu) ama ilk gerçek pozitif bağımsız ML sinyali.
   Sonraki kapı: PAXG 2024-25 çok-yıl OOS + SL/TP/H geometri platosu + canlı-paper izleme. Canlı dokunulmadı.
 
+### 2026-07-08 (5) — ARAŞTIRMA (kod değişikliği YOK): STACKING — strateji sinyalleri ML-özelliği olarak — EK DEĞER YOK (ML-XAU-RAPORU.md §4d)
+- **Soru (kullanıcı):** tüm XAU stratejilerini birleştirip sinyallerini ML ile harmanla + yeni özellikler ekle.
+- **Deney (`stack_xau.py`):** 12 kural-strateji sinyali (MIDAS, TALOS-KELT075, Keltner-mid, EMA200/KAMA,
+  Supertrend×2, Donchian, PDHL, Asya, PSAR, TSMOM) + 4 durum + 6 çapraz-varlık (XAG/BTC/SPY) özelliği,
+  §4c harness'ında 4 set yarıştı.
+- **Sonuç:** STRAT-only AUC **0.503** (giriş-anları bilgisiz); BASE+STRAT 0.644 ≈ BASE 0.640 ama q97
+  ekonomisi SULANIYOR (+27.8→+11.1R, boyut laneti); çapraz-varlık gain %25 kapıyor ama OOS para üretmiyor.
+  Piyasa-özellikli sade TB-LGBM en iyisi kalıyor.
+- **Ders:** kural stratejilerinin edge'i ÇIKIŞ motorunda, giriş-anı bilgi içeriğinde değil (Donchian
+  "exit is the lever" bulgusunun ML-aynası). Doğru birleştirme seviyesi PORTFÖY (düşük-korelasyonlu
+  kitaplar: MIDAS+ML Mar-Tem +129.7R, corr 0.247), özellik-karışımı değil. Canlı dokunulmadı.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

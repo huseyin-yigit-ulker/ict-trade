@@ -100,6 +100,27 @@ Soru: kapıyı bırak, ML doğrudan sinyal üretsin; literatürdeki diğer yakla
 4. **AUC ay geçtikçe yükseliyor** (0.57→0.72): model veri biriktikçe öğreniyor → PAXG 2024-25 ile eğitim büyütme doğal sonraki adım; ama meta-deneyde görülen rejim-kayması riski aynen geçerli (2024-25'in MIDAS-negatif rejimi TB dağılımını da kaydırabilir).
 5. **Ship çıtasının neresinde?** Tek yılın 5 OOS ayı; kâr Mayıs-yoğun; taker'da ≈0 (yine FX-cost akışı olur); n=83. Repo standardına göre henüz ship-grade DEĞİL — ama 30+ el-yapımı ailenin çoğundan iyi bir ilk-geçiş ve MIDAS'a düşük-korelasyonlu ek olma potansiyeli var. Sonraki kapı: PAXG çok-yıl OOS + parametre platosu (SL/TP/H geometrisi) + canlı-paper izleme.
 
+## 4d. Ek deney (2026-07-08): STACKING — tüm stratejiler özellik olarak ML harmanına + yeni özellikler
+
+Soru: XAU'da çalışan tüm stratejileri (repo + literatür) birleştirip sinyallerini ML ile harmanlasak + üstüne yeni özellikler eklesek? (`stack_xau.py`; §4c harness'ı birebir: TB etiketi, aylık genişleyen WF, engine-ekonomi, null bandı.)
+
+**Özellik grupları:** 12 kural-strateji sinyali 1m→15m (shipped MIDAS, TALOS-KELT075, Keltner-mid, EMA200/KAMA pullback, Supertrend flip+pull, Donchian-120, önceki-gün H/L, Asya-kutusu, PSAR, seans-TSMOM) + 4 durum özelliği (supertrend/PSAR yönü, Donchian pozisyonu, Keltner-z) + 6 çapraz-varlık YENİ özellik (gümüş ret4/16/96, altın/gümüş oranı z, BTC/SPY ret16).
+
+| Set | OOS AUC | q97 (Mar-Tem, FX) | q95 |
+|---|---|---|---|
+| BASE (yalnız piyasa özellikleri, §4c) | 0.640 | **83tr +27.8R PF1.57** | 156tr +26.9R |
+| STRAT (yalnız strateji sinyalleri) | **0.503** | 213tr −2.5R | 304tr +6.1R |
+| BASE+STRAT | 0.644 | 83tr +11.1R | 158tr +22.0R |
+| HEPSİ (+çapraz-varlık) | 0.633 | 71tr +12.6R | 138tr +20.0R |
+
+Gain payı: piyasa %69, strateji sinyalleri **%6**, çapraz-varlık %25 (ama ekonomiye çevrilmiyor; SPY/BTC/XAG pikleri 30-Haz'da bitiyor, Temmuz NaN).
+
+**Yorumlar:**
+1. **Strateji sinyalleri tek başına bilgisiz: AUC 0.503.** Kural stratejilerinin giriş-anları, TB sonucu hakkında piyasa özelliklerinin zaten kodlamadığı EK bilgi taşımıyor. Bu stratejiler değersiz demek değil — MIDAS/TALOS parayı ÇIKIŞ motoruyla (trailing runner) kazanıyor; giriş anının kendisi bilgi kaynağı değil. Donchian kitabındaki "kaldıraç exit'te, giriş-filtrelemede değil" bulgusunun ML-aynası.
+2. **Harman BASE'i geçemiyor, hatta q97'de sulandırıyor** (+27.8→+11.1R): n≈11k örnekte 36-42 boyut, en-uç kantil seçimini bozuyor (boyut laneti). Özellik eklemek bedava değil.
+3. **Doğru birleştirme seviyesi PORTFÖY, özellik değil:** ML-TB (83tr +27.8R) MIDAS'a düşük-korelasyonlu (günlük 0.247, §4c) → Mar-Tem MIDAS+ML birleşik +129.7R. KELT075 portföy bulgusuyla (+230R MIDAS+KELT) aynı ders: düşük-korelasyonlu KİTAPLARI yan yana koy, sinyalleri aynı modele karıştırma.
+4. Çapraz-varlık özellikler importance kapıyor ama OOS ekonomi üretmiyor — tipik "önemli görünen ama para etmeyen" özellik; ayrıca veri Temmuz'da kesik. Tam-tarihli gümüş verisiyle tekrar bakılabilir ama öncelik değil.
+
 ## 5. Sonraki adımlar (bu turda YAPILMADI)
 - **Aday B:** bağımsız 15m triple-barrier yön modeli (kill: OOS PF<1.1). Etiketleyici hazır (`labels.triple_barrier`).
 - **Aday C:** ancak bir aday pozitifse, aynı etiketlerde küçük GRU/TCN artık-değer testi (tek deney).
@@ -113,6 +134,7 @@ Soru: kapıyı bırak, ML doğrudan sinyal üretsin; literatürdeki diğer yakla
 - `scratchpad/fx_gold/ml/gate_midas.py` — büyük-frekans rejim-kapısı deneyi (V1 gün / V2 yüksek-TF, ensemble; §4b)
 - `scratchpad/fx_gold/ml/ml_signal_xau.py` — bağımsız ML sinyal harness'ı (5 aile + ensemble, aylık WF; §4c)
 - `scratchpad/fx_gold/ml/analyze_tb.py` — TB-LGBM derin analizi (plato/kırılım/MIDAS-örtüşme/önem; §4c)
+- `scratchpad/fx_gold/ml/stack_xau.py` — stacking harmanı (12 strateji + durum + çapraz-varlık özellikleri; §4d)
 - `scratchpad/fx_gold/ml/lookahead_check_ml.py` — truncation no-lookahead denetimi (PASS)
 - `scratchpad/fx_gold/ml/dataset.pkl` — önbellek (2020 işlem; gitignore'lu pkl)
 - Ortam: `.venv`'e scikit-learn 1.7.2 + lightgbm 4.6.0 + scipy kuruldu (requirements'a EKLENMEDİ — araştırma bağımlılığı)
