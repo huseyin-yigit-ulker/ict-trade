@@ -950,6 +950,30 @@ real maker fill-rate/slippage study, not mainnet P&L.
 - **Telafi:** pos#13 düzeltilmiş kodla `trading_signals` (version='tichix') tablosuna yazıldı. Her iki
   executor de temiz koşuyor. **Ders: paylaşımlı Binance hesabında her sweep KENDİ sembol evreniyle sınırlı olmalı.**
 
+### 2026-07-08 (16) — pos#13 telafisi (elle yeniden giriş, pos#22) + kaldıraç cap 25→75 (marj $42→$14)
+- **Telafi (sahip isteği "bu seferlik aynı setuptan anlık fiyattan aç"):** pos#13 OPUS-sweep bug'ıyla haksız
+  kapatıldığı için AYNI setup'tan (SL 4082.12) anlık fiyata yeniden girildi. Elle emir yazılmadı — `ict_trade.signals`'a
+  `mode='talos_ichi'` bir satır yazılıp (context: `manual_reentry:true` + gerekçe) executor'ın KENDİ yolundan
+  alındı (boyutlandırma/kaldıraç/borsa-tarafı stop/trailing/writeback hepsi test edilmiş kod).
+  Sonuç **pos#22**: SHORT 0.259 @ 4070.98, SL 4082.12 (1R=11.56), 75x. Entry legs: `reject`(GTX −2010) →
+  `place`(MARKET) — yani 0cd3733 taker-eskalasyon düzeltmesi CANLIDA çalıştı. Koruyucu STOP_MARKET borsada
+  (`openAlgoOrders`, closePosition=true, algoId 1000002434045256; `openOrders`'ta GÖRÜNMEZ — algo emri).
+- **OPUS sweep düzeltmesi canlı doğrulandı:** açık altın pozisyonuyla `skip XAUUSDT (outside OPUS universe —
+  other executor owns it)` · breaches=0. Artık kardeş executor'ün pozisyonuna dokunmuyor.
+- **HEDEF-MARJ KALDIRAÇ (sahip isteği: "SL noktasına göre $3 zarar, $10-20 marj"):** `TALOS_ICHI_TARGET_MARGIN_USD=15`
+  eklendi (config+executor); `LEVERAGE_MAX` 25→100 (artık borsa tavanı, belirleyici hedef-marj).
+  - **Kayıp SL'de KALDIRAÇTAN BAĞIMSIZ:** `qty = risk_usd/|giriş−SL|` ⇒ stop yerse kayıp = $3, her zaman.
+    Kaldıraç yalnız MARJI ve likidasyon mesafesini belirler.
+  - `notional = risk/slpct` (stop mesafesi sabitler) ⇒ `marj = notional/L` ⇒ **`L = notional/hedef_marj`**.
+  - Değişmez: **liq yastığı = hedef_marj/risk = 5× SL mesafesi**, stop genişliğinden bağımsız.
+  - Güvenlik sınırı korundu: `L ≤ floor(0.5/slpct)` (liq ≥ 2× SL) — `hedef_marj > 2·risk` iken zaten sağlanır,
+    yalnız yanlış-konfigürasyona karşı bekçi. Simülasyon (SL% 0.27/0.5/1/2): marj $15.0, kayıp $3.00, liq 5.0× ✓.
+  - **OPUS'un `LEVERAGE_MAX=25`'i ayrı anahtar, dokunulmadı.**
+- ⚠️ ISOLATED'da açık pozisyonun kaldıracını değiştirmek tahsisli marjı GERİ ÇEKMEZ (pos#22 `isolatedMargin`
+  $40.92, liq 4211 — 25x'te açıldığı için). Zorla çekmek liq'i stopa yaklaştıracağı ve sahip yalnız YENİ
+  işlemler için istediği için **dokunulmadı**; kapanınca serbest kalır. Kural yalnız yeni girişlerde
+  (giriş öncesi `set_leverage`). Serbest bakiye $55.7, OPUS kısıtlanmıyor.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

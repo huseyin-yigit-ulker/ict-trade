@@ -515,18 +515,27 @@ def _manage_entry(cfg, client, conn, xi, pos, now, shared: SharedTick | None = N
 def _place_entry(cfg, client, conn, xi, pos, now, taker: bool = False) -> None:
     sym = pos["symbol"]
     _ensure_account(cfg, client, sym)
-    # Auto-leverage (OPUS rule, 2026-07-07): per-trade leverage from the SL distance so the
-    # liquidation sits ~2x the SL distance beyond entry (1/L ≈ 2*SL%) — liquidation can NEVER
-    # precede the −1R stop, so the loss stays $risk_usd. Capped at leverage_max. Risk is fixed
-    # by qty (risk_usd/|entry−sl|); leverage only sets the margin + liquidation distance.
-    # Gold's tiny SL% (~0.1-0.4%) means this effectively pins the cap — which is the point:
-    # minimum margin per entry on the shared wallet.
+    # Auto-leverage from the SL distance. THE $ LOSS AT THE STOP IS NEVER SET HERE: qty =
+    # risk_usd/|entry−sl| already fixes it at $risk_usd. Leverage only sets the MARGIN and the
+    # liquidation distance.
+    #   notional = risk_usd / slpct        (pinned by the stop distance)
+    #   margin   = notional / L
+    # TARGET-MARGIN (2026-07-08 owner request, $10-20 band): pick L = notional / target_margin.
+    # SAFETY BOUND (the original 2026-07-07 rule, kept): L <= 0.5/slpct  =>  liquidation sits >= 2x
+    # the SL distance beyond entry, so liquidation can NEVER precede the −1R stop. This bound is
+    # automatically satisfied whenever target_margin > 2*risk_usd — it only guards a misconfig.
     lev = cfg.leverage
     if cfg.armed and cfg.auto_leverage:
         entry_ref = float(pos["signal_entry"])
         slpct = (abs(entry_ref - float(pos["signal_sl"])) / entry_ref) if entry_ref else 0.0
         if slpct > 0:
-            lev = max(1, min(cfg.leverage_max, int(0.5 / slpct)))
+            l_safe = int(0.5 / slpct)                          # liq >= 2x SL distance
+            if cfg.target_margin_usd > 0:
+                notional = cfg.risk_usd / slpct
+                l_target = int(round(notional / cfg.target_margin_usd))
+                lev = max(1, min(cfg.leverage_max, l_safe, l_target))
+            else:
+                lev = max(1, min(cfg.leverage_max, l_safe))    # legacy: cap-bound
         try:
             client.set_leverage(sym, lev)
         except BinanceError as e:

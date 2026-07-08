@@ -62,8 +62,14 @@ class MidasExecCfg:
     symbol: str                    # TALOS_ICHI_SYMBOL (XAUUSDT)
     risk_usd: float                # TALOS_ICHI_RISK_PER_TRADE_USD — USD lost if the 1.5*ATR stop hits
     leverage: int                  # TALOS_ICHI_LEVERAGE — fixed fallback when auto_leverage is off/errors
-    auto_leverage: bool            # TALOS_ICHI_AUTO_LEVERAGE — per-trade leverage from the SL distance (OPUS rule)
-    leverage_max: int              # TALOS_ICHI_LEVERAGE_MAX — hard cap on the auto leverage
+    auto_leverage: bool            # TALOS_ICHI_AUTO_LEVERAGE — per-trade leverage from the SL distance
+    leverage_max: int              # TALOS_ICHI_LEVERAGE_MAX — hard cap on the auto leverage (exchange max)
+    # TARGET-MARGIN leverage (2026-07-08 owner request): the $ LOSS at the stop is fixed by qty
+    # (= risk_usd/|entry-sl|) and NEVER depends on leverage. Leverage only sets margin + liquidation
+    # distance. Since notional = risk_usd/slpct is pinned by the stop, margin = notional/L, so we pick
+    # L = notional/target_margin to land the margin on this number ($10-20 band). Safe by construction:
+    # target_margin > 2*risk_usd  =>  L < 0.5/slpct  =>  liquidation sits >2x the SL distance away.
+    target_margin_usd: float       # TALOS_ICHI_TARGET_MARGIN_USD (0 = off, fall back to the cap)
     margin_type: str               # TALOS_ICHI_MARGIN_TYPE — ISOLATED | CROSSED
     max_concurrent: int            # TALOS_ICHI_MAX_CONCURRENT — hard 1 (also enforced by the unique index)
     # ---- entry (maker-first) ----
@@ -142,6 +148,7 @@ def load_cfg() -> MidasExecCfg:
         leverage=_i(env, "TALOS_ICHI_LEVERAGE", 5),
         auto_leverage=_b(env, "TALOS_ICHI_AUTO_LEVERAGE", False),
         leverage_max=_i(env, "TALOS_ICHI_LEVERAGE_MAX", 25),
+        target_margin_usd=_f(env, "TALOS_ICHI_TARGET_MARGIN_USD", 0.0),
         margin_type=str(env.get("TALOS_ICHI_MARGIN_TYPE", "ISOLATED")).strip().upper(),
         max_concurrent=_i(env, "TALOS_ICHI_MAX_CONCURRENT", 1),
         maker_entry=_b(env, "TALOS_ICHI_MAKER_ENTRY", True),
