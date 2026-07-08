@@ -3,7 +3,7 @@
 talos_ichi_positions rows live in the LIVE db (ict_trade.signals' connection). This module is the ONLY
 writer of that table: it creates positions idempotently (UNIQUE act-once), reads the open set,
 patches fields/state, appends to the talos_ichi_orders forensic log, and on CLOSE upserts the result into
-ict_trade.trading_signals (version='talos_ichix', context-aware) so a live TALOS-ICHI trade lands on the
+ict_trade.trading_signals (version='tichix', context-aware) so a live TALOS-ICHI trade lands on the
 dashboard — distinct from the paper 'talos_ichi' curve that the nightly backfill rewrites.
 
 The reconcile LOGIC lives in executor.py; this module only persists. clientOrderIds are deterministic
@@ -180,10 +180,10 @@ def count_open(conn, symbols=None, *, user_id=None, network=None) -> int:
     return n
 
 
-# ---- writeback to the dashboard (context-aware; version='talos_ichix') -------------------------------
+# ---- writeback to the dashboard (context-aware; version='tichix') -------------------------------
 # tsc.upsert_rows drops `context`, so TALOS-ICHI needs its own upsert that carries the trailing-stop path
 # jsonb — the exact shape ChartModal / TradeContext render for a TALOS-ICHI trade. Mirrors
-# sync/talos_ichi/backfill._CTX_UPSERT so the live 'talos_ichix' rows and the paper 'talos_ichi' rows are identical
+# sync/talos_ichi/backfill._CTX_UPSERT so the live 'tichix' rows and the paper 'talos_ichi' rows are identical
 # in structure (only the version tag + the real fills differ).
 _CTX_COLS = tsc._COLS + ["context"]
 _CTX_UPSERT = f"""
@@ -199,7 +199,7 @@ ON CONFLICT (symbol, signal_time, trade_type, version) DO UPDATE SET
 
 def writeback_trading_signals(bt_conn, pos: dict) -> None:
     """On close, upsert the live TALOS-ICHI result into ict_trade.trading_signals (version = the position's
-    own tag, e.g. 'talos_ichix') with the trailing-stop context, so it joins the dashboard track-record."""
+    own tag, e.g. 'tichix') with the trailing-stop context, so it joins the dashboard track-record."""
     ctx = pos.get("context")
     if isinstance(ctx, str):
         import json
@@ -229,12 +229,17 @@ def writeback_trading_signals(bt_conn, pos: dict) -> None:
     row = tsc.build_row(pos["symbol"], pos["signal_time"], pos["direction"], entry, sl, tp_ref,
                         outcome, strategy=(ctx.get("strategy") or "TALOS-ICHI Keltner-Trend (live, Binance)"),
                         quality="TREND", confluence_score=None)
-    row["version"] = pos.get("version") or "talos_ichix"
+    row["version"] = pos.get("version") or "tichix"
     row["context"] = {
         "kind": "trailing", "init_sl": float(ctx.get("init_sl") or sl),
         "trail_mult": ctx.get("trail_mult", 3.5), "atr_mult": ctx.get("atr_mult", 1.5),
         "trail": ctx.get("trail") or [], "pos": "closed",
-        "exit_px": pos.get("exit_px"), "pnl_r": pos.get("realized_r"), "live": True,
+        # float() casts are REQUIRED: psycopg2 returns numeric columns as Decimal, and Json() ->
+        # json.dumps() cannot serialize Decimal. Without them the writeback (and the whole tick)
+        # died with "Object of type Decimal is not JSON serializable" — pos#13 post-mortem 2026-07-08.
+        "exit_px": float(pos["exit_px"]) if pos.get("exit_px") is not None else None,
+        "pnl_r": float(pos["realized_r"]) if pos.get("realized_r") is not None else None,
+        "live": True,
     }
     vals = [tuple(Json(row[c]) if c == "context" else row[c] for c in _CTX_COLS)]
     cur = bt_conn.cursor()

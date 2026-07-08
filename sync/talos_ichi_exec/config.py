@@ -150,7 +150,7 @@ def load_cfg() -> MidasExecCfg:
         entry_taker_fallback_sec=_i(env, "TALOS_ICHI_ENTRY_TAKER_FALLBACK_SEC", 45),
         after_loss_only=_b(env, "TALOS_ICHI_EXEC_AFTER_LOSS_ONLY", False),
         sl_deadband_ticks=_i(env, "TALOS_ICHI_SL_DEADBAND_TICKS", 2),
-        exec_version=str(env.get("TALOS_ICHI_EXEC_VERSION", "talos_ichix")).strip(),
+        exec_version=str(env.get("TALOS_ICHI_EXEC_VERSION", "tichix")).strip(),
         exec_name=str(env.get("TALOS_ICHI_EXEC_NAME", "TALOS-ICHI-X")).strip(),
         telegram_chat_id=str(env.get("TELEGRAM_EXEC_CHAT_ID") or env.get("TELEGRAM_CHAT_ID") or "").strip(),
         multi_user=_b(env, "EXEC_MULTI_USER", False),

@@ -59,6 +59,13 @@ def _sweep_account(cfg, live, skew_seen: set) -> int:
     #   (1) ORPHAN — a Binance position with NO managed DB row (a true leak) -> flatten;
     #   (2) STALE reconciler — checked globally in main();
     #   (3) total open risk over the cap.
+    #
+    # ⚠️ SYMBOL SCOPE (2026-07-08, post-mortem: OPUS flattened TALOS-ICHI-X's live XAUUSDT SHORT #13,
+    # and earlier a MIDAS-X gold position). The Binance ACCOUNT is SHARED with the gold executor
+    # (sync/talos_ichi_exec), which keeps its rows in talos_ichi_positions — invisible to st.fetch_open
+    # here. Without this scope every gold position looked like an ORPHAN and got MARKET-flattened
+    # within 5 minutes of opening. OPUS may only judge the symbols it is configured to trade;
+    # anything else belongs to another executor and is NOT ours to close.
     breaches = 0
     try:
         positions = client.position_risk()
@@ -69,6 +76,9 @@ def _sweep_account(cfg, live, skew_seen: set) -> int:
         sym = p.get("symbol")
         amt = float(p.get("positionAmt", 0) or 0)
         if amt == 0 or not (sym or "").endswith("USDT"):
+            continue
+        if sym not in cfg.symbols:                         # another executor's symbol — hands off
+            print(f"  [{label}] skip {sym} amt={amt} (outside OPUS universe — other executor owns it)")
             continue
         if managed.get(sym) is None:                       # ORPHAN — no DB row owns this position
             breaches += 1

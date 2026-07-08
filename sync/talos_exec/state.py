@@ -234,7 +234,10 @@ def writeback_trading_signals(bt_conn, pos: dict) -> None:
         "kind": "trailing", "init_sl": float(ctx.get("init_sl") or sl),
         "trail_mult": ctx.get("trail_mult", 3.5), "atr_mult": ctx.get("atr_mult", 1.5),
         "trail": ctx.get("trail") or [], "pos": "closed",
-        "exit_px": pos.get("exit_px"), "pnl_r": pos.get("realized_r"), "live": True,
+        # float() casts REQUIRED — psycopg2 returns numerics as Decimal; Json()->json.dumps chokes.
+        "exit_px": float(pos["exit_px"]) if pos.get("exit_px") is not None else None,
+        "pnl_r": float(pos["realized_r"]) if pos.get("realized_r") is not None else None,
+        "live": True,
     }
     vals = [tuple(Json(row[c]) if c == "context" else row[c] for c in _CTX_COLS)]
     cur = bt_conn.cursor()

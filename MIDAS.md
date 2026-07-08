@@ -928,6 +928,28 @@ real maker fill-rate/slippage study, not mainnet P&L.
   (ikisi de cron'da EMEKLİ/yorumlu, gerçek para akmıyor). Yeniden armanmadan önce bu commit'teki
   `_manage_entry` sıralaması + 45 sn varsayılan oraya da taşınmalı.
 
+### 2026-07-08 (15) — 🔴 POST-MORTEM pos#13: OPUS'un sweep'i TALOS-ICHI-X'in CANLI altın SHORT'unu kapattı
+- **Şikayet (kullanıcı):** "açılan altın işlemini neden kapattın". Telegram: `✅ GİRİŞ XAUUSDT SHORT #13`
+  → `🚨 XAUUSDT ORPHAN flattened (-0.163)` → `⚠️ exec hata: Object of type Decimal is not JSON serializable`.
+- **Olay:** 17:02:06 SELL 0.163 @4063.75 (maker, SL 4082.12 borsada). 17:05:54 BUY 0.163 @4064.34 (taker)
+  → pozisyon MARKET'ten kapatıldı. Gerçekleşen: rPnL −$0.096 + komisyon $0.265 ≈ **−$0.36**. Stop hiç
+  tetiklenmedi (4082'deydi); executor'ın kendi flatten emri yok (sadece entry+sl legs).
+- **KÖK NEDEN 1 — çapraz-executor flatten (asıl suçlu):** `sync/live_exec/safety_sweep.py` (OPUS, cron
+  `*/5 +50s` → 17:05:50 ✓) borsadaki HER pozisyonu kendi `live_positions` tablosunda arıyordu; sembol
+  kapsamı YOKTU. Altın artık `talos_ichi_positions`'ta olduğu için XAUUSDT "ORPHAN" görünüp market'ten
+  kapatıldı. Hesap OPUS ile paylaşımlı; bu mayın MIDAS-X döneminde de patlamış (`ict-exec.log`:
+  `ORPHAN XAUUSDT amt=0.537`) ama fark edilmemiş — MIDAS-X'in mainnet pozisyonu 5-dk sweep'e denk gelmemiş.
+  **Düzeltme:** orphan döngüsüne `if sym not in cfg.symbols: continue` (EXEC_ENABLED_SYMBOLS). OPUS artık
+  yalnız kendi sembollerini yargılar; başka executor'ün pozisyonuna DOKUNMAZ. Doğrulandı (breaches=0).
+- **KÖK NEDEN 2 — writeback çöküyordu:** `state.writeback_trading_signals` context'ine `exit_px`/`pnl_r`
+  DB'den **Decimal** olarak giriyordu; `Json()→json.dumps` serialize edemeyip tick'i öldürüyordu.
+  `float()` cast eklendi (talos_ichi_exec + latent aynı bug olan midas_exec/talos_exec).
+- **KÖK NEDEN 3 — version taşması:** `trading_signals.version` **varchar(10)**, `talos_ichix` 11 karakter →
+  writeback her seferinde `StringDataRightTruncation`. Exec tag `talos_ichix` → **`tichix`** (config+state,
+  mevcut 2 pozisyon satırı güncellendi). Paper `talos_ichi` tam 10, etkilenmedi.
+- **Telafi:** pos#13 düzeltilmiş kodla `trading_signals` (version='tichix') tablosuna yazıldı. Her iki
+  executor de temiz koşuyor. **Ders: paylaşımlı Binance hesabında her sweep KENDİ sembol evreniyle sınırlı olmalı.**
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
