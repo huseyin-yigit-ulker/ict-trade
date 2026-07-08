@@ -838,6 +838,28 @@ real maker fill-rate/slippage study, not mainnet P&L.
   MIDAS anchor (VWAP seans) dokunulmadı. Böylece çizgiler ilk görünür bardan itibaren dolu, sonra canlı
   devam eder. Prod build PASS.
 
+### 2026-07-08 (13) — 🔴 TALOS-ICHI-X MAINNET GERÇEK PARA (MIDAS-X'in yerine); MIDAS paper'a indi
+- **Kullanıcı kararı (soru-cevap teyitli):** OPUS + TALOS-ICHI canlı gerçek-para; MIDAS paper'a. TALOS-ICHI
+  arming=direkt mainnet, risk=$3 (MIDAS-X'ten devir), MIDAS-X=pozisyon varsa kapat + paper'a devam.
+- **Neden TALOS-ICHI mainnet'e uygun:** tam doğrulama bataryasını geçti (plato+null p=0.004+aylık+çok-yıl);
+  Binance taker'da MIDAS'tan dayanıklı (2026 taker +46R vs MIDAS +23R). Kritik kısıt: Binance hesap-başına
+  tek net XAUUSDT pozisyonu → iki gold executor çakışır → MIDAS-X ÖNCE emekli edilmeli.
+- **MIDAS-X emekli:** açık pozisyon YOK (DB 0, borsa XAUUSDT flat, kapatılacak şey yok — uPnL OPUS'tandı).
+  `.env` MIDAS_EXEC_ENABLED=false, owner (midas,mainnet) row enabled=false, cron 2 satır '#'lendi. MIDAS
+  PAPER feed (canli +20s, backfill 01:30) DEVAM. TALOS-X (testnet) da disable + cron emekli.
+- **TALOS-ICHI-X kuruldu (`sync/talos_ichi_exec/`):** talos_exec'ten klon; mode='talos_ichi', strateji
+  sync/talos_ichi, env TALOS_ICHI_*, tablolar talos_ichi_positions/orders, coid tix-, version talos_ichix,
+  isim TALOS-ICHI-X. MIDAS-X'in birebir kardeşi (maker GTX+60sn taker fallback, oto-kaldıraç ≤25x, borsa-
+  tarafı STOP_MARKET cancel/replace iz-süren stop, killswitch/safety_sweep/parity_report).
+- **DB:** migration 016 (user_stream_settings CHECK += talos_ichi, MAINNET kilidi YOK, owner (talos_ichi,
+  mainnet,$3) satırı), schema.sql (talos_ichi tabloları), store.py _POS_TABLES += talos_ichi. Uygulandı.
+- **Doğrulama:** parity_report PASS (18 işlem, 0 uyuşmazlık — track_open == backtest); dry-run temiz;
+  ARMED header doğru (MAINNET/$3/20x/maker); safety_sweep 0 breach. after_loss_only=**false** (doğrulanan
+  tam kitap; after-loss MIDAS'a özgü, TALOS-ICHI için test edilmedi).
+- **Cron:** TALOS-ICHI-X executor +48s, safety_sweep +58s (VM'e kuruldu). Log ict-talos-ichi-exec.log.
+- ⚠️ FX-maliyet modeli: çok-yıl taker OOS negatif (2026-rejim riski); $3 küçük risk, kitabı izle. `.env`
+  commit edilmez (gitignored). Geri-alma: MIDAS.md/crontab yorumlarında.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

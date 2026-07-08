@@ -80,17 +80,21 @@
 #   (DELETE + re-upsert, idempotent). Engine: sync/talos_ichi/backfill.py ($0.50/oz FX-cost, gold-only).
 50 1 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi/backfill.py --apply >> $HOME/ict-talos-ichi.log 2>&1
 
-# --- TALOS-X LIVE EXECUTION (Binance TESTNET/paper; 2026-07-08) ---
-# MIDAS-X'in birebir kardeşi (sync/talos_exec/ — ayrı talos_positions/talos_orders tabloları,
-# ayrı killswitch; gerçek-para MIDAS-X koduna DOKUNULMADI). mode='talos' sinyallerini okur, maker
-# GTX giriş + 60sn maker→taker fallback; iz-süren stop TESTNET'te sentetik modelle her tick yeniden
-# hesaplanıp ADIM ADIM kaydırılır (cur_sl/trail_gen; testnet koşullu emir tipini -4120 ile reddettiği
-# için borsa-tarafı resting stop yerine tick-bazlı takip + tetikte MARKET-close; mainnet'e taşınırsa
-# cancel/replace hazır). Kapanış version='talosx' olarak trading_signals'a yazılır.
-# TALOS_BINANCE_TESTNET=true kilidi + migration 014 talos_testnet_only CHECK'i mainnet'i kapatır.
-* * * * * sleep 42 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_exec/executor.py     >> $HOME/ict-talos-exec.log 2>&1
-# Safety sweep: XAUUSDT-scoped orphan/freshness/clock-skew bekçisi (testnet hesabında).
-*/3 * * * * sleep 55 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_exec/safety_sweep.py >> $HOME/ict-talos-exec.log 2>&1
+# --- TALOS-X (testnet) — 2026-07-08 EMEKLİ (TALOS backtest'e indi; TALOS_EXEC_ENABLED=false) ---
+# Geri-almak için '#'leri kaldır + .env TALOS_EXEC_ENABLED=true.
+# * * * * * sleep 42 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_exec/executor.py     >> $HOME/ict-talos-exec.log 2>&1
+# */3 * * * * sleep 55 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_exec/safety_sweep.py >> $HOME/ict-talos-exec.log 2>&1
+
+# --- TALOS-ICHI-X LIVE EXECUTION (Binance MAINNET, GERÇEK PARA; 2026-07-08, MIDAS-X'in yerine) ---
+# MIDAS-X'in birebir kardeşi (sync/talos_ichi_exec/ — ayrı talos_ichi_positions/talos_ichi_orders
+# tabloları, ayrı killswitch). mode='talos_ichi' sinyallerini okur, maker GTX giriş + 60sn maker→taker
+# fallback; iz-süren stop MAINNET'te borsa-tarafı STOP_MARKET cancel/replace ile kaydırılır. Kapanış
+# version='talos_ichix'. $3 risk, OTO-kaldıraç ≤25x. XAUUSDT'yi TEK executor sahiplenir (MIDAS-X emekli).
+# ARM: LIVE_TRADING_ENABLED=true & TALOS_ICHI_EXEC_ENABLED=true & TALOS_ICHI_EXEC_DRY_RUN=false &
+# TALOS_ICHI_BINANCE_TESTNET=false + owner (talos_ichi,mainnet) enabled satırı (migration 016).
+# Executor +48s (paper emit :45s'ten ayrık), safety sweep +58s.
+* * * * * sleep 48 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi_exec/executor.py     >> $HOME/ict-talos-ichi-exec.log 2>&1
+*/3 * * * * sleep 58 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi_exec/safety_sweep.py >> $HOME/ict-talos-ichi-exec.log 2>&1
 
 # --- d30so8c LIVE EXECUTION (Binance USDⓈ-M; testnet/mainnet via .env BINANCE_TESTNET) ---
 # Reconciler (cron #1): reads the SAME dch30_4h signals, drives real orders reproducing
@@ -121,7 +125,9 @@
 # (owner=mainnet enabled, testnet row draining). ⚠️ taker+taker 2026 = +53.6R PF1.37 w/ gate, but
 # multi-year OOS is negative — small-size, watch the book.
 # BOTH lines no-op while LIVE_TRADING_ENABLED=false OR MIDAS_EXEC_ENABLED=false OR MIDAS_EXEC_DRY_RUN=true.
-# Executor every minute (matches the 1m chandelier), offset +35s off the :20s canli emit.
-* * * * * sleep 35 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/executor.py     >> $HOME/ict-midas-exec.log 2>&1
-# Safety sweep (cron #2): independent XAUUSDT-scoped orphan/reconciler-freshness/clock-skew guard.
-*/3 * * * * sleep 50 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/safety_sweep.py >> $HOME/ict-midas-exec.log 2>&1
+# 2026-07-08 EMEKLİ — MIDAS-X gerçek-para executor'ı durduruldu; MIDAS PAPER'a indirildi (yerine
+# TALOS-ICHI-X mainnet geldi, XAUUSDT'yi o sahiplenir — tek-executor/simge kuralı). Pozisyon yoktu
+# (DB 0, borsa flat). Geri-almak için '#'leri kaldır + .env MIDAS_EXEC_ENABLED=true + owner row enable.
+# MIDAS paper feed (canli +20s, backfill 01:30) DEVAM eder.
+# * * * * * sleep 35 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/executor.py     >> $HOME/ict-midas-exec.log 2>&1
+# */3 * * * * sleep 50 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/midas_exec/safety_sweep.py >> $HOME/ict-midas-exec.log 2>&1

@@ -36,6 +36,8 @@ _POS_TABLES = {
               ("PENDING_ENTRY", "ENTRY_WORKING", "OPEN")),
     "talos": ("ict_trade.talos_positions",
               ("PENDING_ENTRY", "ENTRY_WORKING", "OPEN")),
+    "talos_ichi": ("ict_trade.talos_ichi_positions",
+                   ("PENDING_ENTRY", "ENTRY_WORKING", "OPEN")),
 }
 
 
