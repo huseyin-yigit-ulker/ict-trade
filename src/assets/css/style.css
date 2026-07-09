@@ -2714,6 +2714,10 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
   .intro-leaders { gap: 8px; }
   .intro-leader, .intro-overview-tile { min-width: 0; flex: 1 1 44%; padding: 10px 12px; }
   .intro-leader__value { font-size: 20px; }
+  /* Hero içeriğini viewport'a sabitle — grid auto-track'in max-content ile şişip
+     dar ekranda sağa taşmasını (disclaimer/tile'lar → "sola kayık" + kırpılma) engelle. */
+  .intro-inner { grid-template-columns: minmax(0, 1fr); }
+  .intro-hero, .intro-hero__content, .intro-leaders, .intro-disclaimer { width: 100%; max-width: 100%; min-width: 0; }
 
   /* Controls: horizontally-scrollable chip + sort rows, full-width search. */
   .intro-controls { gap: 8px; }

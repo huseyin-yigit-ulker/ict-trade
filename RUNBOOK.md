@@ -382,6 +382,17 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
+- **Alt çubuk kısayolları güncellendi + Genel Bakış hero taşma düzeltmesi (gerçek-cihaz geri bildirimi).**
+  - **MobileTabBar: Genel · Binance · Strateji · Menü** (herkes). "Binance" → canlı pozisyonlar
+    (`binanceTo` aktivasyona göre mainnet/paper, sekme her zaman görünür). "Strateji" → ana canlı
+    stratejinin komuta merkezi `/${slugFor(LIVE_STREAM_KEYS[0])}/live` (= ATLAS/atlas/live). Yeni
+    `IStrat` ikonu. (Önceki "Genel·Canlı·Menü" sade sürümünden revize.)
+  - **Hero "sola kayık"/kırpılma FIX (`style.css`):** `.intro-inner` grid'inde `.intro-hero__content`
+    grid-item'ı max-content ile boyutlanıp dar ekranda (≤~375px) viewport'u sağdan taşıyor, `overflow:hidden`
+    ile disclaimer kırpılıyor + içerik sola kaymış görünüyordu. Mobil media query'e `grid-template-columns:
+    minmax(0,1fr)` + hero/leaders/disclaimer'a `width/max-width:100%; min-width:0` eklendi → 360px'te
+    simetrik (left=right=24), kırpılma yok.
+  - **Ops:** yalnız frontend; migration/cron/env YOK. iPhone-13 + 360/393px viewport doğrulandı.
 - **Alt navigasyon sadeleştirme + uzun sistem-açıklama metinlerinin kaldırılması (mobil-doğrulandı).**
   Kullanıcı isteği: normal kullanıcı yalnız öz/gerekli görsün, ekranlar okunur olsun.
   - **Mobil alt çubuk (MobileTabBar) herkeste sade: Genel · Canlı · Menü.** "İşlem Merkezi" ve "İstihbarat"
