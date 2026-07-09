@@ -306,7 +306,7 @@ const Sidebar = () => {
             <NavLink to="/total" className="sidebar__link">
               <span className="sidebar__icon"><IconTotal /></span><span>TOTAL</span>
             </NavLink>
-            {features?.intelligence !== false && (
+            {isAdmin && (
               <NavLink to="/intelligence" className="sidebar__link">
                 <span className="sidebar__icon"><IconIntel /></span><span>{t('İstihbarat')}</span>
               </NavLink>

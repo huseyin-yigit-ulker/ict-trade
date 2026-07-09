@@ -53,12 +53,20 @@ export const useAuth = () => useContext(AuthContext);
 // bu yüzden varsayılan KAPALI — yalnız admin (isAdmin) veya admin'in backtest yüzeyini
 // açıkça =true yaptığı kullanıcı görür. (Canlı 3 akışın kendi backtest sekmesi bundan
 // bağımsız: o CANLI MODÜL'de, araştırma bölümünde değil — isResearchStream=false.)
-const DEFAULT_FEATURES = { backtest: false, intelligence: true, trading: true };
+// intelligence: 2026-07-09 opt-in'e çevrildi (backtest gibi). Kurumsal quant tearsheet
+// (Sharpe/Sortino/drawdown/aylık-ısı-haritası) son kullanıcı ürünü değil, analist
+// yüzeyidir — normal kullanıcı SADECE gerekli/öz bilgiyi görsün. Yalnız admin, ya da
+// admin'in açıkça =true yaptığı kullanıcı görür. trading opt-out kalır (default açık).
+const DEFAULT_FEATURES = { backtest: false, intelligence: false, trading: true };
 
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(loadSession);
   const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  // Oturum diskten geri yükleniyorsa profil/features fetch'i KESİN çalışacak (aşağıdaki
+  // mount efekti). O yüzden loading'i baştan true başlat — yoksa efekt-öncesi ilk render'da
+  // features=DEFAULT_FEATURES olur ve RequireFeature, gerçek features gelmeden yanlış karar
+  // verip fail-closed yüzeyleri (intelligence) '/'e atar. Oturum yoksa RequireAuth zaten login'e yollar.
+  const [profileLoading, setProfileLoading] = useState(() => !!loadSession());
   const [features, setFeatures] = useState(null);   // null = yüklenmedi → DEFAULT_FEATURES
   const [prefs, setPrefs] = useState(null);
   const refreshTimer = useRef(null);
@@ -275,11 +283,14 @@ export const RequireAdmin = ({ children }) => {
   return children;
 };
 
-// Admin'in kullanıcı-başına kapatabildiği yüzeyler (user_features): kapalıysa ana
-// sayfaya döner. Satır/tablo yokken (features=DEFAULT) hiçbir şey kısıtlanmaz.
+// Admin'in kullanıcı-başına aç/kapatabildiği yüzeyler (user_features). Admin her
+// yüzeyi görür. Kullanıcı için: opt-out yüzeyler (trading, default açık) yalnız
+// =false ise kapanır; opt-in yüzeyler (intelligence, DEFAULT_FEATURES'ta false)
+// yalnız admin =true yaptıysa açılır. İki kural da tek satırla: =false ⇒ engelle.
 export const RequireFeature = ({ k, children }) => {
-  const { features, profileLoading } = useAuth();
+  const { features, isAdmin, profileLoading } = useAuth();
   if (profileLoading) return null;
+  if (isAdmin) return children;
   if (features?.[k] === false) return <Navigate to="/" replace />;
   return children;
 };

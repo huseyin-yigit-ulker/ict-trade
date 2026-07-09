@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLang } from '../context/LanguageContext';
-import { BACKTEST_ALLOWED_SYMBOLS } from '../context/TradeContext';
+import { CRYPTO_METAL_SYMBOLS } from '../context/TradeContext';
 import { regimeAccuracy, marketOf, MARKETS, fetchRegimeKlines, REGIME_INTERVALS } from '../utils/symbolMeta';
 import { computeRegime, verdictOf, TREND_RANGE, TREND_RANGE_LIST } from '../utils/regimeDetectors';
 import Sparkline from '../components/viz/Sparkline';
@@ -62,7 +62,7 @@ const TrendPage = () => {
     let alive = true;
     setLoading(true);
     (async () => {
-      const out = await Promise.all(BACKTEST_ALLOWED_SYMBOLS.map(async (sym) => {
+      const out = await Promise.all(CRYPTO_METAL_SYMBOLS.map(async (sym) => {
         try {
           // Regime history at the selected timeframe (4h pages from 2025; 1h ~last 50 days).
           const d = await fetchRegimeKlines(sym, tf);

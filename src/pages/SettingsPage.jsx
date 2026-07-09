@@ -113,7 +113,7 @@ const SettingsPage = () => {
             >
               {PAGE_CHOICES
                 .filter((c) => (c.path !== '/trading' || features?.trading !== false)
-                  && (c.path !== '/intelligence' || features?.intelligence !== false))
+                  && (c.path !== '/intelligence' || isAdmin))
                 .map((c) => <option key={c.path} value={c.path}>{t(c.label)}</option>)}
             </select>
           </div>
@@ -122,7 +122,9 @@ const SettingsPage = () => {
           </div>
         </section>
 
-        {/* Data & engine */}
+        {/* Data & engine — motor/DB iç durumu operasyoneldir; yalnız admin görür.
+            Normal kullanıcı sade kalsın (sadece gerekli/öz bilgi). */}
+        {isAdmin && (
         <section className="overview-card settings-card">
           <div className="summary-title">{t('Veri & Motor')}</div>
           <div className="settings-row">
@@ -139,6 +141,7 @@ const SettingsPage = () => {
           </div>
           <button className="header-btn" onClick={testDbConnection}>{t('Bağlantıyı Test Et')}</button>
         </section>
+        )}
 
         {/* Notifications (Web Push) */}
         <section className="overview-card settings-card">
@@ -185,7 +188,9 @@ const SettingsPage = () => {
           )}
         </section>
 
-        {/* Symbols */}
+        {/* Symbols — sinyal-evreni seçimi operasyonel bir kontroldür; yalnız admin.
+            Normal kullanıcının 20 sembol arasından seçim yapmasına gerek yok. */}
+        {isAdmin && (
         <section className="overview-card settings-card settings-card--wide">
           <div className="summary-title">{t('Semboller')} ({selectedSymbols.size})</div>
           {uniqueSymbols.length === 0 && <div className="summary-empty">{t('Kayıt yok')}</div>}
@@ -205,6 +210,7 @@ const SettingsPage = () => {
             <button className="apply-btn ghost" onClick={clearPendingSymbols}>{t('Temizle')}</button>
           </div>
         </section>
+        )}
 
         {/* Account */}
         <section className="overview-card settings-card">

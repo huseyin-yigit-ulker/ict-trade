@@ -39,7 +39,7 @@ const IMenu = () => (
 
 const MobileTabBar = () => {
   const { mobileNavOpen, toggleMobileNav, closeMobileNav } = useTradeContext();
-  const { features } = useAuth();
+  const { features, isAdmin } = useAuth();
   const { t } = useLang();
   const act = useExecActivation();   // "Canlı" sekmesi kişisel aktivasyona bağlı (2026-07-07)
   const cls = ({ isActive }) => `mtab${isActive ? ' is-active' : ''}`;
@@ -63,7 +63,7 @@ const MobileTabBar = () => {
           <IGear /><span>{t('Trade')}</span>
         </NavLink>
       )}
-      {features?.intelligence !== false && (
+      {isAdmin && (
         <NavLink to="/intelligence" className={cls} onClick={closeMobileNav}>
           <IIntel /><span>{t('İstihbarat')}</span>
         </NavLink>

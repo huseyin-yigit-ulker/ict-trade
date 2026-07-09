@@ -13,7 +13,11 @@ const BACKTEST_ALLOWED_HOURS = new Set(Array.from({ length: 24 }, (_, h) => h));
 // audit (PLTR/TSLA were cut too but re-added 2026-06-12 by user decision with
 // the tokenized-equity expansion). Old rows for hidden symbols stay in the
 // database but the dashboard hides them. Mirrors dag/dag.py SYMBOLS.
-export const BACKTEST_ALLOWED_SYMBOLS = [
+// Canlı işlem evreni — kripto + metal (20). 2026-07-09 (ebd03d4) kararı: US-hisse
+// perp'leri canlı Donchian evreninden atıldı. Kullanıcıya dönük yüzeyler (Rejim
+// Haritası vb.) SADECE bunu gösterir; artık işlem yapılmayan hisseler kullanıcıyı
+// yanıltmasın diye. Backtest laboratuvarı (aşağıda) hisseleri koruyor.
+export const CRYPTO_METAL_SYMBOLS = [
   'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT',
   '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
   'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'SUSDT',
@@ -21,14 +25,21 @@ export const BACKTEST_ALLOWED_SYMBOLS = [
   // 2026-06-13: crypto re-add by user decision (XRP/LINK/DOGE re-added, AVAX new).
   'XRPUSDT', 'DOGEUSDT', 'LINKUSDT', 'AVAXUSDT',
   'XAUUSDT', 'XAGUSDT',
-  // Stock-backed perps (underlying equities)
+];
+
+// Stock-backed perps — SADECE araştırma/backtest laboratuvarı için tutulur.
+const STOCK_PERP_SYMBOLS = [
   'NVDAUSDT', 'METAUSDT',
   'AMZNUSDT', 'COINUSDT', 'MSTRUSDT',
   // 2026-06-12 tokenized-equity expansion (listings 2026-01-28 .. 2026-06-08)
   'CRCLUSDT', 'PLTRUSDT', 'TSLAUSDT', 'INTCUSDT', 'HOODUSDT',
   'MSFTUSDT', 'AVGOUSDT', 'BABAUSDT', 'BXUSDT', 'HPEUSDT',
-  'AMATUSDT', 'CRWDUSDT', 'CRDOUSDT', 'AAOIUSDT', 'IWMUSDT'
+  'AMATUSDT', 'CRWDUSDT', 'CRDOUSDT', 'AAOIUSDT', 'IWMUSDT',
 ];
+
+// Backtest (araştırma) evreni = canlı 20 + hisse perp'leri. Sıra korunur ki cache
+// anahtarları ve mevcut backtest tabloları değişmesin.
+export const BACKTEST_ALLOWED_SYMBOLS = [...CRYPTO_METAL_SYMBOLS, ...STOCK_PERP_SYMBOLS];
 
 // Entry-fill timeout — mirrors the backtest engine (ict/config.py EXPIRY_MINUTES = 180):
 // a signal's limit must be touched within 3h of the signal, else it's cancelled.

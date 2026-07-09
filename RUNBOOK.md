@@ -381,6 +381,32 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-09
+- **Kullanıcı yüzeyi sadeleştirme + Rejim Haritası veri tutarlılığı (mobil-doğrulandı).** Amaç: normal
+  (non-admin) kullanıcı yalnız gerekli/öz bilgiyi görsün; analist/operasyon yüzeyleri admin'e kalsın.
+  - **İstihbarat artık admin-only.** Kurumsal quant tearsheet (Sharpe/Sortino/drawdown/aylık ısı-haritası)
+    son kullanıcı ürünü değil. Route `/intelligence` → `RequireAdmin`; Sidebar + MobileTabBar nav gizleme
+    `isAdmin`; Settings ▸ Açılış Sayfası seçeneği de admin'e. Eski `user_features.intelligence=true`
+    izinleri artık **yok sayılır** (DB'ye dokunulmadı — geri-alınabilir kod-tabanlı gating). Bu, 07-05
+    kaydındaki per-user intelligence feature'ını (RequireFeature) admin-only ile **geçersiz kılar**;
+    `trading` opt-out feature'ı aynen korunur.
+  - **Ayarlar sadeleştirme:** "Veri & Motor" (PUSU Engine/DB durumu/Bağlantı testi) ve "Semboller"
+    (20-sembol seçici) blokları **admin-only**. Non-admin'de kalan: Görünüm · Bildirimler · Hesap · Hakkında.
+  - **Rejim Haritası (`/trend`) yalnız canlı evren.** `TradeContext` sembol seti ikiye ayrıldı:
+    `CRYPTO_METAL_SYMBOLS` (canlı 20) + `STOCK_PERP_SYMBOLS` (yalnız backtest laboratuvarı);
+    `BACKTEST_ALLOWED_SYMBOLS = [...ikisi]` (backtest tabloları/cache aynı, sıra korundu). TrendPage artık
+    canlı 20'yi besliyor → ebd03d4 ile atılan ~20 US-hisse perp'i kullanıcıya gösterilmiyor (sayfa
+    ~18.3k→~10.8k px kısaldı).
+  - **BUG FIX — `RequireFeature`/feature-guard direkt-yükleme race'i:** tam-sayfa direkt yüklemede, mount
+    efekti çalışmadan önceki ilk render'da context `features=DEFAULT_FEATURES` döndürüyordu; feature
+    fail-closed olunca (intelligence opt-in) gerçek izinler gelmeden gated sayfayı `/`'e atıyordu (eskiden
+    default açık olduğu için maskeliydi). Düzeltme: oturum diskte varsa `profileLoading` baştan `true`
+    başlatılır (`AuthContext`), guard gerçek profil/features yüklenene dek karar vermez. `/trading` gibi
+    tüm gated sayfaları sağlamlaştırır.
+  - **Ops:** yalnız frontend (React) değişikliği; migration/cron/env YOK. Doğrulama: iPhone-13 viewport'ta
+    (Playwright/Chromium headless) giriş yapılıp login/genel/trend/ayarlar/istihbarat-guard/trading akışları
+    gezildi — yatay taşma yok, nav/guard tutarlı.
+
 ### 2026-07-05
 - **Admin merkezî kontrol + kullanıcı ekleme/silme + kullanıcı tercihleri + bildirim tercihleri (§8a devamı).**
   Tüm kullanıcı kontrolleri artık `/admin`'de; kullanıcı tarafında tema/dil/açılış sayfası + bildirim

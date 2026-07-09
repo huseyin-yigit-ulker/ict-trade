@@ -36,7 +36,9 @@ function App() {
                   <Route path="/trading" element={<RequireActive><RequireFeature k="trading"><TradingSettingsPage /></RequireFeature></RequireActive>} />
                   <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
                   <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
-                  <Route path="/intelligence" element={<RequireFeature k="intelligence"><IntelligencePage /></RequireFeature>} />
+                  {/* İstihbarat = kurumsal quant tearsheet → yalnız admin. Non-admin (eski
+                      user_features.intelligence=true izni olsa bile) '/'e döner. */}
+                  <Route path="/intelligence" element={<RequireAdmin><IntelligencePage /></RequireAdmin>} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
