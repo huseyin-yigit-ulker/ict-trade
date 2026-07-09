@@ -33,7 +33,7 @@ class BinanceError(RuntimeError):
 
 class BinanceFutures:
     def __init__(self, *, api_key: str, api_secret: str, base_url: str,
-                 proxy: str = "", recv_window: int = 5000, timeout: int = 20):
+                 proxy: str = "", recv_window: int = 10000, timeout: int = 20):
         self.key = api_key
         self.secret = (api_secret or "").encode()
         self.base = base_url.rstrip("/")
@@ -51,19 +51,22 @@ class BinanceFutures:
 
     def _request(self, method: str, path: str, params: dict | None = None,
                  *, signed: bool = False, base: str | None = None) -> Any:
-        params = dict(params or {})
-        if signed:
-            params["timestamp"] = self._now_ms()
-            params["recvWindow"] = self.recv_window
-            query = urllib.parse.urlencode(params, doseq=True)
-            sig = hmac.new(self.secret, query.encode(), hashlib.sha256).hexdigest()
-            query = f"{query}&signature={sig}"
-        else:
-            query = urllib.parse.urlencode(params, doseq=True)
-        url = f"{base or self.base}{path}" + (f"?{query}" if query else "")
-
+        base_params = dict(params or {})
         last_exc: Exception | None = None
         for attempt in range(5):
+            # Build the query FRESH each attempt: a signed request must carry a CURRENT timestamp,
+            # else a retry after any delay re-sends a stale one and re-triggers -1021. (Old code hoisted
+            # the timestamp out of the loop, so retries never actually refreshed it.)
+            if signed:
+                p = dict(base_params)
+                p["timestamp"] = self._now_ms()
+                p["recvWindow"] = self.recv_window
+                query = urllib.parse.urlencode(p, doseq=True)
+                sig = hmac.new(self.secret, query.encode(), hashlib.sha256).hexdigest()
+                query = f"{query}&signature={sig}"
+            else:
+                query = urllib.parse.urlencode(base_params, doseq=True)
+            url = f"{base or self.base}{path}" + (f"?{query}" if query else "")
             try:
                 r = requests.request(method, url, headers=self._headers(),
                                      timeout=self.timeout, proxies=self._proxies)
@@ -73,15 +76,27 @@ class BinanceFutures:
                 if r.status_code >= 400:
                     try:
                         body = r.json()
-                        raise BinanceError(int(body.get("code", 0)), str(body.get("msg", r.text)), r.status_code)
                     except ValueError:
                         raise BinanceError(0, r.text[:200], r.status_code)
+                    code = int(body.get("code", 0))
+                    # -1021 = timestamp outside recvWindow (VM clock skew / NTP step). RE-SYNC the
+                    # server-time offset and retry with a fresh timestamp — self-heals a transient
+                    # clock jump instead of failing the reconcile/order (real-money resilience).
+                    if signed and code == -1021 and attempt < 4:
+                        try:
+                            self.sync_time()
+                        except Exception:                # noqa: BLE001
+                            pass
+                        last_exc = BinanceError(code, str(body.get("msg", r.text)), r.status_code)
+                        time.sleep(0.3)
+                        continue
+                    raise BinanceError(code, str(body.get("msg", r.text)), r.status_code)
                 return r.json() if r.text else {}
             except requests.exceptions.RequestException as e:
                 last_exc = e
                 if attempt == 4:
                     break
-                time.sleep(1.5 * (2 ** attempt))      # 1.5, 3, 6, 12s
+                time.sleep(min(1.5 * (2 ** attempt), 6))   # 1.5, 3, 6, 6s
         raise BinanceError(0, f"network: {last_exc}")
 
     # ---------------------------------------------------------------- public

@@ -856,6 +856,18 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - **Cron:** `*/5 * * * * sleep 15` (boş offset), log `$HOME/ict-digest.log`. VM'e kuruldu, canlı test gönderildi
   (3 pozisyon: ETH/FET OPUS-RUNNER + XAU TALOS-ICHI-X).
 
+### 2026-07-08 — fix: -1021 (saat kayması) self-heal — imzalı çağrılar taze damga + resync + retry
+- **Şikayet (sahip):** "MIDAS paper işlem açma hata veriyor — `[-1021] Timestamp outside recvWindow`".
+- **Teşhis:** anlık kayma küçük (~40ms), yani `-1021` VM saatinin ANLIK sıçraması (NTP step/jitter). Ama
+  `binance_futures._request` **timestamp'i döngü DIŞINDA bir kez** hesaplıyordu → retry'lar aynı BAYAT
+  damgayı yeniden gönderiyor, ve `-1021`'de self-heal yoktu → reconcile/emir başarısız.
+- **Düzeltme (`sync/live_exec/binance_futures.py` — TÜM executor'lerce paylaşılan client, gerçek para dahil):**
+  (1) imzalı sorgu HER denemede taze `timestamp` ile kuruluyor; (2) `-1021` alınınca `sync_time()` ile
+  server-time offset RESYNC edilip retry — anlık saat sıçramasını otomatik iyileştirir; (3) `recvWindow`
+  5000→10000 ms (jitter payı). Geriye-dönük uyumlu; salt dayanıklılık artışı.
+- **Doğrulama:** yapay −20000ms kayma enjekte edildi → ilk imzalı çağrı resync edip başardı (offset −117ms'e
+  döndü). Üç executor de temiz koştu (`-1021` yok): MIDAS-X(testnet), TALOS-ICHI-X(mainnet), OPUS(mainnet).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
