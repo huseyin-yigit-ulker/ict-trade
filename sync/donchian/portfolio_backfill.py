@@ -41,7 +41,9 @@ from trade_sync_common import _net_r                 # noqa: E402
 
 DEFAULT_START = pd.Timestamp("2024-01-01", tz="UTC")
 MARGIN_MIN = 0.25                                    # OOS-robust breakout-clearance filter (ATR units)
-SYMBOLS = list(strat.SYMBOLS)                        # full universe (40); no-data symbols skip
+SYMBOLS = list(strat.CRYPTO_METAL_SYMBOLS)           # crypto + metals (20); the 20 US-stock perps
+                                                     # are dropped (2026-07-09 owner decision — the
+                                                     # tokenised equities were noise). See strategy.py.
 # CRYPTO-only universe (the 18 crypto perps; drops XAU/XAG + the 20 stock-perps). 2026-07-08 owner
 # decision: OPUS (d30so8f3h7 — the live real-money stream) trades crypto ONLY, so its backtest book
 # must mirror that universe. Gold has its own streams (MIDAS paper / TALOS-ICHI-X real money).

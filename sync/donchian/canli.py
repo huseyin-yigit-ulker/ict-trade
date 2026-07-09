@@ -166,7 +166,8 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--dry-run", action="store_true")
     g.add_argument("--emit", action="store_true")
-    ap.add_argument("--symbols", nargs="*", default=strat.SYMBOLS)
+    ap.add_argument("--symbols", nargs="*", default=strat.CRYPTO_METAL_SYMBOLS)  # crypto+metals only;
+    #                                        US-stock perps dropped (2026-07-09 owner decision)
     ap.add_argument("--tf", default="1h", choices=sorted(TF_MINUTES),
                     help="signal timeframe (default 1h)")
     ap.add_argument("--confirm-htf", default=None, choices=["1h", "4h"],

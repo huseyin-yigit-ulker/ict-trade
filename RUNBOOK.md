@@ -868,6 +868,23 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - **Doğrulama:** yapay −20000ms kayma enjekte edildi → ilk imzalı çağrı resync edip başardı (offset −117ms'e
   döndü). Üç executor de temiz koştu (`-1021` yok): MIDAS-X(testnet), TALOS-ICHI-X(mainnet), OPUS(mainnet).
 
+### 2026-07-09 — DONCHIAN KRİPTO+METAL: US-hisse perp'leri evrenden atıldı + eski sinyaller silindi
+- **Karar (sahip):** "Kripto ve metaller kalsın, sadece tüm Donchian'larda; US hisseleri gitsin. midas/talos'a
+  dokunma. Donchian metal+kripto çalışsın; metaller Donchian'da zaten live işlem almıyor, sadece sinyal üretsin."
+- **Neden:** OPUS kripto-only yapılırken (2026-07-08) görüldü ki 40-sembol evrenindeki 20 tokenize US hisse
+  (NVDA/META/AMZN/COIN/MSTR/CRCL/PLTR/TSLA/INTC/HOOD/MSFT/AVGO/BABA/BX/HPE/AMAT/CRWD/CRDO/AAOI/IWM) gürültüydü.
+- **Yeni evren:** `strategy.CRYPTO_METAL_SYMBOLS` (20 = 18 kripto + XAU + XAG). `STOCK_SYMBOLS` (20) düşülür.
+  Metaller SİNYAL-ONLY kalır (canlı executor `EXEC_ENABLED_SYMBOLS` kripto-only → XAU/XAG hiç gerçek-para fill almaz).
+- **Kod (üreticiler kısıldı):** `canli.py` `--symbols` default → CRYPTO_METAL; `portfolio_backfill.SYMBOLS` →
+  CRYPTO_METAL (volgate_backfill onu kullanır); `sync_daily.py` upsert öncesi STOCK_SYMBOLS güvenlik-filtresi.
+  d30so8f3h7 (OPUS, gerçek-para ayna) KENDİ `symbols=CRYPTO_SYMBOLS` kısıtıyla **kripto-only** kalır (metalsiz) —
+  backtest kitabı executor'ü aynalamaya devam etsin diye; bilinçli istisna.
+- **DB temizliği (tek sefer):** hisse satırları silindi — LIVE `signals` 213 (547→334), BACKTEST `trading_signals`
+  3426 (54388→50962). Kripto + XAU/XAG + altın akışları (midas 403 / talos 327 / talos_ichi 232 / tichix / midasx)
+  DOKUNULMADI. Silme sonrası her iki DB'de kalan hisse = 0; altın akış sayıları değişmedi.
+- **ICT akışları (v1/v2/main/impulse) — ayrı kitap, dokunulmadı** (live emisyonu 2026-06-14'te emekliydi); bu
+  temizlik yalnız Donchian kapsamı. Script: `scratchpad/delete_stock_signals.py` (--apply).
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

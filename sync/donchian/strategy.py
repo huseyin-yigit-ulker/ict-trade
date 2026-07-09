@@ -167,6 +167,13 @@ SYMBOLS = [
     "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
 ]
 
+# Crypto + metals ONLY (drops the 20 US-stock perps in STOCK_SYMBOLS). 2026-07-09 owner decision:
+# Donchian trades/signals CRYPTO + METALS (XAU/XAG) only — the tokenised US equities were pure
+# noise (263 trades / +11R over the whole book). Metals stay SIGNAL-ONLY (the live executor's
+# EXEC_ENABLED_SYMBOLS is crypto-only, so XAU/XAG never take a real-money fill). This is the
+# default universe for every donchian generator (canli emit, portfolio/volgate backfill).
+CRYPTO_METAL_SYMBOLS = [s for s in SYMBOLS if s not in STOCK_SYMBOLS]
+
 
 @dataclass
 class DonSignal:

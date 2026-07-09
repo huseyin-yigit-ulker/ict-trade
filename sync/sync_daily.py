@@ -445,6 +445,15 @@ def main():
                                  symbols_override=args.symbols)
         all_rows += rows
 
+    # Safety net: drop any US-stock-perp rows before they reach the backtest book. Donchian is
+    # crypto + metals only (2026-07-09 owner decision); the generators are already restricted, but
+    # this guards against a stray stock signal lingering in the live feed being resolved back in.
+    from donchian import strategy as _dstrat
+    _before = len(all_rows)
+    all_rows = [r for r in all_rows if r["symbol"] not in _dstrat.STOCK_SYMBOLS]
+    if len(all_rows) != _before:
+        print(f"  stock-filter: dropped {_before - len(all_rows)} US-stock rows (crypto+metals only)")
+
     # Self-heal the LIVE signals table: physically delete Donchian breakouts that
     # CONCLUSIVELY failed directional entry confirmation (adverse buf*risk before
     # favourable, or fill window elapsed without confirming). The emit-time pre-filter
