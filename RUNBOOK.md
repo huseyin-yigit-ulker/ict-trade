@@ -885,6 +885,24 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - **ICT akışları (v1/v2/main/impulse) — ayrı kitap, dokunulmadı** (live emisyonu 2026-06-14'te emekliydi); bu
   temizlik yalnız Donchian kapsamı. Script: `scratchpad/delete_stock_signals.py` (--apply).
 
+### 2026-07-09 (2) — Admin: açık-işlem özeti cron'unu web'den aç/kapa + altın panosu TALOS etiketi
+- **İstek (sahip):** (1) "Binance Live'daki altın işlemleri artık MIDAS değil TALOS; detay linki de paper'a
+  gönderiyor" — düzelt. (2) "Açık işlemler cron job'unu webden kontrol edilen buton açsın/kapasın."
+- **(1) Altın etiketi:** veri sorguları zaten gerçek-para TALOS-ICHI (`talos_ichi_positions`,
+  `mode=eq.talos_ichi`) idi; sadece görünen isim `sd.name('midas')` (paper kod adı) ile çözülüyordu.
+  `LivePositionsPage.jsx` altın başlığı + `MidasXLivePage.jsx` rozet/uyarıları → `sd.name('talos_ichi')`.
+  Salt etiket; veri/rota (`/binance-altin`) değişmedi.
+- **(2) Cron aç/kapa — bayrak kalıbı:** cron VM crontab'ında sabit (`dag/crontab` `*/5`), web'den satır
+  silinemez → executor `kill_requested` kalıbı: cron her tetiklemede DB bayrağını okur, KAPALI ise sessizce
+  no-op (Binance'i bile çağırmadan çıkar). `--always`/`--dry-run` elle çalıştırmayı bloklamaz.
+  - **DB (migration 017 ✅ uygulandı):** `ict_trade.app_flags` (key/enabled, RLS: authenticated SELECT) +
+    `admin_set_flag(key,bool)` RPC (`is_admin()` korumalı, audit_log'a yazar). Seed `positions_digest=true`.
+  - **Python:** `trade_sync_common.flag_enabled(conn,key,default=True)` (tablo yoksa default → cron kırılmaz);
+    `positions_digest.py` `live_conn()` sonrası gate.
+  - **Frontend:** AdminPage Sistem Durumu kartında **🔔 Açık İşlem Özeti: AÇIK/KAPALI** butonu (admin-only).
+- **Doğrulama:** bayrak KAPALI → cron elle koşuldu → `=== açık işlem özeti KAPALI (app_flags) — atlanıyor ===`,
+  Binance/Telegram'a gitmedi, exit 0; bayrak tekrar AÇIK. Frontend Render'da main'den derlenince buton görünür.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

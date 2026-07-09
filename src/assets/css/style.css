@@ -3139,6 +3139,8 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 /* ── Admin · Sistem Durumu + Duyuru (2026-07-05, migration 009) ─────────────── */
 .admin-ov-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .admin-globalkill { font-size: 12px; padding: 6px 12px; }
+.admin-digest { font-size: 12px; padding: 6px 12px; margin-left: auto; }
+.admin-digest.on { background: rgba(245, 185, 66, 0.14); color: var(--accent); border-color: var(--accent); }
 .admin-stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px; margin-top: 10px;

@@ -154,8 +154,8 @@ export default function MidasXLivePage() {
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
         {/* Admin sees the executor detail; everyone else just the codename. */}
         <span className="livex__badge">{sd.isAdmin
-          ? `${sd.name('midas')}-X · XAU 1m · iz-süren · ${real ? t('GERÇEK') : 'PAPER'}`
-          : `${sd.name('midas')} · ${real ? t('GERÇEK') : 'PAPER'}`}</span>
+          ? `${sd.name('talos_ichi')}-X · XAU 1m · iz-süren · ${real ? t('GERÇEK') : 'PAPER'}`
+          : `${sd.name('talos_ichi')} · ${real ? t('GERÇEK') : 'PAPER'}`}</span>
         <span className="livex__badge" title={t('Yalnız aynı fx-gününün önceki işlemi zararla kapandıysa emir açılır; günün ilk sinyali ve kazanç-sonrası sinyaller atlanır. Sinyal akışı etkilenmez.')}>
           🚧 {t('Kayıp-sonrası kapı')}
         </span>
@@ -165,8 +165,8 @@ export default function MidasXLivePage() {
 
       <div className="livex__warn">
         {real
-          ? t('{name} altın akışı — Binance MAINNET (gerçek para). İşlem başına sabit risk; çıkış iz-süren stopla borsa tarafında korunur.', { name: sd.name('midas') })
-          : t('{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).', { name: sd.name('midas') })}
+          ? t('{name} altın akışı — Binance MAINNET (gerçek para). İşlem başına sabit risk; çıkış iz-süren stopla borsa tarafında korunur.', { name: sd.name('talos_ichi') })
+          : t('{name} altın akışı — Binance testnet (paper, gerçek para DEĞİL).', { name: sd.name('talos_ichi') })}
       </div>
       {stale && (
         <div className="livex__warn">{t('Snapshot 5 dk’dan eski — executor cron çalışmıyor olabilir.')}</div>

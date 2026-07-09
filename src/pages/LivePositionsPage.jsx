@@ -292,12 +292,13 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         </div>
       )}
 
-      {/* ── Gold · MIDAS-X (mainnet) — the account's second real-money stream (2026-07-07:
-            the standalone /binance-altin board left the sidebar; detail deep-link kept) ── */}
+      {/* ── Gold · TALOS-ICHI-X (mainnet) — the account's second real-money stream (2026-07-08:
+            talos_ichi replaced MIDAS as the gold real-money stream; MIDAS is now PAPER. The
+            standalone /binance-altin board left the sidebar; detail deep-link kept) ── */}
       {(goldOpen.length > 0 || goldClosed.length > 0) && (
         <>
           <h2 className="livex__h2">
-            {t('Altın')} · {sd.name('midas')}{' '}
+            {t('Altın')} · {sd.name('talos_ichi')}{' '}
             <Link to="/binance-altin" className="livex__detail-link">{t('Detay')} →</Link>
           </h2>
           {goldOpen.length === 0

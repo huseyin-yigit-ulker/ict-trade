@@ -95,6 +95,24 @@ def backtest_conn():
     return _connect("BACKTESTING_DB_CONNECTION_STRING")
 
 
+def flag_enabled(conn, key: str, default: bool = True) -> bool:
+    """Global uygulama bayrağı (ict_trade.app_flags — migration 017). Admin panelinden
+    aç/kapa edilir. Satır/tablo yoksa `default` döner (migration henüz uygulanmamışsa
+    bayrak kontrolü cron'u ASLA kırmaz). Web'den satır silinemeyen sabit crontab girişleri
+    her tetiklemede bunu okuyup KAPALI ise no-op yapar."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select enabled from ict_trade.app_flags where key = %s", (key,))
+            row = cur.fetchone()
+        return default if row is None else bool(row[0])
+    except Exception:  # noqa: BLE001 — migration 017 henüz uygulanmamış olabilir
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return default
+
+
 # ---------------------------------------------------------------- klines
 def fetch_1h(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
     return fetch_klines(symbol, INTERVAL,

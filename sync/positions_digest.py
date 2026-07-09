@@ -139,6 +139,12 @@ def main() -> None:
                             proxy=str(env.get("BINANCE_PROXY", "")).strip())
 
     conn = tsc.live_conn()
+    # Web (admin paneli) aç/kapa bayrağı — crontab girişi sabit; KAPALI ise sessizce çık
+    # (Binance'i bile çağırma). --always/--dry-run elle çalıştırmayı bloklamaz.
+    if not (args.always or args.dry_run) and not tsc.flag_enabled(conn, "positions_digest"):
+        conn.close()
+        print(f"=== açık işlem özeti KAPALI (app_flags) @ {now:%H:%M}Z — atlanıyor ===")
+        return
     rows = _db_rows(conn)
     conn.close()
 

@@ -51,6 +51,8 @@ export default function AdminPage() {
   const [authMeta, setAuthMeta] = useState({}); // user_id -> {email_confirmed, last_sign_in_at} (009)
   const [statsMap, setStatsMap] = useState({}); // user_id -> {open_count, today_usd, total_usd} (009)
   const [overview, setOverview] = useState(null); // admin_overview() jsonb (009)
+  const [digestOn, setDigestOn] = useState(true); // app_flags.positions_digest (017)
+  const [digestBusy, setDigestBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
@@ -65,7 +67,7 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setErr('');
-    const [p, k, a, f, lu, st, ov] = await Promise.allSettled([
+    const [p, k, a, f, lu, st, ov, fl] = await Promise.allSettled([
       getJSON('profiles?select=*&order=created_at.desc'),
       getJSON('user_api_keys_public?select=*&order=created_at.desc'),
       getJSON('audit_log?select=*&order=created_at.desc&limit=50'),
@@ -73,6 +75,7 @@ export default function AdminPage() {
       rpc('admin_list_users'),      // 009: e-posta onayı + son giriş
       rpc('admin_user_stats'),      // 009: açık poz / bugün$ / toplam$
       rpc('admin_overview'),        // 009: sistem sağlık özeti
+      getJSON('app_flags?select=key,enabled&key=eq.positions_digest'), // 017: cron aç/kapa
     ]);
     if (p.status === 'fulfilled') setProfiles(p.value || []); else setErr(p.reason?.message || 'profiles');
     if (k.status === 'fulfilled') setKeys(k.value || []); else setErr((e) => e || k.reason?.message);
@@ -89,6 +92,8 @@ export default function AdminPage() {
       setStatsMap(Object.fromEntries((st.value || []).map((r) => [r.user_id, r])));
     }
     if (ov.status === 'fulfilled') setOverview(ov.value || null);
+    // 017 app_flags migration'ı henüz uygulanmadıysa sessizce AÇIK varsayılır.
+    if (fl.status === 'fulfilled') setDigestOn(fl.value?.[0]?.enabled ?? true);
     setLoading(false);
   }, []);
 
@@ -210,6 +215,21 @@ export default function AdminPage() {
     } catch (e) { setErr(e.message); }
   };
 
+  // 017: açık-işlem Telegram özeti cron'unu (positions_digest.py) aç/kapa. Crontab girişi
+  // sabit kalır; bayrak KAPALI olduğunda cron her tetiklemede sessizce no-op yapar.
+  const toggleDigest = async () => {
+    if (digestBusy) return;
+    setDigestBusy(true); setErr(''); setOk('');
+    const next = !digestOn;
+    try {
+      await rpc('admin_set_flag', { p_key: 'positions_digest', p_enabled: next });
+      setDigestOn(next);
+      setOk(next
+        ? t('Açık işlem özeti AÇIK — 5 dk’da bir Telegram mesajı.')
+        : t('Açık işlem özeti KAPALI — cron sessizce atlar.'));
+    } catch (e) { setErr(e.message); } finally { setDigestBusy(false); }
+  };
+
   // 009: duyuru — push_outbox kuyruğuna yazar, mevcut --drain cron'u dağıtır.
   const sendAnnouncement = async (e) => {
     e.preventDefault();
@@ -257,6 +277,14 @@ export default function AdminPage() {
         <section className="overview-card admin-card">
           <div className="summary-title admin-ov-head">
             <span>{t('Sistem Durumu')}</span>
+            <button
+              className={`header-btn admin-digest${digestOn ? ' on' : ''}`}
+              onClick={toggleDigest}
+              disabled={digestBusy}
+              title={t('Açık işlem Telegram özeti (5 dk’da bir tek mesaj). Kapalıyken cron sessizce atlar; sinyaller/işlemler etkilenmez.')}
+            >
+              {digestOn ? '🔔' : '🔕'} {t('Açık İşlem Özeti')}: {digestOn ? t('AÇIK') : t('KAPALI')}
+            </button>
             <button className="kill-btn admin-globalkill" onClick={killAll}>
               ⛔ {t('GLOBAL KILL')}
             </button>
