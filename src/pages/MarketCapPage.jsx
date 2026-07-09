@@ -103,9 +103,7 @@ const MarketCapPage = () => {
             </span>
           </span>
         </div>
-        <p style={{ opacity: 0.7, fontSize: 13, lineHeight: 1.55, margin: '0 0 16px', maxWidth: 860 }}>
-          {t('Kripto toplam market cap’i üç katmanda: TOTAL (tüm piyasa), TOTAL2 (BTC hariç), TOTAL3 (BTC+ETH hariç = saf altcoin iştahı). Canlı değerler CoinGecko /global’den kesin; geçmiş grafikler ve genişlik rejimi Binance fiyat × arz proxy’sinden (stable hariç). Salt piyasa verisi — sinyal/backtest değil.')}
-        </p>
+        <div style={{ marginBottom: 16 }} />
 
         {/* LIVE numbers */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 16 }}>
@@ -145,9 +143,7 @@ const MarketCapPage = () => {
               ))}
             </span>
           </div>
-          <p style={{ fontSize: 12, opacity: 0.6, margin: '0 0 12px' }}>
-            {t('Backtest R’ı, sinyal anındaki ER bandı × TOTAL3 genişlik rejimine göre gruplanır. Rejim ER’den bağımsız bilgi taşıyorsa, aynı bant içinde sütunlar farklılaşmalı.')}
-          </p>
+          <div style={{ marginBottom: 12 }} />
 
           {!ydata && <div style={{ fontSize: 12, opacity: 0.55, padding: '6px 0' }}>{t('Analiz verisi hesaplanıyor…')}</div>}
 
@@ -235,9 +231,6 @@ const MarketCapPage = () => {
             </>
           )}
 
-          <p style={{ fontSize: 12, lineHeight: 1.55, opacity: 0.8, margin: '14px 0 4px' }}>
-            {t('Bulgu: genişlik (TOTAL3) rejimi ER bandından bağımsız bilgi taşıyor. En çok R kazandığımız HAFİF bantta, hızlı yükselen TOTAL3 (risk-on coşkusu) hem 2026 hem 2025’te tutarlı biçimde ZARARLI; nötr/risk-off ise kârlı — “risk-on’da al” sezgisinin tersi.')}
-          </p>
           {/* Research footnote names REAL streams — text ships only in the admin
               lazy chunk (adminStreamInfo.MARKETCAP_NOTE), never in the main bundle. */}
           {sd.marketcapNote() && (

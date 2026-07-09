@@ -97,9 +97,6 @@ const SessionInfo = ({ onClose }) => {
             <b style={{ color: usActive ? '#0ECB81' : '#F6465D' }}>
               {usActive ? t('ABD hisse sinyalleri ŞU AN aktif') : t('ABD hisse sinyalleri ŞU AN pasif')}
             </b>
-            <div style={{ color: 'var(--muted,#848E9C)', marginTop: 4 }}>
-              {t('ABD hisse-perp’leri yalnızca pre-market + regular seansında (04:00–16:00 ET, hafta içi, tatil hariç) sinyal üretir — dışında dayanak işlem görmez, gürültüdür. Metaller (~24/5) ve kripto (7/24) gate’lenmez.')}
-            </div>
           </div>
         </div>
 

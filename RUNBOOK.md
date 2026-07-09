@@ -382,6 +382,19 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
+- **Alt navigasyon sadeleştirme + uzun sistem-açıklama metinlerinin kaldırılması (mobil-doğrulandı).**
+  Kullanıcı isteği: normal kullanıcı yalnız öz/gerekli görsün, ekranlar okunur olsun.
+  - **Mobil alt çubuk (MobileTabBar) herkeste sade: Genel · Canlı · Menü.** "İşlem Merkezi" ve "İstihbarat"
+    sekmeleri alt çubuktan kaldırıldı → Menü drawer'ında (Sidebar) erişilir. Canlı sekmesi yalnız aktivasyon
+    varsa görünür (yoksa Genel · Menü). Kullanılmayan `IGear`/`IIntel` ikonları + `useAuth` importu temizlendi.
+  - **Uzun "sistem/yöntem açıklaması" prose blokları herkes için kaldırıldı** (risk uyarıları + kurulum
+    rehberleri KORUNDU): Rejim Haritası (`TrendPage`) 6-yöntem açıklaması + "Rejim Doğruluğu" iki metodoloji
+    paragrafı (tile'lar kaldı); TOTAL (`MarketCapPage`) katman-açıklaması + backtest-gruplama + "Bulgu"
+    paragrafları; Genel Bakış (`IntroPage`) "likidite avı felsefesi" manifesto satırı; Seanslar
+    (`SessionInfo`) bayat ABD-hisse seans açıklaması. Feragatname ("2026 backtest — örneklem içi",
+    "geçmiş performans garanti değil") ve İşlem Merkezi API-kurulum rehberleri DOKUNULMADI.
+  - **Ops:** yalnız frontend; migration/cron/env YOK. iPhone-13 viewport doğrulandı (alt çubuk Genel·Menü,
+    metinler gitti, layout temiz).
 - **Kullanıcı yüzeyi sadeleştirme + Rejim Haritası veri tutarlılığı (mobil-doğrulandı).** Amaç: normal
   (non-admin) kullanıcı yalnız gerekli/öz bilgiyi görsün; analist/operasyon yüzeyleri admin'e kalsın.
   - **İstihbarat artık admin-only.** Kurumsal quant tearsheet (Sharpe/Sortino/drawdown/aylık ısı-haritası)

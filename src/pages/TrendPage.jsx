@@ -196,10 +196,7 @@ const TrendPage = () => {
             ))}
           </div>
         </div>
-        <p style={{ opacity: 0.7, fontSize: 13, lineHeight: 1.55, margin: '0 0 16px', maxWidth: 820 }}>
-          {t('Her sembolün “trend mi range mi” sorusu altı bağımsız yöntemle ölçülür — üç teknik (Efficiency Ratio, ADX, Choppiness) + üç istatistiksel (Hurst, Varyans Oranı, otokorelasyon) — ve TREND ↔ RANGE ekseninde tek bir konsensüse indirgenir. Salt fiyat verisi — sinyal/backtest değil.')}
-          <span style={{ opacity: 0.6 }}>{` · ${tf === '4h' ? '4h · 2025+' : '1h · ~50g'}`}</span>
-        </p>
+        <div style={{ marginBottom: 16 }} />
 
         {/* REGIME ACCURACY — does the trailing label actually predict the next window? */}
         {accAgg && (
@@ -226,12 +223,6 @@ const TrendPage = () => {
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 12, lineHeight: 1.55, opacity: 0.78, margin: '0 0 6px' }}>
-              {t('ER rejim etiketi geçmiş pencereyi birebir tanımlar; ancak bir sonraki pencereyi öngörmede beceri göstermez. “Trend” dediğinde fiyat yönünü ~yarı yarıya (yazı-tura) sürdürür ve ileriye dönük uyum, hep çoğunluğu söyleme (temel oran) doğruluğunun altında kalır. Yani “şu an trend” bir tahmin değil, geçmişin betimlemesidir.')}
-            </p>
-            <p style={{ fontSize: 10.5, lineHeight: 1.5, opacity: 0.5, margin: 0 }}>
-              {t('Yöntem: her barın geriye-dönük ER etiketi (trend ER≥0.25) bir sonraki 10-bar penceredeki gerçekleşmeyle karşılaştırılır; pencereler ayrıktır. Temel oran = hep çoğunluğu söylemenin doğruluğu, Beceri = doğruluk − temel oran.')}
-            </p>
           </div>
         )}
 
