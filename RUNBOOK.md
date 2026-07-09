@@ -903,6 +903,18 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 - **Doğrulama:** bayrak KAPALI → cron elle koşuldu → `=== açık işlem özeti KAPALI (app_flags) — atlanıyor ===`,
   Binance/Telegram'a gitmedi, exit 0; bayrak tekrar AÇIK. Frontend Render'da main'den derlenince buton görünür.
 
+### 2026-07-09 (3) — README vitrin: proje highlight'ı (strateji + sonuç + mimari + uygulama)
+- **İstek (sahip):** "Repoyu güzelleştir; strateji ve sonuçları, yapılan çalışmaları, uygulama linklerini
+  ekleyerek repoyu highlight et."
+- **Değişiklik:** `README.md` ince frontend+güvenlik notundan tam bir vitrin sayfasına yeniden yazıldı
+  (İngilizce, GitHub showcase standardı; RUNBOOK zaten İngilizce): rozetler, "at a glance" metrikleri
+  (436 commit / ~5 ay / 187 py / 42 jsx), **canlı kitap tablosu gerçek sonuçlarla** (OPUS +388.6R/PF1.29,
+  TALOS-ICHI-X +35.6→+118.3R, MIDAS +142R/PF1.48 + fee-honesty), research highlights (OOS eleme, bit-identical
+  no-lookahead, VWAP-trend +115R null p<0.005, ML NO-SHIP), ASCII mimari diyagramı, uygulama rota haritası,
+  tech stack, quickstart, doküman indeksi, güvenlik, disclaimer.
+- **Rakam kaynağı:** RUNBOOK/MIDAS/STRATEJI/FX-GOLD/ML raporları + curated memory; uydurma yok. Tüm doküman
+  linkleri mevcut dosyalara bağlı. Salt dokümantasyon — kod/DB/cron değişmedi.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)
