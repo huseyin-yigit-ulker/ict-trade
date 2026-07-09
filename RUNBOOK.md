@@ -382,6 +382,16 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
+- **Genel Bakış sadeleştirme: filtre/sıralama/arama kaldırıldı + kart istatistikleri 2×2 (gerçek-cihaz).**
+  - **`IntroPage`: kontrol satırı tümüyle kaldırıldı** — Tümü/Range/Seans filtre çipleri, SIRALA sıralama
+    (Toplam R/İsabet/Beklenti/PF) ve "Akım ara…" arama kutusu. Kartlar artık sabit **Toplam R azalan**
+    sırasında (ATLAS→SIRIUS→MENKAR). Kullanılmayan `cat/sort/query` state + `CATS/SORTS/matchCat/metricOf`
+    temizlendi; `visible` tek satıra indi.
+  - **Kart istatistikleri mobilde 2×2 grid (`style.css`):** `.intro-stats` tek-sıra flex'te 4 mono değer
+    (özellikle lead "+387.7R") dar ekranda taşıp `overflow:hidden` ile PF/değerler kırpılıyordu. Mobil
+    media query'de `.intro-stats` → `grid-template-columns: 1fr 1fr` + `.intro-stat{min-width:0}` → 2×2,
+    tüm değerler tam okunur, kırpılma yok (360/393px doğrulandı).
+  - **Ops:** yalnız frontend; migration/cron/env YOK.
 - **Alt çubuk kısayolları güncellendi + Genel Bakış hero taşma düzeltmesi (gerçek-cihaz geri bildirimi).**
   - **MobileTabBar: Genel · Binance · Strateji · Menü** (herkes). "Binance" → canlı pozisyonlar
     (`binanceTo` aktivasyona göre mainnet/paper, sekme her zaman görünür). "Strateji" → ana canlı

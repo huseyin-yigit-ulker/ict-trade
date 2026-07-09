@@ -2734,8 +2734,12 @@ body { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }   /* room for
   .intro-card { padding: 16px; gap: 12px; border-radius: 14px; }
   .intro-card:hover { transform: none; }
   .intro-card__name { font-size: 16.5px; }
+  /* 4 istatistik (Toplam R/İsabet/Beklenti/PF) dar ekranda 2×2 grid — her hücre kartın
+     yarısı, tüm mono değerler TAM ve okunur (tek sırada taşma/kırpma sorunu çözülür). */
+  .intro-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .intro-stat { min-width: 0; }
   .intro-stat__val { font-size: 16px; }
-  .intro-stat--lead .intro-stat__val { font-size: 22px; }
+  .intro-stat--lead .intro-stat__val { font-size: 20px; }
   .intro-go { min-height: 44px; font-size: 13px; }
 }
 

@@ -47,9 +47,6 @@ const IntroPage = () => {
   const [loading, setLoading] = useState(!getCachedStats());
   const [failed, setFailed] = useState(false);
 
-  const [cat, setCat] = useState('all');         // all | full | half | adaptive | session
-  const [sort, setSort] = useState('r');          // r | win | exp | pf
-  const [query, setQuery] = useState('');
   const [openKey, setOpenKey] = useState(null);   // which card's detail is expanded
 
   useEffect(() => {
@@ -85,50 +82,13 @@ const IntroPage = () => {
     };
   }, [stats, pool]);
 
-  const matchCat = (s) =>
-    cat === 'all' ||
-    (cat === 'light' && s.light) ||
-    (cat === 'range' && s.family === 'range') ||
-    (cat === 'full' && s.exit === 'full') ||
-    (cat === 'adaptive' && s.family === 'adaptive') ||
-    (cat === 'session' && s.family === 'session');
-
-  const metricOf = (s) => {
-    const m = statOf(s);
-    if (!m) return -Infinity;
-    if (sort === 'win') return Number(m.win_rate) || 0;
-    if (sort === 'exp') return Number(m.avg_r) || 0;
-    if (sort === 'pf') return Number(m.profit_factor) || 0;
-    return Number(m.total_r) || 0;
-  };
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return pool
-      .filter(matchCat)
-      .filter((s) => {
-        if (!q) return true;
-        const c = headFor(s.key);
-        const blob = `${sd.name(s.key)} ${c?.title || ''} ${c?.tagline || ''} ${c?.summary || ''}`.toLowerCase();
-        return blob.includes(q);
-      })
-      .sort((a, b) => metricOf(b) - metricOf(a));
+  // 2026-07-09: filtre (Tümü/Range/Seans) + sıralama (SIRALA) + arama kontrolleri
+  // kaldırıldı — kartlar sabit Toplam R (azalan) sırasında listelenir.
+  const rOf = (s) => { const m = statOf(s); const r = m ? Number(m.total_r) : NaN; return Number.isFinite(r) ? r : -Infinity; };
+  const visible = useMemo(() => pool.slice().sort((a, b) => rOf(b) - rOf(a)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, sort, query, stats, lang, pool]);
+    [stats, pool]);
 
-  // 2026-06-14: core/adaptive/session families removed with the OOS-negative streams —
-  // only the range book remains, so the category chips collapse to all / range / light.
-  const CATS = [
-    { key: 'all', label: t('Tümü') },
-    { key: 'range', label: 'Range' },
-    { key: 'session', label: t('Seans') },
-  ];
-  const SORTS = [
-    { key: 'r', label: t('Toplam R') },
-    { key: 'win', label: t('İsabet') },
-    { key: 'exp', label: t('Beklenti') },
-    { key: 'pf', label: 'PF' },
-  ];
   const FAMILY_LABEL = { core: t('ICT Çekirdek'), adaptive: t('Adaptif'), session: t('Seans'), range: 'Range', trend: 'Trend' };
   const EXIT_LABEL = { full: t('Tam TP'), half: '½TP', mixed: t('Sembol-bazlı çıkış'), scaleout: 'Scale-out' };
 
@@ -178,31 +138,6 @@ const IntroPage = () => {
             <div className="intro-scrollcue" aria-hidden="true">⌄</div>
           </div>
         </header>
-
-        {/* ---- Controls ---- */}
-        <div className="intro-controls">
-          <div className="intro-chips" role="group" aria-label="filter">
-            {CATS.map((c) => (
-              <button key={c.key} className={`intro-chip ${cat === c.key ? 'active' : ''}`} onClick={() => setCat(c.key)}>
-                {c.label}
-              </button>
-            ))}
-          </div>
-          <div className="intro-controls__right">
-            <div className="intro-sort" role="group" aria-label="sort">
-              <span className="intro-sort__label">{t('Sırala')}</span>
-              {SORTS.map((s) => (
-                <button key={s.key} className={`intro-sort__btn ${sort === s.key ? 'active' : ''}`} onClick={() => setSort(s.key)}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            <input
-              className="intro-search" type="text" placeholder={t('Akım ara...')}
-              value={query} onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </div>
 
         {failed && <div className="intro-note">⚠ {t('Sonuç verisi alınamadı — akım açıklamaları yine de aşağıda.')}</div>}
 
