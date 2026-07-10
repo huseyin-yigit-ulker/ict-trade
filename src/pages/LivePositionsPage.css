@@ -86,3 +86,75 @@
   .livex__table td.livex__cardhead::before { display: none; }
   .livex__table .livex__sub { font-size: 10px; margin-top: 1px; }
 }
+
+/* ── Açık pozisyon modalı: canlı PUSU kartı + mumlar/seviyeler + gerçek Binance rakamları ── */
+.livex__row--tap { cursor: pointer; }
+.livex__row--tap:hover { background: var(--panel-2); }
+.livex__row--tap:active { transform: scale(0.998); }
+
+.lpm__backdrop {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(3px); padding: 12px;
+}
+.lpm {
+  position: relative; width: min(880px, 100%); max-height: 92vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px; display: grid; gap: 14px; box-shadow: var(--shadow-pop);
+}
+.lpm__close {
+  position: absolute; top: 10px; right: 10px; z-index: 2; width: 34px; height: 34px;
+  border-radius: 9px; border: 1px solid var(--border); background: var(--panel-2);
+  color: var(--muted); font-size: 15px; cursor: pointer;
+}
+
+/* canlı PUSU kartı */
+.lpm__card {
+  position: relative; overflow: hidden; border-radius: 12px; padding: 14px 16px;
+  border: 1px solid var(--border); border-top: 2px solid var(--accent);
+  background:
+    radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--acc) 14%, transparent), transparent 62%),
+    var(--panel-2);
+}
+.lpm__brand { display: flex; align-items: baseline; gap: 10px; }
+.lpm__logo { color: var(--accent); font-weight: 800; letter-spacing: 0.16em; font-size: 14px; }
+.lpm__sub { color: var(--muted-2); font-size: 9px; letter-spacing: 0.14em; }
+.lpm__sym { display: flex; align-items: baseline; gap: 9px; margin-top: 2px; }
+.lpm__sym b { font-size: 16px; }
+.lpm__dir { font-size: 11px; font-weight: 800; }
+.lpm__dir--long { color: var(--win, #0ECB81); }
+.lpm__dir--short { color: var(--loss, #F6465D); }
+.lpm__roi { font-size: 40px; font-weight: 800; line-height: 1.1; color: var(--acc); margin-top: 6px; }
+.lpm__usd { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--acc); }
+.lpm__margin { color: var(--muted-2); font-family: inherit; font-size: 11px; font-weight: 500; }
+.lpm__note { color: var(--muted-2); font-size: 10px; margin-top: 4px; }
+.lpm__foot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-soft);
+  color: var(--muted-2); font-size: 10px;
+}
+.lpm__motto { color: var(--accent); opacity: 0.75; font-weight: 700; letter-spacing: 0.06em; }
+
+/* grafik */
+.lpm__chartwrap { position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 6px; }
+.lpm__chart { width: 100%; height: 300px; }
+.lpm__msg {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--muted); font-size: 12px; pointer-events: none;
+}
+.lpm__msg--err { color: var(--loss, #F6465D); }
+
+/* gerçek Binance rakamları */
+.lpm__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.lpm__cell {
+  display: grid; gap: 2px; min-width: 0; padding: 8px 10px; border-radius: 9px;
+  background: var(--panel-2); border: 1px solid var(--border-soft);
+}
+.lpm__k { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-2); }
+.lpm__v { font-family: var(--mono); font-size: 13px; }
+
+@media (max-width: 768px) {
+  .lpm { padding: 12px; border-radius: 12px; max-height: 94vh; }
+  .lpm__roi { font-size: 34px; }
+  .lpm__chart { height: 240px; }
+  .lpm__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

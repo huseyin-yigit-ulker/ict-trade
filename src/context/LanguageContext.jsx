@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { savePrefs } from '../utils/userPrefs';
 
 // Lightweight i18n (no dependency). Pattern: the Turkish string IS the key.
@@ -839,6 +839,21 @@ const EN = {
   'IPTAL': 'CANCELLED',
   'Durum Filtre': 'Status Filter',
   'Sembol Filtre': 'Symbol Filter',
+
+  // --- Açık pozisyon modalı (/binance → satıra dokun) ---
+  'AÇIK POZİSYON': 'OPEN POSITION',
+  'Grafik ve canlı sonucu gör': 'View chart and live result',
+  'Fiili dolum': 'Actual fill',
+  'Anlık fiyat': 'Mark price',
+  'Anlık': 'Mark',
+  'Kaldıraç': 'Leverage',
+  'Marj': 'Margin',
+  'marj': 'margin',
+  'Funding': 'Funding',
+  'uPnL (açık bacak)': 'uPnL (open leg)',
+  'ROI = toplam / başlangıç marjı · canlı': 'ROI = total / initial margin · live',
+  'Grafik yükleniyor…': 'Loading chart…',
+  'Grafik yüklenemedi': 'Chart failed to load',
 };
 
 // TR overrides — the key is already the Turkish string, so this map only fixes
@@ -885,6 +900,11 @@ export const LanguageProvider = ({ children }) => {
   const [lang, setLangState] = useState(() => {
     try { return localStorage.getItem(LS_KEY) || 'tr'; } catch { return 'tr'; }
   });
+
+  // <html lang> dili takip etmeli: index.html'de sabit "tr" idi, bu yüzden EN modunda
+  // CSS `text-transform: uppercase` Türkçe kuralıyla çalışıp "FILL"→"FİLL", "MARGIN"→"MARGİN"
+  // üretiyordu (i → İ). Uygulama geneli düzeltme.
+  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
   // Persist: localStorage (instant) + ict_trade.user_prefs (cross-device, logged-in
   // only). setLang(l, {persist:false}) is the server-apply path — no DB echo.

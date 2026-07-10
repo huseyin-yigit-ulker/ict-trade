@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
 import { authedFetch } from '../utils/supa';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
+import LivePositionModal from '../components/trading/LivePositionModal';
 import './LivePositionsPage.css';
 
 // Reads the live-execution layer (sync/live_exec) straight from the LIVE Supabase via PostgREST:
@@ -105,6 +106,7 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
   const exitLabel = (r) => (r === 'cap' && !sd.isAdmin ? t('Hedef') : EXIT_LABEL[r] || r || '—');
   const [positions, setPositions] = useState([]);
   const [gold, setGold] = useState([]);          // MIDAS-X mainnet positions (gold)
+  const [sel, setSel] = useState(null);          // açık pozisyon → grafik + canlı kart modalı
   const [snaps, setSnaps] = useState({});
   const [account, setAccount] = useState(null);
   const [err, setErr] = useState('');
@@ -252,7 +254,8 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
                 const cd = countdown(pre ? p.entry_deadline : p.time_stop_at, t);
                 const lc = liveCalc(p);
                 return (
-                  <tr key={p.id}>
+                  <tr key={p.id} className="livex__row--tap" onClick={() => setSel(p)}
+                      title={t('Grafik ve canlı sonucu gör')}>
                     <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                     <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                     <td data-label={t('Durum')}><span className={`st ${sb.cls}`}>{sb.label}</span></td>
@@ -403,6 +406,17 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
             </table>
           </div>
         </>
+      )}
+
+      {/* Açık pozisyon: mumlar + plan seviyeleri + GERÇEK Binance rakamları + canlı PUSU kartı */}
+      {sel && (
+        <LivePositionModal
+          key={sel.id}
+          pos={sel}
+          snap={snaps[sel.symbol]}
+          calc={liveCalc(sel)}
+          onClose={() => setSel(null)}
+        />
       )}
     </div>
   );

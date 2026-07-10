@@ -382,6 +382,28 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
+- **YENİ: `/binance` açık pozisyon modalı — grafik + gerçek Binance rakamları + canlı PUSU kartı.**
+  Canlı pozisyonlar tablosunda bir satıra dokununca açılır (`livex__row--tap`).
+  - **Yeni bileşen `src/components/trading/LivePositionModal.jsx`:**
+    - **Canlı PUSU kartı** — dev ROI, toplam $, marj, süre, `WAIT · TRAP · EXECUTE` (Telegram kapanış
+      kartının açık-pozisyon muadili).
+    - **Grafik** (lightweight-charts) — Binance public klines + Cap / TP1 / Giriş / BE / SL fiyat
+      çizgileri + **canlı Mark** çizgisi + giriş oku. Aynı fiyata düşen seviyeler birleşir
+      (RUNNER'da `eff_be == entry_fill_px` → "Giriş·BE"), fiyatlar 5 anlamlı basamak.
+    - **Gerçek Binance rakamları** (`live_account_snapshot`): fiili dolum, mark, kaldıraç, marj,
+      uPnL (açık bacak), funding, toplam, R.
+  - **ROI tanımı:** `toplam / başlangıç marjı`, toplam = TP1'de realize olan + açık bacağın uPnL'i
+    (`liveCalc`). Yani **işlem-seviyesi** ROI; Binance'in açık-bacak ROE'si DEĞİL — kartta yazıyor.
+  - 🐛 **FIX (bu iş sırasında bulundu):** grafik "yükleniyor"da takılıyordu — `calc` prop'u her render
+    yeni obje, sayfada 1sn'lik `forceTick` var → `useMemo`/efekt saniyede bir grafiği yıkıp kuruyordu.
+    Efekt bağımlılıkları primitifleştirildi; canlı **mark** çizgisi ayrı efekte alındı (yenilemede
+    zoom kaybolmasın).
+  - 🐛 **FIX (uygulama geneli):** `index.html`'de `<html lang="tr">` sabitti ve hiç güncellenmiyordu →
+    EN modunda `text-transform: uppercase` Türkçe kuralıyla çalışıp `FILL→FİLL`, `MARGIN→MARGİN`
+    üretiyordu. `LanguageContext` artık `document.documentElement.lang`'ı dile göre günceller.
+  - Modal etiketleri için EN çevirileri eklendi (`LanguageContext`).
+  - **Ops:** yalnız frontend; migration/cron/env YOK. Owner hesabıyla gerçek açık pozisyon
+    (#131 ARBUSDT LONG RUNNER, 15x) üzerinde iPhone-13 viewport'ta doğrulandı.
 - **YENİ: kapanış raporu — Telegram'a PUSU paylaşım kartı + grafik + Binance'ten NET ROI (OPUS + TALOS-ICHI-X).**
   Bir pozisyon TAM kapandığında Telegram'a TEK bildirimde İKİ görsel gider: (1) paylaşılabilir PUSU
   sonuç kartı, (2) mum grafiği (giriş / SL / TP1 / BE / cap seviyeleri + giriş ▲ ve çıkış ✕).
