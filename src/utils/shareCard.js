@@ -192,7 +192,7 @@ export async function renderCardBlob(d) {
   // hücreler
   const cells = [
     [d.t('Giriş'), d.entry],
-    [d.t('Anlık'), d.mark],
+    [d.markLabel || d.t('Anlık'), d.mark],
     [d.t('Süre'), d.dur],
     ['R', d.r],
   ];

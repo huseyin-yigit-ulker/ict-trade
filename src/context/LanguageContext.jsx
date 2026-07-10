@@ -858,6 +858,11 @@ const EN = {
   'Hazırlanıyor…': 'Preparing…',
   'Görsel indirildi': 'Image downloaded',
   'Paylaşılamadı': 'Could not share',
+  'KAPANDI': 'CLOSED',
+  'ROI = sonuç / başlangıç marjı': 'ROI = result / initial margin',
+  'Süre limiti': 'Time limit',
+  'Ters sinyal': 'Reverse signal',
+  'Borsa kapanışı': 'Exchange close',
 };
 
 // TR overrides — the key is already the Turkish string, so this map only fixes

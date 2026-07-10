@@ -391,8 +391,12 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
                 {closed.map((p) => {
                   const lng = (p.direction || '').toUpperCase() === 'LONG';
                   const win = Number(p.realized_r) >= 0;
+                  // Yalnız GERÇEKTEN dolmuş kapanışlar tıklanır (iptal edilenlerde dolum/grafik yok).
+                  const tap = p.state === 'CLOSED' && p.entry_fill_time;
                   return (
-                    <tr key={p.id}>
+                    <tr key={p.id} className={tap ? 'livex__row--tap' : undefined}
+                        onClick={tap ? () => setSel(p) : undefined}
+                        title={tap ? t('Grafik ve canlı sonucu gör') : undefined}>
                       <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                       <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                       <td data-label={t('Sonuç')}><span className={`st ${win ? 'st-done' : 'st-sl'}`}>{exitLabel(p.exit_reason)}</span></td>

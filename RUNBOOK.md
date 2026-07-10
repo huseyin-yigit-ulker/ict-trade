@@ -382,7 +382,19 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
-- **YENİ: `/binance` açık pozisyon modalı — grafik + gerçek Binance rakamları + canlı PUSU kartı.**
+- **`/binance` pozisyon kartı: kapananlar da tıklanır + GRAFİK KALDIRILDI (kart yeterli).**
+  - **Kapanmış işlemler de dokunulabilir** ("Son Kapananlar" satırları; yalnız gerçekten dolmuş
+    `state=CLOSED && entry_fill_time` — iptaller hariç). Modal kapananda **nihai** veriyi gösterir:
+    kicker "KAPANDI", ROI/Toplam = `realized_usd`, R = `realized_r`, "Çıkış" fiyatı + `exit_reason`
+    etiketi + süre = exit−entry. Açıkta eskisi gibi canlı (mark/uPnL).
+  - **Lightweight-charts grafiği kaldırıldı** — kart + gerçek rakam hücreleri yeterli. Fiyat çizgileri,
+    markerlar, canlı-mark efekti gitti; yalnız paylaşım kartının **sparkline**'ı için hafif kline çekimi
+    kaldı (best-effort). Modal artık çok daha hafif (lightweight-charts import yok).
+  - **Paylaşım kartı** açık/kapalı ikisini de basar (kapananda 2. hücre "Çıkış", kicker "KAPANDI").
+  - 🐛 FIX: `Date.now()` render/`useMemo` içinde impure — açık pozisyonun "şimdi"si `requestAnimationFrame`
+    ile bir kez yakalanıp memo'ya verildi. + kapanış-durum etiketleri (KAPANDI/Sonuç/Borsa kapanışı vb.)
+    için EN çevirileri (owner EN modunda Türkçe sızıyordu).
+- **YENİ: `/binance` açık pozisyon modalı — gerçek Binance rakamları + canlı/nihai PUSU kartı + paylaş.**
   Canlı pozisyonlar tablosunda bir satıra dokununca açılır (`livex__row--tap`).
   - **Yeni bileşen `src/components/trading/LivePositionModal.jsx`:**
     - **Canlı PUSU kartı** — dev ROI, toplam $, marj, süre, `WAIT · TRAP · EXECUTE` (Telegram kapanış
