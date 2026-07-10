@@ -16,6 +16,7 @@ Kullanım (executor'den, kapanış DB'ye yazıldıktan SONRA):
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import time
@@ -204,6 +205,136 @@ def render_chart(df: pd.DataFrame, pos: dict, *, reason: str, exit_px: float,
     return buf.getvalue()
 
 
+# ------------------------------------------------------------------ paylaşım kartı
+def _reticle(ax, cx, cy, r, color, alpha, aspect):
+    """PUSU nişangâhı — iç içe halkalar + dört çeyrek çizgisi (marka motifi).
+
+    Eksen kare DEĞİL (0..1 x 0..1, 1008×567 px), bu yüzden daire çizmek için y-yarıçapı
+    `aspect` (= genişlik/yükseklik) ile ölçeklenir; yoksa elips gibi ezilir."""
+    from matplotlib.patches import Ellipse
+    for k, lw in ((1.0, 1.1), (0.66, 0.8), (0.30, 0.8)):
+        ax.add_patch(Ellipse((cx, cy), width=2 * r * k, height=2 * r * k * aspect,
+                             fill=False, ec=color, alpha=alpha, lw=lw))
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        ax.plot([cx + dx * r * 0.78, cx + dx * r * 1.25],
+                [cy + dy * r * 0.78 * aspect, cy + dy * r * 1.25 * aspect],
+                color=color, alpha=alpha, lw=1.1, solid_capstyle="round")
+
+
+def _sparkline(fig, df, pos, exit_px: float, acc: str):
+    """İşlemin kendi fiyat yolu — kartın sağında, eksensiz mini grafik."""
+    sax = fig.add_axes([0.575, 0.415, 0.38, 0.245])
+    sax.set_axis_off()
+    sax.patch.set_alpha(0)
+    y = df["close"].to_numpy()
+    x = range(len(y))
+    epx = float(pos.get("entry_fill_px") or pos.get("eff_entry") or pos["signal_entry"])
+    sax.axhline(epx, color=_MUTED, lw=0.7, ls="--", alpha=0.55)
+    sax.plot(x, y, color=acc, lw=1.5, solid_capstyle="round")
+    sax.fill_between(x, y, y.min(), color=acc, alpha=0.10)
+    sax.plot(0, y[0], marker="o", ms=4.5, color=_GOLD, mec=_BG, mew=0.8)
+    sax.plot(len(y) - 1, exit_px, marker="X", ms=7, color=_BLUE, mec=_BG, mew=0.8)
+    pad = (y.max() - y.min()) * 0.18 or 1e-9
+    sax.set_ylim(min(y.min(), epx, exit_px) - pad, max(y.max(), epx, exit_px) + pad)
+    sax.set_xlim(-len(y) * 0.03, (len(y) - 1) * 1.03)   # uçtaki işaretler kırpılmasın
+
+
+def render_card(pos: dict, *, reason: str, exit_px: float, realized_r, pnl: dict,
+                roi, margin: float, entry_t: pd.Timestamp, exit_t: pd.Timestamp,
+                tag: str, df: pd.DataFrame | None = None) -> bytes:
+    """PUSU'ya özgün paylaşım kartı: taktik ızgara + nişangâh motifi, dev NET ROI,
+    işlemin kendi fiyat yolu (sparkline) ve WAIT · TRAP · EXECUTE imzası.
+
+    Not: NET ROI komisyon + funding düşülmüş cüzdan gerçeğidir (borsaların paylaşım
+    kartlarındaki ROE brüttür)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    win = pnl["net"] >= 0
+    acc = _UP if win else _DOWN
+    long = str(pos["direction"]).lower() == "long"
+    sym = pos["symbol"]
+    epx = float(pos.get("entry_fill_px") or pos.get("eff_entry") or pos["signal_entry"])
+    lev = int(pos.get("leverage") or 1) or 1
+
+    fig = plt.figure(figsize=(7.2, 4.05), dpi=140)
+    fig.patch.set_facecolor(_BG)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_axis_off()
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+    # taktik ızgara (çok soluk altın) + sonuç parıltısı + nişangâh
+    ASPECT = 7.2 / 4.05          # eksen kare değil — daireler bununla düzeltilir
+    for i in range(1, 16):
+        ax.axvline(i / 16, color=_GOLD, alpha=0.028, lw=0.6)
+    for i in range(1, 10):
+        ax.axhline(i / 10, color=_GOLD, alpha=0.028, lw=0.6)
+    from matplotlib.patches import Ellipse
+    for rr, aa in ((0.30, 0.045), (0.20, 0.04), (0.11, 0.035)):
+        ax.add_patch(Ellipse((0.245, 0.545), width=2 * rr, height=2 * rr * ASPECT,
+                             color=acc, alpha=aa, lw=0))
+    _reticle(ax, 0.245, 0.545, 0.175, _GOLD, 0.085, ASPECT)
+
+    # çerçeve + üst altın şerit
+    ax.add_patch(plt.Rectangle((0, 0), 1, 1, fill=False, ec="#2a2f3a", lw=1.4))
+    ax.add_patch(plt.Rectangle((0, 0.986), 1, 0.014, color=_GOLD, lw=0))
+
+    # marka
+    ax.text(0.045, 0.895, "P U S U", color=_GOLD, fontsize=17, fontweight="bold", va="center")
+    ax.text(0.047, 0.822, "L İ K İ D İ T E   A V I", color=_MUTED, fontsize=6.8, va="center")
+
+    # sembol + yön/kaldıraç rozeti
+    ax.text(0.955, 0.895, sym, color=_TEXT, fontsize=15, fontweight="bold", ha="right", va="center")
+    bcol = _UP if long else _DOWN
+    ax.text(0.955, 0.820, f"{'LONG' if long else 'SHORT'}  ·  {lev}x", color=bcol, fontsize=10,
+            fontweight="bold", ha="right", va="center")
+
+    # kahraman: NET ROI (sol) + net $ (sol alt)
+    roi_txt = f"{roi:+.1f}%" if roi is not None else "—"
+    ax.text(0.045, 0.605, roi_txt, color=acc, fontsize=50, fontweight="bold", va="center")
+    ax.text(0.048, 0.455, f"{pnl['net']:+.2f}$", color=acc, fontsize=19, fontweight="bold",
+            va="center", family="monospace")
+    ax.text(0.185, 0.452, f"· marj {margin:.2f}$", color=_MUTED, fontsize=8.5, va="center")
+    ax.text(0.048, 0.383, "NET ROI  ·  komisyon + funding dahil", color=_MUTED, fontsize=7.5,
+            va="center")
+
+    # işlemin fiyat yolu (sağ)
+    if df is not None and not df.empty:
+        try:
+            _sparkline(fig, df, pos, exit_px, acc)
+        except Exception:  # noqa: BLE001 — sparkline kozmetiktir, kartı düşürmesin
+            pass
+
+    ax.plot([0.045, 0.955], [0.322, 0.322], color="#2a2f3a", lw=1)
+
+    # alt satır: giriş / çıkış / süre / sonuç
+    cells = [
+        ("GİRİŞ", f"{epx:g}"),
+        ("ÇIKIŞ", f"{exit_px:g}"),
+        ("SÜRE", _fmt_dur(exit_t - entry_t)),
+        ("SONUÇ", f"{float(realized_r):+.2f}R" if realized_r is not None else reason),
+    ]
+    step = (0.955 - 0.045) / len(cells)
+    for i, (lab, val) in enumerate(cells):
+        x = 0.045 + i * step
+        ax.text(x, 0.232, lab, color=_MUTED, fontsize=7.5, va="center")
+        ax.text(x, 0.152, val, color=_TEXT, fontsize=12, fontweight="bold", va="center",
+                family="monospace")
+
+    # imza satırı
+    foot = f"{reason} · {exit_t:%d.%m.%Y %H:%M} UTC" + (f"  —  {tag}" if tag else "")
+    ax.text(0.045, 0.055, foot, color=_MUTED, fontsize=7.5, va="center")
+    ax.text(0.955, 0.055, "WAIT · TRAP · EXECUTE", color=_GOLD, fontsize=7.5, alpha=0.75,
+            fontweight="bold", ha="right", va="center")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=_BG)
+    plt.close(fig)
+    return buf.getvalue()
+
+
 # ------------------------------------------------------------------ Telegram
 def send_photo(png: bytes, caption: str, *, chat_id: str = "") -> bool:
     env = tsc._read_env()
@@ -221,6 +352,42 @@ def send_photo(png: bytes, caption: str, *, chat_id: str = "") -> bool:
     return r.ok
 
 
+def send_media_group(images: list[tuple[str, bytes]], caption: str, *, chat_id: str = "") -> bool:
+    """Birden çok görseli TEK bildirimde yolla (caption ilk görselde). Başarısız olursa
+    sırayla sendPhoto'ya düşer — kart yine de gider."""
+    env = tsc._read_env()
+    token = env.get("TELEGRAM_BOT_TOKEN")
+    chat = chat_id or env.get("TELEGRAM_EXEC_CHAT_ID") or env.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        print(f"  [report] telegram skipped (token/chat yok): {caption[:60]}")
+        return False
+
+    media, files = [], {}
+    for i, (name, data) in enumerate(images):
+        key = f"photo{i}"
+        files[key] = (f"{name}.png", data, "image/png")
+        item = {"type": "photo", "media": f"attach://{key}"}
+        if i == 0:
+            item["caption"] = caption[:1024]
+            item["parse_mode"] = "HTML"
+        media.append(item)
+
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendMediaGroup",
+                          data={"chat_id": chat, "media": json.dumps(media)},
+                          files=files, timeout=40)
+        if r.ok:
+            return True
+        print(f"  [report] sendMediaGroup error: {r.text[:180]} — tek tek deneniyor")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [report] sendMediaGroup exception: {e} — tek tek deneniyor")
+
+    ok = False
+    for i, (_, data) in enumerate(images):
+        ok = send_photo(data, caption if i == 0 else "", chat_id=chat_id) or ok
+    return ok
+
+
 # ------------------------------------------------------------------ metin
 def _fmt_dur(td: pd.Timedelta) -> str:
     m = int(td.total_seconds() // 60)
@@ -229,14 +396,21 @@ def _fmt_dur(td: pd.Timedelta) -> str:
     return (f"{d}g " if d else "") + (f"{h}s " if (h or d) else "") + f"{m}dk"
 
 
-def build_caption(pos: dict, *, reason: str, exit_px: float, realized_r, pnl: dict,
-                  entry_t: pd.Timestamp, exit_t: pd.Timestamp, tag: str) -> str:
-    sym, direction = pos["symbol"], str(pos["direction"]).upper()
+def roi_margin(pos: dict, pnl: dict) -> tuple[float, float | None]:
+    """(başlangıç marjı, NET ROI %). Marj = giriş × qty / kaldıraç."""
     epx = float(pos.get("entry_fill_px") or pos.get("eff_entry") or pos["signal_entry"])
     qty = float(pos.get("qty") or 0)
     lev = int(pos.get("leverage") or 1) or 1
     margin = (epx * qty / lev) if (epx and qty) else 0.0
-    roi = (pnl["net"] / margin * 100.0) if margin else None
+    return margin, ((pnl["net"] / margin * 100.0) if margin else None)
+
+
+def build_caption(pos: dict, *, reason: str, exit_px: float, realized_r, pnl: dict,
+                  entry_t: pd.Timestamp, exit_t: pd.Timestamp, tag: str) -> str:
+    sym, direction = pos["symbol"], str(pos["direction"]).upper()
+    epx = float(pos.get("entry_fill_px") or pos.get("eff_entry") or pos["signal_entry"])
+    lev = int(pos.get("leverage") or 1) or 1
+    margin, roi = roi_margin(pos, pnl)
 
     win = pnl["net"] >= 0
     emoji = "🟢" if win else "🔴"
@@ -292,19 +466,33 @@ def report_close(client, cfg, pos: dict, *, reason: str, exit_px: float,
             time.sleep(2.0)
             pnl = net_pnl(client, sym, since_ms)
 
-        df = _klines(sym, entry_t, exit_t)
         caption = build_caption(pos, reason=reason, exit_px=float(exit_px), realized_r=realized_r,
                                 pnl=pnl, entry_t=entry_t, exit_t=exit_t, tag=tag)
-        if df is None or df.empty:
-            print(f"  [report] {sym}: mum verisi yok — sadece metin gönderiliyor")
-            import notify
-            notify.alert(caption, chat_id=getattr(cfg, "telegram_chat_id", ""))
-            return True
+        margin, roi = roi_margin(pos, pnl)
+        chat = getattr(cfg, "telegram_chat_id", "")
 
-        title = f"{tag or 'PUSU'} · {sym} {str(pos['direction']).upper()} #{pos.get('id', '?')} — {reason}"
-        png = render_chart(df, pos, reason=reason, exit_px=float(exit_px),
-                           entry_t=entry_t, exit_t=exit_t, title=title)
-        return send_photo(png, caption, chat_id=getattr(cfg, "telegram_chat_id", ""))
+        df = _klines(sym, entry_t, exit_t)
+        has_bars = df is not None and not df.empty
+
+        # 1) paylaşılabilir PUSU kartı (sparkline için mumları da alır)
+        images: list[tuple[str, bytes]] = [
+            ("pusu-sonuc", render_card(pos, reason=reason, exit_px=float(exit_px),
+                                       realized_r=realized_r, pnl=pnl, roi=roi, margin=margin,
+                                       entry_t=entry_t, exit_t=exit_t, tag=tag,
+                                       df=df if has_bars else None)),
+        ]
+        # 2) seviye/fiyat grafiği — mum verisi yoksa yalnız kart gider
+        if has_bars:
+            title = (f"{tag or 'PUSU'} · {sym} {str(pos['direction']).upper()} "
+                     f"#{pos.get('id', '?')} — {reason}")
+            images.append(("grafik", render_chart(df, pos, reason=reason, exit_px=float(exit_px),
+                                                  entry_t=entry_t, exit_t=exit_t, title=title)))
+        else:
+            print(f"  [report] {sym}: mum verisi yok — yalnız paylaşım kartı gönderiliyor")
+
+        if len(images) == 1:
+            return send_photo(images[0][1], caption, chat_id=chat)
+        return send_media_group(images, caption, chat_id=chat)
     except Exception as e:  # noqa: BLE001 — rapor ASLA emir yönetimini bozmaz
         print(f"  [report] kapanış raporu atlandı ({pos.get('symbol', '?')}): {e}")
         return False

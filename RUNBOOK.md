@@ -382,9 +382,9 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
-- **YENİ: kapanış raporu — Telegram'a grafik + Binance'ten NET ROI (OPUS + TALOS-ICHI-X).**
-  Bir pozisyon TAM kapandığında Telegram'a mum grafiği (giriş / SL / TP1 / BE / cap seviyeleri +
-  giriş ▲ ve çıkış ✕ işaretleri) ve gerçek para sonucu gönderilir.
+- **YENİ: kapanış raporu — Telegram'a PUSU paylaşım kartı + grafik + Binance'ten NET ROI (OPUS + TALOS-ICHI-X).**
+  Bir pozisyon TAM kapandığında Telegram'a TEK bildirimde İKİ görsel gider: (1) paylaşılabilir PUSU
+  sonuç kartı, (2) mum grafiği (giriş / SL / TP1 / BE / cap seviyeleri + giriş ▲ ve çıkış ✕).
   - **Yeni modül `sync/live_exec/trade_report.py`** (talos_ichi_exec de sys.path üzerinden kullanır):
     - `net_pnl()` — Binance'in KENDİ kayıtları: `userTrades.realizedPnl` (brüt) − `userTrades.commission`
       + `income(FUNDING_FEE)` (işaretli) = **NET**. USDT-dışı komisyon (BNB) ayrı raporlanır.
@@ -392,7 +392,16 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
     - `render_chart()` — matplotlib (Agg, headless). İşlem süresine göre mum aralığı (1m/5m/15m/1h).
       Aynı fiyattaki etiketler birleşir (OPUS'ta BE==Giriş); görünür aralık dışındaki seviye (uzak cap)
       y-eksenini ezmesin diye kenarda ok ile gösterilir.
-    - `send_photo()` — Telegram `sendPhoto` (multipart). Mum verisi yoksa düz metne düşer.
+    - `render_card()` — **PUSU'ya özgün paylaşım kartı**: taktik ızgara + nişangâh motifi (eksen kare
+      olmadığından daireler `ASPECT`=7.2/4.05 ile düzeltilir), dev NET ROI, işlemin kendi fiyat yolu
+      (sparkline: giriş ● / çıkış ✕ / kesikli giriş çizgisi — renk **sonucu** kodlar, fiyat yönünü değil),
+      GİRİŞ/ÇIKIŞ/SÜRE/SONUÇ hücreleri, `WAIT · TRAP · EXECUTE` imzası.
+    - `send_photo()` / `send_media_group()` — kart + grafik TEK bildirimde (caption ilk görselde);
+      medya grubu hata verirse sırayla `sendPhoto`'ya düşer. Mum verisi yoksa yalnız kart gider.
+    - ⚠️ **Binance'in "pozisyon paylaş" görseli API'den ALINAMAZ:** resmî fapi'de böyle bir uç nokta yok;
+      o kartı üreten `www.binance.com/bapi/...` uçları public değil, dokümante değil ve API key/secret
+      kabul etmiyor (web oturumu + CSRF ister). Bu yüzden kendi kartımızı çiziyoruz. Referans kodu da
+      işlem-bazlı değil **hesap-sabiti** bir metindir (API'si de yok) — karta konmadı.
     - ROI% = net / başlangıç marjı, marj = giriş×qty/kaldıraç.
   - **Kancalar:** OPUS `_close()` (sl/tp1_be/breakeven/cap/time_stop — 5 çağrı, `client`/`cfg` eklendi)
     + `_reconcile_to_closed` (closed_externally) + `_reverse_close`. TALOS-ICHI-X `_finalize()`
