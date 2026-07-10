@@ -401,7 +401,13 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   - 🐛 **FIX (uygulama geneli):** `index.html`'de `<html lang="tr">` sabitti ve hiç güncellenmiyordu →
     EN modunda `text-transform: uppercase` Türkçe kuralıyla çalışıp `FILL→FİLL`, `MARGIN→MARGİN`
     üretiyordu. `LanguageContext` artık `document.documentElement.lang`'ı dile göre günceller.
-  - Modal etiketleri için EN çevirileri eklendi (`LanguageContext`).
+  - **Paylaş butonu (`src/utils/shareCard.js`):** kart **Canvas 2D** ile PNG'ye çizilir (1080×608) →
+    `navigator.share({files})` ile mobil native paylaşım sayfası; desteklenmiyorsa/iptal edilirse PNG
+    indirilir. DOM→görüntü kütüphanesi (html2canvas vb.) KULLANILMADI: yeni bağımlılık + foreignObject'te
+    `color-mix()`/gradient/web-font güvenilmez. Kart Telegram'daki matplotlib kartıyla aynı kimlikte
+    (nişangâh, dev ROI, fiyat-yolu sparkline'ı, `WAIT · TRAP · EXECUTE`). Web Share dosya paylaşımı
+    güvenli bağlam (HTTPS) ister — prod'da çalışır.
+  - Modal etiketleri + paylaşım metinleri için EN çevirileri eklendi (`LanguageContext`).
   - **Ops:** yalnız frontend; migration/cron/env YOK. Owner hesabıyla gerçek açık pozisyon
     (#131 ARBUSDT LONG RUNNER, 15x) üzerinde iPhone-13 viewport'ta doğrulandı.
 - **YENİ: kapanış raporu — Telegram'a PUSU paylaşım kartı + grafik + Binance'ten NET ROI (OPUS + TALOS-ICHI-X).**

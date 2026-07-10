@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart, CandlestickSeries, LineStyle, createSeriesMarkers } from 'lightweight-charts';
 import { useLang } from '../../context/LanguageContext';
+import { renderCardBlob, sharePng } from '../../utils/shareCard';
 
 // Açık BİNANCE pozisyonu için grafik + gerçek borsa rakamları + paylaşılabilir canlı PUSU kartı.
 // Kaynaklar: ict_trade.live_positions (plan seviyeleri) + live_account_snapshot (mark / uPnL /
@@ -30,6 +31,7 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
   const boxRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [shareMsg, setShareMsg] = useState('');
 
   const v = useMemo(() => {
     const entry = n(pos.entry_fill_px) ?? n(pos.eff_entry) ?? n(pos.signal_entry);
@@ -64,6 +66,7 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
 
   const seriesRef = useRef(null);
   const markLineRef = useRef(null);
+  const closesRef = useRef(null);   // paylaşım kartındaki sparkline için mum kapanışları
 
   // Grafik YALNIZ pozisyon/plan seviyeleri değişince kurulur. Bağımlılıklar bilinçli olarak
   // primitif: `v` her render'da yeni obje (sayfadaki 1sn'lik tick yüzünden) — obje kimliğine
@@ -102,6 +105,7 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
         });
         series.setData(bars);
         seriesRef.current = series;
+        closesRef.current = bars.map((x) => x.close);
 
         // Aynı fiyata düşen seviyeler birleştirilir — RUNNER'da BE == Giriş olur ve iki
         // eksen etiketi üst üste binerdi. Tolerans: fiyatın binde biri.
@@ -154,6 +158,36 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
     });
   }, [v.mark, t, loading]);
 
+  const onShare = async () => {
+    setShareMsg(t('Hazırlanıyor…'));
+    try {
+      const blob = await renderCardBlob({
+        t,
+        symbol: pos.symbol,
+        long: v.long,
+        lev: v.lev,
+        roi: v.roi,
+        total: v.total,
+        margin: v.margin,
+        entry: fmtPx(v.entry),
+        mark: fmtPx(v.mark),
+        dur: fmtDur(Date.now() - v.startMs),
+        r: v.totalR == null ? '—' : `${v.totalR >= 0 ? '+' : ''}${v.totalR.toFixed(2)}R`,
+        kicker: t('AÇIK POZİSYON'),
+        note: t('ROI = toplam / başlangıç marjı · canlı'),
+        footer: new Date().toLocaleString(),
+        closes: closesRef.current,
+        entryPx: v.entry,
+      });
+      const res = await sharePng(blob, `pusu-${pos.symbol}-${pos.id}.png`, `PUSU · ${pos.symbol}`);
+      setShareMsg(res === 'shared' ? '' : res === 'downloaded' ? t('Görsel indirildi')
+        : res === 'cancelled' ? '' : t('Paylaşılamadı'));
+    } catch {
+      setShareMsg(t('Paylaşılamadı'));
+    }
+    setTimeout(() => setShareMsg(''), 2500);
+  };
+
   const cells = [
     [t('Fiili dolum'), fmtPx(v.entry)],
     [t('Anlık fiyat'), fmtPx(v.mark)],
@@ -192,6 +226,9 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
             <span>{fmtDur(Date.now() - v.startMs)}</span>
             <span className="lpm__motto">WAIT · TRAP · EXECUTE</span>
           </div>
+          <button className="lpm__share" onClick={onShare} disabled={!!shareMsg}>
+            {shareMsg || `↗ ${t('Paylaş')}`}
+          </button>
         </div>
 
         {/* mumlar + plan seviyeleri + anlık mark */}

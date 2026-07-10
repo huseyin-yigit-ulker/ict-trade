@@ -854,6 +854,10 @@ const EN = {
   'ROI = toplam / başlangıç marjı · canlı': 'ROI = total / initial margin · live',
   'Grafik yükleniyor…': 'Loading chart…',
   'Grafik yüklenemedi': 'Chart failed to load',
+  'Paylaş': 'Share',
+  'Hazırlanıyor…': 'Preparing…',
+  'Görsel indirildi': 'Image downloaded',
+  'Paylaşılamadı': 'Could not share',
 };
 
 // TR overrides — the key is already the Turkish string, so this map only fixes
