@@ -101,8 +101,12 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
   }, [pos.symbol, v.startMs, v.endMs]);
 
   const REASON = {
+    // OPUS scale-out
     sl: 'SL −1R', tp1_be: 'TP1+BE', breakeven: 'BE', cap: 'Cap',
     time_stop: t('Süre limiti'), reversed: t('Ters sinyal'), closed_externally: t('Borsa kapanışı'),
+    // Altın (TALOS-ICHI-X / MIDAS-X) iz-süren
+    'trail/stop': t('İz-süren stop'), time: t('Süre (8s)'), session: t('Seans sonu'),
+    slipped: t('Fiyat kaçtı'), killswitch: 'Killswitch',
   };
   const rTxt = v.totalR == null ? '—' : `${v.totalR >= 0 ? '+' : ''}${v.totalR.toFixed(2)}R`;
   const kicker = v.closed ? t('KAPANDI') : t('AÇIK POZİSYON');

@@ -382,6 +382,14 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
+- **PUSU kartı ALTIN akışlarına da: TALOS-ICHI-X + MIDAS-X.** `/binance` (mainnet) ve `/binance-paper`
+  (testnet) sayfalarındaki **Altın bölümü** satırları da tıklanır oldu → aynı `LivePositionModal`
+  (gerçek Binance rakamları + paylaşılabilir kart). Mainnet altın = TALOS-ICHI-X, testnet altın = MIDAS-X
+  (ikisi de aynı iz-süren şema, aynı bölüm). Altın için `totalUsd/totalR` OPUS `liveCalc` yerine
+  `goldCalc`'tan (`{upnl, liveR}`) beslenir; `sel` artık `{pos, isGold}`. Altın çıkış-sebepleri
+  (İz-süren stop / Süre 8s / Seans sonu / Fiyat kaçtı) modal REASON'a + EN çevirilerine eklendi.
+  Doğrulandı: TALOS #39 XAUUSDT (closed_externally, +0.20R, ROI +4.0%) + MIDAS #63 XAUUSDT
+  (trail/stop, +0.56R, ROI +3.3%) — kart + gerçek rakamlar + paylaşım.
 - **`/binance` pozisyon kartı: kapananlar da tıklanır + GRAFİK KALDIRILDI (kart yeterli).**
   - **Kapanmış işlemler de dokunulabilir** ("Son Kapananlar" satırları; yalnız gerçekten dolmuş
     `state=CLOSED && entry_fill_time` — iptaller hariç). Modal kapananda **nihai** veriyi gösterir:

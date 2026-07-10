@@ -105,7 +105,7 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
   const capLabel = sd.isAdmin ? `Cap +${CAP_R}R` : t('Hedef');
   const exitLabel = (r) => (r === 'cap' && !sd.isAdmin ? t('Hedef') : EXIT_LABEL[r] || r || '—');
   const [positions, setPositions] = useState([]);
-  const [gold, setGold] = useState([]);          // MIDAS-X mainnet positions (gold)
+  const [gold, setGold] = useState([]);          // gold XAU positions: mainnet=TALOS-ICHI-X, testnet=MIDAS-X
   const [sel, setSel] = useState(null);          // açık pozisyon → grafik + canlı kart modalı
   const [snaps, setSnaps] = useState({});
   const [account, setAccount] = useState(null);
@@ -118,13 +118,17 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
   const load = useCallback(async () => {
     if (!SUPA_URL || !SUPA_KEY) { setErr(t('Supabase ayarları eksik.')); setLoading(false); return; }
     try {
+      // Gold stream depends on the board's network: testnet/paper = MIDAS-X (midas_positions),
+      // mainnet = TALOS-ICHI-X (talos_ichi_positions). Both share the SAME trailing-stop engine
+      // and column layout, so the gold render below is identical either way. On testnet OPUS never
+      // trades (live_positions is mainnet-only), so MIDAS-X IS the paper board. Best-effort: a
+      // missing table/grant must not blank the page.
+      const goldTable = network === 'testnet' ? 'midas_positions' : 'talos_ichi_positions';
       const [pos, snap, acc, au] = await Promise.all([
         getJSON(`live_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=60`),
         getJSON(`live_account_snapshot?select=*&network=eq.${network}`),
         getJSON('live_account?select=*'),
-        // Gold (TALOS-ICHI-X, mainnet real money since 2026-07-08) rows — best-effort: a missing
-        // table/grant must not blank the page.
-        getJSON(`talos_ichi_positions?select=*&network=eq.${network}&order=updated_at.desc&limit=20`).catch(() => []),
+        getJSON(`${goldTable}?select=*&network=eq.${network}&order=updated_at.desc&limit=20`).catch(() => []),
       ]);
       setPositions(pos);
       setGold(au);
@@ -204,9 +208,11 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
         {/* Admin sees the plan economics; everyone else just the codename. The name comes
             from useStreamDisplay so no raw stream key ships as a visible literal. */}
-        <span className="livex__badge">{sd.isAdmin
-          ? `${sd.name('d30so8f3h7')} · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`
-          : sd.name('d30so8f3h7')}</span>
+        <span className="livex__badge">{net === 'testnet'
+          ? `${sd.name('midas')} · XAU · ${t('iz-süren')}`
+          : (sd.isAdmin
+            ? `${sd.name('d30so8f3h7')} · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`
+            : sd.name('d30so8f3h7'))}</span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(account?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>
@@ -231,7 +237,9 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         </div>
       </div>
 
-      {/* open positions */}
+      {/* open positions (OPUS scale-out) — mainnet only. On testnet/paper the board runs MIDAS-X,
+          rendered in the gold section below; OPUS never trades testnet. */}
+      {net === 'mainnet' && (<>
       <h2 className="livex__h2">{t('Açık Pozisyonlar')}</h2>
       {loading ? <div className="livex__empty">{t('Yükleniyor…')}</div>
         : open.length === 0 ? <div className="livex__empty">{t('Açık pozisyon yok — sinyal bekleniyor.')}</div>
@@ -254,8 +262,8 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
                 const cd = countdown(pre ? p.entry_deadline : p.time_stop_at, t);
                 const lc = liveCalc(p);
                 return (
-                  <tr key={p.id} className="livex__row--tap" onClick={() => setSel(p)}
-                      title={t('Grafik ve canlı sonucu gör')}>
+                  <tr key={p.id} className="livex__row--tap" onClick={() => setSel({ pos: p, isGold: false })}
+                      title={t('Kartı gör ve paylaş')}>
                     <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                     <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                     <td data-label={t('Durum')}><span className={`st ${sb.cls}`}>{sb.label}</span></td>
@@ -294,15 +302,18 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
           </table>
         </div>
       )}
+      </>)}
 
-      {/* ── Gold · TALOS-ICHI-X (mainnet) — the account's second real-money stream (2026-07-08:
-            talos_ichi replaced MIDAS as the gold real-money stream; MIDAS is now PAPER. The
-            standalone /binance-altin board left the sidebar; detail deep-link kept) ── */}
-      {(goldOpen.length > 0 || goldClosed.length > 0) && (
+      {/* ── Gold — the account's XAU trailing-stop stream. On mainnet: TALOS-ICHI-X (real money,
+            2026-07-08 took MIDAS's place; /binance-altin detail deep-link kept). On testnet/paper:
+            MIDAS-X — this IS the paper board, so always render it (waiting-for-signal included). ── */}
+      {(net === 'testnet' || goldOpen.length > 0 || goldClosed.length > 0) && (
         <>
           <h2 className="livex__h2">
-            {t('Altın')} · {sd.name('talos_ichi')}{' '}
-            <Link to="/binance-altin" className="livex__detail-link">{t('Detay')} →</Link>
+            {t('Altın')} · {net === 'testnet' ? sd.name('midas') : sd.name('talos_ichi')}{' '}
+            {net === 'mainnet' && (
+              <Link to="/binance-altin" className="livex__detail-link">{t('Detay')} →</Link>
+            )}
           </h2>
           {goldOpen.length === 0
             ? <div className="livex__empty">{t('Açık altın pozisyonu yok — sinyal bekleniyor.')}</div>
@@ -323,8 +334,11 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
                     const pre = p.state !== 'OPEN';
                     const cd = countdown(pre ? p.entry_deadline : p.time_stop_at, t);
                     const gc = goldCalc(p);
+                    const tap = p.state === 'OPEN' && p.entry_fill_time;
                     return (
-                      <tr key={`g${p.id}`}>
+                      <tr key={`g${p.id}`} className={tap ? 'livex__row--tap' : undefined}
+                          onClick={tap ? () => setSel({ pos: p, isGold: true }) : undefined}
+                          title={tap ? t('Kartı gör ve paylaş') : undefined}>
                         <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                         <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                         <td data-label={t('Durum')}><span className={`st ${sb.cls}`}>{sb.label}</span></td>
@@ -357,8 +371,11 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
                     const lng = (p.direction || '').toUpperCase() === 'LONG';
                     const win = Number(p.realized_r) >= 0;
                     const cancelled = p.state === 'CANCELLED';
+                    const tap = p.state === 'CLOSED' && p.entry_fill_time;
                     return (
-                      <tr key={`gc${p.id}`}>
+                      <tr key={`gc${p.id}`} className={tap ? 'livex__row--tap' : undefined}
+                          onClick={tap ? () => setSel({ pos: p, isGold: true }) : undefined}
+                          title={tap ? t('Kartı gör ve paylaş') : undefined}>
                         <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                         <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                         <td data-label={t('Sonuç')}><span className={`st ${cancelled ? 'st-cancel' : (win ? 'st-done' : 'st-sl')}`}>{MIDAS_EXIT[p.exit_reason] || p.exit_reason || '—'}</span></td>
@@ -395,8 +412,8 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
                   const tap = p.state === 'CLOSED' && p.entry_fill_time;
                   return (
                     <tr key={p.id} className={tap ? 'livex__row--tap' : undefined}
-                        onClick={tap ? () => setSel(p) : undefined}
-                        title={tap ? t('Grafik ve canlı sonucu gör') : undefined}>
+                        onClick={tap ? () => setSel({ pos: p, isGold: false }) : undefined}
+                        title={tap ? t('Kartı gör ve paylaş') : undefined}>
                       <td className="mono livex__cardhead" data-label={t('Sembol')}>{p.symbol}</td>
                       <td data-label={t('Yön')}><span className={lng ? 'dir dir--long' : 'dir dir--short'}>{lng ? 'LONG' : 'SHORT'}</span></td>
                       <td data-label={t('Sonuç')}><span className={`st ${win ? 'st-done' : 'st-sl'}`}>{exitLabel(p.exit_reason)}</span></td>
@@ -412,13 +429,16 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         </>
       )}
 
-      {/* Açık pozisyon: mumlar + plan seviyeleri + GERÇEK Binance rakamları + canlı PUSU kartı */}
+      {/* Pozisyon kartı (OPUS scale-out veya altın iz-süren) — GERÇEK Binance rakamları +
+          paylaşılabilir PUSU kartı. Altın için totalUsd/totalR goldCalc'tan gelir. */}
       {sel && (
         <LivePositionModal
-          key={sel.id}
-          pos={sel}
-          snap={snaps[sel.symbol]}
-          calc={liveCalc(sel)}
+          key={`${sel.isGold ? 'g' : 'o'}${sel.pos.id}`}
+          pos={sel.pos}
+          snap={snaps[sel.pos.symbol]}
+          calc={sel.isGold
+            ? { totalUsd: goldCalc(sel.pos).upnl, totalR: goldCalc(sel.pos).liveR }
+            : liveCalc(sel.pos)}
           onClose={() => setSel(null)}
         />
       )}

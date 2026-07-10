@@ -863,6 +863,11 @@ const EN = {
   'Süre limiti': 'Time limit',
   'Ters sinyal': 'Reverse signal',
   'Borsa kapanışı': 'Exchange close',
+  'İz-süren stop': 'Trailing stop',
+  'Süre (8s)': 'Time (8h)',
+  'Seans sonu': 'Session end',
+  'Fiyat kaçtı': 'Price slipped',
+  'Kartı gör ve paylaş': 'View and share card',
 };
 
 // TR overrides — the key is already the Turkish string, so this map only fixes
