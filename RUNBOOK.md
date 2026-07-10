@@ -382,6 +382,30 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-09
+- **YENİ: kapanış raporu — Telegram'a grafik + Binance'ten NET ROI (OPUS + TALOS-ICHI-X).**
+  Bir pozisyon TAM kapandığında Telegram'a mum grafiği (giriş / SL / TP1 / BE / cap seviyeleri +
+  giriş ▲ ve çıkış ✕ işaretleri) ve gerçek para sonucu gönderilir.
+  - **Yeni modül `sync/live_exec/trade_report.py`** (talos_ichi_exec de sys.path üzerinden kullanır):
+    - `net_pnl()` — Binance'in KENDİ kayıtları: `userTrades.realizedPnl` (brüt) − `userTrades.commission`
+      + `income(FUNDING_FEE)` (işaretli) = **NET**. USDT-dışı komisyon (BNB) ayrı raporlanır.
+      MARKET dolumu userTrades'e düşmemişse bir kez 2sn bekleyip tekrar okur.
+    - `render_chart()` — matplotlib (Agg, headless). İşlem süresine göre mum aralığı (1m/5m/15m/1h).
+      Aynı fiyattaki etiketler birleşir (OPUS'ta BE==Giriş); görünür aralık dışındaki seviye (uzak cap)
+      y-eksenini ezmesin diye kenarda ok ile gösterilir.
+    - `send_photo()` — Telegram `sendPhoto` (multipart). Mum verisi yoksa düz metne düşer.
+    - ROI% = net / başlangıç marjı, marj = giriş×qty/kaldıraç.
+  - **Kancalar:** OPUS `_close()` (sl/tp1_be/breakeven/cap/time_stop — 5 çağrı, `client`/`cfg` eklendi)
+    + `_reconcile_to_closed` (closed_externally) + `_reverse_close`. TALOS-ICHI-X `_finalize()`
+    (yalnız `cfg.armed`). TP1 kısmi booking'de mesaj YOK — sadece tam kapanış.
+  - ⚠️ **BEST-EFFORT sözleşmesi:** `report_close()` hiçbir koşulda exception fırlatmaz (Binance hatası,
+    bozuk pos, client=None, matplotlib yok → sessizce `False`). Emir yönetimi ETKİLENMEZ. `dry_run`da
+    ve TALOS-ICHI `armed=false`da hiç gönderilmez. `EXEC_CLOSE_REPORT=false` ile kapatılabilir.
+  - **Not:** caption'daki `R` DB'deki `realized_r`'dir (brüt-türetilmiş), `Net`/`ROI` ise komisyon+funding
+    düşülmüş cüzdan gerçeğidir — ikisi kasıtlı olarak farklı şeyleri ölçer.
+  - **Ops:** `matplotlib` requirements.txt'e eklendi ve VM `.venv`'ine KURULDU (executor'ler oradan koşar).
+    Migration/cron/env değişikliği YOK. Doğrulama: gerçek kapanmış pozisyon #124 ETHUSDT (time_stop,
+    brüt +1.64$ · komisyon −0.15$ · funding −0.23$ → **net +1.26$, ROI +12.1%**) grafikle Telegram'a
+    gönderildi; hata yolları (Binance patlar / pos bozuk / client None) exception fırlatmadan atlandı.
 - **Genel Bakış sadeleştirme: filtre/sıralama/arama kaldırıldı + kart istatistikleri 2×2 (gerçek-cihaz).**
   - **`IntroPage`: kontrol satırı tümüyle kaldırıldı** — Tümü/Range/Seans filtre çipleri, SIRALA sıralama
     (Toplam R/İsabet/Beklenti/PF) ve "Akım ara…" arama kutusu. Kartlar artık sabit **Toplam R azalan**

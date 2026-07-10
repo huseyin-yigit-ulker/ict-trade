@@ -46,6 +46,7 @@ import config as cfgmod                                      # noqa: E402
 import state as st                                           # noqa: E402
 import sizing                                                # noqa: E402
 import notify                                                # noqa: E402
+import trade_report                                          # noqa: E402  (kapanış grafiği + net ROI; best-effort)
 import store as ustore                                       # noqa: E402  (sync/users/store.py)
 import killswitch as ks                                      # noqa: E402  (flatten_positions — resolves to OURS, dir is front-most)
 import strategy as M                                         # noqa: E402
@@ -675,8 +676,13 @@ def _finalize(cfg, client, conn, bt, pos, *, reason, exit_px, exit_time, res_pnl
                pnl_r=(round(realized_r, 3) if realized_r is not None else None))
     st.patch(conn, pos["id"], state=st.CLOSED, exit_reason=reason, exit_px=exit_px,
              exit_time=exit_time or now, realized_r=realized_r, realized_usd=realized_usd, context=ctx)
+    full = st.reload(conn, pos["id"])
     if bt is not None:
-        st.writeback_trading_signals(bt, st.reload(conn, pos["id"]))
+        st.writeback_trading_signals(bt, full)
+    # Kapanış raporu (grafik + Binance'ten net ROI) — yalnız gerçek dolum varken; best-effort.
+    if cfg.armed:
+        trade_report.report_close(client, cfg, full, reason=reason, exit_px=exit_px,
+                                  realized_r=realized_r, tag=_tag(cfg))
     r_txt = f"{realized_r:+.2f}R" if realized_r is not None else "R bilinmiyor"
     usd_txt = f" · {realized_usd:+.2f}$" if realized_usd is not None else ""
     emoji = "✅" if (realized_r is not None and realized_r >= 0) else "❌"

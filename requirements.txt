@@ -5,3 +5,4 @@ sqlalchemy
 psycopg2-binary
 dotenv
 pywebpush          # Web Push (VAPID) fan-out — sync/push_notify.py; safe no-op if unset
+matplotlib         # kapanış raporu grafiği — sync/live_exec/trade_report.py (Agg, headless)

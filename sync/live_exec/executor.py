@@ -34,6 +34,7 @@ import state as st                                   # noqa: E402
 import levels as lvl                                 # noqa: E402
 import sizing                                        # noqa: E402
 import notify                                        # noqa: E402
+import trade_report                                  # noqa: E402  (kapanış grafiği + net ROI; best-effort)
 import store as ustore                               # noqa: E402  (sync/users/store.py)
 import killswitch as ks                              # noqa: E402  (flatten_positions)
 from binance_futures import BinanceFutures, BinanceError   # noqa: E402
@@ -405,8 +406,13 @@ def _reconcile_to_closed(cfg, client, conn, bt_conn, pos, now) -> None:
     realized_r = (realized_usd / denom) if denom else None
     st.patch(conn, pos["id"], state=st.CLOSED, exit_reason="closed_externally",
              exit_time=now, realized_r=realized_r, realized_usd=realized_usd)
+    exit_px = _last_price(sym, now)     # yalnız rapor için — DB semantiği değişmesin
+    full = _reload(conn, pos["id"])
     if bt_conn is not None:
-        st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+        st.writeback_trading_signals(bt_conn, full)
+    if exit_px is not None:
+        trade_report.report_close(client, cfg, full, reason="closed_externally", exit_px=exit_px,
+                                  realized_r=realized_r, tag=_TAG)
     dirn = str(pos["direction"]).upper()
     if realized_r is None:
         head, tail = "🏁 KAPANDI", "borsada kapandı (R bilinmiyor)"
@@ -435,25 +441,37 @@ def _reverse_close(cfg, client, conn, bt_conn, pos, now) -> None:
     risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
     denom = risk_eff * float(pos.get("qty") or 0)
     realized_r = (realized_usd / denom) if denom else None
+    rev_exit_px = _last_price(sym, now)
     st.patch(conn, pos["id"], state=st.CLOSED, exit_reason="reversed", exit_time=now,
-             exit_px=_last_price(sym, now), realized_r=realized_r, realized_usd=realized_usd)
+             exit_px=rev_exit_px, realized_r=realized_r, realized_usd=realized_usd)
+    full = _reload(conn, pos["id"])
     if bt_conn is not None:
-        st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+        st.writeback_trading_signals(bt_conn, full)
+    if rev_exit_px is not None:
+        trade_report.report_close(client, cfg, full, reason="reversed", exit_px=rev_exit_px,
+                                  realized_r=realized_r, tag=_TAG)
     _alert(cfg, conn, f"🔄 <b>TERS SİNYAL</b> · <b>{sym}</b> #{pos['id']}\n"
                       f"{str(pos['direction']).upper()} kapatıldı ({realized_usd:+.2f}$"
                       + (f", {realized_r:+.2f}R" if realized_r is not None else "")
                       + ") → ters yön açılıyor" + f" — {_TAG}", kind="exit")
 
 
-def _close(conn, bt_conn, pos, *, reason, exit_px, realized_r):
+def _close(conn, bt_conn, pos, *, reason, exit_px, realized_r, client=None, cfg=None):
     """Finalize a position in the DB (the MARKET close was already fired by the caller) and
-    upsert the result to trading_signals. realized_usd = R × the position's $ risk (risk_eff×qty)."""
+    upsert the result to trading_signals. realized_usd = R × the position's $ risk (risk_eff×qty).
+
+    client/cfg verilirse Telegram'a kapanış raporu (grafik + Binance'ten net ROI) gönderilir —
+    tamamen best-effort, hatası yutulur ve emir yönetimini ETKİLEMEZ."""
     risk_eff = abs(float(pos.get("eff_entry") or pos["signal_entry"]) - float(pos["signal_sl"]))
     realized_usd = (realized_r * risk_eff * float(pos.get("qty") or 0)) if realized_r is not None else None
     st.patch(conn, pos["id"], state=st.CLOSED, exit_reason=reason, exit_px=exit_px,
              exit_time=pd.Timestamp.now(tz="UTC"), realized_r=realized_r, realized_usd=realized_usd)
+    full = _reload(conn, pos["id"])
     if bt_conn is not None:
-        st.writeback_trading_signals(bt_conn, _reload(conn, pos["id"]))
+        st.writeback_trading_signals(bt_conn, full)
+    if client is not None and cfg is not None:
+        trade_report.report_close(client, cfg, full, reason=reason, exit_px=exit_px,
+                                  realized_r=realized_r, tag=_TAG)
 
 
 # ------------------------------------------------------------------ reconcile
@@ -603,7 +621,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
         if hit == "protect":                                    # −1R full stop
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="sl")
             _cancel_resting(cfg, client, sym)
-            _close(conn, bt_conn, pos, reason="sl", exit_px=rl.sl, realized_r=-1.0 - _fee_r(cfg, pos))
+            _close(conn, bt_conn, pos, reason="sl", exit_px=rl.sl, realized_r=-1.0 - _fee_r(cfg, pos),
+                   client=client, cfg=cfg)
             _alert(cfg, conn, f"🛑 <b>{sym}</b> stopped −1R — {_TAG}", kind="exit")
             return
         if hit == "target":                                     # +1R -> book 60%, ride runner
@@ -612,7 +631,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             runner_qty = xi.floor_qty(sym, abs(_position_amt(client, sym)))
             if runner_qty <= 0:
                 _close(conn, bt_conn, pos, reason="tp1_be", exit_px=rl.tp1,
-                       realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
+                       realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos),
+                       client=client, cfg=cfg)
                 return
             st.patch(conn, pos["id"], state=st.RUNNER, runner_qty=runner_qty,
                      tp1_fill_time=now, tp1_fill_px=rl.tp1)
@@ -632,7 +652,8 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="be")
             _cancel_resting(cfg, client, sym)
             _close(conn, bt_conn, pos, reason="breakeven", exit_px=be,
-                   realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos))
+                   realized_r=cfg.close_frac * cfg.first_r - _fee_r(cfg, pos),
+                   client=client, cfg=cfg)
             _alert(cfg, conn, f"🏁 <b>{sym}</b> runner breakeven (+{cfg.close_frac*cfg.first_r:.1f}R) — {_TAG}",
                    kind="exit")
             return
@@ -640,7 +661,7 @@ def _reconcile(cfg, client, conn, bt_conn, xi, pos: dict, now: pd.Timestamp,
             _market(client, conn, pos, abs(_position_amt(client, sym)), leg="cap")
             _cancel_resting(cfg, client, sym)
             r = cfg.close_frac * cfg.first_r + (1 - cfg.close_frac) * cfg.runner_cap_r - _fee_r(cfg, pos)
-            _close(conn, bt_conn, pos, reason="cap", exit_px=cap, realized_r=r)
+            _close(conn, bt_conn, pos, reason="cap", exit_px=cap, realized_r=r, client=client, cfg=cfg)
             _alert(cfg, conn, f"🏁 <b>{sym}</b> runner CAP +{cfg.runner_cap_r:g}R ({r:+.2f}R) — {_TAG}",
                    kind="exit")
             return
@@ -676,7 +697,7 @@ def _maybe_time_stop(cfg, client, conn, bt_conn, sym, pos, now: pd.Timestamp,
     runner_r = ((last - float(pos["eff_entry"])) * sign / risk) if (last and risk) else 0.0
     frac = (1 - cfg.close_frac) if pos["state"] == st.RUNNER else 1.0
     r = booked + frac * max(runner_r, 0.0) - _fee_r(cfg, pos)
-    _close(conn, bt_conn, pos, reason="time_stop", exit_px=last, realized_r=r)
+    _close(conn, bt_conn, pos, reason="time_stop", exit_px=last, realized_r=r, client=client, cfg=cfg)
     _alert(cfg, conn, f"⏱️ <b>3 GÜN DOLDU</b> · <b>{sym}</b> {str(pos['direction']).upper()} #{pos['id']}\n"
                       f"süre limiti — market kapandı @ {last:g} · realized {r:+.2f}R — {_TAG}", kind="exit")
 
