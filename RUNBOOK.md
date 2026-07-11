@@ -381,6 +381,15 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11 (7)
+- **Kullanıcı modunda grafik varsayılanı NATIVE + istihbarat paneli sızıntı düzeltmesi.**
+  - Sinyal kartına tıklayınca artık TV embed'i değil **PUSU native grafiği** açılır
+    (giriş/TP/SL/Ters-Onay overlay'li) — `UserShell` mount'ta `setChartView('chart')`;
+    kullanıcı modal içi toggle'dan TV'ye yine geçebilir. Admin davranışı değişmedi.
+  - **GİZLİLİK FİX:** ChartModal bilgi panelindeki motor-içi satırlar (ham
+    `Strateji: DONCHIAN_BO`, Kalite, Konfluens, HTF/LTF) HERKESE görünüyordu —
+    artık `sd.isAdmin` kapılı. Emülatörde assert: TV iframe=0, DONCHIAN_BO=0.
+
 ### 2026-07-11 (6)
 - **Kullanıcı modu: işleme tıklayınca GRAFİK + Sinyaller'e haftalık karne.**
   - **TradeChart** (`src/components/user/TradeChart.jsx`, lightweight-charts): pozisyonun

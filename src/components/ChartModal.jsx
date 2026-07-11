@@ -1299,7 +1299,9 @@ const ChartModal = () => {
             </div>
           )}
 
-          {(activeSignal.strategy || activeSignal.quality || Number.isFinite(activeSignal.confluenceScore) || activeSignal.htfTimeframe) && (
+          {/* Motor içi istihbarat (ham strateji etiketi/kalite/konfluens/HTF-LTF) YALNIZ
+              admin'e — non-admin'e ham 'DONCHIAN_BO' gibi etiketler sızıyordu (2026-07-11). */}
+          {sd.isAdmin && (activeSignal.strategy || activeSignal.quality || Number.isFinite(activeSignal.confluenceScore) || activeSignal.htfTimeframe) && (
             <div className="position-panel__intel">
               {Number.isFinite(activeSignal.confluenceScore) && !isTrailing && (
                 <div className="position-row"><span>{t('Konfluens')}</span><b style={{ color: '#F5B942' }}>{activeSignal.confluenceScore}</b></div>
