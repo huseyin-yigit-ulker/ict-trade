@@ -381,6 +381,19 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11 (2)
+- **Yeni kullanıcı onboarding'i: Portföy'de "Kurulum Adımları" kartı.**
+  `src/components/user/OnboardingCard.jsx` — 4 canlı adım, kullanıcının kendi satırlarından
+  otomatik işaretlenir: ① hesap onayı (`profiles.status`) ② API anahtarı
+  (`user_api_keys_public`; `pending_verify` → "doğrulanıyor…") ③ akış başlat
+  (`user_stream_settings.enabled+symbols`) ④ bildirimleri aç (push aboneliği —
+  karttan tek dokunuşla `enablePush`; SW/push desteklenmiyorsa adım gizli, `pushState`
+  1.5s zaman-aşımı korumalı). İlerleme çubuğu + aktif adım vurgusu; 4/4 olunca kart
+  kendini gizler. Eski statik "Botu kurun" CTA'sının yerini aldı; `SETTINGS_EVT` ile
+  canlı tazelenir. İşlemler boş-durumuna "Botu kurun →" butonu eklendi. ~15 yeni EN
+  çevirisi. Emülatör senaryoları: `scratchpad/newuser_shots.mjs` (taze / onay bekleyen /
+  anahtar-doğrulanıyor) — ekranlar `scratchpad/usermode/newuser_*.png`.
+
 ### 2026-07-11
 - **ROL AYRIMLI ARAYÜZ: admin-dışı kullanıcılar Binance-tarzı 4 sekmeli basit kabuğa taşındı.**
   Router seviyesinde rol çatalı (`src/AppRoutes.jsx`): **admin = mevcut arayüzün tamamı birebir**

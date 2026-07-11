@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang } from '../../context/LanguageContext';
-import { useExecActivation } from '../../utils/execActivation';
 import { useLiveExec, fmtUsd, fmtUsdSigned, ago } from '../../utils/useLiveExec';
 import PositionCard, { ClosedCard } from '../../components/user/PositionCard';
+import OnboardingCard from '../../components/user/OnboardingCard';
 import LivePositionModal from '../../components/trading/LivePositionModal';
 
 // Portföy — kullanıcı modunun ana sayfası. Binance app ana ekranı gibi:
@@ -22,7 +22,6 @@ const EyeIcon = ({ off }) => (
 
 export default function PortfolioPage() {
   const { t } = useLang();
-  const act = useExecActivation();
   const {
     loading, open, closed, snapFor, calcFor, accounts,
     totalWallet, totalUpnl, updatedAt, refresh,
@@ -38,8 +37,6 @@ export default function PortfolioPage() {
 
   const mask = (v) => (hide ? '******' : v);
   const upnlUp = Number(totalUpnl) >= 0;
-  const noActivation = !act.loading && !act.mainnet && !act.testnet;
-  const empty = !loading && open.length === 0 && closed.length === 0;
   const teaser = closed.slice(0, 3);
   // Yalnız gerçekten dolmuş satırlar tıklanır (iptallerde dolum/kart yok) — admin pano kuralı.
   const tapOpen = (p) => (p.isGold ? p.state === 'OPEN' && p.entry_fill_time : true);
@@ -74,14 +71,9 @@ export default function PortfolioPage() {
         </div>
       </section>
 
-      {/* Kurulum CTA — hiç aktivasyon + hiç veri yoksa */}
-      {noActivation && empty && (
-        <section className="ush-card ush-cta">
-          <h3>{t('Botu kurun')}</h3>
-          <p>{t('Sinyaller merkezî olarak üretilir; emirler kendi Binance hesabınızda, kendi anahtarınızla çalışır.')}</p>
-          <Link to="/bot" className="ush-btn ush-btn--primary">{t('Bot sekmesine git')} →</Link>
-        </section>
-      )}
+      {/* Kurulum Adımları — yeni kullanıcının canlı ilerleme kartı; kurulum
+          tamamlanınca (4/4) kendini gizler. */}
+      <OnboardingCard />
 
       {/* Açık pozisyonlar */}
       <section className="ush-section">

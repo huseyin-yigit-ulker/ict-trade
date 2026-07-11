@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLang } from '../../context/LanguageContext';
 import { useLiveExec, fmtUsd, fmtR } from '../../utils/useLiveExec';
 import PositionCard, { ClosedCard } from '../../components/user/PositionCard';
@@ -80,7 +81,10 @@ export default function TradesPage() {
       {loading && isEmpty ? (
         <div className="ush-empty">{t('Yükleniyor…')}</div>
       ) : isEmpty ? (
-        <div className="ush-empty">{t('Henüz işlem yok.')}</div>
+        <div className="ush-empty">
+          <p className="ush-empty__msg">{t('Henüz işlem yok.')}</p>
+          <Link to="/bot" className="ush-btn ush-btn--primary">{t('Botu kurun')} →</Link>
+        </div>
       ) : (
         <>
           {showOpen.length > 0 && (

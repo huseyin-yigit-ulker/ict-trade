@@ -342,6 +342,73 @@
 .ush-cta { margin-top: 14px; text-align: center; }
 .ush-cta h3 { margin: 0 0 6px; font-size: 16px; }
 .ush-cta p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.ush-empty__msg { margin: 0 0 12px; }
+
+/* Kurulum Adımları (onboarding) kartı */
+.ush-onb { margin-top: 14px; }
+.ush-onb__head { display: flex; align-items: baseline; justify-content: space-between; }
+.ush-onb__head h3 { margin: 0; font-size: 15px; }
+.ush-onb__count { font-size: 12.5px; color: var(--accent); font-weight: 700; }
+.ush-onb__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  margin: 10px 0 14px;
+  overflow: hidden;
+}
+.ush-onb__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width .3s ease;
+}
+.ush-onb__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ush-onb__step {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  text-decoration: none;
+  cursor: default;
+}
+a.ush-onb__step, button.ush-onb__step { cursor: pointer; }
+a.ush-onb__step:hover, button.ush-onb__step:hover { background: var(--chip-glass); }
+.ush-onb__step.is-current {
+  background: rgba(245, 185, 66, .07);
+  border-color: rgba(245, 185, 66, .3);
+  color: var(--text);
+}
+.ush-onb__step.is-done { color: var(--muted-2); }
+.ush-onb__step.is-done .ush-onb__label { text-decoration: line-through; text-decoration-color: var(--muted-2); }
+.ush-onb__dot {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border);
+  color: var(--win);
+  font-size: 11px;
+}
+.ush-onb__step.is-done .ush-onb__dot { border-color: var(--win); background: var(--win-soft); }
+.ush-onb__step.is-current .ush-onb__dot { border-color: var(--accent); }
+.ush-onb__step.is-pending .ush-onb__dot { color: var(--accent); }
+.ush-onb__label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ush-onb__label small { font-size: 11.5px; color: var(--muted-2); line-height: 1.45; }
+.ush-onb__label .ush-onb__err { color: var(--loss); }
+.ush-onb__go { margin-left: auto; color: var(--accent); font-weight: 700; }
 
 /* Pozisyon kartı */
 .ush-poscard {
