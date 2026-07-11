@@ -3237,3 +3237,8 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 }
 .livex__kpi { border-radius: 12px; border-color: var(--border-soft); }
 .livex__badge, .livex__net { border-radius: 7px; }
+.close-modern { border-radius: 10px; }
+/* ChartModal mobil: Kapat butonu sağ üstte sabit — başlık satırı altına girmesin */
+@media (max-width: 768px) {
+  .chart-header-top { padding-right: 86px; }
+}

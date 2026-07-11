@@ -111,10 +111,24 @@ const Topbar = () => {
   const applyBest = () => { applySymbolSet(rankedByR.slice(0, TOP_N)); setSymOpen(false); };
   const applyWorst = () => { applySymbolSet(rankedByR.slice(-TOP_N)); setSymOpen(false); };
 
-  // Symbols + status filter are per-view controls — shown only on the 4 strategy×mode
-  // views, on the RIGHT side of the bar. Hidden on Intelligence / Settings.
-  const isView = loc.pathname !== '/settings' && loc.pathname !== '/intelligence'
-    && loc.pathname !== '/' && loc.pathname !== '/trend';
+  // Route-duyarlı başlık haritası (2026-07-11 audit düzeltmesi): filtre/sembol
+  // kontrolleri YALNIZ strateji görünümünde (/:strategy/:mode) anlamlıdır — eskiden
+  // /admin, /binance*, /trading, /total da "strateji görünümü" sanılıp OPUS başlığı
+  // + TP/SL filtreleri gösteriliyordu.
+  const PAGE_TITLES = {
+    '/': t('Genel Bakış'),
+    '/settings': t('Ayarlar'),
+    '/intelligence': t('İstihbarat'),
+    '/trend': t('Rejim Haritası'),
+    '/total': 'TOTAL',
+    '/admin': t('Yönetim'),
+    '/trading': t('İşlem Merkezi'),
+    '/binance': t('Binance Canlı'),
+    '/binance-paper': 'Binance Paper',
+    '/binance-altin': t('Altın'),
+  };
+  const pageTitle = PAGE_TITLES[loc.pathname];
+  const isView = pageTitle === undefined;   // yalnız strateji×mod görünümleri kaldı
   const STATUS_FILTERS = [
     { key: 'all', label: t('Tümü') },
     { key: 'tp', label: 'TP' },
@@ -140,11 +154,7 @@ const Topbar = () => {
           {isNarrow ? (mobileNavOpen ? '✕' : '☰') : (sidebarHidden ? '☰' : '‹‹')}
         </button>
         <div className="topbar__title">
-          {loc.pathname === '/' ? t('Genel Bakış')
-            : loc.pathname === '/settings' ? t('Ayarlar')
-            : loc.pathname === '/intelligence' ? t('İstihbarat')
-            : loc.pathname === '/trend' ? t('Rejim Haritası')
-            : `${sd.name(strategy)} · ${t(MODE_LABEL[mode] || 'Live')}`}
+          {pageTitle ?? `${sd.name(strategy)} · ${t(MODE_LABEL[mode] || 'Live')}`}
         </div>
         <KillzoneClock />
         <button

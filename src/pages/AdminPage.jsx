@@ -53,6 +53,8 @@ export default function AdminPage() {
   const [overview, setOverview] = useState(null); // admin_overview() jsonb (009)
   const [digestOn, setDigestOn] = useState(true); // app_flags.positions_digest (017)
   const [digestBusy, setDigestBusy] = useState(false);
+  const [nuDigestOn, setNuDigestOn] = useState(true); // app_flags.newuser_digest (2026-07-11)
+  const [nuDigestBusy, setNuDigestBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
@@ -75,7 +77,7 @@ export default function AdminPage() {
       rpc('admin_list_users'),      // 009: e-posta onayı + son giriş
       rpc('admin_user_stats'),      // 009: açık poz / bugün$ / toplam$
       rpc('admin_overview'),        // 009: sistem sağlık özeti
-      getJSON('app_flags?select=key,enabled&key=eq.positions_digest'), // 017: cron aç/kapa
+      getJSON('app_flags?select=key,enabled&key=in.(positions_digest,newuser_digest)'), // 017: cron aç/kapa
     ]);
     if (p.status === 'fulfilled') setProfiles(p.value || []); else setErr(p.reason?.message || 'profiles');
     if (k.status === 'fulfilled') setKeys(k.value || []); else setErr((e) => e || k.reason?.message);
@@ -93,7 +95,11 @@ export default function AdminPage() {
     }
     if (ov.status === 'fulfilled') setOverview(ov.value || null);
     // 017 app_flags migration'ı henüz uygulanmadıysa sessizce AÇIK varsayılır.
-    if (fl.status === 'fulfilled') setDigestOn(fl.value?.[0]?.enabled ?? true);
+    if (fl.status === 'fulfilled') {
+      const flagOf = (key) => (fl.value || []).find((r) => r.key === key)?.enabled ?? true;
+      setDigestOn(flagOf('positions_digest'));
+      setNuDigestOn(flagOf('newuser_digest'));
+    }
     setLoading(false);
   }, []);
 
@@ -230,6 +236,20 @@ export default function AdminPage() {
     } catch (e) { setErr(e.message); } finally { setDigestBusy(false); }
   };
 
+  // Yeni-kullanıcı günlük özet push'u (sync/newuser_digest.py, cron 18:05 UTC) aç/kapa.
+  const toggleNuDigest = async () => {
+    if (nuDigestBusy) return;
+    setNuDigestBusy(true); setErr(''); setOk('');
+    const next = !nuDigestOn;
+    try {
+      await rpc('admin_set_flag', { p_key: 'newuser_digest', p_enabled: next });
+      setNuDigestOn(next);
+      setOk(next
+        ? t('Yeni üye özeti AÇIK — ilk haftadaki kullanıcılara akşam günlük push.')
+        : t('Yeni üye özeti KAPALI — cron sessizce atlar.'));
+    } catch (e) { setErr(e.message); } finally { setNuDigestBusy(false); }
+  };
+
   // 009: duyuru — push_outbox kuyruğuna yazar, mevcut --drain cron'u dağıtır.
   const sendAnnouncement = async (e) => {
     e.preventDefault();
@@ -284,6 +304,14 @@ export default function AdminPage() {
               title={t('Açık işlem Telegram özeti (5 dk’da bir tek mesaj). Kapalıyken cron sessizce atlar; sinyaller/işlemler etkilenmez.')}
             >
               {digestOn ? '🔔' : '🔕'} {t('Açık İşlem Özeti')}: {digestOn ? t('AÇIK') : t('KAPALI')}
+            </button>
+            <button
+              className={`header-btn admin-digest${nuDigestOn ? ' on' : ''}`}
+              onClick={toggleNuDigest}
+              disabled={nuDigestBusy}
+              title={t('İlk haftasındaki kullanıcılara akşam günlük özet push’u (newuser_digest cron’u). Kapalıyken cron sessizce atlar.')}
+            >
+              {nuDigestOn ? '🔔' : '🔕'} {t('Yeni Üye Özeti')}: {nuDigestOn ? t('AÇIK') : t('KAPALI')}
             </button>
             <button className="kill-btn admin-globalkill" onClick={killAll}>
               ⛔ {t('GLOBAL KILL')}

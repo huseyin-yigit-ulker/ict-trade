@@ -381,6 +381,20 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11 (5)
+- **Admin tam-sayfa UI denetimi (web+mobil, emülatör) + düzeltmeler.** 10 sayfa × 2 cihaz
+  mock-verili Playwright turuyla tarandı (`scratchpad/admin_audit.mjs`, ekranlar
+  `scratchpad/audit/`); hiçbir sayfada yatay taşma yok.
+  - **Topbar route-duyarlı yapıldı (en büyük bulgu):** başlık ve TP/SL/sembol filtreleri
+    her sayfada strateji görünümüne kilitliydi — /admin'de bile "OPUS · Canlı" + filtre
+    şeridi görünüyordu. Artık başlık haritası (/admin=Yönetim, /binance=Binance Canlı,
+    /trading=İşlem Merkezi, /total, /binance-paper, /binance-altin) ve filtreler YALNIZ
+    /:strategy/:mode görünümünde (Topbar.jsx).
+  - **Yönetim'e yeni kontrol:** "Yeni Üye Özeti" bayrak çipi — `app_flags.newuser_digest`
+    admin panelinden aç/kapa (admin_set_flag; Açık İşlem Özeti çipinin ikizi).
+  - **ChartModal mobil:** Kapat butonu ile mum/çizgi toggle'ının üst üste binmesi
+    giderildi (chart-header-top sağ boşluk); Kapat 10px köşe.
+
 ### 2026-07-11 (4)
 - **Admin arayüzü modern yenileme (yalnız görünüm).** `style.css` sonuna tek override bloğu
   ("ADMIN MODERN REFRESH"): kartlar 6→14px köşe + yumuşak sınır + hover, kpi-hero 16px,
