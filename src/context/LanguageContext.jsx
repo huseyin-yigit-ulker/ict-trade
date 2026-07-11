@@ -886,6 +886,8 @@ const EN = {
   'Toplam K/Z': 'Total PnL',
   'Henüz işlem yok.': 'No trades yet.',
   'Dün': 'Yesterday',
+  'Son 7 gün': 'Last 7 days',
+  'Kazanma': 'Win rate',
   'Grafiği aç': 'Open chart',
   'Son Fiyat': 'Last Price',
   'Giriş penceresi': 'Entry window',

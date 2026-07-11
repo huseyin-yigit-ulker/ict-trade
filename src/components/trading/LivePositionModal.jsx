@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useLang } from '../../context/LanguageContext';
 import { renderCardBlob, sharePng } from '../../utils/shareCard';
+import TradeChart from '../user/TradeChart';
 
 // Bir BİNANCE pozisyonu için paylaşılabilir PUSU kartı + gerçek borsa rakamları.
 // Açık pozisyonda canlı (mark/uPnL), kapananda nihai (realized). Grafik yok — kart yeterli;
@@ -26,7 +27,10 @@ const fmtDur = (ms) => {
   return `${d ? `${d}g ` : ''}${d || h ? `${h}s ` : ''}${m % 60}dk`;
 };
 
-const LivePositionModal = ({ pos, snap, calc, onClose }) => {
+// showChart (2026-07-11, kullanıcı modu): kart+hücrelerin ALTINA işlem mum grafiği
+// (TradeChart) ekler. Admin panoları default false ile eski davranışta kalır
+// (da42fb1 "kart yeterli" kararı admin tarafında korunur).
+const LivePositionModal = ({ pos, snap, calc, onClose, showChart = false }) => {
   const { t } = useLang();
   const [shareMsg, setShareMsg] = useState('');
   // Açık pozisyonun "şimdi"si bir kez yakalanır (render'da Date.now() = impure). Kapananda
@@ -195,6 +199,9 @@ const LivePositionModal = ({ pos, snap, calc, onClose }) => {
             {shareMsg || `↗ ${t('Paylaş')}`}
           </button>
         </div>
+
+        {/* işlem grafiği (kullanıcı modu) — giriş/SL/hedef çizgileri + giriş/çıkış işaretleri */}
+        {showChart && <TradeChart pos={pos} />}
 
         {/* gerçek Binance rakamları */}
         <div className="lpm__grid">

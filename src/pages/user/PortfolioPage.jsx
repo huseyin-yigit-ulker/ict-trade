@@ -130,6 +130,7 @@ export default function PortfolioPage() {
           snap={snapFor(sel)}
           calc={calcFor(sel)}
           onClose={() => setSel(null)}
+          showChart={!!sel.entry_fill_time}
         />
       )}
     </div>

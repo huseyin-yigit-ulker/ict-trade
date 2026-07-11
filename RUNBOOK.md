@@ -381,6 +381,18 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11 (6)
+- **Kullanıcı modu: işleme tıklayınca GRAFİK + Sinyaller'e haftalık karne.**
+  - **TradeChart** (`src/components/user/TradeChart.jsx`, lightweight-charts): pozisyonun
+    ömrünü mum grafikte çizer — Giriş/SL/TP1/Hedef seviye çizgileri (nötr etiketler,
+    maskeye uygun; altında iz-süren SL) + giriş oku ve "Çıkış ±R" işareti. Binance klines,
+    pencereye göre 1m→4h otomatik kabalaşır. `LivePositionModal`'a `showChart` prop'u
+    eklendi — **yalnız kullanıcı sayfaları (Portföy/İşlemler) true geçer**; admin panoları
+    default false ile eski davranışta (da42fb1 "kart yeterli" admin'de korunur).
+  - **Haftalık karne (Sinyaller):** filtrelerin altında kompakt şerit — Son 7 gün toplam R
+    (scale-out: `scaleOutLiveR` statü modeli; iz-sürenlerde nightly `pnlR`), Kazanma %,
+    TP/SL sayısı, Aktif sayısı. statusFilter'dan bağımsız hesaplanır.
+
 ### 2026-07-11 (5)
 - **Admin tam-sayfa UI denetimi (web+mobil, emülatör) + düzeltmeler.** 10 sayfa × 2 cihaz
   mock-verili Playwright turuyla tarandı (`scratchpad/admin_audit.mjs`, ekranlar

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useTradeContext } from '../../context/TradeContext';
 import { useLang } from '../../context/LanguageContext';
 import { LIVE_STREAM_KEYS, codenameFor } from '../../utils/streamMask';
+import {
+  scaleOutLiveR, isScaleOutStrategy, soCapFromStrategy, isConfirmStrategy, soBookFromStrategy,
+} from '../../utils/liveR';
 import SignalCard from '../../components/user/SignalCard';
 import PusuLogo from '../../components/PusuLogo';
 
@@ -51,6 +54,35 @@ export default function SignalsPage() {
 
   const shown = filteredSignals.filter((sig) => statusFilter === 'all' || statusOf(sig) === statusFilter);
 
+  // ── Son 7 gün istatistikleri (statusFilter'dan bağımsız — akışın haftalık karnesi) ──
+  // R modeli Dashboard ile aynı: scale-out akışta scaleOutLiveR (statü-bazlı, ücret dahil);
+  // iz-süren akışlarda (SIRIUS/MENKAR) nightly sync'in çözdüğü sig.pnlR kullanılır.
+  const isSO = isScaleOutStrategy(strategy);
+  const soCapR = soCapFromStrategy(strategy);
+  const soConservative = isConfirmStrategy(strategy);
+  const soBookFrac = soBookFromStrategy(strategy);
+  const outcomeR = (sig, st) => {
+    if (trailing) return Number.isFinite(sig.pnlR) ? sig.pnlR : null;
+    if (!isSO) return null;
+    const r = scaleOutLiveR(sig.entry, sig.sl, liveStatuses[sig.id]?.status, soCapR, soConservative, soBookFrac);
+    return r == null ? (st === 'sl' ? -1 : null) : r;
+  };
+  const week = { r: 0, rKnown: false, tp: 0, sl: 0, active: 0, total: 0 };
+  const weekStartTs = nowTs - 7 * 86_400_000;
+  for (const sig of filteredSignals) {
+    if (effTimeOf(sig).getTime() < weekStartTs) continue;
+    const st = statusOf(sig);
+    week.total += 1;
+    if (st === 'tp') week.tp += 1;
+    else if (st === 'sl') week.sl += 1;
+    else if (st === 'active') week.active += 1;
+    if (st === 'tp' || st === 'sl') {
+      const r = outcomeR(sig, st);
+      if (r != null) { week.r += r; week.rKnown = true; }
+    }
+  }
+  const wr = week.tp + week.sl > 0 ? Math.round((week.tp / (week.tp + week.sl)) * 100) : null;
+
   // Gün gruplama — "Bugün / Dün / 9 Temmuz Cuma" (efektif sinyal zamanına göre).
   // Liste küçük (son ~2 günün sinyalleri) — memo gerektirmez.
   const fmt = new Intl.DateTimeFormat(locale || 'tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
@@ -96,6 +128,24 @@ export default function SignalsPage() {
           </button>
         ))}
       </div>
+
+      {/* Haftalık karne — Binance tarzı kompakt istatistik şeridi */}
+      {isLoaded && week.total > 0 && (
+        <div className="ush-card ush-tradesum ush-weekstats">
+          <div>
+            <span>{t('Son 7 gün')} · R</span>
+            <b className={`mono ${!week.rKnown ? 'dim' : week.r >= 0 ? 'pos' : 'neg'}`}>
+              {week.rKnown ? `${week.r >= 0 ? '+' : ''}${week.r.toFixed(2)}R` : '—'}
+            </b>
+          </div>
+          <div>
+            <span>{t('Kazanma')}</span>
+            <b className={`mono ${wr == null ? 'dim' : wr >= 50 ? 'pos' : 'neg'}`}>{wr == null ? '—' : `%${wr}`}</b>
+          </div>
+          <div><span>TP / SL</span><b className="mono">{week.tp} / {week.sl}</b></div>
+          <div><span>{t('Aktif')}</span><b className="mono">{week.active}</b></div>
+        </div>
+      )}
 
       {liveError && <div className="ush-error" role="alert">⚠ {t(liveError)}</div>}
 
