@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { changePassword } from '../utils/supa';
 import { pushSupported, pushState, enablePush, disablePush } from '../utils/push';
-import { PAGE_CHOICES } from '../utils/userPrefs';
+import { PAGE_CHOICES, USER_PAGE_CHOICES } from '../utils/userPrefs';
 import SignalWatchCard from '../components/trading/SignalWatchCard';
 
 // Bildirim tercihi anahtarları — ict_trade.user_prefs kolonlarıyla birebir;
@@ -111,8 +111,8 @@ const SettingsPage = () => {
               value={prefs?.default_page || '/'}
               onChange={(e) => updatePrefs({ default_page: e.target.value })}
             >
-              {PAGE_CHOICES
-                .filter((c) => (c.path !== '/trading' || features?.trading !== false)
+              {(isAdmin ? PAGE_CHOICES : USER_PAGE_CHOICES)
+                .filter((c) => ((c.path !== '/trading' && c.path !== '/bot') || features?.trading !== false)
                   && (c.path !== '/intelligence' || isAdmin))
                 .map((c) => <option key={c.path} value={c.path}>{t(c.label)}</option>)}
             </select>

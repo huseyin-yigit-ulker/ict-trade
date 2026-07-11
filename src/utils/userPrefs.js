@@ -17,7 +17,19 @@ export const PAGE_CHOICES = [
   { path: '/intelligence', label: 'İstihbarat' },
 ];
 
-export const isValidPage = (p) => PAGE_CHOICES.some((c) => c.path === p);
+// Kullanıcı (admin-dışı) kabuğunun açılış sayfası seçenekleri — 4 sekmeli
+// Binance-tarzı arayüzün rotaları. Eski PAGE_CHOICES yolları alias'larla
+// (/binance→/portfoy, /trading→/bot …) zaten çözülür; bu liste yalnız
+// SettingsPage select'inin doğru etiketleri göstermesi için.
+export const USER_PAGE_CHOICES = [
+  { path: '/portfoy', label: 'Portföy' },
+  { path: '/islemler', label: 'İşlemler' },
+  { path: '/sinyaller', label: 'Sinyaller' },
+  { path: '/bot', label: 'Bot' },
+];
+
+export const isValidPage = (p) => PAGE_CHOICES.some((c) => c.path === p)
+  || USER_PAGE_CHOICES.some((c) => c.path === p);
 
 /** Oturumdaki kullanıcının prefs satırı (yoksa null). */
 export async function fetchPrefs() {

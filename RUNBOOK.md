@@ -381,6 +381,39 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11
+- **ROL AYRIMLI ARAYÜZ: admin-dışı kullanıcılar Binance-tarzı 4 sekmeli basit kabuğa taşındı.**
+  Router seviyesinde rol çatalı (`src/AppRoutes.jsx`): **admin = mevcut arayüzün tamamı birebir**
+  (eski `App.jsx` rota ağacı `AdminRoutes`'a taşındı, sıfır davranış değişikliği); **user =
+  yeni `UserShell`** (`src/components/user/`, `src/pages/user/`, `src/assets/css/user.css`):
+  - Sekmeler: **Portföy** (`/portfoy` — toplam bakiye + göz-gizle + açık pozisyon kartları +
+    son işlem teaser'ı), **İşlemler** (`/islemler` — açık/kapalı filtre + özet şerit +
+    `LivePositionModal` paylaşım kartı), **Sinyaller** (`/sinyaller` — kod adlı akış çipleri
+    ATLAS/SIRIUS/MENKAR, gün gruplu sinyal kartları, tık → mevcut `ChartModal`), **Bot**
+    (`/bot` — hero durum kartı + MEVCUT İşlem Merkezi kartları aynen; İnce Ayar katlanır).
+    Profil (`/profil`) header avatarında → `SettingsPage` sarmalayıcı. Mobil ≤768px alt sekme
+    çubuğu, masaüstü slim üst-nav.
+  - Kullanıcıya kapanan yüzeyler: strateji hub'ı, `/trend`, `/total`, `/:strategy/:mode`,
+    araştırma/backtest, `/admin`, `/intelligence` → hepsi `/portfoy`'a redirect. Push/bookmark
+    alias'ları: `/binance(-paper)`→`/portfoy`, `/binance-altin`→`/islemler`, `/trading`→`/bot`,
+    `/settings`→`/profil`. Varsayılan giriş: user `/portfoy`, admin `/` (değişmedi).
+  - Veri: yeni `src/utils/useLiveExec.js` (LivePositionsPage fetch/R-matematiğinin iki-ağ
+    birleşik hook hali; RLS zaten kullanıcıya kilitler). Sinyal tesisatı %100 `TradeContext`
+    (UserShell mount'ta canlı akışa priming — bayat localStorage backtest fetch'i engellenir).
+  - Gizlilik: stream kimliği yalnız `codenameFor`/`useStreamDisplay`; Cap+R ekonomisi "Hedef"
+    maskeli; `adminStreamInfo` ayrı lazy chunk olarak build'de doğrulandı (40 kB).
+  - `features.trading=false` → Bot sekmesi bilgi kartı (redirect yok); pending/disabled →
+    `/bot` RequireActive kapısı. `USER_PAGE_CHOICES` (`userPrefs.js`) + SettingsPage açılış
+    sayfası seçenekleri role göre. i18n: ~45 yeni EN karşılığı; `'İşlemler'` EN'i
+    'Actions'→'Trades' (eski kullanım yalnız AdminPage tablo başlığıydı).
+  - **Emülatör testi (Playwright cihaz emülasyonu):** `scratchpad/user_mode_shots.mjs` —
+    iPhone 14 / Pixel 7 / 1440px masaüstü / açık tema; GoTrue+PostgREST+Binance route-mock
+    (üretime yazmadan, sentetik mum path'leriyle TP/AKTİF/BEKLİYOR/İPTAL durumları); tüm gizli
+    rota redirect'leri assert edildi. `scratchpad/admin_mock_tour.mjs` — admin dalının eski
+    kabuğu (Sidebar+IntroPage) aynen render ettiği doğrulandı. Ekran görüntüleri:
+    `scratchpad/usermode/`. NOT: `scratchpad/login.mjs`'teki hesap **role='user'** çıktı —
+    gerçek admin hesabıyla canlı doğrulama deploy sonrası owner'da.
+
 ### 2026-07-09
 - **PUSU kartı ALTIN akışlarına da: TALOS-ICHI-X + MIDAS-X.** `/binance` (mainnet) ve `/binance-paper`
   (testnet) sayfalarındaki **Altın bölümü** satırları da tıklanır oldu → aynı `LivePositionModal`
