@@ -140,6 +140,7 @@ export default function OnboardingCard() {
           return <li key={st.key}><span className={cls}>{inner}</span></li>;
         })}
       </ol>
+      <Link to="/yardim" className="ush-onb__help">{t('Nasıl çalışır? Yardım & SSS')} →</Link>
     </section>
   );
 }

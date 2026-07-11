@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLang } from '../../context/LanguageContext';
 import { getJSON } from '../../utils/supa';
@@ -89,6 +90,21 @@ export default function BotPage() {
           </div>
         )}
       </section>
+
+      {/* Önce-Paper önerisi — henüz hiç akış çalışmıyorken göster: gerçek para
+          bağlamadan testnet anahtarıyla deneme yolu. */}
+      {!anyOn && (
+        <section className="ush-card ush-paperhint">
+          <b>💡 {t('Önce Paper’da deneyin')}</b>
+          <p>{t('Gerçek para bağlamadan önce botu sahte bakiyeyle test edebilirsiniz: Binance Futures Testnet’ten ücretsiz anahtar alın, ağ olarak Paper’ı seçip ekleyin.')}</p>
+          <div className="ush-paperhint__row">
+            <a className="ush-btn" href="https://testnet.binancefuture.com" target="_blank" rel="noreferrer">
+              {t('Testnet anahtarı al')} ↗
+            </a>
+            <Link className="ush-btn" to="/yardim">{t('Yardım & SSS')}</Link>
+          </div>
+        </section>
+      )}
 
       <div className="settings-grid ush-botgrid">
         {fresh && <SetupGuideCard />}

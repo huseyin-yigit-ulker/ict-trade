@@ -596,6 +596,68 @@ a.ush-onb__step:hover, button.ush-onb__step:hover { background: var(--chip-glass
 /* Profil — SettingsPage kendi stiliyle gelir; yalnız dış boşluk. */
 .ush-profile .settings-page { padding: 0; }
 
+/* Yardım & SSS */
+.ush-pagetitle { margin: 4px 2px 14px; font-size: 19px; }
+.ush-faq { display: flex; flex-direction: column; gap: 8px; }
+.ush-faq__item {
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+}
+.ush-faq__item > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 13px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+.ush-faq__item > summary::-webkit-details-marker { display: none; }
+.ush-faq__item > summary::after { content: '▾'; margin-left: auto; color: var(--muted); font-size: 12px; }
+.ush-faq__item[open] > summary::after { content: '▴'; }
+.ush-faq__item > p {
+  margin: 0;
+  padding: 0 16px 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.ush-help .ush-cta { margin-top: 16px; }
+.ush-helplink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 13px 16px;
+  margin-bottom: 14px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+}
+.ush-helplink:hover { border-color: var(--hover-border); }
+.ush-helplink small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ush-helplink b { margin-left: auto; color: var(--accent); }
+.ush-onb__help {
+  display: block;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.ush-onb__help:hover { color: var(--accent); }
+
+/* Önce-Paper öneri kartı */
+.ush-paperhint { margin-bottom: 16px; }
+.ush-paperhint > b { font-size: 14.5px; }
+.ush-paperhint > p { margin: 6px 0 12px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.ush-paperhint__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ush-paperhint .ush-btn { padding: 8px 14px; font-size: 13px; }
+
 /* ── Masaüstü (>768px): üst nav görünür, alt bar gizli, içerik genişler ── */
 @media (min-width: 769px) {
   .ush-nav { display: flex; }

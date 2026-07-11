@@ -381,6 +381,20 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11 (3)
+- **Yeni kullanıcı paketi 2: Yardım/SSS + önce-Paper önerisi + ilk-hafta günlük özet push'u.**
+  - **Yardım & SSS** (`/yardim`, `src/pages/user/HelpPage.jsx`): 8 soruluk statik mini rehber
+    (nasıl çalışır / güvenlik / risk / durdurma / ücretler / Paper / bildirim / sinyaller) —
+    anonimleştirme sınırına uygun (strateji mekaniği yok). Girişler: Profil üstü kısayol
+    kartı + Kurulum Adımları kartı alt linki + Bot'taki Paper kartı.
+  - **Önce-Paper önerisi** (BotPage): hiç akış çalışmıyorken 💡 kart — testnet.binancefuture.com
+    anahtar linki + Paper ağıyla risksiz deneme yönlendirmesi.
+  - **İlk-hafta günlük özeti** (`sync/newuser_digest.py` + cron `5 18 * * *`, canlı crontab'a
+    KURULDU): ilk API anahtarı ≤7 gün olan, push-abonelikli kullanıcılara akşam tek push —
+    "Bugün: N işlem, ±$X · Açık: M pozisyon · Toplam: ±$Y" (kind='system', user_prefs'e uyar;
+    aktivite yoksa 3. günden sonra susar). Salt-okunur/best-effort; `app_flags 'newuser_digest'`
+    ile kapatılır. Teslimat mevcut push_outbox --drain kuyruğundan. Dry-run doğrulandı.
+
 ### 2026-07-11 (2)
 - **Yeni kullanıcı onboarding'i: Portföy'de "Kurulum Adımları" kartı.**
   `src/components/user/OnboardingCard.jsx` — 4 canlı adım, kullanıcının kendi satırlarından

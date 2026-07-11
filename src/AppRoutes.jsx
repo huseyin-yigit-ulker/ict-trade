@@ -19,6 +19,7 @@ import TradesPage from './pages/user/TradesPage';
 import SignalsPage from './pages/user/SignalsPage';
 import BotPage from './pages/user/BotPage';
 import ProfilePage from './pages/user/ProfilePage';
+import HelpPage from './pages/user/HelpPage';
 import PusuLogo from './components/PusuLogo';
 
 // Rol çatalı (2026-07-11): admin MEVCUT arayüzün tamamını görür (aşağıdaki AdminRoutes,
@@ -68,6 +69,7 @@ const UserRoutes = () => (
       <Route path="/sinyaller" element={<SignalsPage />} />
       <Route path="/bot" element={<RequireActive><BotPage /></RequireActive>} />
       <Route path="/profil" element={<ProfilePage />} />
+      <Route path="/yardim" element={<HelpPage />} />
       {/* Push/deep-link/bookmark alias'ları — sw.js push data.url eski yolları taşıyabilir. */}
       <Route path="/binance" element={<Navigate to="/portfoy" replace />} />
       <Route path="/binance-paper" element={<Navigate to="/portfoy" replace />} />

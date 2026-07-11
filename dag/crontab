@@ -114,6 +114,10 @@
 # Kişisel push kuyruğu: executor'ların push_outbox'a yazdığı kullanıcıya-özel bildirimleri (giriş/TP/SL/
 # anahtar durumu) o kullanıcının push aboneliklerine gönderir. Broadcast push davranışı değişmedi.
 * * * * * sleep 45 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/push_notify.py --drain >> $HOME/ict-users.log 2>&1
+# Yeni kullanıcı günlük özeti (2026-07-11): ilk haftasındaki (ilk API anahtarı ≤7 gün) push-abonelikli
+# kullanıcılara akşam tek push — bugünkü işlem/K-Z + açık pozisyon + toplam. Salt-okunur, best-effort;
+# app_flags 'newuser_digest' ile kapatılabilir. Teslimat yukarıdaki --drain kuyruğundan.
+5 18 * * * cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/newuser_digest.py >> $HOME/ict-users.log 2>&1
 
 # --- MIDAS-X LIVE EXECUTION (Binance TRADIFI_PERPETUAL XAUUSDT; MAINNET 2026-07-07) ---
 # MIDAS's real-money bridge: reads the SAME mode='midas' signals (paper feed above), places a
