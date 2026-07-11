@@ -381,6 +381,14 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-11 (4)
+- **Admin arayüzü modern yenileme (yalnız görünüm).** `style.css` sonuna tek override bloğu
+  ("ADMIN MODERN REFRESH"): kartlar 6→14px köşe + yumuşak sınır + hover, kpi-hero 16px,
+  Topbar yarı saydam + blur (user header ile aynı dil), Sidebar nav hap (10px, sol çizgi
+  kaldırıldı), buton/girdi köşeleri 10px, durum filtreleri pill, livex tablo/KPI kutuları
+  12px, masaüstü modallar 16px (mobil tam-ekran davranışı değişmedi). DOM/yerleşim/işlev
+  AYNEN; geri almak = bloğu silmek. Mock-admin emülatör turuyla masaüstü+iPhone doğrulandı.
+
 ### 2026-07-11 (3)
 - **Yeni kullanıcı paketi 2: Yardım/SSS + önce-Paper önerisi + ilk-hafta günlük özet push'u.**
   - **Yardım & SSS** (`/yardim`, `src/pages/user/HelpPage.jsx`): 8 soruluk statik mini rehber

@@ -3169,3 +3169,71 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
   .admin-stats { grid-template-columns: repeat(2, 1fr); }
   .admin-ov-head { flex-wrap: wrap; }
 }
+
+/* ============================================================
+   ADMIN MODERN REFRESH (2026-07-11) — kabuğun görsel dili kullanıcı
+   moduyla (user.css) hizalandı: 12-16px köşeler, yumuşak sınırlar,
+   blur'lu yapışkan başlıklar, hap (pill) filtreler. YALNIZ görünüm;
+   yerleşim/işlev/DOM değişmedi. Override bloğu — kaynak sırası kazanır;
+   geri almak için bu bloğu sil.
+   ============================================================ */
+
+/* Kartlar — 6px köşeler 14px'e, sınırlar yumuşak, hover'da belirginleşir */
+.overview-card,
+.summary-card,
+.day-notebook {
+  border-radius: 14px;
+  border-color: var(--border-soft);
+  transition: border-color 0.15s ease;
+}
+.overview-card:hover,
+.day-notebook:hover { border-color: var(--border); }
+.kpi-hero { border-radius: 16px; }
+
+/* Yapışkan başlık — user header gibi yarı saydam + blur */
+.topbar {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom-color: var(--border-soft);
+}
+
+/* Sidebar — hap nav, yumuşak ayraçlar */
+.sidebar { border-right-color: var(--border-soft); }
+.sidebar__link {
+  border-radius: 10px;
+  padding: 8px 12px;
+  border-left: none;
+}
+.sidebar__link.active { background: rgba(245, 185, 66, 0.12); }
+.sidebar__engine { border-radius: 12px; border-color: var(--border-soft); }
+
+/* Butonlar ve girdiler — 4-6px köşeler 10px'e */
+.header-btn,
+.primary-btn,
+.icon-btn,
+.apply-btn,
+.sidebar__logout,
+.settings-select,
+.login-field input,
+.tinput,
+.coin-select {
+  border-radius: 10px;
+}
+
+/* Durum filtreleri ve segmentler — pill */
+.status-filter__btn,
+.status-filter { border-radius: 999px; }
+.seg { border-radius: 999px; overflow: hidden; }
+.chip { border-radius: 7px; }
+
+/* Tablolar (canlı panolar) — kart hissi */
+.livex__tablewrap { border-radius: 12px; border-color: var(--border-soft); }
+
+/* Modallar — masaüstünde yumuşak köşe (mobil tam-ekran davranışı değişmez) */
+@media (min-width: 769px) {
+  .modal-overlay > div { border-radius: 16px; }
+  .login-card { border-radius: 16px; }
+}
+.livex__kpi { border-radius: 12px; border-color: var(--border-soft); }
+.livex__badge, .livex__net { border-radius: 7px; }
