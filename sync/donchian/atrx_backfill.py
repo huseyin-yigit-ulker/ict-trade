@@ -25,7 +25,7 @@ Backtest-only (no live emit; live OPUS is untouched). Nightly cron refresh, like
     python sync/donchian/atrx_backfill.py --apply
 """
 from __future__ import annotations
-import sys, os, argparse
+import sys, os, json, argparse
 from pathlib import Path
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parent)); sys.path.insert(0, str(_HERE.parents[1]))
@@ -40,8 +40,11 @@ import trade_sync_common as tsc  # noqa: E402
 ST = pb.STREAMS["d30so8f3h7"]
 ATR_FAST, ATR_SLOW = 5, 20
 VERSIONS = [
-    ("d30so8f3sq", lambda x: x < 0.8),    # squeeze-only (WR play)
-    ("d30so8f3q5", lambda x: x <= 1.25),  # no-expansion / skip the worst vol bucket (totR play)
+    ("d30so8f3sq", lambda x: x < 0.8),           # squeeze-only (WR play)
+    ("d30so8f3q5", lambda x: x <= 1.25),         # no-expansion / skip the worst vol bucket (totR play)
+    ("d30so8f3bd", lambda x: 0.6 <= x < 0.8),    # sweet BAND (2026-07-12 fine-band scan: <0.6 is
+                                                 # junk-prone — 2025 negatif; 0.6-0.8 üç yılda da
+                                                 # WR 56-62 / avgR +0.20..+0.38 ile en sağlam dilim)
 ]
 
 # ── Universe (2026-07-12 owner decision: "filtreyi geçen HER sembol sinyal üretsin") ──
@@ -136,14 +139,35 @@ def main():
         sl = round(100 * sum(1 for r in closed if r["status"] == "closed_sl") / len(closed)) if closed else 0
         print(f"\n[{ver}] {len(rows)} rows · closed={len(closed)} · R={tot:+.1f} · WR={wr}% · "
               f"SLrate={sl}% · active={len(realized) - len(closed)}", flush=True)
+        # Her işlemin ATRX skoru (girişte geçerli olan D-1 değeri) -> context.atrx.
+        # Paylaşılan upsert_rows'a dokunmadan, upsert SONRASI hedefli UPDATE ile yazılır
+        # (UI'daki skor-aralığı filtresi bunu okur). rows ve realized 1:1 aynı sırada.
+        ctx_vals = []
+        for row, r in zip(rows, realized):
+            a = _atrx(r["symbol"], r["signal_ts"])
+            if not np.isnan(a):
+                # 4 basamak: 3 basamakta 0.7996 -> 0.800'e yuvarlanıp bandın (0.6-0.8) dışına
+                # düşmüş görünüyordu; UI'daki aralık filtresi bu yüzden sınır satırlarını eliyordu.
+                ctx_vals.append((row["symbol"], row["signal_time"], row["trade_type"], ver,
+                                 json.dumps({"atrx": round(float(a), 4)})))
         if args.apply:
+            from psycopg2.extras import execute_values
             conn = tsc.backtest_conn(); cur = conn.cursor()
             cur.execute(f"DELETE FROM {tsc.TABLE} WHERE version = %s", (ver,))
             deleted = cur.rowcount; conn.commit(); cur.close()
-            n = tsc.upsert_rows(conn, rows); conn.close()
-            print(f"  [DB] deleted {deleted} old, upserted {n} rows for version='{ver}'", flush=True)
+            n = tsc.upsert_rows(conn, rows)
+            cur = conn.cursor()
+            execute_values(cur, f"""
+                UPDATE {tsc.TABLE} AS t SET context = v.ctx::jsonb
+                FROM (VALUES %s) AS v(symbol, signal_time, trade_type, version, ctx)
+                WHERE t.symbol = v.symbol AND t.signal_time = v.signal_time
+                  AND t.trade_type = v.trade_type AND t.version = v.version
+            """, ctx_vals, page_size=500)
+            conn.commit(); cur.close(); conn.close()
+            print(f"  [DB] deleted {deleted} old, upserted {n} rows, ctx={len(ctx_vals)} "
+                  f"for version='{ver}'", flush=True)
         else:
-            print(f"  [dry-run] {len(rows)} rows would upsert.", flush=True)
+            print(f"  [dry-run] {len(rows)} rows would upsert (ctx={len(ctx_vals)}).", flush=True)
 
 
 if __name__ == "__main__":

@@ -1301,8 +1301,18 @@ const ChartModal = () => {
 
           {/* Motor içi istihbarat (ham strateji etiketi/kalite/konfluens/HTF-LTF) YALNIZ
               admin'e — non-admin'e ham 'DONCHIAN_BO' gibi etiketler sızıyordu (2026-07-11). */}
-          {sd.isAdmin && (activeSignal.strategy || activeSignal.quality || Number.isFinite(activeSignal.confluenceScore) || activeSignal.htfTimeframe) && (
+          {sd.isAdmin && (activeSignal.strategy || activeSignal.quality || Number.isFinite(activeSignal.confluenceScore) || activeSignal.htfTimeframe || Number.isFinite(Number(activeSignal.context?.atrx))) && (
             <div className="position-panel__intel">
+              {/* ATRX = girişten önceki gün kapanışıyla hesaplanan günlük ATR5/ATR20 skoru
+                  (ATRX-kapılı akışlarda backfill her satıra yazar). Admin-only. */}
+              {Number.isFinite(Number(activeSignal.context?.atrx)) && (
+                <div className="position-row">
+                  <span>ATRX</span>
+                  <b style={{ color: Number(activeSignal.context.atrx) < 0.8 ? '#0ECB81' : Number(activeSignal.context.atrx) > 1.25 ? '#F6465D' : 'inherit' }}>
+                    {Number(activeSignal.context.atrx).toFixed(2)}
+                  </b>
+                </div>
+              )}
               {Number.isFinite(activeSignal.confluenceScore) && !isTrailing && (
                 <div className="position-row"><span>{t('Konfluens')}</span><b style={{ color: '#F5B942' }}>{activeSignal.confluenceScore}</b></div>
               )}

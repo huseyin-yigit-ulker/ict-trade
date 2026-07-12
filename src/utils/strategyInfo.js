@@ -201,6 +201,34 @@ export const STRATEGY_INFO = {
     },
   },
 
+  d30so8f3bd: {
+    icon: '🎯', accent: '#E67E22',
+    tr: {
+      title: 'OPUS · BAND', tagline: 'OPUS ikizi + ATRX tatlı-bant kapısı (0.60 ≤ ATRX < 0.80) — günün seçilmiş sembolleri',
+      summary: 'OPUS ile BİREBİR aynı sinyal ve çıkış modeli; kapı, SQZ’nin rafine hali: sembolün günlük oynaklığı sıkışmış OLACAK ama AŞIRI ölü olmayacak — 0.60 ≤ günlük ATR(5)/ATR(20) < 0.80 (önceki gün kapanışı, bakışsız). İnce-bant taraması <0.60 diliminin güvenilmez olduğunu gösterdi (2025’te negatif; ölü/likiditesiz sembol popülasyonu); tatlı nokta 0.60-0.80 bandı. Günde medyan ~15 sembol geçer (P25 7 · P75 35) — “bugün hangi semboller aktif” listesinin işlem kitabı budur.',
+      sections: [
+        { h: 'Kapı tanımı', t: 'SQZ ile aynı ATRX metriği (günlük ATR5/ATR20, D-1 kapanışıyla; gün boyu sabit). Fark: alt sınır — ATRX<0.60 olan aşırı-derin sıkışmalar da elenir. Yani üç dilimden yalnız ortadaki alınır: aşırı-ölü (<0.6) dışarıda, tatlı bant (0.6-0.8) içeride, normal/genişlemiş (≥0.8) dışarıda.' },
+        { h: 'Neden bant, neden ilk-N değil', t: '2026-07-12 seçim analizi: “en sıkışık İLK-10” hem 2026’da (avgR +0.10 vs bandın +0.20) hem likidite-bazlı ilk-10 olarak (WR %51.7) bandın altında kaldı — derinlik sıralaması edge’i KIRPIYOR çünkü en derin sıkışma çoğu kez ölü semboldür. Sabit-N dayatmak yerine bandın kendisi filtre; pozisyon kapasitesi endişesi varsa çözüm eşzamanlı-pozisyon sınırıdır, sembol ön-seçimi değil.' },
+        { h: 'Sonuçlar (ince-bant, üç yıl)', t: '0.60-0.80 bandı: 2026 (101 sym) WR %55.8 · avgR +0.20 · +158R (n=805) · 2024 (18 sym) WR %61.8 · avgR +0.29 · +52R · 2025 WR %60.2 · avgR +0.38 · +100R. Karşılaştırma — atılan <0.60 dilimi: 2025 WR %44.9 civarı / negatif avgR; ≥0.80 dilimleri baseline’a yakın veya altında.' },
+        { h: 'SQZ / Q5 ile ilişki', t: 'BAND ⊂ SQZ (SQZ = <0.8’in tamamı = bant + riskli <0.6 dilimi). SQZ’nin 2026’daki <0.50 işlemleri parlaktı (WR %70) ama 2025’te aynı dilim para kaybetti — BAND bu oynak dilimi tamamen dışarıda bırakan “temiz” versiyondur. Q5 ise ayrı felsefe: yalnız en kötüyü atar, kalan her şeyi işler.' },
+        { h: 'Evren & çözüm', t: 'DİNAMİK evren — kapıyı geçen HER sembol: çekirdek 18 kripto-perp (kitap 2024-01’den) + 83 Binance kripto-perp (2026-01’den). Hisse-perp/metal hariç. %0.1 round-trip ücret, 1m çözüm. Gece backfill’i (atrx_backfill.py, 02:30); canlı emit YOK.' },
+      ],
+      caveat: 'Backtest-only araştırma varyantı. Bant sınırları (0.60/0.80) ince-bant taramasından seçildi — eşik-hassasiyeti riski SQZ/Q5’ten bir kademe yüksektir (iki eşik, tek dönemde kalibre edildi; üç yılda tutması güven verir ama 2026-sonrası izlenmeli). Canlıya alma kararı ayrı doğrulama ister.',
+    },
+    en: {
+      title: 'OPUS · BAND', tagline: 'OPUS twin + the ATRX sweet-band gate (0.60 ≤ ATRX < 0.80) — the day’s selected symbols',
+      summary: 'IDENTICAL signals and exit model to OPUS; the gate is SQZ refined: the symbol’s daily vol must be compressed but NOT dead — 0.60 ≤ daily ATR(5)/ATR(20) < 0.80 (previous-day close, no lookahead). The fine-band scan showed the <0.60 slice is unreliable (negative in 2025; a dead/illiquid-symbol population); the sweet spot is the 0.60-0.80 band. A median of ~15 symbols pass per day (P25 7 · P75 35) — this book is the trade record of the daily “which symbols are active” list.',
+      sections: [
+        { h: 'Gate definition', t: 'Same ATRX metric as SQZ (daily ATR5/ATR20 at D-1 close; fixed for the whole day). The difference: a lower bound — ultra-deep squeezes with ATRX<0.60 are also skipped. Of the three slices, only the middle is taken: ultra-dead (<0.6) out, sweet band (0.6-0.8) in, normal/expanded (≥0.8) out.' },
+        { h: 'Why a band, not top-N', t: 'The 2026-07-12 selection study: “the 10 most squeezed” underperformed the band both by depth ranking (2026 avgR +0.10 vs the band’s +0.20) and by liquidity ranking (51.7% WR) — depth ranking CUTS the edge because the deepest squeeze is often a dead symbol. Rather than forcing a fixed N, the band itself is the filter; if position capacity is the concern, cap concurrent positions, not the symbol pre-selection.' },
+        { h: 'Results (fine-band, three years)', t: 'The 0.60-0.80 band: 2026 (101 sym) WR 55.8% · avgR +0.20 · +158R (n=805) · 2024 (18 sym) WR 61.8% · avgR +0.29 · +52R · 2025 WR 60.2% · avgR +0.38 · +100R. For contrast — the dropped <0.60 slice: ~45-51% WR / negative avgR in 2025; the ≥0.80 slices sit at or below baseline.' },
+        { h: 'Relation to SQZ / Q5', t: 'BAND ⊂ SQZ (SQZ = all of <0.8 = the band + the risky <0.6 slice). SQZ’s <0.50 trades shone in 2026 (70% WR) but the same slice lost money in 2025 — BAND is the “clean” version that leaves that unstable slice out entirely. Q5 is a different philosophy: drop only the worst, trade everything else.' },
+        { h: 'Universe & resolution', t: 'DYNAMIC universe — ANY symbol passing the gate: core 18 crypto-perps (book from 2024-01) + 83 more Binance crypto-perps (from 2026-01). Stock-perps/metals excluded. 0.1% round-trip fee, 1m resolution. Nightly backfill (atrx_backfill.py, 02:30); NO live emit.' },
+      ],
+      caveat: 'Backtest-only research variant. The band edges (0.60/0.80) were picked from the fine-band scan — threshold-sensitivity risk is one notch above SQZ/Q5 (two thresholds, calibrated in one pass; holding across three years is reassuring but watch it beyond 2026). Going live would need separate validation.',
+    },
+  },
+
   // 🥇 MIDAS — gold-only intraday VWAP-trend (INDEPENDENT from the Donchian book).
   midas: {
     icon: '🥇', accent: '#D4AF37',

@@ -134,7 +134,7 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `30 0 * * *` | `sync_daily.py --stream all` | nightly resolve (all streams) |
 | `45 0 * * *` | `sync_daily.py --stream d30_4h_so` (cap 6) | scale-out 6R |
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
-| `30 2 * * *` | `donchian/atrx_backfill.py --apply` | **OPUS·SQZ + OPUS·Q5** backtest refresh (ATRX-kapılı OPUS ikizleri, dinamik 18+83 sembol evreni, 2026-07-12) |
+| `30 2 * * *` | `donchian/atrx_backfill.py --apply` | **OPUS·SQZ + OPUS·Q5 + OPUS·BAND** backtest refresh (ATRX-kapılı OPUS ikizleri, dinamik 18+83 sembol evreni, 2026-07-12) |
 | `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh (live emit retired 2026-07-07; re-enable command in the crontab comment) |
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `* * * * *` (+30s) | `talos/canli.py --emit --lookback-min 3 --sl-step 0` | **TALOS** emit + trailing track + Telegram |
@@ -399,6 +399,28 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
     push_notify maskeleri. Canlı OPUS'a ve LIVE_STREAM_KEYS'e dokunulmadı.
   - ✅ Cron KURULU (2026-07-12): `30 2 * * * cd $HOME/ict-trade && .venv/bin/python
     sync/donchian/atrx_backfill.py --apply >> $HOME/ict-sync.log 2>&1`.
+
+### 2026-07-12 (4)
+- **ATRX SKORU işlem satırlarında + Backtest'te SKOR-ARALIĞI filtresi (admin-only).**
+  - `atrx_backfill.py` artık her satıra `context = {"atrx": <D-1 skoru>}` yazar (upsert SONRASI
+    hedefli UPDATE — paylaşılan `tsc.upsert_rows`/`_COLS` sözleşmesine dokunulmadı).
+  - Dashboard'a **ATRX SKOR** pill şeridi (yalnız `ATRX_STREAM_KEYS` akışları + backtest modu +
+    admin): Tümü · <0.60 · **0.60-0.80 (bant)** · 0.80-1.00 · 1.00-1.25 · ≥1.25. Seçim TÜM
+    türetimleri süzer (KPI hero, kümülatif eğri, R-histogramı, yıl/ay/gün kartları) — `viewSignals`
+    tek kaynak. ChartModal istihbarat panelinde ATRX satırı (yeşil <0.8 / kırmızı >1.25).
+  - TradeContext: `ATRX_STREAM_KEYS` export'u; bu 3 versiyonda backtest fetch'i sembol
+    allow-list'ini ATLAR (dinamik 101-sembol evreni UI'da tam görünsün diye).
+
+### 2026-07-12 (3)
+- **OPUS·BAND (`d30so8f3bd` / VELA): ATRX tatlı-bant üçüncü ikiz + "ilk-10" analizi.**
+  - Kullanıcı sorusu "kapıyı geçenlerden 10 sembol seçsem?" → ince-bant taraması: tatlı nokta
+    **0.60 ≤ ATRX < 0.80** (WR %55.8/61.8/60.2, avgR +0.20/+0.29/+0.38 — üç yıl). **<0.60 dilimi
+    güvenilmez** (2025 negatif; ölü-sembol popülasyonu). "En sıkışık İLK-10" ve "likidite İLK-10"
+    sıralamaları bandı YENEMEDİ (2026 avgR +0.10 / WR %51.7 vs bandın +0.20) → sabit-N ön-seçimi
+    yerine bant filtresi; kapasite endişesi varsa eşzamanlı-pozisyon sınırı önerildi.
+  - `atrx_backfill.py` VERSIONS'a `d30so8f3bd` (0.6≤atrx<0.8) eklendi; UI tam kayıt (Sidebar,
+    VELA codename, OPUS·BAND admin adı, strategyInfo tam kart tr/en, TradeContext, push mask).
+    Bant günde medyan ~15 sembol geçirir (P25 7 · P75 35).
 
 ### 2026-07-12 (2)
 - **ATRX ikizlerinin evreni GENİŞLETİLDİ: "kapıyı geçen her sembol sinyal üretsin".**

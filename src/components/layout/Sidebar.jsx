@@ -107,9 +107,10 @@ const GROUPS = [
   // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07, talos 2026-07-08 canlıdan buraya indi) ──
   { key: 'talos',      icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
-  // ATRX-kapılı ATLAS ikizleri (2026-07-12): squeeze (WR) + genişleme-atla (totR)
+  // ATRX-kapılı ATLAS ikizleri (2026-07-12): squeeze (WR) + genişleme-atla (totR) + tatlı-bant
   { key: 'd30so8f3sq', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3q5', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'd30so8f3bd', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'donchianc',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd1h_so4c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd1h_so6c',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },

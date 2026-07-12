@@ -43,6 +43,7 @@ export const CODENAMES = {
   // ATRX-kapılı ATLAS ikizleri (2026-07-12 sembol-durum çalışması; backtest-only)
   d30so8f3sq: 'PYXIS',
   d30so8f3q5: 'CARINA',
+  d30so8f3bd: 'VELA',
 };
 
 // ── ürün sınırı: CANLI (işlem açılabilir) akışlar vs backtest-only araştırma varyantları ──

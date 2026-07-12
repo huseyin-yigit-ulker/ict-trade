@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useTradeContext, isHalfFor } from '../context/TradeContext';
+import { useTradeContext, isHalfFor, ATRX_STREAM_KEYS } from '../context/TradeContext';
 import { useLang } from '../context/LanguageContext';
+import { useStreamDisplay } from '../utils/useStreamDisplay';
 import { scaleOutLiveR, isScaleOutStrategy, soCapFromStrategy, isConfirmStrategy, soBookFromStrategy } from '../utils/liveR';
 import Sparkline from './viz/Sparkline';
 import PusuLogo from './PusuLogo';
@@ -193,6 +194,64 @@ const Dashboard = () => {
   // MIDAS/TALOS (trailing-stop, no fixed TP/SL R:R): cards show Entry + Exit + the realised result only —
   // no R:R pill, no Hedef/Risk row, no risk/reward bar (those imply a fixed target that doesn't exist).
   const isTrailing = strategy === 'midas' || strategy === 'talos' || strategy === 'talos_ichi';
+
+  // ── ATRX skor-aralığı filtresi (yalnız SQZ/Q5/BAND akışları; ADMIN-only — skor adı/eşikler
+  // mekanik sızdırır). Aralık seçilince TÜM türetimler (KPI, eğri, histogram, gün kartları)
+  // seçili dilime göre yeniden hesaplanır. sig.context.atrx = backfill'in yazdığı D-1 skoru.
+  const streamDisp = useStreamDisplay();   // admin mi? (ATRX skor filtresi admin-only)
+  const isAtrxStream = ATRX_STREAM_KEYS.has(strategy);
+  const [atrxRange, setAtrxRange] = useState(null);   // null=tümü, yoksa [lo, hi] (null uç = sınırsız)
+  useEffect(() => { setAtrxRange(null); }, [strategy, mode]);   // akış/mod değişince sıfırla
+  const viewSignals = useMemo(() => {
+    if (!isAtrxStream || !atrxRange) return filteredSignals;
+    const [lo, hi] = atrxRange;
+    return filteredSignals.filter((s) => {
+      const a = Number(s?.context?.atrx);
+      if (!Number.isFinite(a)) return false;
+      return (lo == null || a >= lo) && (hi == null || a < hi);
+    });
+  }, [filteredSignals, isAtrxStream, atrxRange]);
+  const ATRX_PRESETS = [
+    { label: 'Tümü', range: null },
+    { label: '<0.60', range: [null, 0.6] },
+    { label: '0.60-0.80 (bant)', range: [0.6, 0.8] },
+    { label: '0.80-1.00', range: [0.8, 1.0] },
+    { label: '1.00-1.25', range: [1.0, 1.25] },
+    { label: '≥1.25', range: [1.25, null] },
+  ];
+  const sameRange = (a, b) => (a === b) || (!!a && !!b && a[0] === b[0] && a[1] === b[1]);
+  const renderAtrxFilter = () => {
+    if (!isAtrxStream || mode !== 'backtest' || !streamDisp.isAdmin) return null;
+    return (
+      <div className="atrx-filter" style={{
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        margin: '0 0 12px', padding: '8px 12px', borderRadius: 10,
+        border: '1px solid var(--border, #2a2f3a)', background: 'var(--panel, rgba(255,255,255,0.02))',
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, opacity: 0.75 }}>
+          ATRX SKOR
+        </span>
+        {ATRX_PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => setAtrxRange(p.range)}
+            style={{
+              fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+              border: `1px solid ${sameRange(atrxRange, p.range) ? '#F0B90B' : 'var(--border, #2a2f3a)'}`,
+              background: sameRange(atrxRange, p.range) ? 'rgba(240,185,11,0.15)' : 'transparent',
+              color: 'inherit',
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
+        <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 'auto' }}>
+          {viewSignals.length}/{filteredSignals.length} işlem
+        </span>
+      </div>
+    );
+  };
 
   // Shimmer placeholders while the first fetch is in flight — prevents the
   // misleading "Sinyal yok." flash before data arrives.
@@ -389,7 +448,7 @@ const Dashboard = () => {
   // 23:00 açılışlı bir bar 00:00'da yayınlanan sinyalini önceki güne koyar.
   const groupedLive = useMemo(() => {
     if (mode !== 'live') return {};
-    return filteredSignals.reduce((acc, sig) => {
+    return viewSignals.reduce((acc, sig) => {
       const effDate = effectiveSignalTime(sig) || sig.dateObj;
       const dateKey = effDate.toLocaleDateString(locale, {
         timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
@@ -398,13 +457,13 @@ const Dashboard = () => {
       acc[dateKey].push(sig);
       return acc;
     }, {});
-  }, [filteredSignals, mode, locale]);
+  }, [viewSignals, mode, locale]);
 
   // Backtest hiyerarşik veri seti
   const backtestSignals = useMemo(() => {
     if (mode !== 'backtest') return [];
-    return [...filteredSignals].sort((a, b) => b.dateObj - a.dateObj);
-  }, [mode, filteredSignals]);
+    return [...viewSignals].sort((a, b) => b.dateObj - a.dateObj);
+  }, [mode, viewSignals]);
 
   const yearBuckets = useMemo(() => {
     const byYear = backtestSignals.reduce((acc, sig) => {
@@ -549,32 +608,32 @@ const Dashboard = () => {
     if (mode === 'backtest') {
       // Derive everything from the SAME filtered, in-view set as the spark/histogram,
       // so headline + curve + bins stay consistent and react to symbol/date filters.
-      if (!filteredSignals.length) return null;
-      const closedList = filteredSignals.filter((x) => x.status === 'TP' || x.status === 'SL');
+      if (!viewSignals.length) return null;
+      const closedList = viewSignals.filter((x) => x.status === 'TP' || x.status === 'SL');
       const closedR = closedList.map((x) => (Number.isFinite(x.pnlR) ? x.pnlR : 0));
       const sumPos = closedR.reduce((a, r) => a + (r > 0 ? r : 0), 0);
       const sumNeg = closedR.reduce((a, r) => a + (r < 0 ? r : 0), 0);
       const wins = closedList.filter((x) => x.status === 'TP').length;
       closedTrades = closedList.length;
-      totalTrades = filteredSignals.length;
+      totalTrades = viewSignals.length;
       winRate = closedTrades ? (wins / closedTrades) * 100 : 0;
       totalR = closedR.reduce((a, r) => a + r, 0);
       exp = closedTrades ? totalR / closedTrades : 0;
       pf = sumNeg !== 0 ? sumPos / Math.abs(sumNeg) : null;
-      cum = downsample(cumulativeR(filteredSignals, calculatePnL), 80);
-      hist = rHistogram(filteredSignals.map((x) => x.pnlR));
+      cum = downsample(cumulativeR(viewSignals, calculatePnL), 80);
+      hist = rHistogram(viewSignals.map((x) => x.pnlR));
     } else {
-      if (!filteredSignals.length) return null;
-      const c = summarizeLiveCounts(filteredSignals);
-      if (isSO) tp1Agg = summarizeTp1(filteredSignals);   // TP1-reached count + summed live R
+      if (!viewSignals.length) return null;
+      const c = summarizeLiveCounts(viewSignals);
+      if (isSO) tp1Agg = summarizeTp1(viewSignals);   // TP1-reached count + summed live R
       const denom = c.tp + c.sl;
       winRate = denom ? (c.tp / denom) * 100 : 0;
       totalR = c.rScore;
       pf = null;
       exp = denom ? c.rScore / denom : 0;
-      totalTrades = filteredSignals.length;
+      totalTrades = viewSignals.length;
       closedTrades = denom;
-      const asc = [...filteredSignals].sort((a, b) => a.dateObj - b.dateObj);
+      const asc = [...viewSignals].sort((a, b) => a.dateObj - b.dateObj);
       const rs = asc.map((sig) => liveOutcomeR(sig, liveStatuses[sig.id]?.status, halfFor(sig), isSO, soCapR, soConservative, soBookFrac));
       let cc = 0;
       cum = downsample(rs.map((r) => (cc += r)), 80);
@@ -661,7 +720,7 @@ const Dashboard = () => {
   const renderMidasSessions = () => {
     if (!isTrailing) return null;
     const agg = {};
-    filteredSignals.forEach((s) => {
+    viewSignals.forEach((s) => {
       const h = new Date(s.dateObj).getUTCHours();
       const sess = MIDAS_SESSIONS.find((x) => x.test(h));
       if (!sess) return;
@@ -1069,6 +1128,7 @@ const Dashboard = () => {
     <div id="dashboard" className="visible" style={{ opacity: 1, display: 'block' }}>
       {renderError()}
       <StrategyIntro />
+      {renderAtrxFilter()}
       {renderKpiHero()}
       {renderMidasSessions()}
       {isTrailing && mode === 'live' && (
@@ -1076,7 +1136,7 @@ const Dashboard = () => {
           <MidasLiveChart variant={strategy} />
         </div>
       )}
-      {filteredSignals.length === 0 && (
+      {viewSignals.length === 0 && (
         <div className="dash-empty">
           <PusuLogo size={46} className="dash-empty__logo" animated />
           <div className="dash-empty__title">{t('Sinyal yok.')}</div>
