@@ -12,6 +12,8 @@ export { STRATEGY_INFO, infoFor } from './strategyInfo';
 export const REAL_NAMES = {
   d30so8f3h7: 'OPUS',
   d30so8f3vg: 'FABLE',
+  d30so8f3sq: 'OPUS·SQZ',
+  d30so8f3q5: 'OPUS·Q5',
   midas: 'MIDAS',
   talos: 'TALOS',
   talos_ichi: 'TALOS-ICHI',
@@ -39,6 +41,8 @@ export const REAL_NAMES = {
 export const REAL_LABELS = {
   d30so8f3h7: 'OPUS · DONCHIAN 30m+4h·WR 8R ·b30·7g',
   d30so8f3vg: 'FABLE · DONCHIAN 30m+4h·WR 8R ·b30·7g ·VolGate0.9',
+  d30so8f3sq: 'OPUS·SQZ · DONCHIAN 30m+4h·WR 8R ·b30·7g ·ATRX<0.8 (günlük squeeze — WR oyunu)',
+  d30so8f3q5: 'OPUS·Q5 · DONCHIAN 30m+4h·WR 8R ·b30·7g ·ATRX≤1.25 (genişleme-atla — totR oyunu)',
   midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing·paper)',
   talos: 'TALOS · ALTIN Keltner-Trend (XAU 1m·trailing·backtest)',
   talos_ichi: 'TALOS-ICHI · ALTIN Keltner+Ichimoku (XAU 1m·trailing·MAINNET gerçek-para)',

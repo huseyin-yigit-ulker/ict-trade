@@ -144,6 +144,63 @@ export const STRATEGY_INFO = {
     },
   },
 
+  // 🌀 ATRX-kapılı OPUS ikizleri (2026-07-12 sembol-durum çalışması) — backtest-only.
+  // Tam kart anahtarı = version tag (infoFor'un suffix-türetmesini bilerek kısa devre eder).
+  d30so8f3sq: {
+    icon: '🌀', accent: '#9B59B6',
+    tr: {
+      title: 'OPUS · SQZ', tagline: 'OPUS ikizi + günlük oynaklık-SIKIŞMASI kapısı (ATRX<0.8) — yüksek-WR ucu',
+      summary: 'OPUS (d30so8f3h7) ile BİREBİR aynı sinyal ve çıkış modeli (30m Donchian kırılım + 4h yön onayı, +0.5R confirm giriş, TP1’de %30 bankla, runner cap 8R, 7 gün, kripto-only evren); tek fark bir SEMBOL-DURUM kapısı: sinyal yalnızca sembolün GÜNLÜK oynaklığı sıkışmışken alınır — ATRX = günlük ATR(5)/ATR(20) < 0.8, bir önceki günün kapanışıyla hesaplanır (bakışsız). Fikir: Donchian kırılımı, oynaklık sıkışmasından ÇIKARKEN çalışır; kırılım geldiğinde patlama daha öndedir.',
+      sections: [
+        { h: 'Kapı tanımı', t: 'Her sembol için günlük barlardan ATR(5)/ATR(20) oranı (ATRX). Sinyal gününden STRİKT önceki günün değeri kullanılır — gün içi hiçbir bilgi sızmaz. ATRX<0.8 = son 5 günün ortalama gerçek aralığı, 20-günlük ortalamanın %80’inin altında (sıkışma). Geçemeyen sinyal hiç alınmaz; pozisyon zinciri (tek-poz/sembol, reverse) kalan sinyallerle yeniden kurulur.' },
+        { h: 'Neden bu kapı (çalışmanın özeti)', t: '2026-07-12 taraması: 101 Binance kripto perp × 2026-H1, canlı-ikiz motorla 3.245 işlem, 39 bakışsız sembol-durum senaryosu (hacim bantları, gün/hafta/ay kaybeden-kazananları, dip/tepe yakınlığı, trend hizası, BTC-görece güç…). Hepsi 2024-25’te gerçek dinamik-evren backtest’iyle OOS doğrulandı. SONUÇ: ATRX ailesi dışındaki HER koşul yıldan yıla işaret değiştirdi (ör. 2026’nın yıldızı “hacim 1.3-2×” OOS’ta WR %47 + negatif R). Sıkışma/genişleme üç yılda da aynı yönde tutan TEK durumdu.' },
+        { h: 'Sonuçlar (dinamik-evren, ATRX<0.8)', t: '2024 (18 sym): WR %58.6 · avgR +0.22 · +51.9R (baseline %53.0 · +0.06 · +51.6R). 2025: WR %55.0 · avgR +0.22 · +83.9R (baseline %54.3 · +0.17 · +201.1R). 2026-H1 (101 sym): WR %56.4 · avgR +0.195 · +193.7R (baseline %54.0 · +0.10 · +311.4R). WR ve R/işlem ÜÇ yılda da baseline üstü.' },
+        { h: 'Bedeli', t: 'İşlem sayısı ~1/3’e düşer ve iyi yıllarda toplam R’ın bir kısmından vazgeçilir (2025: +84 vs +201). Bu akış WR/verim ucudur: eğri düzgünleşir, işlem başına R 2-4 katına çıkar, ama mutlak R hedefliyorsan kardeşi OPUS·Q5’e bak.' },
+        { h: 'Evren & çözüm', t: 'OPUS ile aynı 18 kripto-perp evreni, aynı 1m-veri çözümü, %0.1 round-trip ücret. Gece backfill’i (atrx_backfill.py) 2024-01’den bugüne kitabı tazeler; canlı emit YOK.' },
+      ],
+      caveat: 'Backtest-only araştırma varyantı — canlı OPUS’a dokunulmadı. Etki mütevazı ve 2025’te WR marjı ince (+0.7 puan); 39-senaryo taramasından sağ çıkan tek aile olması güven verir ama çoklu-test riski sıfır değildir. Canlıya alma kararı ayrı bir doğrulama ister.',
+    },
+    en: {
+      title: 'OPUS · SQZ', tagline: 'OPUS twin + a daily volatility-SQUEEZE gate (ATRX<0.8) — the high-WR end',
+      summary: 'IDENTICAL signals and exit model to OPUS (d30so8f3h7: 30m Donchian breakout + 4h confirm, +0.5R confirm entry, book 30% at TP1, 8R runner cap, 7-day limit, crypto-only universe); the one difference is a SYMBOL-STATE gate: a signal is taken only while the symbol’s DAILY volatility is compressed — ATRX = daily ATR(5)/ATR(20) < 0.8, computed at the previous day’s close (no lookahead). The idea: Donchian breakouts work coming OUT of a squeeze; by the time vol has already expanded, the breakout is late.',
+      sections: [
+        { h: 'Gate definition', t: 'Per symbol, the daily-bar ATR(5)/ATR(20) ratio (ATRX). The value of the day STRICTLY before the signal’s day is used — nothing intraday leaks. ATRX<0.8 = the last 5 days’ average true range sits below 80% of the 20-day average (a squeeze). A failing signal is never taken; the position chain (one-pos/symbol, reverses) is re-walked on the surviving signals.' },
+        { h: 'Why this gate (the study)', t: '2026-07-12 scan: 101 Binance crypto perps × 2026-H1, 3,245 trades on the live-twin engine, 39 lookahead-free symbol-state scenarios (volume bands, daily/weekly/monthly losers & winners, low/high proximity, trend alignment, BTC-relative strength…). All were OOS-validated on 2024-25 as TRUE dynamic-universe re-walks. RESULT: every condition except the ATRX family flipped sign across years (e.g. 2026’s star “volume 1.3-2×” went to 47% WR and negative R OOS). Squeeze/expansion was the ONLY state that held all three years.' },
+        { h: 'Results (dynamic universe, ATRX<0.8)', t: '2024 (18 sym): WR 58.6% · avgR +0.22 · +51.9R (baseline 53.0% · +0.06 · +51.6R). 2025: WR 55.0% · avgR +0.22 · +83.9R (baseline 54.3% · +0.17 · +201.1R). 2026-H1 (101 sym): WR 56.4% · avgR +0.195 · +193.7R (baseline 54.0% · +0.10 · +311.4R). WR and R/trade beat baseline in ALL three years.' },
+        { h: 'The cost', t: 'Trade count drops to ~1/3 and good years give up part of the total R (2025: +84 vs +201). This stream is the WR/efficiency end: smoother curve, 2-4× R per trade — if you want absolute R, see its sibling OPUS·Q5.' },
+        { h: 'Universe & resolution', t: 'Same 18 crypto-perp universe as OPUS, same 1m-data resolution, 0.1% round-trip fee. The nightly backfill (atrx_backfill.py) refreshes the book from 2024-01; NO live emit.' },
+      ],
+      caveat: 'Backtest-only research variant — live OPUS is untouched. The effect is modest and the 2025 WR margin thin (+0.7pt); being the sole survivor of a 39-scenario scan is reassuring but multiple-testing risk is not zero. Going live would need its own validation.',
+    },
+  },
+  d30so8f3q5: {
+    icon: '🛡️', accent: '#16A085',
+    tr: {
+      title: 'OPUS · Q5', tagline: 'OPUS ikizi + genişleme-ATLA kapısı (ATRX≤1.25) — toplam-R’ı koruyan uç',
+      summary: 'OPUS (d30so8f3h7) ile BİREBİR aynı sinyal ve çıkış modeli; tek fark: günlük oynaklığı ZATEN patlamış sembollere girilmez — ATRX = günlük ATR(5)/ATR(20) > 1.25 ise sinyal atlanır (önceki gün kapanışıyla, bakışsız). OPUS·SQZ’nin gevşek kardeşi: sıkışma ŞART DEĞİL, sadece en kötü durum kovası (aşırı genişleme, ~Q5) elenir. İşlemlerin ~%85’i kalır; amaç WR patlatmak değil, üç yılda da baseline’ın üstünde toplam R.',
+      sections: [
+        { h: 'Kapı tanımı', t: 'OPUS·SQZ ile aynı ATRX metriği (günlük ATR5/ATR20, D-1 kapanışı). Fark eşik: <0.8 yerine ≤1.25 — yani yalnız “oynaklık son 5 günde 20-günlük ortalamanın %125’ini aşmış” semboller elenir. Kuintil analizi bu kovanın (Q5) üç yılda da EN KÖTÜ olduğunu gösterdi: avgR 2026 −0.04 / 2024 −0.12 / 2025 en düşük.' },
+        { h: 'Neden (çalışmanın özeti)', t: 'Aynı 2026-07-12 taraması (101 sembol × 39 senaryo + 2024-25 dinamik-evren OOS). Genişleme-atla, tarama boyunca toplam R’ı ÜÇ yılda da baseline üstüne çıkaran TEK kural oldu: kırılım sinyali oynaklık patlamasının ARDINDAN geliyorsa ortalamada geç kalmıştır — trend zaten koşmuş, stop geniş, runner’a alan dar.' },
+        { h: 'Sonuçlar (dinamik-evren, ATRX≤1.25)', t: '2024 (18 sym): +62.5R vs baseline +51.6R (WR %53.5 vs %53.0). 2025: +212.4R vs +201.1R (WR %55.3 vs %54.3, avgR +0.20 vs +0.17). 2026-H1 (101 sym): +332.4R vs +311.4R (avgR +0.12 vs +0.10). Üç yılda da toplam R baseline üstü; işlem sayısı yalnızca ~%15 azalır.' },
+        { h: 'SQZ ile karşılaştırma', t: 'SQZ = WR oyunu (WR %55-59, işlem 1/3, iyi yılda R bırakır). Q5 = totR oyunu (kazanç mütevazı +10..21R/yıl ama yönü hiç şaşırmadı, davranış OPUS’a en yakın). Canlı filtre adayı olarak önce izlenmesi gereken bu uçtur; SQZ ise “yüksek isabet” vitrini.' },
+        { h: 'Evren & çözüm', t: 'OPUS ile aynı 18 kripto-perp evreni, aynı 1m-veri çözümü, %0.1 round-trip ücret. Gece backfill’i (atrx_backfill.py) 2024-01’den bugüne kitabı tazeler; canlı emit YOK.' },
+      ],
+      caveat: 'Backtest-only araştırma varyantı — canlı OPUS’a dokunulmadı. Kazanç payı küçüktür (yılda ~+10..21R, %5-7); bu bir “çöpü at” sigortasıdır, alfa makinesi değil. Çoklu-test riski için not: 39 senaryodan üç yıl tutarlı kalan tek aile ATRX idi.',
+    },
+    en: {
+      title: 'OPUS · Q5', tagline: 'OPUS twin + a skip-the-EXPANSION gate (ATRX≤1.25) — the totR-preserving end',
+      summary: 'IDENTICAL signals and exit model to OPUS (d30so8f3h7); the one difference: symbols whose daily volatility has ALREADY blown out are skipped — if ATRX = daily ATR(5)/ATR(20) > 1.25 the signal is not taken (previous-day close, no lookahead). The looser sibling of OPUS·SQZ: a squeeze is NOT required, only the worst state bucket (extreme expansion, ~Q5) is removed. ~85% of trades survive; the goal is not a WR spike but total R above baseline in all three years.',
+      sections: [
+        { h: 'Gate definition', t: 'Same ATRX metric as OPUS·SQZ (daily ATR5/ATR20 at D-1 close). Only the threshold differs: ≤1.25 instead of <0.8 — i.e. only symbols whose 5-day vol exceeds 125% of the 20-day average are skipped. Quintile analysis showed this bucket (Q5) is the WORST in all three years: avgR 2026 −0.04 / 2024 −0.12 / 2025 the lowest.' },
+        { h: 'Why (the study)', t: 'Same 2026-07-12 scan (101 symbols × 39 scenarios + 2024-25 dynamic-universe OOS). Skip-the-expansion was the ONLY rule in the whole scan that lifted total R above baseline in ALL three years: a breakout arriving AFTER the vol explosion is on average late — the trend has run, the stop is wide, the runner has little room.' },
+        { h: 'Results (dynamic universe, ATRX≤1.25)', t: '2024 (18 sym): +62.5R vs baseline +51.6R (WR 53.5% vs 53.0%). 2025: +212.4R vs +201.1R (WR 55.3% vs 54.3%, avgR +0.20 vs +0.17). 2026-H1 (101 sym): +332.4R vs +311.4R (avgR +0.12 vs +0.10). Total R beats baseline all three years; trade count falls only ~15%.' },
+        { h: 'vs SQZ', t: 'SQZ = the WR play (55-59% WR, 1/3 the trades, gives up R in good years). Q5 = the totR play (modest +10..21R/yr gains but the direction never flipped; behaviour closest to OPUS). As a live-filter candidate this end should be watched first; SQZ is the “high hit-rate” showcase.' },
+        { h: 'Universe & resolution', t: 'Same 18 crypto-perp universe as OPUS, same 1m-data resolution, 0.1% round-trip fee. The nightly backfill (atrx_backfill.py) refreshes the book from 2024-01; NO live emit.' },
+      ],
+      caveat: 'Backtest-only research variant — live OPUS is untouched. The edge is small (~+10..21R/yr, 5-7%); this is a “skip the junk” insurance, not an alpha machine. Multiple-testing note: of 39 scenarios, ATRX was the only family consistent across three years.',
+    },
+  },
+
   // 🥇 MIDAS — gold-only intraday VWAP-trend (INDEPENDENT from the Donchian book).
   midas: {
     icon: '🥇', accent: '#D4AF37',

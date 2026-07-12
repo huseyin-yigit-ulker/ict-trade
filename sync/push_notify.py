@@ -58,6 +58,10 @@ _DELETE = "DELETE FROM ict_trade.push_subscriptions WHERE id = %s"
 # with streamMask.CODENAMES. Longest-first replacement so 'MIDAS-X' wins over 'MIDAS'.
 _MASK_MAP = [
     ("MIDAS-X", "SIRIUS-X"),
+    ("OPUS·SQZ", "PYXIS"),     # longest-first: OPUS'tan ÖNCE gelmeli
+    ("OPUS·Q5", "CARINA"),
+    ("d30so8f3sq", "PYXIS"),
+    ("d30so8f3q5", "CARINA"),
     ("OPUS", "ATLAS"),
     ("FABLE", "NOVA"),
     ("MIDAS", "SIRIUS"),

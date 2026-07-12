@@ -40,6 +40,9 @@ export const CODENAMES = {
   d30so4f3: 'HYDRA',
   d30so6f3: 'CORVUS',
   d30so8f3: 'DRACO',
+  // ATRX-kapılı ATLAS ikizleri (2026-07-12 sembol-durum çalışması; backtest-only)
+  d30so8f3sq: 'PYXIS',
+  d30so8f3q5: 'CARINA',
 };
 
 // ── ürün sınırı: CANLI (işlem açılabilir) akışlar vs backtest-only araştırma varyantları ──

@@ -134,6 +134,7 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `30 0 * * *` | `sync_daily.py --stream all` | nightly resolve (all streams) |
 | `45 0 * * *` | `sync_daily.py --stream d30_4h_so` (cap 6) | scale-out 6R |
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
+| `10 1 * * *` | `donchian/atrx_backfill.py --apply` | **OPUS·SQZ + OPUS·Q5** backtest refresh (ATRX-kapılı OPUS ikizleri, 2026-07-12) |
 | `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh (live emit retired 2026-07-07; re-enable command in the crontab comment) |
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `* * * * *` (+30s) | `talos/canli.py --emit --lookback-min 3 --sl-step 0` | **TALOS** emit + trailing track + Telegram |
@@ -380,6 +381,24 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
+
+### 2026-07-12
+- **OPUS·SQZ + OPUS·Q5: ATRX-kapılı OPUS ikizleri (backtest-only) ana işlem menüsünde.**
+  - 2026-07-12 sembol-durum çalışması (101 Binance kripto perp × 39 bakışsız senaryo, 2024-25
+    dinamik-evren OOS doğrulamalı; scriptler `scratchpad/opus_scn_*.py` + `opus_dyn_*.py`):
+    hacim/momentum/dip-tepe koşullarının HEPSİ yıldan yıla işaret değiştirdi; üç yılda da tutan
+    tek durum **günlük ATRX = ATR(5)/ATR(20)** (D-1 kapanışı, bakışsız) idi.
+  - Yeni backtest versiyonları (OPUS sinyal+çıkış modeli birebir, yalnız sembol-durum kapısı):
+    **`d30so8f3sq` / OPUS·SQZ / PYXIS** — ATRX<0.8 squeeze-only (WR oyunu: WR %55-59 her yıl);
+    **`d30so8f3q5` / OPUS·Q5 / CARINA** — ATRX≤1.25 genişleme-atla (totR oyunu: üç yılda da
+    baseline üstü). Motor: `sync/donchian/atrx_backfill.py` (`--dry-run`/`--apply`, DELETE+upsert
+    idempotent, tek event-build'den iki versiyon türetir).
+  - UI: Sidebar backtest bölümü + streamMask CODENAMES (PYXIS/CARINA) + adminStreamInfo
+    REAL_NAMES/REAL_LABELS + `strategyInfo.js`'e iki TAM detaylı kart (tr+en: kapı tanımı,
+    çalışma gerekçesi, 3-yıl sayılar, bedel/karşılaştırma, caveat) + TradeContext 4 harita +
+    push_notify maskeleri. Canlı OPUS'a ve LIVE_STREAM_KEYS'e dokunulmadı.
+  - ⏳ Cron: `10 1 * * * cd $HOME/ict-trade && .venv/bin/python sync/donchian/atrx_backfill.py
+    --apply >> $HOME/ict-sync.log 2>&1` satırı crontab'a EL İLE eklenecek (oturum izni yoktu).
 
 ### 2026-07-11 (7)
 - **Kullanıcı modunda grafik varsayılanı NATIVE + istihbarat paneli sızıntı düzeltmesi.**
