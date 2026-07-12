@@ -134,7 +134,7 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `30 0 * * *` | `sync_daily.py --stream all` | nightly resolve (all streams) |
 | `45 0 * * *` | `sync_daily.py --stream d30_4h_so` (cap 6) | scale-out 6R |
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
-| `10 1 * * *` | `donchian/atrx_backfill.py --apply` | **OPUS·SQZ + OPUS·Q5** backtest refresh (ATRX-kapılı OPUS ikizleri, 2026-07-12) |
+| `30 2 * * *` | `donchian/atrx_backfill.py --apply` | **OPUS·SQZ + OPUS·Q5** backtest refresh (ATRX-kapılı OPUS ikizleri, dinamik 18+83 sembol evreni, 2026-07-12) |
 | `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh (live emit retired 2026-07-07; re-enable command in the crontab comment) |
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `* * * * *` (+30s) | `talos/canli.py --emit --lookback-min 3 --sl-step 0` | **TALOS** emit + trailing track + Telegram |
@@ -397,8 +397,17 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
     REAL_NAMES/REAL_LABELS + `strategyInfo.js`'e iki TAM detaylı kart (tr+en: kapı tanımı,
     çalışma gerekçesi, 3-yıl sayılar, bedel/karşılaştırma, caveat) + TradeContext 4 harita +
     push_notify maskeleri. Canlı OPUS'a ve LIVE_STREAM_KEYS'e dokunulmadı.
-  - ✅ Cron KURULU (2026-07-12): `10 1 * * * cd $HOME/ict-trade && .venv/bin/python
+  - ✅ Cron KURULU (2026-07-12): `30 2 * * * cd $HOME/ict-trade && .venv/bin/python
     sync/donchian/atrx_backfill.py --apply >> $HOME/ict-sync.log 2>&1`.
+
+### 2026-07-12 (2)
+- **ATRX ikizlerinin evreni GENİŞLETİLDİ: "kapıyı geçen her sembol sinyal üretsin".**
+  - `atrx_backfill.py` artık DİNAMİK evren koşar: çekirdek 18 kripto-perp (kitap 2024-01'den) +
+    83 ek Binance kripto-perp (kitap 2026-01'den — paylaşımlı 1m cache'in başladığı yer;
+    hisse-perp + metal hariç). Delisted/veri-yok semboller per-symbol try/except ile atlanır.
+  - Cron 01:10 → **02:30**'a taşındı (101-sembollük iş 01:20-01:50 backfill kümesiyle
+    çakışmasın). strategyInfo kartları + adminStreamInfo etiketleri dinamik evreni anlatacak
+    şekilde güncellendi (83 sembol yalnız 2026 kitabına katkı verir — caveat'ta belirtildi).
 
 ### 2026-07-11 (7)
 - **Kullanıcı modunda grafik varsayılanı NATIVE + istihbarat paneli sızıntı düzeltmesi.**

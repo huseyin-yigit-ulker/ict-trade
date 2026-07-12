@@ -15,6 +15,10 @@ scenarios on 101 Binance crypto perps, the ATRX family was the ONLY condition th
 2024 AND 2025 AND 2026 as a true dynamic-universe re-walk. Everything else (volume bands,
 weekly losers/winners, 30d-low proximity...) flipped sign out-of-sample.
 
+Universe = DYNAMIC, not OPUS's fixed 18: the CORE 18 (book from 2024-01) + 83 more Binance
+crypto perps (book from 2026-01, where the shared 1m cache starts) — any symbol passing the
+ATRX gate generates signals ("filtreyi geçen her sembol sinyal üretsin", 2026-07-12).
+
 Backtest-only (no live emit; live OPUS is untouched). Nightly cron refresh, like volgate.
 
     python sync/donchian/atrx_backfill.py --dry-run
@@ -34,11 +38,31 @@ import portfolio_backfill as pb  # noqa: E402
 import trade_sync_common as tsc  # noqa: E402
 
 ST = pb.STREAMS["d30so8f3h7"]
-W_START = pd.Timestamp("2024-01-01", tz="UTC")
 ATR_FAST, ATR_SLOW = 5, 20
 VERSIONS = [
     ("d30so8f3sq", lambda x: x < 0.8),    # squeeze-only (WR play)
     ("d30so8f3q5", lambda x: x <= 1.25),  # no-expansion / skip the worst vol bucket (totR play)
+]
+
+# ── Universe (2026-07-12 owner decision: "filtreyi geçen HER sembol sinyal üretsin") ──
+# CORE = OPUS'un 18 kripto perp'i, kitap 2024-01-01'den (çok-yıllık 1m cache mevcut).
+# BROAD = çalışmanın kalan 83 Binance kripto perp'i (hisse-perp + metal HARİÇ), kitap
+# 2026-01-01'den — 1m cache kapsamı burada başlar; daha erken başlatmak her sembol için
+# ~2 yıl 1m fetch'i gerektirirdi. Delisted/veri-yok semboller per-symbol try/except ile atlanır.
+CORE_START = pd.Timestamp("2024-01-01", tz="UTC")
+BROAD_START = pd.Timestamp("2026-01-01", tz="UTC")
+BROAD_SYMBOLS = [
+    "1000BONKUSDT", "1000FLOKIUSDT", "1000LUNCUSDT", "1000SHIBUSDT", "2ZUSDT", "AAVEUSDT",
+    "AEROUSDT", "ALGOUSDT", "APTUSDT", "ASTERUSDT", "ATOMUSDT", "BCHUSDT", "BEATUSDT", "BSVUSDT",
+    "BUSDT", "CAKEUSDT", "CCUSDT", "CFXUSDT", "CRVUSDT", "DASHUSDT", "DEXEUSDT", "DOTUSDT",
+    "ENAUSDT", "ETCUSDT", "ETHFIUSDT", "FFUSDT", "FILUSDT", "GRASSUSDT", "GRTUSDT", "GWEIUSDT",
+    "HBARUSDT", "HYPEUSDT", "ICPUSDT", "INJUSDT", "JASMYUSDT", "JSTUSDT", "JTOUSDT", "JUPUSDT",
+    "KAIAUSDT", "KASUSDT", "KITEUSDT", "LABUSDT", "LDOUSDT", "LITUSDT", "LTCUSDT", "MONUSDT",
+    "MORPHOUSDT", "MUSDT", "NIGHTUSDT", "OPUSDT", "PENDLEUSDT", "PENGUUSDT", "PIEVERSEUSDT",
+    "POLUSDT", "PUMPUSDT", "PYTHUSDT", "QNTUSDT", "RENDERUSDT", "SEIUSDT", "SKYUSDT", "SPXUSDT",
+    "STABLEUSDT", "STRKUSDT", "STXUSDT", "SUNUSDT", "TAOUSDT", "TIAUSDT", "TRUMPUSDT", "TRXUSDT",
+    "UBUSDT", "UNIUSDT", "VELVETUSDT", "VETUSDT", "VIRTUALUSDT", "VVVUSDT", "WLDUSDT", "WLFIUSDT",
+    "XLMUSDT", "XMRUSDT", "XPLUSDT", "XTZUSDT", "ZECUSDT", "ZROUSDT",
 ]
 
 _D: dict = {}
@@ -77,14 +101,15 @@ def main():
     g.add_argument("--dry-run", action="store_true"); g.add_argument("--apply", action="store_true")
     args = ap.parse_args()
     w_end = pd.Timestamp.now(tz="UTC")
-    syms = list(ST.symbols or pb.SYMBOLS)
-    print(f"=== ATRX twins of d30so8f3h7 | {W_START.date()}..{w_end.date()} | {len(syms)} symbols ===",
-          flush=True)
+    core = list(ST.symbols or pb.SYMBOLS)
+    plan = [(s, CORE_START) for s in core] + [(s, BROAD_START) for s in BROAD_SYMBOLS]
+    print(f"=== ATRX twins of d30so8f3h7 | core {len(core)} sym ({CORE_START.date()}..) + "
+          f"broad {len(BROAD_SYMBOLS)} sym ({BROAD_START.date()}..) -> {w_end.date()} ===", flush=True)
 
     kept = {v: [] for v, _ in VERSIONS}
-    for sym in syms:
+    for sym, w_start in plan:
         try:
-            ev = pb.build_events(sym, ST, W_START, w_end)
+            ev = pb.build_events(sym, ST, w_start, w_end)
         except Exception as e:  # noqa: BLE001
             print(f"  ! {sym}: {type(e).__name__}: {e}", flush=True)
             continue
@@ -99,7 +124,9 @@ def main():
         print(f"  {sym:<14} {len(ev):>4} events -> {' '.join(counts)}", flush=True)
 
     for ver, _ in VERSIONS:
-        realized = pb.walk(kept[ver], ST, W_START, w_end)
+        # CORE_START güvenli: _load_1m cache varken baş tarafı fetch etmez (yalnız kuyruk);
+        # broad sembollerin frame'i cache'in başladığı yerden gelir ve tüm event'lerini kapsar.
+        realized = pb.walk(kept[ver], ST, CORE_START, w_end)
         rows = pb.to_rows(realized, ST)
         for r in rows:
             r["version"] = ver                      # override d30so8f3h7 -> gated tag
