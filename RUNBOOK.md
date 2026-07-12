@@ -397,8 +397,8 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
     REAL_NAMES/REAL_LABELS + `strategyInfo.js`'e iki TAM detaylı kart (tr+en: kapı tanımı,
     çalışma gerekçesi, 3-yıl sayılar, bedel/karşılaştırma, caveat) + TradeContext 4 harita +
     push_notify maskeleri. Canlı OPUS'a ve LIVE_STREAM_KEYS'e dokunulmadı.
-  - ⏳ Cron: `10 1 * * * cd $HOME/ict-trade && .venv/bin/python sync/donchian/atrx_backfill.py
-    --apply >> $HOME/ict-sync.log 2>&1` satırı crontab'a EL İLE eklenecek (oturum izni yoktu).
+  - ✅ Cron KURULU (2026-07-12): `10 1 * * * cd $HOME/ict-trade && .venv/bin/python
+    sync/donchian/atrx_backfill.py --apply >> $HOME/ict-sync.log 2>&1`.
 
 ### 2026-07-11 (7)
 - **Kullanıcı modunda grafik varsayılanı NATIVE + istihbarat paneli sızıntı düzeltmesi.**
