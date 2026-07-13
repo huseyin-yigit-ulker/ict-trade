@@ -135,6 +135,7 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `45 0 * * *` | `sync_daily.py --stream d30_4h_so` (cap 6) | scale-out 6R |
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
 | `30 2 * * *` | `donchian/atrx_backfill.py --apply` | **OPUS·SQZ + OPUS·Q5 + OPUS·BAND** backtest refresh (ATRX-kapılı OPUS ikizleri, dinamik 18+83 sembol evreni, 2026-07-12) |
+| `0 2 * * *` | `talos_gate/backfill.py --apply` | **TALOS·4H (CRUX) + TALOS-ICHI·4H (LYNX)** backtest refresh (yavaş trend-yönü kapılı altın ikizleri, 2026-07-13) |
 | `20 1 * * *` | `volgate_backfill.py --apply` | FABLE backtest refresh (live emit retired 2026-07-07; re-enable command in the crontab comment) |
 | `30 1 * * *` | `midas/backfill.py --apply` | MIDAS backtest refresh |
 | `* * * * *` (+30s) | `talos/canli.py --emit --lookback-min 3 --sl-step 0` | **TALOS** emit + trailing track + Telegram |
@@ -383,6 +384,50 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-13
+- **ALTIN yavaş trend-yönü kapılı TALOS ikizleri — `talos_dg` (CRUX) + `talos_kdg` (LYNX). BACKTEST-ONLY.**
+  - **Köken:** "OPUS ve TALOS altında aynı yönde sinyal verince işlem açalım" konfluans sorusu
+    (scratchpad/gold_confluence/). Üç kademede eledi: (1) katı eş-zamanlılık (OPUS'un XAU'da pozisyonu
+    AÇIKKEN TALOS tetikler) ÖLÜ — 45 işlem, avgR iyileşmesi sıfır; (2) kapı gevşetilince (OPUS'un son
+    kırılım yönü) avgR +0.235→+0.409; (3) **ablasyon OPUS'u eledi** — aynı işi sade bir **4h Donchian(55)
+    orta-çizgi** kapısı daha iyi yapıyor (avgR +0.448), ER kapısı/4h confirm/confirm-fill makinesi olmadan.
+    OPUS altında kendi başına gürültü (2026: 42 işlem, +3.6R). **Konfluans YOK; değerli olan yavaş yön.**
+  - **`talos_dg` (CRUX)** = TALOS + 4h kapı — *totR oyunu*. XAU 2026: 335tr/+78.9R/PF1.45 → **238tr/+106.7R/
+    avgR+0.448/PF1.90/maxDD−9.6**. PAXG 3-yıl: +41.7R → **+178.9R** (her yıl avgR artar).
+  - **`talos_kdg` (LYNX)** = TALOS + **Kumo ∧ 4h kapı** — *kalite/DD oyunu, hayatta-kalma varyantı*.
+    XAU 2026: **171tr/+105.2R/avgR+0.615/WR%45/PF2.30/maxDD−8.8** (aynı parayı %28 az işlem, %29 az DD ile).
+    PAXG 3-yıl **+129.9R**, avgR +0.194 / PF 1.35 / maxDD **−36.5** (hepsi ailenin EN İYİSİ; TALOS maxDD
+    −195.0). En kötü yıl (2024) zararı −174.6R → **−17.6R** (~10 kat). Risk-getiri (totR/maxDD): TALOS 0.21 ·
+    Kumo 0.60 · CRUX 2.73 · **LYNX 3.56**.
+  - **Doğrulama:** plato DÜZ ve GENİŞ (tf 2h/4h/8h × lookback 30/40/55/70/90 = 15 hücrenin 15'i baseline'ı
+    yener, 14'ü "her yıl avgR artar"ı geçer; varsayılan 4h/55 ızgaradan seçilmedi, OPUS'tan a-priori miras).
+    Null A (dairesel kaydırma, katı): LYNX 4 hücrenin **3'ünde** geçer — Kumo (2/4) ve 4h kapı (2/4) tek
+    başına yapamıyor. Null B (rastgele-düşürme): LYNX 3/4 ✅ + 1 zayıf. Tek zayıf yıl 2025, ama o yıl HER
+    yön filtresi kalıyor (Kumo %69 ile en kötüsü) → yıla özgü.
+  - **🔬 SEMANTİK KEŞFİ — doğrulanan kitap ≠ ship edilen kitap.** Bu motora filtre uygulamanın İKİ yolu var
+    ve aynı şey DEĞİLLER: **PRE** = `side` dizisini maskele + walk'ı yeniden koş (**canlı kodun yaptığı**),
+    **POST** = TALOS'un hazır kitabından eleme. Motor TEK-POZİSYONLU olduğu için PRE'de elenen sinyal motoru
+    BOŞ bırakır ve TALOS'un hiç girmediği **"doğan"** işlemler kitaba girer. `talos_ichi`'nin ship gerekçesi
+    (`scratchpad/fx_gold/talos_ichi_validate.py::apply_kumo`) **POST**'u ölçmüştü, canlı **PRE** koşuyor:
+    PAXG 3-yıl POST **+107.2R** vs PRE **+55.2R** (doğan işlemler 227tr / **−53.7R** / 3 yılın 3'ünde zarar).
+    XAU'da işaret TERSİNE döner (doğanlar +18.7R, PRE +107.8 > POST +86.8) → **canlı P&L'de acil bug YOK,
+    executor'e dokunulmadı**; ama TALOS-ICHI'nin çok-yıl karnesi kayıtlıdan zayıf. Yeni akışlar PRE
+    (canlı-sadık) yazılır; kapıda POST/PRE farkı önemsiz (XAU: POST +101.5 vs PRE +105.2).
+  - **Canlı filtre DEĞİŞTİRİLMEDİ.** TALOS-ICHI-X gerçek parayla Kumo ile koşmaya devam ediyor: XAUUSDT'de
+    (gerçek sembol) Kumo ile 4h kapı **istatistiksel olarak ayırt edilemez** (+107.8R vs +106.7R, net −1.1R;
+    ayrıştıkları %32'lik işlem kümesinin İKİSİ de değersiz — avgR +0.106 vs +0.091). Kapının üstünlüğü
+    TAMAMEN PAXG vekilinden geliyor. Bu iki akış, gerçek parayı riske atmadan canlı Kumo'nun yanında koşup
+    ayrışmayı ölçmek için var.
+  - **Kod:** `sync/talos_gate/strategy.py` + `backfill.py` (tek motor, iki version). UI: `streamMask.js`
+    CODENAMES (CRUX/LYNX) + `adminStreamInfo.js` REAL_NAMES/REAL_LABELS + `strategyInfo.js` tam kartlar
+    (admin-only lazy chunk). Backtest DB'ye yazıldı (238 + 171 satır). `LIVE_STREAM_KEYS`'te YOK =
+    backtest-only, yalnız admin'e (veya `user_features.backtest=true`) görünür.
+  - ⚠️ **Çekinceler:** 2024 kapıyla bile ZARARDA (CRUX −51.8R / LYNX −17.6R) — rejim kalkanı değil, hasar
+    azaltıcı. Maliyet $0.50/oz ECN-FX; Binance taker'da (~$4/oz) aile zaten negatif. XAU vadeli verisi
+    2025-12-11'de başlar → çok-yıl OOS PAXG vekiliyle. Filtre kombinasyonu bir ARAMA sonucu (denenen:
+    OPUS-BIAS / 4h Donchian / 4h EMA200 / ham 30m kırılım / Kumo / kesişimler).
+  - ⏳ **Cron BEKLİYOR (kurulmadı — sahip onayı gerekli):** `0 2 * * * cd $HOME/ict-trade &&
+    $HOME/ict-trade/.venv/bin/python sync/talos_gate/backfill.py --apply >> $HOME/ict-talos-gate.log 2>&1`
+    Kurulana kadar kitap 2026-07-13 tarihli tek seferlik backfill'de donmuş kalır.
 - **Paylaşılabilir işlem linkleri: `/p/<token>` — 1 saatlik, login gerektirmeyen public grafik.**
   - Admin, CANLI bir işlemin grafiğini (ChartModal başlığındaki **Paylaş** butonu) tek tıkla public
     bir linke çevirir; link panoya kopyalanır ve **60 dk** sonra kendiliğinden ölür. Buton yalnız

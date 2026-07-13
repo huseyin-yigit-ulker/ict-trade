@@ -44,6 +44,9 @@ export const CODENAMES = {
   d30so8f3sq: 'PYXIS',
   d30so8f3q5: 'CARINA',
   d30so8f3bd: 'VELA',
+  // Yavaş trend-yönü kapılı ALTIN ikizleri (2026-07-13 konfluans çalışması; backtest-only)
+  talos_dg: 'CRUX',
+  talos_kdg: 'LYNX',
 };
 
 // ── ürün sınırı: CANLI (işlem açılabilir) akışlar vs backtest-only araştırma varyantları ──
