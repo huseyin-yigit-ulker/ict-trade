@@ -1026,6 +1026,46 @@ real maker fill-rate/slippage study, not mainnet P&L.
   fx-gününün ilk sinyalini tasarım gereği atlar. `talos_exec` hâlâ eski (60 sn) pencereyi taşır; cron'da
   emekli, yeniden armanmadan önce port edilmeli.
 
+### 2026-07-13 — ⛔ MIDAS EMEKLİ: backtest-only'ye indi (canlı emit + MIDAS-X executor KAPATILDI)
+
+**Sahip kararı:** "MIDAS'ı backtest tarafına taşıyalım, paper account'a da canlı işlem açmayalım. Canlıda
+şu an OPUS ve TALOS-ICHI çalışsın."
+
+**Emeklilik öncesi güvenlik kontrolü (kapatmadan ÖNCE yapıldı):**
+- DB `midas_positions`: 13 CLOSED + 4 CANCELLED → **açık/bekleyen pozisyon YOK**.
+- Testnet borsa (`position_risk` + `open_orders`, XAUUSDT): **0 açık pozisyon · 0 bekleyen emir**.
+- Yani sahipsiz bırakılan emir/pozisyon yok; kapatma güvenli.
+
+**Kapatılanlar (savunma katmanları — üçü birden):**
+1. **Cron** (3 satır yorumlandı): `midas/canli.py --emit` (paper sinyal emit + trailing track),
+   `midas_exec/executor.py`, `midas_exec/safety_sweep.py`. Geri alma talimatı crontab'da yazılı.
+2. **`.env`**: `MIDAS_EXEC_ENABLED=false` + `MIDAS_EXEC_DRY_RUN=true` (fail-closed).
+3. **DB**: `user_stream_settings` (midas, testnet) `enabled=false`. Ayrıca tutarlılık için
+   (talos, testnet) da `enabled=false` — TALOS-X'in cron'u zaten yorumluydu ama DB satırı açık kalmıştı
+   (latent tuzak: cron geri açılsa TALOS-X silahlanırdı). `talos_positions` BOŞ, güvenli.
+
+**Doğrulama:** `sync/midas_exec/executor.py` elle koşturulduğunda banner artık `DRY-RUN (no orders)` +
+`0 exec user-network row(s) loaded` → hem .env hem DB kapısı kapalı, emir açması imkânsız.
+(Bkz. bilinen tuzak: `.env` process env'i EZER, banner tek güvenilir kaynaktır.)
+
+**DEVAM EDEN:** gece backfill'i `30 1 * * * sync/midas/backfill.py --apply` (version='midas') —
+kitap her gece tazelenir, MIDAS Dashboard'da araştırma/backtest akışı olarak yaşamaya devam eder.
+Sadece **hiçbir işlem açılmaz** (paper dahil).
+
+**UI:** `streamMask.js` `LIVE_STREAM_KEYS` = `['d30so8f3h7', 'talos_ichi']` (midas çıkarıldı → artık
+`isResearchStream`, yani yalnız admin'e / `user_features.backtest=true` olan kullanıcıya görünür).
+`adminStreamInfo.js` etiketi + `strategyInfo.js` MIDAS kartının caveat'ı güncellendi (tr+en).
+
+**Gerekçe (kayda geçsin):** MIDAS'ın çok-yıl OOS'u zaten breakeven/negatifti ve FX-maliyet modeli
+($0.50/oz) Binance taker'da (~$4/oz) çöküyordu — yani gerçek-para yolu kapalıydı. Paper executor'ün
+tek işlevi altyapı doğrulamasıydı; o iş bitti (TALOS-ICHI-X aynı köprüyü mainnet'te koşuyor).
+
+**CANLI SET ARTIK: OPUS (kripto, gerçek para) + TALOS-ICHI-X (altın, gerçek para). Başka hiçbir şey.**
+
+**Geri alma:** crontab'daki 3 satırın `# ` işaretini kaldır + `.env` `MIDAS_EXEC_ENABLED=true` /
+`MIDAS_EXEC_DRY_RUN=false` + `user_stream_settings` (midas,testnet) `enabled=true` + `streamMask.js`
+`LIVE_STREAM_KEYS`'e `'midas'` geri ekle.
+
 <!-- NEXT ENTRY GOES ABOVE THIS LINE -->
 ```
 ### YYYY-MM-DD — <summary> (commit <hash>)

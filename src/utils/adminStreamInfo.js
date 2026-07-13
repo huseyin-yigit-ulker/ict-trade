@@ -47,7 +47,7 @@ export const REAL_LABELS = {
   d30so8f3sq: 'OPUS·SQZ · DONCHIAN 30m+4h·WR 8R ·b30·7g ·ATRX<0.8 (günlük squeeze — WR oyunu · dinamik 101-sym evren)',
   d30so8f3q5: 'OPUS·Q5 · DONCHIAN 30m+4h·WR 8R ·b30·7g ·ATRX≤1.25 (genişleme-atla — totR oyunu · dinamik 101-sym evren)',
   d30so8f3bd: 'OPUS·BAND · DONCHIAN 30m+4h·WR 8R ·b30·7g ·ATRX 0.6-0.8 (tatlı bant — <0.6 çöp-riski dışarıda · dinamik 101-sym evren)',
-  midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing·paper)',
+  midas: 'MIDAS · ALTIN VWAP-Trend (XAU 1m·trailing·backtest — 2026-07-13 canlıdan indi)',
   talos: 'TALOS · ALTIN Keltner-Trend (XAU 1m·trailing·backtest)',
   talos_ichi: 'TALOS-ICHI · ALTIN Keltner+Ichimoku (XAU 1m·trailing·MAINNET gerçek-para)',
   talos_dg: 'TALOS·4H · ALTIN Keltner + 4h-Donchian(55) yön kapısı (XAU 1m·trailing·backtest — totR oyunu)',

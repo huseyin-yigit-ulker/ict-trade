@@ -58,7 +58,11 @@ export const CODENAMES = {
 // 2026-07-07: TALOS (talos/ANTARES) eklendi — 3. canlı akış, PAPER-only (executor'u yok).
 // 2026-07-08: TALOS → araştırma/backtest'e indirildi; yerine TALOS-ICHI (talos_ichi/MENKAR) canlı
 // PAPER akışı geldi (Ichimoku Kumo yön filtreli TALOS; tam doğrulama bataryasını geçti). Executor YOK.
-export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'midas', 'talos_ichi'];
+// 2026-07-13: MIDAS (SIRIUS) → BACKTEST-ONLY (sahip kararı). Canlı emit + MIDAS-X testnet/paper
+// executor'ü emekli; gece backfill'i (version='midas') devam eder, yani kitap taze kalır ama HİÇBİR
+// işlem açılmaz. CANLI SET ARTIK YALNIZ 2 AKIŞ: OPUS (kripto, gerçek para) + TALOS-ICHI (altın,
+// gerçek para). TALOS-X testnet satırı da kapatıldı (DB enabled=false + cron zaten yorumlu).
+export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'talos_ichi'];
 
 /** True = backtest-only araştırma varyantı (canlı olmayan herhangi bir codename). */
 export const isResearchStream = (key) => !!CODENAMES[key] && !LIVE_STREAM_KEYS.includes(key);

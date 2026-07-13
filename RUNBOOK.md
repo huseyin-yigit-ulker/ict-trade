@@ -130,7 +130,7 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `0 * * * *` | `donchian/canli.py --emit --no-telegram` (1h breakout, silent — feeds nightly `donchianc` resolve) | Donchian 1h |
 | `0,30 * * * *` | `donchian/canli.py --emit --tf 30m --confirm-htf 4h --name OPUS` | **OPUS** emit |
 | `0,30 * * * *` | `… --rr 6 --no-telegram` | 6R twin (silent) |
-| `* * * * *` | `midas/canli.py --emit --lookback-min 3 --sl-step 0` | **MIDAS** emit + trailing track + Telegram |
+| ~~`* * * * *`~~ | ~~`midas/canli.py --emit`~~ | ⛔ **EMEKLİ 2026-07-13** — MIDAS backtest-only'ye indi (canlı emit YOK) |
 | `30 0 * * *` | `sync_daily.py --stream all` | nightly resolve (all streams) |
 | `45 0 * * *` | `sync_daily.py --stream d30_4h_so` (cap 6) | scale-out 6R |
 | `0 1 * * *` | `sync_daily.py --stream d30_4h_so` (cap 8) | scale-out 8R |
@@ -144,8 +144,12 @@ Applied with `crontab dag/crontab`. All times UTC. (See §8 for safety on the re
 | `*/3 * * * *` (+55s) | `talos_exec/safety_sweep.py` | TALOS-X safety guard (XAUUSDT-scoped, testnet) |
 | `*/2 * * * *` | `live_exec/executor.py` | **REAL-MONEY** OPUS reconciler |
 | `*/5 * * * *` | `live_exec/safety_sweep.py` | executor safety guard |
-| `* * * * *` | `midas_exec/executor.py` | **MIDAS-X** reconciler (**REAL-MONEY mainnet** since 2026-07-07) |
-| `*/3 * * * *` | `midas_exec/safety_sweep.py` | MIDAS-X safety guard (XAUUSDT-scoped) |
+| ~~`* * * * *`~~ | ~~`midas_exec/executor.py`~~ | ⛔ **EMEKLİ 2026-07-13** — MIDAS-X kapatıldı (DB flat + testnet borsa 0 poz/0 emir doğrulandı) |
+| ~~`*/3 * * * *`~~ | ~~`midas_exec/safety_sweep.py`~~ | ⛔ **EMEKLİ 2026-07-13** (sahipsiz pozisyon yok — sweep'e gerek kalmadı) |
+
+> **CANLI SET (2026-07-13'ten itibaren): OPUS (kripto, gerçek para) + TALOS-ICHI-X (altın, gerçek para).**
+> Başka hiçbir akış işlem açmaz. MIDAS / TALOS / TALOS-X / FABLE / CRUX / LYNX ve tüm Donchian varyantları
+> backtest-only (gece backfill'leri döner, kitapları tazedir; emir açmazlar).
 | `* * * * *` (+40s) | `users/verify_keys.py` | multi-user API-key verification |
 | `* * * * *` (+45s) | `push_notify.py --drain` | personal Web-Push outbox drain |
 
@@ -384,6 +388,26 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-13
+- **⛔ MIDAS EMEKLİ — backtest-only'ye indi. CANLI SET ARTIK YALNIZ OPUS + TALOS-ICHI-X.**
+  - Sahip kararı: "MIDAS'ı backtest tarafına taşıyalım, paper account'a da canlı işlem açmayalım."
+  - **Kapatmadan ÖNCE güvenlik kontrolü:** DB `midas_positions` 13 CLOSED + 4 CANCELLED (açık YOK) ·
+    testnet borsa XAUUSDT **0 açık pozisyon / 0 bekleyen emir** → sahipsiz emir bırakılmadı.
+  - **Üç savunma katmanı birden kapatıldı:** (1) cron — `midas/canli.py --emit`, `midas_exec/executor.py`,
+    `midas_exec/safety_sweep.py` yorumlandı (geri-alma talimatı crontab'da); (2) `.env` —
+    `MIDAS_EXEC_ENABLED=false` + `MIDAS_EXEC_DRY_RUN=true`; (3) DB — `user_stream_settings`
+    (midas,testnet) `enabled=false`.
+  - **Bonus tuzak kapatıldı:** (talos,testnet) satırı da `enabled=false` yapıldı. TALOS-X'in cron'u zaten
+    yorumluydu ama DB satırı açık kalmıştı — biri cron'u geri açsa TALOS-X silahlanırdı. `talos_positions` BOŞ.
+  - **Doğrulama:** `midas_exec/executor.py` elle koşunca banner `DRY-RUN (no orders)` + `0 exec
+    user-network row(s) loaded` → emir açması imkânsız. (Bilinen tuzak: `.env` process env'i EZER; banner
+    tek güvenilir kaynak.)
+  - **DEVAM EDER:** gece backfill `30 1 * * * midas/backfill.py --apply` (version='midas') — kitap taze kalır,
+    MIDAS Dashboard'da araştırma akışı olarak yaşar, ama **hiçbir işlem açmaz** (paper dahil).
+  - **UI:** `LIVE_STREAM_KEYS` = `['d30so8f3h7','talos_ichi']` → MIDAS artık `isResearchStream` (yalnız admin /
+    `user_features.backtest=true`). Etiket + strateji kartı caveat'ı (tr+en) güncellendi.
+  - **Gerekçe:** MIDAS'ın çok-yıl OOS'u zaten breakeven/negatifti ve FX-maliyet modeli ($0.50/oz) Binance
+    taker'da (~$4/oz) çöküyordu — gerçek-para yolu kapalıydı. Paper executor'ün tek işlevi altyapı
+    doğrulamasıydı; o iş bitti (TALOS-ICHI-X aynı köprüyü mainnet'te koşuyor). Detay: MIDAS.md 2026-07-13.
 - **ALTIN yavaş trend-yönü kapılı TALOS ikizleri — `talos_dg` (CRUX) + `talos_kdg` (LYNX). BACKTEST-ONLY.**
   - **Köken:** "OPUS ve TALOS altında aynı yönde sinyal verince işlem açalım" konfluans sorusu
     (scratchpad/gold_confluence/). Üç kademede eledi: (1) katı eş-zamanlılık (OPUS'un XAU'da pozisyonu
