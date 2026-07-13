@@ -67,6 +67,14 @@ export const LIVE_STREAM_KEYS = ['d30so8f3h7', 'talos_ichi'];
 /** True = backtest-only araştırma varyantı (canlı olmayan herhangi bir codename). */
 export const isResearchStream = (key) => !!CODENAMES[key] && !LIVE_STREAM_KEYS.includes(key);
 
+// ── ALTIN "iz-süren stop" ailesi (MIDAS motoru: 1m bar, 1.5×ATR stop, SABİT HEDEF YOK, 3.5×ATR
+// trailing / 8s / seans-sonu). Bu akışlarda grafik hayalet TP/SL hedef çizgisi ÇİZMEZ, durum
+// context.pos'tan otoriter okunur ve canlı yenileme 30sn'de bir olur (Donchian'ın 15dk'lık bar
+// hizasına değil). Tek kaynak: yeni bir altın ikizi eklenince SADECE burayı güncelle — daha önce
+// bu kontrol 5 ayrı dosyada `=== 'midas' || 'talos' || ...` diye elle tekrarlanıyordu.
+export const TRAILING_STREAMS = ['midas', 'talos', 'talos_ichi', 'talos_dg', 'talos_kdg'];
+export const isTrailingStream = (key) => TRAILING_STREAMS.includes(key);
+
 const SLUG_TO_KEY = Object.fromEntries(
   Object.entries(CODENAMES).map(([key, code]) => [code.toLowerCase(), key]),
 );

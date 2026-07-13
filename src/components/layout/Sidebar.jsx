@@ -100,13 +100,18 @@ const IconShield = () => (
 // strings live in a separate lazy chunk — see utils/streamMask.js). Leaf URLs use
 // the codename slug (slugFor) so raw stream keys never appear in the address bar.
 const GROUPS = [
-  // ── canlı modül: OPUS + TALOS-ICHI (gerçek-para) + MIDAS (paper altın; 2026-07-08 MIDAS-X emekli) ──
+  // ── canlı modül: SADECE OPUS + TALOS-ICHI (ikisi de gerçek-para). 2026-07-13: MIDAS buradan
+  //    indirildi (canlı emit + MIDAS-X paper executor emekli) → artık backtest-only. ──
   { key: 'd30so8f3h7', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
   { key: 'talos_ichi', icon: <IconIntel />, modes: ['live', 'backtest'], live: true, real: true, section: 'live' },
-  { key: 'midas',      icon: <IconIntel />, modes: ['live', 'backtest'], live: true, paper: true, section: 'live' },
-  // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07, talos 2026-07-08 canlıdan buraya indi) ──
+  // ── backtest-only araştırma akışları (d30so8f3vg 2026-07-07, talos 2026-07-08, midas 2026-07-13
+  //    canlıdan buraya indi) ──
+  { key: 'midas',      icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'talos',      icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3vg', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  // Yavaş trend-yönü kapılı ALTIN ikizleri (2026-07-13): 4h kapı (CRUX) + Kumo∧4h (LYNX)
+  { key: 'talos_dg',   icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
+  { key: 'talos_kdg',  icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   // ATRX-kapılı ATLAS ikizleri (2026-07-12): squeeze (WR) + genişleme-atla (totR) + tatlı-bant
   { key: 'd30so8f3sq', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },
   { key: 'd30so8f3q5', icon: <IconIntel />, modes: ['backtest'], section: 'backtest' },

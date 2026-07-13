@@ -35,9 +35,11 @@ export const STREAMS = [
   S('d30so8f3q5', 'scaleout'),   // 2026-07-12: ATRX≤1.25 genişleme-atla OPUS ikizi (backtest-only)
   S('d30so8f3bd', 'scaleout'),   // 2026-07-12: ATRX 0.6-0.8 tatlı-bant OPUS ikizi (backtest-only)
   // ── altın akışları ──
-  S('midas', 'full'),
+  S('midas', 'full'),        // 2026-07-13: backtest-only'ye indi (canlı emit + MIDAS-X executor emekli)
   S('talos', 'full'),
-  S('talos_ichi', 'full'),   // araştırma/paper: TALOS + Ichimoku Kumo yön filtresi
+  S('talos_ichi', 'full'),   // canlı gerçek-para akışı (TALOS-ICHI-X)
+  S('talos_dg', 'full'),     // 2026-07-13: TALOS + 4h Donchian yön kapısı (CRUX, backtest-only)
+  S('talos_kdg', 'full'),    // 2026-07-13: TALOS + Kumo ∧ 4h kapı (LYNX, backtest-only)
 ];
 
 // Session cache, shared across the login showcase and the intro hub.
