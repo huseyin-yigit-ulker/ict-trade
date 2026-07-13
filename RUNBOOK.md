@@ -425,9 +425,9 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
     azaltıcı. Maliyet $0.50/oz ECN-FX; Binance taker'da (~$4/oz) aile zaten negatif. XAU vadeli verisi
     2025-12-11'de başlar → çok-yıl OOS PAXG vekiliyle. Filtre kombinasyonu bir ARAMA sonucu (denenen:
     OPUS-BIAS / 4h Donchian / 4h EMA200 / ham 30m kırılım / Kumo / kesişimler).
-  - ⏳ **Cron BEKLİYOR (kurulmadı — sahip onayı gerekli):** `0 2 * * * cd $HOME/ict-trade &&
+  - ✅ **Cron KURULU (2026-07-13):** `0 2 * * * cd $HOME/ict-trade &&
     $HOME/ict-trade/.venv/bin/python sync/talos_gate/backfill.py --apply >> $HOME/ict-talos-gate.log 2>&1`
-    Kurulana kadar kitap 2026-07-13 tarihli tek seferlik backfill'de donmuş kalır.
+    (01:50 TALOS-ICHI ile 02:30 ATRX arasına yerleşir). Temiz cron ortamında (`env -i`) doğrulandı.
 - **Paylaşılabilir işlem linkleri: `/p/<token>` — 1 saatlik, login gerektirmeyen public grafik.**
   - Admin, CANLI bir işlemin grafiğini (ChartModal başlığındaki **Paylaş** butonu) tek tıkla public
     bir linke çevirir; link panoya kopyalanır ve **60 dk** sonra kendiliğinden ölür. Buton yalnız
