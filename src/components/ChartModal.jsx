@@ -1026,14 +1026,16 @@ const ChartModal = () => {
   // yazıyoruz; public sayfa böylece strateji etiketini hiç görmeden doğru çizgileri çizer.
   // Payload'a strateji/versiyon/kalite/konfluens/ATRX KOYMA — link gizlilik sözleşmesi
   // (018_share_links.sql) bunların dışarı sızmamasına dayanır.
-  const [share, setShare] = useState({ busy: false, url: '', err: '' });
-  useEffect(() => { setShare({ busy: false, url: '', err: '' }); }, [activeSignal?.id]);
+  // Aynı işlem ikinci kez paylaşılırsa RPC AYNI token'ı döndürür (reused=true) ve sadece
+  // 60 dk'lık süreyi sıfırlar — daha önce dağıtılmış link ölmez (019_share_links_reuse.sql).
+  const [share, setShare] = useState({ busy: false, url: '', err: '', reused: false });
+  useEffect(() => { setShare({ busy: false, url: '', err: '', reused: false }); }, [activeSignal?.id]);
 
   const canShare = sd.isAdmin && mode === 'live' && Number.isFinite(Number(activeSignal?.id));
 
   const createShareLink = async () => {
     if (!canShare || share.busy) return;
-    setShare({ busy: true, url: '', err: '' });
+    setShare({ busy: true, url: '', err: '', reused: false });
     try {
       const soRiskP = (Number.isFinite(dispEntry) && Number.isFinite(activeSignal.sl))
         ? Math.abs(dispEntry - activeSignal.sl) : null;
@@ -1060,9 +1062,9 @@ const ChartModal = () => {
       if (!res?.token) throw new Error('token yok');
       const url = `${window.location.origin}/p/${res.token}`;
       try { await navigator.clipboard.writeText(url); } catch { /* panoya yazılamadı — link yine gösterilir */ }
-      setShare({ busy: false, url, err: '' });
+      setShare({ busy: false, url, err: '', reused: !!res.reused });
     } catch (e) {
-      setShare({ busy: false, url: '', err: e?.message || 'link oluşturulamadı' });
+      setShare({ busy: false, url: '', err: e?.message || 'link oluşturulamadı', reused: false });
     }
   };
 
@@ -1106,10 +1108,14 @@ const ChartModal = () => {
                 className="chart-share__btn"
                 onClick={createShareLink}
                 disabled={share.busy}
-                title={t('1 saat geçerli public paylaşım linki oluştur')}
+                title={t('1 saat geçerli public paylaşım linki oluştur (aynı işlem: aynı link, süre sıfırlanır)')}
               >
                 <IconShare />
-                <span>{share.busy ? t('Oluşturuluyor…') : share.url ? t('Kopyalandı ✓') : t('Paylaş')}</span>
+                <span>
+                  {share.busy ? t('Oluşturuluyor…')
+                    : share.url ? (share.reused ? t('Süre yenilendi ✓') : t('Kopyalandı ✓'))
+                    : t('Paylaş')}
+                </span>
               </button>
               {share.url && (
                 <input

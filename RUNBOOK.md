@@ -408,6 +408,13 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
   - Dosyalar: `src/pages/SharedTradePage.jsx` + `.css`, `src/AppRoutes.jsx`, `src/components/ChartModal.jsx`,
     `supabase/migrations/018_share_links.sql`. Kapsam: **canlı** işlemler (`ict_trade.signals`);
     backtest satırları AYRI bir Supabase projesinde olduğu için henüz paylaşılamıyor.
+- **Paylaşım linki YENİDEN KULLANIMI (`019_share_links_reuse.sql`, UYGULANDI).** Aynı işlem ikinci
+  kez paylaşılınca artık YENİ token üretilmiyor: `admin_create_share` **mevcut token'ı geri döndürür**
+  ve yalnız süreyi 60 dk'ya sıfırlar (`reused: true`). Böylece daha önce dağıtılmış link ölmez —
+  ChartModal butonu "Süre yenilendi ✓" der. İptal edilmiş (`revoked`) bir link tekrar paylaşılırsa
+  DİRİLİR. `views` sayacı kasten sıfırlanmaz (kümülatif). Kısıt: `uq_share_links_signal` (işlem
+  başına tek satır); yeni kolon `renewed_at`; `admin_list_shares` bunu da döndürür (return tipi
+  değiştiği için fonksiyon drop+create edildi).
 
 ### 2026-07-12
 - **OPUS·SQZ + OPUS·Q5: ATRX-kapılı OPUS ikizleri (backtest-only) ana işlem menüsünde.**
