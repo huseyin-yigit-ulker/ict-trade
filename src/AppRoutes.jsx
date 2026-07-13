@@ -21,6 +21,11 @@ import BotPage from './pages/user/BotPage';
 import ProfilePage from './pages/user/ProfilePage';
 import HelpPage from './pages/user/HelpPage';
 import PusuLogo from './components/PusuLogo';
+import SharedTradePage from './pages/SharedTradePage';
+
+// PUBLIC yüzey (2026-07-13): /p/:token = admin'in ürettiği 1 saatlik paylaşım linki.
+// /login gibi RequireAuth'un DIŞINDA ve HER İKİ dalda tanımlı olmalı — aksi halde oturumu
+// olan biri linki açtığında ilgili dalın '*' fallback'ine takılıp eve yönlenir.
 
 // Rol çatalı (2026-07-11): admin MEVCUT arayüzün tamamını görür (aşağıdaki AdminRoutes,
 // eski App.jsx rota ağacının birebir taşınmışı); admin-dışı herkes Binance-tarzı 4 sekmeli
@@ -40,6 +45,7 @@ const BootSplash = () => (
 const AdminRoutes = () => (
   <Routes>
     <Route path="/login" element={<LoginScreen />} />
+    <Route path="/p/:token" element={<SharedTradePage />} />
     <Route element={<RequireAuth><AppShell /></RequireAuth>}>
       <Route index element={<IntroPage />} />
       <Route path="/trend" element={<TrendPage />} />
@@ -62,6 +68,7 @@ const AdminRoutes = () => (
 const UserRoutes = () => (
   <Routes>
     <Route path="/login" element={<LoginScreen />} />
+    <Route path="/p/:token" element={<SharedTradePage />} />
     <Route element={<RequireAuth><UserShell /></RequireAuth>}>
       <Route index element={<Navigate to="/portfoy" replace />} />
       <Route path="/portfoy" element={<PortfolioPage />} />

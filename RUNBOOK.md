@@ -382,6 +382,33 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-13
+- **Paylaşılabilir işlem linkleri: `/p/<token>` — 1 saatlik, login gerektirmeyen public grafik.**
+  - Admin, CANLI bir işlemin grafiğini (ChartModal başlığındaki **Paylaş** butonu) tek tıkla public
+    bir linke çevirir; link panoya kopyalanır ve **60 dk** sonra kendiliğinden ölür. Buton yalnız
+    `isAdmin && mode==='live'` iken görünür — kullanıcılar link üretemez.
+  - Sayfa CANLI: her 20 sn'de `get_shared_trade` RPC'siyle DB'den (trail/pos/exit/pnl_r) + Binance'ten
+    (mumlar) tazelenir. Açık pozisyon linkte yaşamaya devam eder, iz-süren stop uzar.
+  - **Gizlilik sözleşmesi (018 başlığında yazılı):** RPC ASLA `strategy` / `version` / `mode` /
+    `quality` / `confluence_score` / `context.atrx` döndürmez; public panelde "Strateji" satırı YOK.
+    Geometri (entry / SL / TP1 / cap; ·0.5R confirm kaydırması) **paylaşım anında admin'in
+    tarayıcısında** çözülüp `share_links.payload`'a dondurulur — public sayfa strateji etiketini
+    bilmeden doğru çizgileri çizer. Panelde sembol/yön/giriş/stop/hedef + PnL (R ve %) + süre var.
+  - **Migration `018_share_links.sql`** (owner DSN ile UYGULANDI): `share_links` tablosu (RLS açık,
+    policy yok, anon/authenticated'tan revoke → PostgREST'ten doğrudan okunamaz) + RPC'ler
+    `admin_create_share` / `get_shared_trade` (PUBLIC/anon) / `admin_list_shares` / `admin_revoke_share`.
+    Admin RPC'lerinde `is_admin()` kapısı **VE** `revoke ... from public, anon` (Postgres yeni
+    fonksiyonlara PUBLIC execute verir — tek başına `grant to authenticated` yetmez).
+  - Rota `/p/:token` **her iki dalda** (AdminRoutes + UserRoutes) `RequireAuth` DIŞINDA tanımlı;
+    aksi halde oturumu olan biri linki açtığında `*` fallback'ine takılıp eve yönlenirdi.
+  - Doğrulandı (anon HTTP): geçerli token → 200 + sızıntı yok; süresi dolmuş → `{"error":"expired"}`;
+    uydurma token → `not_found`; anon `admin_create_share` → 401 permission denied; `share_links`
+    tablosuna doğrudan GET → 401. Trailing (XAUUSDT) + scale-out (BTCUSDT) linkleri tarayıcıda
+    oturumsuz render edildi.
+  - Dosyalar: `src/pages/SharedTradePage.jsx` + `.css`, `src/AppRoutes.jsx`, `src/components/ChartModal.jsx`,
+    `supabase/migrations/018_share_links.sql`. Kapsam: **canlı** işlemler (`ict_trade.signals`);
+    backtest satırları AYRI bir Supabase projesinde olduğu için henüz paylaşılamıyor.
+
 ### 2026-07-12
 - **OPUS·SQZ + OPUS·Q5: ATRX-kapılı OPUS ikizleri (backtest-only) ana işlem menüsünde.**
   - 2026-07-12 sembol-durum çalışması (101 Binance kripto perp × 39 bakışsız senaryo, 2024-25

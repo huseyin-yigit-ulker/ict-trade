@@ -1,0 +1,149 @@
+/* Public paylaşım sayfası (/p/:token) — kendi kendine yeten koyu tema.
+   Uygulama kabuğunun (AppShell/UserShell) DIŞINDA render edilir, o yüzden
+   değişkenlere/global sınıflara güvenmez: renkler burada sabit. */
+
+.shp {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #0B0E11;
+  color: #EAECEF;
+  font-family: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.shp--center {
+  align-items: center;
+  justify-content: center;
+}
+
+.shp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+}
+.shp-empty h1 { margin: 8px 0 0; font-size: 20px; font-weight: 600; }
+.shp-empty p { margin: 0; color: #848E9C; font-size: 14px; max-width: 340px; line-height: 1.5; }
+
+/* ---------------------------------------------------------------- header */
+.shp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2B3139;
+  flex-wrap: wrap;
+}
+.shp-head__id { display: flex; align-items: center; gap: 10px; }
+.shp-head__id h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+.shp-head__ttl {
+  font-size: 12px;
+  color: #848E9C;
+  border: 1px solid #2B3139;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- body */
+.shp-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.shp-panel {
+  width: 280px;
+  flex: 0 0 280px;
+  padding: 12px 14px;
+  border-right: 1px solid #2B3139;
+  background: #181A20;
+  overflow-y: auto;
+}
+
+.shp-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(43, 49, 57, 0.6);
+  font-size: 13px;
+}
+.shp-row:last-child { border-bottom: 0; }
+.shp-row > span { color: #848E9C; white-space: nowrap; }
+.shp-row > b {
+  font-weight: 500;
+  text-align: right;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+.shp-sub { color: #848E9C; font-weight: 400; }
+
+/* ---------------------------------------------------------------- chart */
+.shp-chart {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.shp-chart__canvas { flex: 1; min-height: 0; width: 100%; }
+.shp-chart__status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #848E9C;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.shp-legend {
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+  border-top: 1px solid #2B3139;
+  font-size: 11px;
+  color: #848E9C;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.shp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.shp-l { width: 16px; height: 0; border-top: 2px solid; display: inline-block; }
+.shp-l--entry { border-color: #848E9C; }
+.shp-l--tp { border-color: #0ECB81; border-top-style: dashed; }
+.shp-l--sl { border-color: #F6465D; border-top-style: dashed; }
+.shp-l--trail { border-color: #F0B90B; }
+
+/* ---------------------------------------------------------------- footer */
+.shp-foot {
+  padding: 10px 16px;
+  border-top: 1px solid #2B3139;
+  color: #5E6673;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- mobil */
+@media (max-width: 760px) {
+  .shp-body { flex-direction: column-reverse; }   /* grafik üstte, panel altta */
+  .shp-panel {
+    width: auto;
+    flex: 0 0 auto;
+    border-right: 0;
+    border-top: 1px solid #2B3139;
+  }
+  .shp-chart { min-height: 55vh; }
+  .shp-head__ttl { font-size: 11px; }
+}

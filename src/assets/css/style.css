@@ -1019,6 +1019,25 @@ button.chip   { cursor: pointer; }
 .chart-style-seg button:hover { color: #EAECEF; }
 .chart-style-seg button.active { background: rgba(245, 185, 66, 0.16); color: #F5B942; }
 
+/* Paylaş — 1 saatlik public link (admin + canlı işlem). Link üretilince input'ta gösterilir
+   (pano yazımı izin verilmezse kullanıcı elle kopyalayabilsin diye). */
+.chart-share { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chart-share__btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid #2B3139; border-radius: 6px;
+  color: #848E9C; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.chart-share__btn:hover:not(:disabled) { color: #F5B942; border-color: #F5B942; background: rgba(245, 185, 66, 0.1); }
+.chart-share__btn:disabled { opacity: 0.6; cursor: default; }
+.chart-share__url {
+  width: 230px; max-width: 40vw;
+  background: #0B0E11; border: 1px solid #2B3139; border-radius: 6px;
+  color: #EAECEF; padding: 4px 8px; font-size: 11px;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+.chart-share__err { color: #F6465D; font-size: 11px; }
+
 /* draggable + collapsible info panel */
 .position-panel__bar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

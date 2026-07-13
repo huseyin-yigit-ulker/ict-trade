@@ -5,6 +5,7 @@ import { useLang } from '../context/LanguageContext';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
 import { scaleOutLiveR } from '../utils/liveR';
 import { useSwipeDownClose } from '../utils/useSwipeDownClose';
+import { rpc } from '../utils/supa';
 
 const IconCandles = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
@@ -15,6 +16,12 @@ const IconCandles = () => (
 const IconLine = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="1,10 5,6 8.5,8.5 13,2" />
+  </svg>
+);
+const IconShare = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="3" r="1.8" /><circle cx="3" cy="7" r="1.8" /><circle cx="11" cy="11" r="1.8" />
+    <line x1="4.6" y1="6.1" x2="9.4" y2="3.9" /><line x1="4.6" y1="7.9" x2="9.4" y2="10.1" />
   </svg>
 );
 
@@ -1014,6 +1021,51 @@ const ChartModal = () => {
     return `${days} gün ${hrs % 24} sa`;
   };
 
+  // ---- Paylaş: 1 saatlik public link (/p/<token>) — ADMIN + CANLI işlem ------------------
+  // Geometriyi BURADA donduruyoruz (·0.5R confirm kaydırması, scale-out TP1/cap) ve payload'a
+  // yazıyoruz; public sayfa böylece strateji etiketini hiç görmeden doğru çizgileri çizer.
+  // Payload'a strateji/versiyon/kalite/konfluens/ATRX KOYMA — link gizlilik sözleşmesi
+  // (018_share_links.sql) bunların dışarı sızmamasına dayanır.
+  const [share, setShare] = useState({ busy: false, url: '', err: '' });
+  useEffect(() => { setShare({ busy: false, url: '', err: '' }); }, [activeSignal?.id]);
+
+  const canShare = sd.isAdmin && mode === 'live' && Number.isFinite(Number(activeSignal?.id));
+
+  const createShareLink = async () => {
+    if (!canShare || share.busy) return;
+    setShare({ busy: true, url: '', err: '' });
+    try {
+      const soRiskP = (Number.isFinite(dispEntry) && Number.isFinite(activeSignal.sl))
+        ? Math.abs(dispEntry - activeSignal.sl) : null;
+      const payload = {
+        v: 1,
+        symbol: activeSignal.symbol,
+        dir: activeSignal.dir,
+        signalTs: effectiveSignalDate(activeSignal)?.getTime(),   // bar KAPANIŞI (sinyalin gerçek anı)
+        ltf: activeSignal.ltfTimeframe || '1m',
+        entry: Number.isFinite(dispEntry) ? dispEntry : null,
+        sl: Number(activeSignal.sl),
+        tp: isTrailing || !Number.isFinite(dispTp) ? null : dispTp,
+        tp1: (isScaleOut && soRiskP)
+          ? (activeSignal.dir === 'LONG' ? dispEntry + soRiskP : dispEntry - soRiskP)
+          : null,
+        kind: isTrailing ? 'trailing' : isScaleOut ? 'scaleout' : 'plain',
+        entryIsStop: isConfirmEntry,
+        capR: soCapR,
+        bookFrac: soBookPct / 100,
+      };
+      const res = await rpc('admin_create_share', {
+        p_signal_id: Number(activeSignal.id), p_payload: payload, p_ttl_minutes: 60,
+      });
+      if (!res?.token) throw new Error('token yok');
+      const url = `${window.location.origin}/p/${res.token}`;
+      try { await navigator.clipboard.writeText(url); } catch { /* panoya yazılamadı — link yine gösterilir */ }
+      setShare({ busy: false, url, err: '' });
+    } catch (e) {
+      setShare({ busy: false, url: '', err: e?.message || 'link oluşturulamadı' });
+    }
+  };
+
   useEffect(() => {
     if (!showTv && chartContainerRef.current) {}
   }, [showTv]);
@@ -1045,6 +1097,30 @@ const ChartModal = () => {
             <div className="chart-style-seg" role="group" aria-label="chart style">
               <button className={chartStyle === 'candles' ? 'active' : ''} onClick={() => setChartStyleP('candles')} title={t('Mum')} aria-label={t('Mum')}><IconCandles /></button>
               <button className={chartStyle === 'line' ? 'active' : ''} onClick={() => setChartStyleP('line')} title={t('Çizgi')} aria-label={t('Çizgi')}><IconLine /></button>
+            </div>
+          )}
+          {/* Paylaş — yalnız admin + canlı işlem. 1 saatlik public link üretir, panoya kopyalar. */}
+          {canShare && (
+            <div className="chart-share">
+              <button
+                className="chart-share__btn"
+                onClick={createShareLink}
+                disabled={share.busy}
+                title={t('1 saat geçerli public paylaşım linki oluştur')}
+              >
+                <IconShare />
+                <span>{share.busy ? t('Oluşturuluyor…') : share.url ? t('Kopyalandı ✓') : t('Paylaş')}</span>
+              </button>
+              {share.url && (
+                <input
+                  className="chart-share__url"
+                  value={share.url}
+                  readOnly
+                  onFocus={(e) => e.target.select()}
+                  aria-label={t('Paylaşım linki')}
+                />
+              )}
+              {share.err && <span className="chart-share__err">{share.err}</span>}
             </div>
           )}
           {/* TradingView-style OHLC legend: inline next to the symbol (NOT pushed right under the
