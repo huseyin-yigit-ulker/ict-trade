@@ -388,6 +388,26 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-13
+- **📝 OPUS PAPER (testnet) açıldı — 18 sembolün TAMAMI, maks 10 eşzamanlı pozisyon.**
+  - Sahip isteği: "paper account'a OPUS'u tüm semboller için açalım." Amaç: mainnet'in 5-sembol /
+    5-pozisyon **sermaye kısıtı olmadan** OPUS'un tam kitabını canlı aynalamak.
+  - **Sadece DB değişikliği** (kod/cron yok): `user_stream_settings` (opus, **testnet**) →
+    `enabled=true`, `symbols` = OPUS'un doğrulanmış **18-kripto** evreni (`strategy.SYMBOLS[:XAUUSDT]`),
+    `max_concurrent=10`, `risk_usd=5`, `max_total_risk_usd=50`. **Mainnet satırına DOKUNULMADI**
+    (5 sembol / 5 pozisyon / $25 aynen duruyor — executor çıktısıyla doğrulandı).
+  - Ek cron gerekmedi: `live_exec/executor.py` (*/2 dk) zaten `EXEC_MULTI_USER` fan-out'u ile
+    user×network satırlarının hepsini sürüyor. Emit tarafı da hazırdı (canli.py evreni
+    `CRYPTO_METAL_SYMBOLS` → 19 sembole sinyal üretiyor; executor sadece kendi listesiyle süzüyor).
+  - **⚠️ `max_concurrent=10` bir DB CHECK korkuluğudur (1..10) — 18 yapmak için gevşetilmedi.**
+    Sahip 18 istemişti; önce ölçtüm: OPUS kitabında (2808 işlem, 18 kripto, 2024-26) tavan-10'un
+    kaçırdığı işlemlerin toplamı 3 YILDA sadece **+15.3R** (tavan-10 → 2527 işlem/+377.5R vs tam kitap
+    2808/+392.8R = **%96'sı**; tavan-12'de kaçanlar zaten −11.5R, yani kırpmak yardım ediyor).
+    Mainnet'in tavan-5'i ise gerçekten pahalı (+147.9R kaçırıyor) — paper'ın asıl kazancı 5→10'da.
+    3 yılda 15R için üretimdeki gerçek-para hasar-yarıçapı korkuluğunu gevşetmeye değmez → migration
+    yazıldı ama UYGULANMADI, silindi.
+  - Testnet hesap durumu (açmadan önce): $5,001 bakiye, 0 açık pozisyon, anahtarlar mevcut.
+  - Görünürlük: Sidebar'daki **"Binance Paper"** linki `act.testnet` aktivasyonuna bağlı olduğu için
+    kendiliğinden görünür hale gelir; pozisyonlar `live_positions` (network='testnet') satırlarında.
 - **⛔ MIDAS EMEKLİ — backtest-only'ye indi. CANLI SET ARTIK YALNIZ OPUS + TALOS-ICHI-X.**
   - Sahip kararı: "MIDAS'ı backtest tarafına taşıyalım, paper account'a da canlı işlem açmayalım."
   - **Kapatmadan ÖNCE güvenlik kontrolü:** DB `midas_positions` 13 CLOSED + 4 CANCELLED (açık YOK) ·
