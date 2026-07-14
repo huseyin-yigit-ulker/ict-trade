@@ -63,7 +63,7 @@ def _alert(cfg, conn, text: str, *, title: str = "", kind: str = "") -> None:
     if cfg.user_id:
         body = _HTML_RE.sub("", text)
         ustore.push_user(conn, cfg.user_id, title or body.split("\n", 1)[0][:60], body,
-                         tag="exec", kind=kind)
+                         tag="", kind=kind)  # boş tag: sabit "exec" ardışık olayları tek bildirimde eziyordu (2026-07-14)
 
 
 def _net(cfg) -> str:

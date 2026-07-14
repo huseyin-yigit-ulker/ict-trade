@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, LineSeries, HistogramSeries } from 'lightweight-charts';
 import { useLang } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+import { readChartTheme } from '../utils/chartTheme';
 import { REGIME_BANDS, regimeOf, efficiencyRatio, regimeAccuracy, fetchRegimeKlines } from '../utils/symbolMeta';
 import { computeRegime, rollingRegime, DETECTOR_WINDOW, TREND_RANGE, DETECTOR_CATS } from '../utils/regimeDetectors';
 
@@ -9,7 +11,7 @@ const ScoreBar = ({ score }) => {
   const s = Math.max(-1, Math.min(1, Number.isFinite(score) ? score : 0));
   const col = s >= 0.15 ? TREND_RANGE.trend.color : s <= -0.15 ? TREND_RANGE.range.color : TREND_RANGE.transition.color;
   return (
-    <div style={{ position: 'relative', height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }}>
+    <div style={{ position: 'relative', height: 6, borderRadius: 4, background: 'var(--chip-glass)' }}>
       <div style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: 'var(--border, #2a2f3a)' }} />
       <div style={{ position: 'absolute', left: s < 0 ? `${50 + s * 50}%` : '50%', width: `${Math.abs(s) * 50}%`, top: 0, bottom: 0, background: col, borderRadius: 4 }} />
     </div>
@@ -38,6 +40,7 @@ const hexA = (hex, a) => {
 
 const TrendDetail = ({ symbol, tf = '4h', onClose }) => {
   const { t, locale } = useLang();
+  const { theme } = useTheme();   // toggle -> grafik efekti yeniden koşar (canvas CSS var çözemez)
   const wrapRef = useRef(null);
   const chartRef = useRef(null);
   const [meta, setMeta] = useState(null);     // { curER, curRegime, mix, n }
@@ -48,6 +51,7 @@ const TrendDetail = ({ symbol, tf = '4h', onClose }) => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     let alive = true, chart = null, ro = null;
+    const th = readChartTheme();   // CSS token'ları çözülmüş renk olarak (taze okuma)
 
     (async () => {
       let d;
@@ -91,17 +95,17 @@ const TrendDetail = ({ symbol, tf = '4h', onClose }) => {
       const H = Math.max(440, Math.min(Math.round(window.innerHeight * 0.62), 760));
       chart = createChart(wrapRef.current, {
         width: W, height: H,
-        layout: { background: { type: 'solid', color: '#0B0E11' }, textColor: '#EAECEF',
-          fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace", panes: { separatorColor: '#2B3139' } },
+        layout: { background: { type: 'solid', color: th.bg }, textColor: th.text,
+          fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace", panes: { separatorColor: th.border } },
         grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-        rightPriceScale: { borderColor: '#2B3139' },
-        timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2B3139' },
+        rightPriceScale: { borderColor: th.border },
+        timeScale: { timeVisible: true, secondsVisible: false, borderColor: th.border },
         localization: {
           locale,
           timeFormatter: (ts) => new Date(ts * 1000).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
         },
-        crosshair: { mode: 1, vertLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#1E2329' },
-          horzLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#1E2329' } },
+        crosshair: { mode: 1, vertLine: { color: th.muted, style: 2, labelBackgroundColor: th.panel },
+          horzLine: { color: th.muted, style: 2, labelBackgroundColor: th.panel } },
       });
       chartRef.current = chart;
 
@@ -112,14 +116,16 @@ const TrendDetail = ({ symbol, tf = '4h', onClose }) => {
       bg.setData(bgData);
       chart.priceScale('bg').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
       // single-colour price line on top
-      const price = chart.addSeries(LineSeries, { color: '#EAECEF', lineWidth: 2, priceLineVisible: false });
+      const price = chart.addSeries(LineSeries, { color: th.text, lineWidth: 2, priceLineVisible: false });
       price.setData(priceData);
 
       // CONSENSUS SCORE (−1..+1) in a second pane, with trend / 0 / range guide lines
-      const scoreLine = chart.addSeries(LineSeries, { color: '#C9CDD4', lineWidth: 2, priceLineVisible: false,
+      // (skor çizgisi #C9CDD4 -> th.text: en yakın semantik rol; rejim/TREND_RANGE renkleri
+      // bilinçli tema-sabit — rejim kimlik renkleri, semantik haritanın dışında.)
+      const scoreLine = chart.addSeries(LineSeries, { color: th.text, lineWidth: 2, priceLineVisible: false,
         lastValueVisible: true, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } }, 1);
       scoreLine.setData(scoreData);
-      [[0.15, TREND_RANGE.trend.color, '+0.15'], [0, '#848E9C', '0'], [-0.15, TREND_RANGE.range.color, '−0.15']].forEach(([p, c, title]) =>
+      [[0.15, TREND_RANGE.trend.color, '+0.15'], [0, th.muted, '0'], [-0.15, TREND_RANGE.range.color, '−0.15']].forEach(([p, c, title]) =>
         scoreLine.createPriceLine({ price: p, color: c, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title }));
       try { chart.panes()[1]?.setHeight(Math.round(H * 0.32)); } catch { /* older api */ }
 
@@ -142,7 +148,7 @@ const TrendDetail = ({ symbol, tf = '4h', onClose }) => {
       if (ro) ro.disconnect();
       if (chart) { chart.remove(); chartRef.current = null; }
     };
-  }, [symbol, tf, onClose, locale]);
+  }, [symbol, tf, onClose, locale, theme]);
 
   // Header read-out: the rolling consensus under the crosshair, else the current snapshot.
   const head = hover || (meta?.reg && { verdict: meta.reg.verdict, score: meta.reg.score, date: t('Güncel') });
@@ -243,8 +249,8 @@ const TrendDetail = ({ symbol, tf = '4h', onClose }) => {
         {meta && meta.acc && (
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, fontSize: 11, alignItems: 'center' }}>
             <span style={{ fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>{t('Rejim Doğruluğu')}</span>
-            <span>{t('Süreklilik')} <b style={{ color: meta.acc.contP >= 0.54 ? '#0ECB81' : meta.acc.contP <= 0.46 ? '#F6465D' : '#C9CDD4' }}>%{Math.round((meta.acc.contP ?? 0) * 100)}</b></span>
-            <span>{t('İleriye dönük uyum')} <b style={{ color: meta.acc.overall >= meta.acc.baseline ? '#0ECB81' : '#F6465D' }}>%{Math.round(meta.acc.overall * 100)}</b>
+            <span>{t('Süreklilik')} <b style={{ color: meta.acc.contP >= 0.54 ? 'var(--win)' : meta.acc.contP <= 0.46 ? 'var(--loss)' : 'var(--text)' }}>%{Math.round((meta.acc.contP ?? 0) * 100)}</b></span>
+            <span>{t('İleriye dönük uyum')} <b style={{ color: meta.acc.overall >= meta.acc.baseline ? 'var(--win)' : 'var(--loss)' }}>%{Math.round(meta.acc.overall * 100)}</b>
               <span style={{ opacity: 0.5 }}> · {t('Temel oran')} %{Math.round(meta.acc.baseline * 100)}</span></span>
             <span style={{ opacity: 0.5 }}>{t('Örnek')} {meta.acc.n} {t('bar')}</span>
           </div>

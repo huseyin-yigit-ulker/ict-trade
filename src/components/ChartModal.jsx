@@ -7,6 +7,8 @@ import { scaleOutLiveR } from '../utils/liveR';
 import { useSwipeDownClose } from '../utils/useSwipeDownClose';
 import { rpc } from '../utils/supa';
 import { isTrailingStream } from '../utils/streamMask';
+import { readChartTheme } from '../utils/chartTheme';
+import { useTheme } from '../context/ThemeContext';
 
 const IconCandles = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
@@ -50,6 +52,7 @@ const cacheSet = (k, v) => {
 const ChartModal = () => {
   const { activeSignal, setActiveSignal, chartView, setChartView, mode, liveStatuses, strategy } = useTradeContext();
   const { t, locale } = useLang();
+  const { theme } = useTheme();   // toggle -> grafik efekti yeniden koşar (canvas CSS var çözemez)
   const sd = useStreamDisplay();   // PRIVACY: exit-economics labels (cap R) are admin-only
   // Mobile: swipe down on the header/handle to dismiss the chart sheet (inert on desktop).
   const { dragY, handlers: swipeHandlers } = useSwipeDownClose(() => setActiveSignal(null));
@@ -263,12 +266,13 @@ const ChartModal = () => {
     const width = rect.width > 0 ? rect.width : 900;
     const height = rect.height > 0 ? rect.height : 520;
 
-    // Binance-aligned palette: yellow accents not used here, but candle/wick
-    // colors and crosshair match the dashboard's --win / --loss / --muted tokens.
+    // Tema-farkındalı palet: CSS token'ları (--bg/--text/--win/--loss/...) efekt her koştuğunda
+    // taze çözülür — canvas CSS var çözemediği için readChartTheme getComputedStyle kullanır.
+    const th = readChartTheme();
     const themeConfig = {
-      bg: '#0B0E11', text: '#EAECEF', grid: 'transparent',
-      upColor: '#0ECB81', downColor: '#F6465D',
-      wickUp: '#0ECB81', wickDown: '#F6465D',
+      bg: th.bg, text: th.text, grid: 'transparent',
+      upColor: th.up, downColor: th.down,
+      wickUp: th.up, wickDown: th.down,
     };
 
     // 1. CHART OLUŞTURMA
@@ -289,9 +293,9 @@ const ChartModal = () => {
       },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       width, height,
-      rightPriceScale: { borderColor: '#2B3139', scaleMargins: { top: 0.2, bottom: 0.2 } },
+      rightPriceScale: { borderColor: th.border, scaleMargins: { top: 0.2, bottom: 0.2 } },
       timeScale: {
-        timeVisible: true, secondsVisible: false, borderColor: '#2B3139',
+        timeVisible: true, secondsVisible: false, borderColor: th.border,
         tickMarkFormatter: (time, tickMarkType) => {
             const date = new Date(time * 1000);   // axis labels in UTC
             if (tickMarkType < 3) return date.toLocaleDateString(locale, { timeZone: 'UTC', day: 'numeric', month: 'short' });
@@ -300,8 +304,8 @@ const ChartModal = () => {
       },
       crosshair: {
         mode: 1,
-        vertLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#1E2329' },
-        horzLine: { color: '#848E9C', style: 2, labelBackgroundColor: '#1E2329' }
+        vertLine: { color: th.muted, style: 2, labelBackgroundColor: th.panel },
+        horzLine: { color: th.muted, style: 2, labelBackgroundColor: th.panel }
       }
     });
     chartRef.current = chart;
@@ -336,7 +340,7 @@ const ChartModal = () => {
     const isLineChart = chartStyle === 'line';
     const mainSeries = isLineChart
       ? chart.addSeries(LineSeries, {
-          color: '#EAECEF', lineWidth: 2, lastValueVisible: false, crosshairMarkerVisible: true,
+          color: th.text, lineWidth: 2, lastValueVisible: false, crosshairMarkerVisible: true,
           priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
         })
       : chart.addSeries(CandlestickSeries, {
@@ -630,9 +634,9 @@ const ChartModal = () => {
         // CANCELLED live trade: tint the signal→cancel span AMBER (the attempted-but-vetoed
         // window) so it reads distinctly from the violet pre-signal / gray post-close context.
         candles = candles.map((c) => {
-          if (c.time < signalSec) return { ...c, color: '#322B45', wickColor: '#7C6BB0', borderColor: '#473A66' };
-          if (closeBarSec != null && c.time > closeBarSec) return { ...c, color: '#2B3139', wickColor: '#5E6673', borderColor: '#2B3139' };
-          if (isCancelled && closeBarSec != null) return { ...c, color: '#3D331C', wickColor: '#C99A3E', borderColor: '#5C4B28' };
+          if (c.time < signalSec) return { ...c, color: th.dim.pre.color, wickColor: th.dim.pre.wick, borderColor: th.dim.pre.border };
+          if (closeBarSec != null && c.time > closeBarSec) return { ...c, color: th.dim.post.color, wickColor: th.dim.post.wick, borderColor: th.dim.post.border };
+          if (isCancelled && closeBarSec != null) return { ...c, color: th.dim.cancel.color, wickColor: th.dim.cancel.wick, borderColor: th.dim.cancel.border };
           return { ...c, borderColor: c.close >= c.open ? themeConfig.upColor : themeConfig.downColor };
         });
 
@@ -652,20 +656,20 @@ const ChartModal = () => {
         // 3. Pozisyon bölgesi (entry baz; TP yeşil / SL kırmızı yarı-saydam, kapanışta biter)
         if (isLong) {
             tpAreaSeries.applyOptions({
-                topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.1)', topFillColor2: 'rgba(14, 203, 129, 0.02)',
+                topLineColor: th.up, topFillColor1: th.upSoft(0.1), topFillColor2: th.upSoft(0.02),
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
             slAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#F6465D', bottomFillColor1: 'rgba(246, 70, 93, 0.1)', bottomFillColor2: 'rgba(246, 70, 93, 0.02)'
+                bottomLineColor: th.down, bottomFillColor1: th.downSoft(0.1), bottomFillColor2: th.downSoft(0.02)
             });
         } else {
             tpAreaSeries.applyOptions({
                 topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent',
-                bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.1)', bottomFillColor2: 'rgba(14, 203, 129, 0.02)'
+                bottomLineColor: th.up, bottomFillColor1: th.upSoft(0.1), bottomFillColor2: th.upSoft(0.02)
             });
             slAreaSeries.applyOptions({
-                topLineColor: '#F6465D', topFillColor1: 'rgba(246, 70, 93, 0.1)', topFillColor2: 'rgba(246, 70, 93, 0.02)',
+                topLineColor: th.down, topFillColor1: th.downSoft(0.1), topFillColor2: th.downSoft(0.02),
                 bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
             });
         }
@@ -716,11 +720,11 @@ const ChartModal = () => {
         if (isScaleOut && partialLevel != null && tp && partialBarSec != null) {
           runnerZoneSeries.applyOptions(isLong ? {
             baseValue: { type: 'price', price: partialLevel },
-            topLineColor: '#0ECB81', topFillColor1: 'rgba(14, 203, 129, 0.22)', topFillColor2: 'rgba(14, 203, 129, 0.05)',
+            topLineColor: th.up, topFillColor1: th.upSoft(0.22), topFillColor2: th.upSoft(0.05),
             bottomLineColor: 'transparent', bottomFillColor1: 'transparent', bottomFillColor2: 'transparent'
           } : {
             baseValue: { type: 'price', price: partialLevel },
-            bottomLineColor: '#0ECB81', bottomFillColor1: 'rgba(14, 203, 129, 0.22)', bottomFillColor2: 'rgba(14, 203, 129, 0.05)',
+            bottomLineColor: th.up, bottomFillColor1: th.upSoft(0.22), bottomFillColor2: th.upSoft(0.05),
             topLineColor: 'transparent', topFillColor1: 'transparent', topFillColor2: 'transparent'
           });
           runnerZoneSeries.setData(endTimeForGraph > partialBarSec
@@ -735,7 +739,7 @@ const ChartModal = () => {
         // every pass (live refresh re-runs this block every 3s).
         if (isPartial && !chartRef.current._beSeries) {
           chartRef.current._beSeries = chart.addSeries(LineSeries, {
-            color: '#F0B90B', lineWidth: 2, lineStyle: 2,
+            color: th.accent, lineWidth: 2, lineStyle: 2,
             lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
             priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
           });
@@ -752,29 +756,29 @@ const ChartModal = () => {
         if (!chartRef.current._priceLinesAdded) {
           const targetPct = entry && tp ? ((tp - entry) / entry) * 100 : null;
           const riskPct = entry && sl ? ((sl - entry) / entry) * 100 : null;
-          if (entry) mainSeries.createPriceLine({ price: entry, color: '#848E9C', lineWidth: 1, lineStyle: 0, title: `${t('Giriş')}${isConfirmEntry ? ' ·0.5R' : ''} ${formatPrice(entry)}`, axisLabelVisible: true });
+          if (entry) mainSeries.createPriceLine({ price: entry, color: th.muted, lineWidth: 1, lineStyle: 0, title: `${t('Giriş')}${isConfirmEntry ? ' ·0.5R' : ''} ${formatPrice(entry)}`, axisLabelVisible: true });
           // LIVE confirm-entry: the realistic entry sits +0.5R above the breakout, so mark the
           // SIGNAL (breakout) level too — they coincide in backtest (entry already == 0.5R level).
           if (liveConfirm && Number.isFinite(sigEntry) && Math.abs(sigEntry - entry) > 1e-9) {
-            mainSeries.createPriceLine({ price: sigEntry, color: '#5E6673', lineWidth: 1, lineStyle: 3, title: `${t('Sinyal')} ${formatPrice(sigEntry)}`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: sigEntry, color: th.muted, lineWidth: 1, lineStyle: 3, title: `${t('Sinyal')} ${formatPrice(sigEntry)}`, axisLabelVisible: true });
           }
           // 4R line: for scale-out it is the RUNNER CAP (runner takes profit at +4R == the
           // signal's own TP); for every other stream it is the full take-profit. Drawn for both.
           // The green TP / green ½TP / red SL lines are TRADE levels — drawn only for a trade that
           // was actually taken. A CANCELLED signal (directional veto / timeout) never opened, so
           // suppress them (no phantom green/red); only the entry/signal + the -0.5R veto show.
-          if (tp && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: tp, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? (sd.isAdmin ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('Hedef')) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (tp && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: tp, color: th.up, lineWidth: 1, lineStyle: 2, title: `${isScaleOut ? (sd.isAdmin ? t('Runner Cap +{cap}R', { cap: soCapR }) : t('Hedef')) : t('TP')}${targetPct != null ? ' +' + Math.abs(targetPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // Partial-take line (dashed): ½TP closes 50% here (SL→entry); scale-out closes 60% at
           // +1R and the runner then rides with a breakeven stop.
           if (partialLevel != null && !isCancelled && !isTrailing) {
             const partialPct = entry ? ((partialLevel - entry) / entry) * 100 : null;
             const partialTitle = isScaleOut ? `TP1 +1R · %${soBookPct}` : '½TP %50';
-            mainSeries.createPriceLine({ price: partialLevel, color: '#0ECB81', lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' +' + Math.abs(partialPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: partialLevel, color: th.up, lineWidth: 1, lineStyle: 2, title: `${partialTitle}${partialPct != null ? ' +' + Math.abs(partialPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           }
-          if (sl && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
+          if (sl && !isCancelled && !isTrailing) mainSeries.createPriceLine({ price: sl, color: th.down, lineWidth: 1, lineStyle: 2, title: `${t('SL')}${riskPct != null ? ' -' + Math.abs(riskPct).toFixed(1) + '%' : ''}`, axisLabelVisible: true });
           // MIDAS: the FIXED initial stop = 1R risk, set at entry, NEVER changes (dashed). The
           // variable trailing stop is drawn as a stepped LINE below (its path to the exit).
-          if (sl && !isCancelled && isTrailing) mainSeries.createPriceLine({ price: sl, color: '#F6465D', lineWidth: 1, lineStyle: 3, title: `${t('SL')} (1R) ${formatPrice(sl)}`, axisLabelVisible: true });
+          if (sl && !isCancelled && isTrailing) mainSeries.createPriceLine({ price: sl, color: th.down, lineWidth: 1, lineStyle: 3, title: `${t('SL')} (1R) ${formatPrice(sl)}`, axisLabelVisible: true });
           // Adverse-0.5R confirmation level (SL side): the directional gate (ENTRY_CONFIRM_BUF=0.5)
           // line. Drawn on EVERY live signal — for 'İptal (Ters Yön)' it marks WHERE the breakout
           // went adverse first and got vetoed; for trades that DID open (SL/TP/active) it shows the
@@ -784,10 +788,10 @@ const ChartModal = () => {
           // MIDAS has no +0.5R directional-confirm gate (not a confirm-entry stream) -> no adverse line.
           if (mode === 'live' && !isTrailing && Number.isFinite(sigRisk) && sigRisk > 0) {
             const advLvl = isLong ? sigEntry - 0.5 * sigRisk : sigEntry + 0.5 * sigRisk;
-            mainSeries.createPriceLine({ price: advLvl, color: '#F0B90B', lineWidth: 1, lineStyle: 2, title: `${t('Ters Onay')} −0.5R`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: advLvl, color: th.accent, lineWidth: 1, lineStyle: 2, title: `${t('Ters Onay')} −0.5R`, axisLabelVisible: true });
           }
           if (mode === 'backtest' && activeSignal?.exitPrice) {
-            mainSeries.createPriceLine({ price: sig.exitPrice, color: '#F0B90B', lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(sig.exitPrice)}`, axisLabelVisible: true });
+            mainSeries.createPriceLine({ price: sig.exitPrice, color: th.accent, lineWidth: 1, lineStyle: 1, title: `${t('Çıkış')} ${formatPrice(sig.exitPrice)}`, axisLabelVisible: true });
           }
           chartRef.current._priceLinesAdded = true;
         }
@@ -802,7 +806,7 @@ const ChartModal = () => {
         if (isTrailing && Array.isArray(trailSrc) && trailSrc.length > 1) {
           if (!chartRef.current._trailSeries) {
             chartRef.current._trailSeries = chart.addSeries(LineSeries, {
-              color: '#F0B90B', lineWidth: 2, lineStyle: 0, lineType: 1,   // lineType 1 = stepped
+              color: th.accent, lineWidth: 2, lineStyle: 0, lineType: 1,   // lineType 1 = stepped
               lastValueVisible: true, priceLineVisible: false, crosshairMarkerVisible: false,
               title: t('İz Süren Stop'),
               priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
@@ -827,6 +831,7 @@ const ChartModal = () => {
         // 4b. ICT KARAR GEOMETRİSİ — motorun işlemi tetikleyen FVG/OB/sweep/BOS'u.
         // entry_zone zaman-sınırlı kutu (üst+alt çizgi, oluşumdan kapanışa); swept
         // likidite + yapı kırılımı referans çizgisi. activeSignal.geometry yoksa atlanır.
+        // Geometri renkleri (#7AA2F7/#9D7CD8/#C792EA/#56C2E6) bilinçli tema-sabit (kimlik renkleri).
         if (!chartRef.current._geoAdded) {
           const geo = activeSignal.geometry;
           if (geo) {
@@ -863,7 +868,7 @@ const ChartModal = () => {
         const isBE = isPartial && (beClose || (mode === 'live' && ctxStatus === 'BE Oldu'));
         const isTP = !isBE && ((mode === 'backtest' && sig.status === 'TP') || (mode === 'live' && ctxStatus === 'TP Oldu'));
         const isSL = (mode === 'backtest' && sig.status === 'SL') || (mode === 'live' && (ctxStatus === 'SL Oldu' || ctxStatus === 'TP/SL Aynı Mum'));
-        const exitColor = isCancelled ? '#848E9C' : isTP ? '#0ECB81' : isSL ? '#F6465D' : '#F0B90B';
+        const exitColor = isCancelled ? th.muted : isTP ? th.up : isSL ? th.down : th.accent;
         // Scale-out has NO single "TP": the runner exits at its +4R cap, breakeven, or a
         // mark (3-day / data-edge). Label the exit marker accordingly so it isn't a misleading
         // "TP" (the real +1R take-profit is the separate partial marker). A cancelled signal
@@ -879,18 +884,18 @@ const ChartModal = () => {
         const exitSec = closeBarSec != null ? closeBarSec : (Number.isFinite(sig.exitTs) ? snapBar(sig.exitTs) : null);
 
         const markers = [];
-        if (signalVisible && !isTrailing) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: '#F0B90B', text: t('Sinyal'), size: 1 });
+        if (signalVisible && !isTrailing) markers.push({ time: signalSec, position: 'aboveBar', shape: 'circle', color: th.accent, text: t('Sinyal'), size: 1 });
         // Entry-fill marker — shown whenever the entry fills, INCLUDING on the signal bar itself
         // (breakouts enter at the bar close, so entryFillSec usually == signalSec). Sinyal is an
         // aboveBar circle and Giriş is a belowBar arrow (long), so they don't collide on one bar.
         if (entryFilled && entryFillSec != null) {
-          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: '#F5B942', text: isConfirmEntry ? `${t('Giriş')} ·0.5R` : t('Giriş'), size: 1 });
+          markers.push({ time: entryFillSec, position: isLong ? 'belowBar' : 'aboveBar', shape: isLong ? 'arrowUp' : 'arrowDown', color: th.accent, text: isConfirmEntry ? `${t('Giriş')} ·0.5R` : t('Giriş'), size: 1 });
         }
         // Kısmi kâr işareti: ½TP'de fiyat TP/2'ye değdi (%50 kapandı); scale-out'ta +1R'ye
         // değdi (%60 kapandı). Her ikisinde de SL → Entry (breakeven).
         if (isPartial && partialBarSec != null && (partialBarSec !== exitSec || !isTerminalState)) {
           const partialText = isScaleOut ? `TP1 +1R · %${soBookPct} → BE` : '½TP %50 · SL→BE';
-          markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: '#F5B942', text: partialText, size: 1 });
+          markers.push({ time: partialBarSec, position: isLong ? 'aboveBar' : 'belowBar', shape: 'circle', color: th.accent, text: partialText, size: 1 });
         }
         if (isTerminalState && exitSec != null) {
           markers.push({ time: exitSec, position: isLong ? 'aboveBar' : 'belowBar',
@@ -969,7 +974,7 @@ const ChartModal = () => {
       chart.remove();
       chartRef.current = null;
     };
-  }, [activeSignal, dbFresh, showTv, mode, chartStyle, isHalf, isScaleOut]);
+  }, [activeSignal, dbFresh, showTv, mode, chartStyle, isHalf, isScaleOut, theme]);
 
   // UI Formatters
   // Signal/hover times in UTC (the data's native zone), labelled so it's unambiguous
@@ -1085,16 +1090,16 @@ const ChartModal = () => {
     <div
       id="modal"
       style={{
-        display: 'block', backgroundColor: '#0B0E11', color: '#EAECEF',
+        display: 'block', backgroundColor: 'var(--bg)', color: 'var(--text)',
         transform: dragY ? `translateY(${dragY}px)` : undefined,
         transition: dragY ? 'none' : 'transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1)',
       }}
     >
-      <div id="chart-header" {...swipeHandlers} style={{ borderBottom: '1px solid #2a2e39', padding: '10px', paddingRight: '104px' }}>
+      <div id="chart-header" {...swipeHandlers} style={{ borderBottom: '1px solid var(--border)', padding: '10px', paddingRight: '104px' }}>
         <div className="sheet-handle" aria-hidden="true" />
         <div className="chart-header-top">
-          <h2 style={{color:'white', margin:0, fontSize:'16px'}}>
-            {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? '#0ECB81' : '#F6465D'}}>{activeSignal?.dir}</span>
+          <h2 style={{color:'var(--text)', margin:0, fontSize:'16px'}}>
+            {activeSignal?.symbol} <span style={{color: activeSignal?.dir === 'LONG' ? 'var(--win)' : 'var(--loss)'}}>{activeSignal?.dir}</span>
           </h2>
           {!showTv && (
             <div className="chart-style-seg" role="group" aria-label="chart style">
@@ -1134,7 +1139,7 @@ const ChartModal = () => {
               close button, where it used to get clipped), values tinted by the hovered bar's direction. */}
           {!showTv && hoverInfo && (() => {
             const up = hoverInfo.open === undefined || hoverInfo.close >= hoverInfo.open;
-            const vc = up ? '#0ECB81' : '#F6465D';
+            const vc = up ? 'var(--win)' : 'var(--loss)';
             return (
               <div className="chart-hover-info">
                 <span className="ohlc-time">{formatHoverTime(hoverInfo.time)}</span>
@@ -1201,7 +1206,7 @@ const ChartModal = () => {
           ? Math.abs(dispEntry - activeSignal.sl) : null;
         const so1R = soRisk ? (activeSignal.dir === 'LONG' ? dispEntry + soRisk : dispEntry - soRisk) : null;
         const so1Rpct = so1R ? pctDist(dispEntry, so1R) : null;
-        let soState = null, soStateColor = '#EAECEF';
+        let soState = null, soStateColor = 'var(--text)';
         if (isScaleOut) {
           if (mode === 'backtest') {
             if (sig.status === 'SL') {
@@ -1212,7 +1217,7 @@ const ChartModal = () => {
               const fullSL = Number.isFinite(exitPrice) && Number.isFinite(activeSignal.sl)
                 && Math.abs(exitPrice - activeSignal.sl) / activeSignal.sl < 1e-4;
               soState = fullSL ? t('SL · tüm pozisyon (+1R görülmedi)') : t('Ters sinyal · erken kapanış (+1R yok)');
-              soStateColor = '#F6465D';
+              soStateColor = 'var(--loss)';
             }
             else if (sig.status === 'TP') {
               const beRunner = Number.isFinite(exitPrice) && dispEntry
@@ -1227,17 +1232,17 @@ const ChartModal = () => {
                 : capRunner ? t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR })
                 : runnerDays >= (soHorizD - 0.1) ? t('%{book} +1R alındı · %{run} runner mark ({hor}g)', { book: soBookPct, run: soRunPct, hor: soHorizD })
                 : t('%{book} +1R alındı · %{run} runner mark (veri sonu, <{hor}g)', { book: soBookPct, run: soRunPct, hor: soHorizD });
-              soStateColor = '#0ECB81';
-            } else { soState = t('Açık'); soStateColor = '#F5B942'; }
+              soStateColor = 'var(--win)';
+            } else { soState = t('Açık'); soStateColor = 'var(--accent)'; }
           } else {
             // live: mirror the backtest runner breakdown from the live status, so the live panel
             // reads as richly as backtest (not just a bare status string).
             const s = liveTradeStatus;
-            if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = '#F6465D'; }
-            else if (s === 'BE Oldu') { soState = t('%{book} +1R alındı · %{run} runner BE (0R)', { book: soBookPct, run: soRunPct }); soStateColor = '#0ECB81'; }
-            else if (s === 'TP Oldu') { soState = t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR }); soStateColor = '#0ECB81'; }
-            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%{book} +1R alındı · %{run} runner aktif (≤+{cap}R / {hor}g)', { book: soBookPct, run: soRunPct, cap: soCapR, hor: soHorizD }); soStateColor = '#F5B942'; }
-            else { soState = s; soStateColor = '#F5B942'; }   // Entry Geldi / Sinyal Bekliyor / İptal
+            if (s === 'SL Oldu' || s === 'TP/SL Aynı Mum') { soState = t('SL · tüm pozisyon (+1R görülmedi)'); soStateColor = 'var(--loss)'; }
+            else if (s === 'BE Oldu') { soState = t('%{book} +1R alındı · %{run} runner BE (0R)', { book: soBookPct, run: soRunPct }); soStateColor = 'var(--win)'; }
+            else if (s === 'TP Oldu') { soState = t('%{book} +1R alındı · %{run} runner +{cap}R cap', { book: soBookPct, run: soRunPct, cap: soCapR }); soStateColor = 'var(--win)'; }
+            else if (s === 'İşlem Aktif (+1R Alındı · Runner)') { soState = t('%{book} +1R alındı · %{run} runner aktif (≤+{cap}R / {hor}g)', { book: soBookPct, run: soRunPct, cap: soCapR, hor: soHorizD }); soStateColor = 'var(--accent)'; }
+            else { soState = s; soStateColor = 'var(--accent)'; }   // Entry Geldi / Sinyal Bekliyor / İptal
           }
         }
 
@@ -1245,11 +1250,11 @@ const ChartModal = () => {
         <div
           ref={panelRef}
           className={`position-panel${panelCollapsed ? ' collapsed' : ''}`}
-          style={{ backgroundColor: '#181A20', borderRight: '1px solid #2B3139', ...(panelPos ? { position: 'fixed', left: panelPos.x, top: panelPos.y, right: 'auto' } : {}) }}
+          style={{ backgroundColor: 'var(--panel)', borderRight: '1px solid var(--border)', ...(panelPos ? { position: 'fixed', left: panelPos.x, top: panelPos.y, right: 'auto' } : {}) }}
         >
           <div className="position-panel__bar" onPointerDown={startPanelDrag}>
             <span className="position-panel__title">
-              {activeSignal.symbol} · <span style={{ color: activeSignal.dir === 'LONG' ? '#0ECB81' : '#F6465D' }}>{activeSignal.dir}</span>
+              {activeSignal.symbol} · <span style={{ color: activeSignal.dir === 'LONG' ? 'var(--win)' : 'var(--loss)' }}>{activeSignal.dir}</span>
             </span>
             <button
               className="position-panel__btn"
@@ -1271,26 +1276,26 @@ const ChartModal = () => {
           {isTrailing ? null : !isScaleOut ? (
             <div className="position-row">
                <span>{t('Hedef')}</span>
-               <b><span style={{color:'#0ECB81'}}>{formatPrice(dispTp)}</span>
-                 {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
+               <b><span style={{color:'var(--win)'}}>{formatPrice(dispTp)}</span>
+                 {targetPct != null && <span style={{color:'var(--muted)', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
                </b>
             </div>
           ) : (<>
             <div className="position-row">
                <span>{`TP1 (+1R · %${soBookPct})`}</span>
-               <b><span style={{color:'#0ECB81'}}>{formatPrice(so1R)}</span>
-                 {so1Rpct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{Math.abs(so1Rpct).toFixed(2)}%</span>}
+               <b><span style={{color:'var(--win)'}}>{formatPrice(so1R)}</span>
+                 {so1Rpct != null && <span style={{color:'var(--muted)', fontWeight:400}}> · +{Math.abs(so1Rpct).toFixed(2)}%</span>}
                </b>
             </div>
             <div className="position-row">
                <span>{sd.isAdmin ? t('Runner Cap (+{cap}R)', { cap: soCapR }) : t('Hedef')}</span>
-               <b><span style={{color:'#0ECB81'}}>{formatPrice(dispTp)}</span>
-                 {targetPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
+               <b><span style={{color:'var(--win)'}}>{formatPrice(dispTp)}</span>
+                 {targetPct != null && <span style={{color:'var(--muted)', fontWeight:400}}> · +{targetPct.toFixed(2)}%</span>}
                </b>
             </div>
             <div className="position-row">
                <span>{`Runner (%${soRunPct})`}</span>
-               <b style={{color:'#F5B942', fontWeight:500}}>{t('+{cap}R cap · breakeven · {hor}g', { cap: soCapR, hor: soHorizD })}</b>
+               <b style={{color:'var(--accent)', fontWeight:500}}>{t('+{cap}R cap · breakeven · {hor}g', { cap: soCapR, hor: soHorizD })}</b>
             </div>
             {soState && (
               <div className="position-row">
@@ -1305,8 +1310,8 @@ const ChartModal = () => {
             return (
               <div className="position-row">
                 <span>½TP ({t('Kısmi')})</span>
-                <b><span style={{color:'#F5B942'}}>{formatPrice(halfLevelP)}</span>
-                  {halfPctP != null && <span style={{color:'#848E9C', fontWeight:400}}> · +{Math.abs(halfPctP).toFixed(2)}%</span>}
+                <b><span style={{color:'var(--accent)'}}>{formatPrice(halfLevelP)}</span>
+                  {halfPctP != null && <span style={{color:'var(--muted)', fontWeight:400}}> · +{Math.abs(halfPctP).toFixed(2)}%</span>}
                 </b>
               </div>
             );
@@ -1314,23 +1319,23 @@ const ChartModal = () => {
           {!isTrailing && (
           <div className="position-row">
              <span>{t('Stop')}</span>
-             <b><span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span>
-               {riskPct != null && <span style={{color:'#848E9C', fontWeight:400}}> · -{Math.abs(riskPct).toFixed(2)}%</span>}
+             <b><span style={{color:'var(--loss)'}}>{formatPrice(activeSignal.sl)}</span>
+               {riskPct != null && <span style={{color:'var(--muted)', fontWeight:400}}> · -{Math.abs(riskPct).toFixed(2)}%</span>}
              </b>
           </div>
           )}
           {rr != null && !isScaleOut && !isTrailing && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
-              <b style={{ color: '#F5B942' }}>1:{rr.toFixed(2)}
-                {isHalf && <span style={{color:'#848E9C', fontWeight:400}}> · ½TP maks +{(0.75 * rr).toFixed(2)}R</span>}
+              <b style={{ color: 'var(--accent)' }}>1:{rr.toFixed(2)}
+                {isHalf && <span style={{color:'var(--muted)', fontWeight:400}}> · ½TP maks +{(0.75 * rr).toFixed(2)}R</span>}
               </b>
             </div>
           )}
           {isScaleOut && (
             <div className="position-row">
               <span>{t('Risk-Reward')}</span>
-              <b style={{ color: '#F5B942' }}>1:1 (TP1)<span style={{color:'#848E9C', fontWeight:400}}> · runner ≤+{soCapR}R / {soHorizD}g</span></b>
+              <b style={{ color: 'var(--accent)' }}>1:1 (TP1)<span style={{color:'var(--muted)', fontWeight:400}}> · runner ≤+{soCapR}R / {soHorizD}g</span></b>
             </div>
           )}
           {mode === 'live' && !midasClosedLive && Number.isFinite(liveLastPrice) && (
@@ -1342,7 +1347,7 @@ const ChartModal = () => {
               {distToEntry != null && (
                 <div className="position-row">
                   <span>{t("Entry'ye Uzaklık")}</span>
-                  <b style={{ color: Math.abs(distToEntry) < 0.5 ? '#F5B942' : '#EAECEF' }}>
+                  <b style={{ color: Math.abs(distToEntry) < 0.5 ? 'var(--accent)' : 'var(--text)' }}>
                     {distToEntry >= 0 ? '+' : ''}{distToEntry.toFixed(2)}%
                   </b>
                 </div>
@@ -1359,15 +1364,15 @@ const ChartModal = () => {
           <div className="position-row">
             <span>{t('PnL')}</span>
             {midasClosedLive && Number.isFinite(midasR) ? (
-              <b style={{ color: midasR >= 0 ? '#0ECB81' : '#F6465D' }}>{midasR >= 0 ? '+' : ''}{midasR.toFixed(2)}R</b>
+              <b style={{ color: midasR >= 0 ? 'var(--win)' : 'var(--loss)' }}>{midasR >= 0 ? '+' : ''}{midasR.toFixed(2)}R</b>
             ) : Number.isFinite(soLiveR) ? (
               // scale-out LIVE R: +0.6−fee secured at the +1R partial / BE (floor while the
               // runner rides), −1R for a pre-+1R stop. Realised R comes from the nightly sync.
-              <b style={{color: soLiveR >= 0 ? '#0ECB81' : '#F6465D'}}>
+              <b style={{color: soLiveR >= 0 ? 'var(--win)' : 'var(--loss)'}}>
                 {soLiveRFloor ? '≥' : ''}{soLiveR >= 0 ? '+' : ''}{soLiveR.toFixed(2)}R
               </b>
             ) : (
-              <b style={{color: activePnL === null || activePnL >= 0 ? '#0ECB81' : '#F6465D'}}>
+              <b style={{color: activePnL === null || activePnL >= 0 ? 'var(--win)' : 'var(--loss)'}}>
                 {activePnL !== null ? formatPnL(activeSignal, activePnL) : '--'}
               </b>
             )}
@@ -1391,13 +1396,13 @@ const ChartModal = () => {
               {Number.isFinite(Number(activeSignal.context?.atrx)) && (
                 <div className="position-row">
                   <span>ATRX</span>
-                  <b style={{ color: Number(activeSignal.context.atrx) < 0.8 ? '#0ECB81' : Number(activeSignal.context.atrx) > 1.25 ? '#F6465D' : 'inherit' }}>
+                  <b style={{ color: Number(activeSignal.context.atrx) < 0.8 ? 'var(--win)' : Number(activeSignal.context.atrx) > 1.25 ? 'var(--loss)' : 'inherit' }}>
                     {Number(activeSignal.context.atrx).toFixed(2)}
                   </b>
                 </div>
               )}
               {Number.isFinite(activeSignal.confluenceScore) && !isTrailing && (
-                <div className="position-row"><span>{t('Konfluens')}</span><b style={{ color: '#F5B942' }}>{activeSignal.confluenceScore}</b></div>
+                <div className="position-row"><span>{t('Konfluens')}</span><b style={{ color: 'var(--accent)' }}>{activeSignal.confluenceScore}</b></div>
               )}
               {activeSignal.quality && (
                 <div className="position-row"><span>{t('Kalite')}</span><b>{activeSignal.quality}</b></div>
@@ -1416,11 +1421,11 @@ const ChartModal = () => {
       })()}
 
       {showTv && activeSignal && mode === 'live' && (
-        <div className="position-panel horizontal bottom-left" style={{ backgroundColor: '#1e222d', borderRight: '1px solid #2a2e39' }}>
+        <div className="position-panel horizontal bottom-left" style={{ backgroundColor: 'var(--panel-2)', borderRight: '1px solid var(--border)' }}>
           <div className="position-row"><span>{t('Sembol')}</span><b>{activeSignal.symbol}</b></div>
           <div className="position-row">
             <span>{t('Yön')}</span>
-            <b style={{ color: activeSignal.dir === 'LONG' ? '#0ECB81' : '#F6465D' }}>
+            <b style={{ color: activeSignal.dir === 'LONG' ? 'var(--win)' : 'var(--loss)' }}>
               {activeSignal.dir}
             </b>
           </div>
@@ -1428,19 +1433,19 @@ const ChartModal = () => {
           <div className="position-row"><span>Entry{isConfirmEntry ? ' ·0.5R' : ''}</span><b>{formatPrice(dispEntry)}</b></div>
           <div className="position-row">
             <span>TP / SL</span>
-            <b><span style={{color:'#0ECB81'}}>{formatPrice(dispTp)}</span> / <span style={{color:'#F6465D'}}>{formatPrice(activeSignal.sl)}</span></b>
+            <b><span style={{color:'var(--win)'}}>{formatPrice(dispTp)}</span> / <span style={{color:'var(--loss)'}}>{formatPrice(activeSignal.sl)}</span></b>
           </div>
         </div>
       )}
 
-      {chartError && !showTv && <div className="chart-warning" style={{color:'#F6465D'}}>{chartError}</div>}
+      {chartError && !showTv && <div className="chart-warning" style={{color:'var(--loss)'}}>{chartError}</div>}
       {chartLoading && !showTv && <div className="chart-warning">{t('Veriler yükleniyor...')}</div>}
 
       <div
         ref={chartContainerRef}
         id="chart-container"
         className="journal-chart"
-        style={{ width: '100%', height: '100%', minHeight: '520px', display: showTv ? 'none' : 'block', backgroundColor: '#0B0E11' }}
+        style={{ width: '100%', height: '100%', minHeight: '520px', display: showTv ? 'none' : 'block', backgroundColor: 'var(--bg)' }}
       ></div>
 
       {showTv && (

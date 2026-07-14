@@ -58,10 +58,12 @@ _DELETE = "DELETE FROM ict_trade.push_subscriptions WHERE id = %s"
 # with streamMask.CODENAMES. Longest-first replacement so 'MIDAS-X' wins over 'MIDAS'.
 _MASK_MAP = [
     ("MIDAS-X", "SIRIUS-X"),
-    ("OPUS·SQZ", "PYXIS"),     # longest-first: OPUS'tan ÖNCE gelmeli
+    ("OPUS·BAND", "VELA"),     # longest-first: OPUS'tan ÖNCE gelmeli
+    ("OPUS·SQZ", "PYXIS"),
     ("OPUS·Q5", "CARINA"),
     ("d30so8f3sq", "PYXIS"),
     ("d30so8f3q5", "CARINA"),
+    ("d30so8f3bd", "VELA"),
     ("OPUS", "ATLAS"),
     ("FABLE", "NOVA"),
     ("MIDAS", "SIRIUS"),
@@ -115,11 +117,15 @@ def _admin_user_ids(conn) -> set:
 
 
 # signals.mode (scanner discriminator) -> anonim akış KEY'i (user_signal_watch.strategy).
+# Not: lookup `_MODE_TO_STREAM.get(mode, mode)` — mode==strategy olan akışlar (talos_ichi)
+# fallback ile de eşleşir; yine de canlı akışları burada AÇIKÇA listele ki eşleme sözleşmesi
+# görünür olsun (2026-07-14 C-1 onarımı).
 _MODE_TO_STREAM = {
     "dch30_4h": "d30so8f3h7",    # OPUS
     # "dch30_4hvg" (FABLE) emekli 2026-07-07 — canli emit'i kaldirildi, backtest-only.
-    "midas": "midas",            # MIDAS / SIRIUS
-    "talos": "talos",            # TALOS / ANTARES (3. canlı PAPER akışı, 2026-07-07)
+    "midas": "midas",            # MIDAS / SIRIUS (2026-07-13'ten beri backtest-only, emit yok)
+    "talos": "talos",            # TALOS / ANTARES (PAPER akışı, 2026-07-07)
+    "talos_ichi": "talos_ichi",  # TALOS-ICHI / MENKAR (CANLI altın akışı)
 }
 
 
@@ -216,7 +222,8 @@ def push_signal_watchers(mode: str, symbol: str, title: str, body: str,
                          url: str = "/", tag: str | None = None) -> int:
     """Queue a PERSONAL signal push for every user whose watchlist (ict_trade.user_signal_watch)
     includes (stream_of(mode), symbol). Honors notify_signals. Text is masked to codenames
-    per-user (the --drain path doesn't mask). Fires for the FULL scanned universe (independent
+    per-user (drain 2026-07-14'ten beri ikinci katman olarak yine maskeler — çifte maske
+    zararsız). Fires for the FULL scanned universe (independent
     of the owner's Telegram gate) so a user can watch any symbol. Rows are delivered by the
     existing `--drain` cron. Best-effort; silent no-op pre-migration-011. Returns rows queued."""
     try:
@@ -267,6 +274,12 @@ def drain_outbox(conn) -> int:
     subscriptions (so the queue can never grow unbounded); dead endpoints (404/410)
     are pruned like the broadcast path. Returns the number of pushes sent.
 
+    ANONYMIZATION (2026-07-14, C-2): non-admin payload'larının title/body'si gönderim
+    anında _mask_text ile kod adlarına çevrilir. Enqueue tarafı (push_signal_watchers)
+    zaten maskeliyor — çifte maske zararsız (replace idempotent); asıl kapsam, maskesiz
+    yazan üreticiler (executor _alert -> push_user, admin_notify RPC). Maskeleme
+    best-effort: hata olursa payload olduğu gibi gider (push düşürülmez).
+
     Quiet no-op when: VAPID/pywebpush unconfigured, the outbox is empty, or the
     push_outbox table doesn't exist yet (migration 006 not applied — the cron line
     may land first)."""
@@ -297,11 +310,21 @@ def drain_outbox(conn) -> int:
             by_user.setdefault(str(user_id), []).append((sub_id, endpoint, p256dh, auth))
 
         claims = {"sub": subject}
+        admins = _admin_user_ids(conn)
         sent = 0
         dead: set = set()
         done_ids: list = []
         for row_id, user_id, payload in rows:
             data = payload if isinstance(payload, str) else json.dumps(payload)
+            if user_id not in admins:
+                try:
+                    obj = json.loads(data)
+                    for k in ("title", "body"):
+                        if isinstance(obj.get(k), str):
+                            obj[k] = _mask_text(obj[k])
+                    data = json.dumps(obj)
+                except Exception:  # noqa: BLE001 — maskeleme hatası push'u düşürmesin
+                    pass
             for sub_id, endpoint, p256dh, auth in by_user.get(user_id, []):
                 if sub_id in dead:
                     continue

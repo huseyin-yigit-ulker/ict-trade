@@ -25,21 +25,20 @@ En büyük fırsatlar beş kümede toplanıyor:
 
 ## 1. Kritik bulgular (öneriden bağımsız — bugün kırık)
 
-### 1.1 Altın sinyal-izleme push'u hiçbir koşulda çalışamaz 🔴
-Üç katman aynı anda kırık (hepsi kodda doğrulandı):
-- `supabase/migrations/011_user_signal_watch.sql:18` — CHECK yalnız `('d30so8f3h7','d30so8f3vg','midas')` kabul ediyor; canlı akışlar ise `d30so8f3h7` + `talos_ichi` (`src/utils/streamMask.js` LIVE_STREAM_KEYS). MENKAR (altın) için kaydet → **CHECK ihlali, upsert patlar**.
-- `sync/push_notify.py:120-125` `_MODE_TO_STREAM` — `talos_ichi` eşlemesi yok; emit `push_signal_watchers` çağırsa bile satır eşleşemez.
-- `src/components/trading/SignalWatchCard.jsx:19` `UNI_BUCKET` — `talos_ichi` bucket'ı yok; kullanıcı sembol bile seçemiyor.
-- Bonus: izinli 3 stratejiden 2'si ölü (`midas` backtest-only 2026-07-13'ten beri, `d30so8f3vg`/FABLE emekli 2026-07-07).
+### 1.1 Altın sinyal-izleme push'u fiilen imkânsızdı 🔴 → ✅ FİX (2026-07-14)
+**Düzeltme notu (2026-07-14, canlı DB'de doğrulandı):** raporun ilk sürümü "üç katman kırık" diyordu; gerçekte DB katmanı `015_talos_ichi_stream.sql` ile ÇOKTAN onarılmıştı (CHECK `'talos','talos_ichi'` içeriyor; `stream_universe`'te (talos_ichi, XAUUSDT) satırı var) ve `_MODE_TO_STREAM.get(mode, mode)` fallback'i raw `talos_ichi`'yi zaten geçiriyordu. **Gerçek kırıklar ve yapılan onarım:**
+- `SignalWatchCard.jsx` `UNI_BUCKET`'ta talos_ichi eşlemesi yoktu → MENKAR sekmesi "Bu akış için sembol listesi boş" gösteriyordu, kullanıcı kayıt YAPAMIYORDU → altın izleme fiilen imkânsız. ✅ eşleme eklendi.
+- Ölü stratejili izleme satırları (`d30so8f3vg`, `midas`) `_watchlist_user_ids` üzerinden sahibini broadcast'ten düşürüyordu ama izlenen akış hiç sinyal üretmiyor → o kullanıcı HİÇBİR sinyal push'u almıyordu. ✅ migration `020_signal_watch_cleanup.sql` ile temizlendi (canlı DB'ye uygulandı; kalan satırlar yalnız d30so8f3h7).
+- ✅ `_MODE_TO_STREAM`'e `talos_ichi` açıkça eklendi (fallback'e bel bağlamamak + sözleşmeyi görünür kılmak için).
 
-"Seçilebilen ama asla tetiklenmeyen alarm" sessiz-başarısızlık sınıfıdır — kullanıcı güvenini en çok kıran hata. Fix: bkz. **C-1** (efor S).
+Ders: "seçilebilen ama asla tetiklenmeyen alarm" sessiz-başarısızlık sınıfıdır; ve bir bulguyu raporlarken migration zincirinin TAMAMI (011→013→015) okunmalı.
 
-### 1.2 Anonimleştirme sızıntısı: executor kişisel push'ları maskesiz 🔴
+### 1.2 Anonimleştirme sızıntısı: executor kişisel push'ları maskesiz 🔴 → ✅ FİX (2026-07-14, drain katmanı)
 - `sync/live_exec/executor.py:50` — `_TAG = "OPUS · d30so8f3h7"` (EXEC_NAME + gerçek version key); `_alert` (satır 55-66) bu metni HTML-strip edip **olduğu gibi** `push_user`'a veriyor.
 - `sync/users/store.py:190` `push_user` ve `sync/push_notify.py:264` `drain_outbox` **hiç maskeleme yapmaz** (drain docstring'i bunu açıkça söylüyor). Aynı örüntü 4 executor'da da var.
 - `009_admin_tools.sql` `admin_notify` RPC payload'ı verbatim yazar — duyuruda "OPUS" geçerse tüm kullanıcılara aynen gider.
 
-Sonuç: non-admin bir kullanıcıya kendi executor'ünün push'unda **"OPUS · d30so8f3h7"** görünür — kod adı sözleşmesinin (ATLAS/MENKAR/VELA) tam ihlali. Broadcast sinyal yolu (`send_push`) doğru maskeliyor; kişisel yol delik. Fix: bkz. **C-2** (efor S). Not: `_MASK_MAP`'e VELA ekleyen working-tree diff'i (`sync/push_notify.py`) hâlâ commit edilmemiş.
+Sonuç: non-admin bir kullanıcıya kendi executor'ünün push'unda **"OPUS · d30so8f3h7"** görünürdü — kod adı sözleşmesinin (ATLAS/MENKAR/VELA) tam ihlali. Broadcast sinyal yolu (`send_push`) zaten doğru maskeliyordu; kişisel yol delikti. ✅ **FİX:** `drain_outbox` artık gönderim anında admin-olmayan her payload'ın title/body'sini `_mask_text`'ten geçiriyor (best-effort; maske hatası push'u düşürmez; çifte maske idempotent) → `push_user`, `admin_notify` ve gelecekteki tüm üreticiler tek noktadan korunuyor. VELA `_MASK_MAP` diff'i de bu dalgada commit'lendi. Kalan (C-5 öncesi): enqueue-mask — `push_outbox`'a client SELECT açılmadan payload'lar DB'ye de maskeli yazılmalı.
 
 ### 1.3 Push teslimatı: "hata da olsa gönderildi sayılır" 🟠
 `drain_outbox` (`sync/push_notify.py:305-330`) her satırı sonuç ne olursa olsun `sent_at=now()` işaretler; 404/410 dışındaki hatalar (5xx, timeout, **429**) yalnız print edilir, retry yok. Chrome 2026 başından beri Push API'ye hız limiti uyguluyor (aşımda HTTP 429) — meşgul bir günde push'lar sessizce kaybolur. Ayrıca tüm push'lar default TTL (4 hafta!) ve default urgency ile gidiyor: 3 gün önceki sinyal push'u telefon açılınca teslim edilebilir. Fix: **C-3** + **C-11**.
@@ -50,8 +49,8 @@ SVG mikro-grafikler (Sparkline, EquityCurvePanel, IntelViz) CSS token okuyup tem
 ### 1.5 Outcome-scan mantığı 3 kopya 🟠
 "Mumlardan işlemin akıbetini çöz" taraması üç yerde bağımsız yaşıyor: `ChartModal.jsx` (~462-540), `SharedTradePage.jsx` `scanOutcome` (55-97, kendi yorumu "sadeleştirilmiş ikiz"), `sync/live_exec/trade_report.py` (Python). Ayrıştıkları gün aynı işlem üç yüzeyde farklı sonuç gösterir — güven ürünü için en tehlikeli bug sınıfı. Fix: **B-3** (ortak util + JS/Python paylaşımlı test vektörleri).
 
-### 1.6 İstemcide bildirimler birbirini eziyor 🟡
-`executor.py:66` tüm executor push'larını sabit `tag="exec"` ile gönderiyor → tarayıcıda aynı tag'li bildirim bir öncekini **değiştirir**; hızlı ardışık olaylarda (GİRİŞ → TP1) kullanıcı yalnız sonuncuyu görür. Fix: **C-9** içinde tag'i `exec:{sym}:{pos_id}` yapmak (tek satır).
+### 1.6 İstemcide bildirimler birbirini eziyor 🟡 → ✅ FİX (2026-07-14)
+`executor.py:66` tüm executor push'larını sabit `tag="exec"` ile gönderiyordu → tarayıcıda aynı tag'li bildirim bir öncekini **değiştirir**; hızlı ardışık olaylarda (GİRİŞ → TP1) kullanıcı yalnız sonuncuyu görürdü. ✅ **FİX:** 4 executor'da `tag=""` (spec gereği boş tag asla coalesce edilmez → her olay ayrı kart) + `sw.js`'te savunmacı `tag: data.tag || undefined` (null tag'in `"null"` string'ine dönüşüp TERSİNE hepsini birleştirmesini önler). Pozisyon-bazlı akıllı tag (`exec:{sym}:{pos_id}`) + dedup penceresi C-9'un P1 kapsamında kalır.
 
 ---
 
@@ -237,9 +236,9 @@ Sonuç: PUSU'nun eksikleri "egzotik" özellikler değil — bu kategorinin **bek
 
 ### P0 — bug ve sözleşme ihlalleri (önerinin ötesinde: onarım)
 
-**C-1. Sinyal izleme listesi onarımı** — §1.1'in çözümü. Uygulama: yeni migration `020_signal_watch_fix.sql`: CHECK'i genişlet `('d30so8f3h7','talos_ichi','midas','talos')` **veya** tamamen kaldırıp uygulama katmanında doğrula (yeni akış her defasında migration istemesin — önerilen bu); ölü `d30so8f3vg` satırlarını temizle. `push_notify.py` `_MODE_TO_STREAM`'e `"talos_ichi": "talos_ichi"`. `SignalWatchCard.jsx` `UNI_BUCKET`'a talos_ichi (akış XAUUSDT-only → `['XAUUSDT']` fallback yeterli; stream_universe seed'i doğrulanmalı). Efor: **S**. Risk: düşük — tablo yalnız push yönlendirir, emir yönetimine dokunmaz.
+**C-1. Sinyal izleme listesi onarımı** ✅ **UYGULANDI (2026-07-14)** — §1.1'in çözümü, düzeltilmiş kapsamla: CHECK zaten migration 015'le düzgündü, stream_universe seed'liydi. Yapılanlar: `SignalWatchCard.jsx` `UNI_BUCKET`'a `talos_ichi` eşlemesi (asıl kırık buydu), `push_notify.py` `_MODE_TO_STREAM`'e açık `talos_ichi` girdisi, migration `020_signal_watch_cleanup.sql` ile ölü stratejili (d30so8f3vg, midas) izleme satırlarının temizliği — bu satırlar sahibini broadcast'ten düşürüyordu. Canlı DB'ye uygulandı; kalan izleme satırları yalnız d30so8f3h7.
 
-**C-2. Merkezi maskeleme: drain + enqueue çift katman** — §1.2'nin çözümü. Uygulama (tek dokunuşla en geniş kapsama): `drain_outbox()` içinde `_admin_user_ids` setini çek (desen dosyada mevcut); `user_id` admin değilse payload title/body'sine `_mask_text` uygula (url/tag'e değil) → `push_user`, `admin_notify` ve gelecekteki tüm enqueue'lar tek noktadan korunur (çifte maske zararsız — replace idempotent). Ek savunma: `_MASK_MAP`'i `sync/users/mask.py` paylaşılan modüle taşı ve `push_user` enqueue anında da maskele (**A-1/C-5 bildirim merkezinin ÖNKOŞULU** — DB'de düz metin kaldıkça client SELECT açılamaz); eski maskesiz satırlara tek seferlik mask-update. Working-tree'deki VELA `_MASK_MAP` diff'i commit edilmeli. Efor: **S** (drain) + **S/M** (enqueue+geçmiş temizliği). Risk: maskeleme best-effort try/except içinde kalmalı; admin'in kendi push'ları maskelenmez.
+**C-2. Merkezi maskeleme: drain + enqueue çift katman** — §1.2'nin çözümü. ✅ **Drain katmanı UYGULANDI (2026-07-14):** `drain_outbox()` gönderim anında admin-olmayan payload'ların title/body'sini `_mask_text`'ten geçiriyor (best-effort try/except — maske hatası push'u düşürmez; url/tag'e dokunulmaz; çifte maske idempotent, test edildi) → `push_user`, `admin_notify` ve gelecekteki tüm enqueue'lar tek noktadan korunuyor. VELA `_MASK_MAP` diff'i bu dalgada commit'lendi. **KALAN (A-1/C-5 bildirim merkezinin ÖNKOŞULU):** enqueue-mask — `_MASK_MAP`'i paylaşılan modüle taşı, `push_user` enqueue anında da maskele, eski maskesiz satırlara tek seferlik mask-update (DB'de düz metin kaldıkça client SELECT açılamaz). Efor (kalan): **S/M**.
 
 **C-3. Teslim telemetrisi + transient retry (Chrome 429)** — §1.3'ün çözümü. Uygulama: migration `021_push_outbox_delivery.sql`: `push_outbox`'a `attempts int default 0`, `last_error text`, `next_attempt_at timestamptz`; `push_subscriptions`'a `fail_count`, `last_success_at`. `drain_outbox`: başarı→sent_at; 404/410→prune (mevcut); 429/5xx/timeout→`attempts+1`, `next_attempt_at = now() + 2^attempts dk`, satır açık kalır; `attempts>=5`→sent_at+last_error (poison-pill tavanı — kuyruk sınırsız büyümez, mevcut tasarım hedefi korunur); SELECT'e `next_attempt_at` şartı. Efor: **M**. Risk: tüm yeni mantık mevcut dev try/except + "migration yoksa sessiz no-op" deseninde kalır; emir yönetimi hiçbir koşulda etkilenmez.
 

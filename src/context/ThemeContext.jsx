@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useLayoutEffect, useCallback } from 'react';
 import { savePrefs } from '../utils/userPrefs';
 
 // Dark (default) / light theme. Applies via <html data-theme="..."> so CSS token
@@ -16,7 +16,11 @@ export const ThemeProvider = ({ children }) => {
     try { return localStorage.getItem(LS) || 'dark'; } catch { return 'dark'; }
   });
 
-  useEffect(() => {
+  // useLayoutEffect (useEffect DEĞİL): parent effect'leri child'lardan SONRA koşar — grafik
+  // bileşenlerinin useEffect'i readChartTheme() ile getComputedStyle okumadan ÖNCE data-theme
+  // güncellenmiş olmalı, yoksa canvas bir toggle geriden boyanır. Layout effect'ler tüm passive
+  // effect'lerden (ve paint'ten) önce biter.
+  useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem(LS, theme); } catch { /* ignore */ }
   }, [theme]);

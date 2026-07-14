@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { useStreamDisplay } from '../utils/useStreamDisplay';
+import { useTheme } from '../context/ThemeContext';
+import { readChartTheme } from '../utils/chartTheme';
 
 // Standalone LIVE chart for MIDAS (XAUUSDT 1m) — NOT tied to a trade. Draws the exact metrics the
 // signal logic (sync/midas/strategy.signals) keys off, recomputed live every 30s:
@@ -106,7 +108,7 @@ const kumo15 = (candles) => {
 // to the LOWER band (low ≤ band+0.25·ATR15) reclaimed with a bullish close (sync/talos/strategy).
 // `km` (per-bar Ichimoku Kumo) present == TALOS-ICHI: a signal also requires the cloud colour to
 // agree (long -> Senkou A>B green, short -> A<B red). km=null -> plain TALOS (gate always open).
-const computeTalos = (candles, km = null) => {
+const computeTalos = (candles, km = null, th) => {
   const k = keltner15(candles);
   const a = atr15(candles);
   const refData = []; const bandU = []; const bandL = []; const markers = [];
@@ -128,9 +130,9 @@ const computeTalos = (candles, km = null) => {
     if (Number.isFinite(a[i]) && a[i] > 0 && Number.isFinite(kk.slope) && sessOk) {
       const tol = TOUCH_TOL * a[i];
       if (kk.slope > 0 && c.close > bLo && c.low <= bLo + tol && c.close > c.open && cloudBull) {
-        markers.push({ time: c.time, position: 'belowBar', shape: 'arrowUp', color: '#0ECB81', text: 'AL', size: 1 });
+        markers.push({ time: c.time, position: 'belowBar', shape: 'arrowUp', color: th.up, text: 'AL', size: 1 });
       } else if (kk.slope < 0 && c.close < bHi && c.high >= bHi - tol && c.close < c.open && cloudBear) {
-        markers.push({ time: c.time, position: 'aboveBar', shape: 'arrowDown', color: '#F6465D', text: 'SAT', size: 1 });
+        markers.push({ time: c.time, position: 'aboveBar', shape: 'arrowDown', color: th.down, text: 'SAT', size: 1 });
       }
     }
   }
@@ -155,7 +157,7 @@ const computeTalos = (candles, km = null) => {
   return { refData, bandU, bandL, markers, last, kumoAData, kumoBData };
 };
 
-const compute = (candles) => {
+const compute = (candles, th) => {
   let curDay = null; let cumPV = 0; let cumV = 0;
   const vw = candles.map((c) => {
     const day = fxDayKey(c.time);
@@ -175,9 +177,9 @@ const compute = (candles) => {
     if (i > SLOPE_N && Number.isFinite(a[i]) && a[i] > 0 && sessOk) {
       const tol = TOUCH_TOL * a[i];
       if (c.close > v && slope[i] > 0 && c.low <= v + tol && c.close > c.open) {
-        markers.push({ time: c.time, position: 'belowBar', shape: 'arrowUp', color: '#0ECB81', text: 'AL', size: 1 });
+        markers.push({ time: c.time, position: 'belowBar', shape: 'arrowUp', color: th.up, text: 'AL', size: 1 });
       } else if (c.close < v && slope[i] < 0 && c.high >= v - tol && c.close < c.open) {
-        markers.push({ time: c.time, position: 'aboveBar', shape: 'arrowDown', color: '#F6465D', text: 'SAT', size: 1 });
+        markers.push({ time: c.time, position: 'aboveBar', shape: 'arrowDown', color: th.down, text: 'SAT', size: 1 });
       }
     }
   }
@@ -199,7 +201,7 @@ const compute = (candles) => {
 // When a `trades` list is given (backtest day): HIGHLIGHT the signals that actually OPENED a trade —
 // bright arrow + "AL/SAT ±R" at the trade's signal bar — while the other clustered signal-formation
 // markers are dimmed (still visible, but muted). Without trades, returns the core markers unchanged.
-const highlightMarkers = (coreMarkers, trades, candles) => {
+const highlightMarkers = (coreMarkers, trades, candles, th) => {
   if (!trades || !trades.length || !candles.length) return coreMarkers;
   const times = candles.map((c) => c.time);
   const t0 = times[0]; const t1 = times[times.length - 1];
@@ -217,17 +219,17 @@ const highlightMarkers = (coreMarkers, trades, candles) => {
     if (inWin(tr.signalMs)) {                              // ENTRY: amber arrow "AL"/"SAT" at the signal bar
       const bar = snap(tr.signalMs); entryBars.add(bar);
       hi.push({ time: bar, position: long ? 'belowBar' : 'aboveBar', shape: long ? 'arrowUp' : 'arrowDown',
-        size: 2, color: '#F0B90B', text: long ? 'AL' : 'SAT' });
+        size: 2, color: th.accent, text: long ? 'AL' : 'SAT' });
     }
     if (inWin(tr.exitMs)) {                                // EXIT: result-coloured circle "Çıkış ±R"
       hi.push({ time: snap(tr.exitMs), position: long ? 'aboveBar' : 'belowBar', shape: 'circle', size: 1,
-        color: Number.isFinite(r) && r < 0 ? '#F6465D' : '#0ECB81',
+        color: Number.isFinite(r) && r < 0 ? th.down : th.up,
         text: `Çıkış${Number.isFinite(r) ? ` ${r >= 0 ? '+' : ''}${r.toFixed(2)}R` : ''}` });
     }
   }
   const dim = coreMarkers.filter((m) => !entryBars.has(m.time)).map((m) => ({
     ...m, size: 1, text: undefined,
-    color: m.color === '#0ECB81' ? 'rgba(14,203,129,0.28)' : 'rgba(246,70,93,0.26)',
+    color: m.color === th.up ? th.upSoft(0.28) : th.downSoft(0.26),
   }));
   return [...dim, ...hi];
 };
@@ -239,6 +241,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
   // PRIVACY: the anchor line + the rule checklist render under neutral tags for
   // everyone except the admin (whose real labels lazy-load from adminStreamInfo).
   const sd = useStreamDisplay();
+  const { theme } = useTheme();   // toggle -> grafik efekti yeniden koşar (canvas CSS var çözemez)
   const isTalos = variant === 'talos' || variant === 'talos_ichi';   // both use the 15m Keltner visuals
   const isIchi = variant === 'talos_ichi';                           // + Ichimoku Kumo-colour direction gate
   const REF = isTalos ? (sd.isAdmin ? 'K-EMA20' : 'T-REF') : sd.refline();
@@ -257,16 +260,17 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
   useEffect(() => {
     if (!containerRef.current) return undefined;
     framedRef.current = false; markersRef.current = null;   // fresh per (re)mount / window change
+    const th = readChartTheme();   // CSS token'ları çözülmüş renk olarak (taze okuma)
     const chart = createChart(containerRef.current, {
-      layout: { background: { type: 'solid', color: '#0B0E11' }, textColor: '#EAECEF',
+      layout: { background: { type: 'solid', color: th.bg }, textColor: th.text,
         fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace" },
       // crosshair (hover) time label in UTC — same as the axis labels + the cards (never local time)
       localization: { timeFormatter: (ts) => new Date(ts * 1000)
         .toLocaleString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' UTC' },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       width: containerRef.current.clientWidth, height: containerRef.current.clientHeight,
-      rightPriceScale: { borderColor: '#2B3139', scaleMargins: { top: 0.15, bottom: 0.15 } },
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2B3139',
+      rightPriceScale: { borderColor: th.border, scaleMargins: { top: 0.15, bottom: 0.15 } },
+      timeScale: { timeVisible: true, secondsVisible: false, borderColor: th.border,
         tickMarkFormatter: (time, type) => {
           const d = new Date(time * 1000);
           return type < 3 ? d.toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short' })
@@ -276,8 +280,9 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
     });
     chartRef.current = chart;
     const candle = chart.addSeries(CandlestickSeries, {
-      upColor: '#0ECB81', downColor: '#F6465D', borderVisible: false, wickUpColor: '#0ECB81', wickDownColor: '#F6465D',
+      upColor: th.up, downColor: th.down, borderVisible: false, wickUpColor: th.up, wickDownColor: th.down,
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 } });
+    // Referans/bant mavisi (#3B82F6) bilinçli tema-sabit — metrik kimlik rengi, her iki temada okunur.
     const refSeries = chart.addSeries(LineSeries, { color: '#3B82F6', lineWidth: 2, title: REF, lastValueVisible: true,
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 }, crosshairMarkerVisible: false });
     const bandOpts = { color: 'rgba(59,130,246,0.35)', lineWidth: 1, lineStyle: 2, lastValueVisible: false,
@@ -288,8 +293,8 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
     // keys off. Created hidden; a visibility effect toggles them for talos_ichi (see showKumo).
     const kOpts = { lineWidth: 1, lastValueVisible: false, priceLineVisible: false,
       crosshairMarkerVisible: false, visible: false, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } };
-    const kumoA = chart.addSeries(LineSeries, { ...kOpts, color: 'rgba(14,203,129,0.9)', title: 'Senkou A' });
-    const kumoB = chart.addSeries(LineSeries, { ...kOpts, color: 'rgba(246,70,93,0.9)', title: 'Senkou B' });
+    const kumoA = chart.addSeries(LineSeries, { ...kOpts, color: th.upSoft(0.9), title: 'Senkou A' });
+    const kumoB = chart.addSeries(LineSeries, { ...kOpts, color: th.downSoft(0.9), title: 'Senkou B' });
     seriesRef.current = { candle, refSeries, bandU, bandL, kumoA, kumoB };
 
     let cancelled = false;
@@ -327,12 +332,12 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         if (!raw.length) { setStatus('Veri yok'); return; }
         const candles = raw.map((d) => ({ time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5] }));
         const { refData, bandU: bu, bandL: bl, markers, last: lm, kumoAData, kumoBData } = isTalos
-          ? computeTalos(candles, isIchi ? kumo15(candles) : null)
-          : compute(candles);
+          ? computeTalos(candles, isIchi ? kumo15(candles) : null, th)
+          : compute(candles, th);
         candle.setData(candles); refSeries.setData(refData); bandU.setData(bu); bandL.setData(bl);
         if (isIchi && kumoAData) { kumoA.setData(kumoAData); kumoB.setData(kumoBData); }
         // markers = ALL signal-formation moments (dimmed) + the trades that opened (entry arrow + exit)
-        const finalMarkers = highlightMarkers(markers, tradesRef.current, candles);
+        const finalMarkers = highlightMarkers(markers, tradesRef.current, candles, th);
         finalMarkers.sort((a, b) => a.time - b.time);
         if (!markersRef.current) markersRef.current = createSeriesMarkers(candle, finalMarkers);
         else markersRef.current.setMarkers(finalMarkers);
@@ -357,7 +362,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
     });
     ro.observe(containerRef.current);
     return () => { cancelled = true; if (id) clearInterval(id); ro.disconnect(); chart.remove(); chartRef.current = null; };
-  }, [startMs, endMs, REF, variant]);
+  }, [startMs, endMs, REF, variant, theme]);
 
   // Toggle the Ichimoku cloud lines on/off without re-running the data-load effect (TALOS-ICHI only).
   useEffect(() => {
@@ -372,26 +377,28 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
   const longReady = c && c.sessOk && c.above && c.slopeUp && c.pullLong && c.bull && (!isIchi || c.kumoLong);
   const shortReady = c && c.sessOk && c.below && c.slopeDn && c.pullShort && c.bear && (!isIchi || c.kumoShort);
 
+  // DOM inline stiller CSS var kullanır (tema toggle'ında canlı güncellenir); yarı-saydam
+  // dolgular color-mix ile token'dan türetilir — alfa değerleri eskisiyle birebir.
   const Pill = ({ ok, label }) => (
     <span style={{ padding: '2px 7px', borderRadius: 6, fontSize: 11, whiteSpace: 'nowrap',
-      background: ok ? 'rgba(14,203,129,0.14)' : 'rgba(246,70,93,0.10)',
-      color: ok ? '#0ECB81' : '#9AA4AD',
-      border: `1px solid ${ok ? 'rgba(14,203,129,0.45)' : 'rgba(122,132,141,0.25)'}` }}>
+      background: ok ? 'color-mix(in srgb, var(--win) 14%, transparent)' : 'color-mix(in srgb, var(--loss) 10%, transparent)',
+      color: ok ? 'var(--win)' : 'var(--muted)',
+      border: `1px solid ${ok ? 'color-mix(in srgb, var(--win) 45%, transparent)' : 'color-mix(in srgb, var(--muted) 25%, transparent)'}` }}>
       {ok ? '✓' : '✗'} {label}
     </span>
   );
   const Row = ({ side, ready, color, items }) => (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-      <b style={{ color, minWidth: 78 }}>{side} {ready ? (color === '#0ECB81' ? '🟢 HAZIR' : '🔴 HAZIR') : ''}</b>
+      <b style={{ color, minWidth: 78 }}>{side} {ready ? (color === 'var(--win)' ? '🟢 HAZIR' : '🔴 HAZIR') : ''}</b>
       {items.map((it) => <Pill key={it.label} ok={it.ok} label={it.label} />)}
     </div>
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0B0E11', color: '#EAECEF' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', color: 'var(--text)' }}>
       <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', flexWrap: 'wrap', padding: '10px 14px',
-        borderBottom: '1px solid #1E2329', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
-        <strong style={{ color: '#F0B90B' }}>{sd.name(variant)} · XAUUSDT {last?.interval || '1m'} · {isStatic
+        borderBottom: '1px solid var(--border-soft)', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
+        <strong style={{ color: 'var(--accent)' }}>{sd.name(variant)} · XAUUSDT {last?.interval || '1m'} · {isStatic
           ? new Date(endMs).toLocaleDateString('tr-TR', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
           : 'CANLI'}</strong>
         <span>Fiyat <b>{fmt(last?.price)}</b></span>
@@ -401,7 +408,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         <span>ATR15 <b>{fmt(last?.atr)}</b> · bant ±{last ? fmt(TOUCH_TOL * last.atr) : '—'}</span>
         {isIchi && (
           <span>Kumo{' '}
-            <b style={{ color: last?.cloud === 'bull' ? '#0ECB81' : last?.cloud === 'bear' ? '#F6465D' : '#848E9C' }}>
+            <b style={{ color: last?.cloud === 'bull' ? 'var(--win)' : last?.cloud === 'bear' ? 'var(--loss)' : 'var(--muted)' }}>
               {last?.cloud === 'bull' ? '🟢 yeşil (yukarı)' : last?.cloud === 'bear' ? '🔴 kırmızı (aşağı)' : '—'}
             </b>
           </span>
@@ -409,18 +416,18 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
         {isIchi && (
           <button type="button" onClick={() => setShowKumo((v) => !v)}
             style={{ cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, padding: '2px 8px', borderRadius: 6,
-              background: showKumo ? 'rgba(59,130,246,0.16)' : 'transparent', color: showKumo ? '#7FB0FF' : '#848E9C',
-              border: `1px solid ${showKumo ? 'rgba(59,130,246,0.5)' : 'rgba(122,132,141,0.35)'}` }}>
+              background: showKumo ? 'rgba(59,130,246,0.16)' : 'transparent', color: showKumo ? '#7FB0FF' : 'var(--muted)',
+              border: `1px solid ${showKumo ? 'rgba(59,130,246,0.5)' : 'color-mix(in srgb, var(--muted) 35%, transparent)'}` }}>
             ☁️ Kumo çizgileri {showKumo ? 'açık' : 'kapalı'}
           </button>
         )}
-        {status && <span style={{ color: '#F6465D' }}>{status}</span>}
+        {status && <span style={{ color: 'var(--loss)' }}>{status}</span>}
       </div>
       {!isStatic && c && (
-        <div style={{ padding: '8px 14px', borderBottom: '1px solid #1E2329', display: 'flex', flexDirection: 'column',
+        <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-soft)', display: 'flex', flexDirection: 'column',
           gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
-          <span style={{ color: '#848E9C', fontSize: 10, letterSpacing: '0.04em' }}>SİNYAL KOŞULLARI (anlık · hepsi ✓ olunca sinyal oluşur)</span>
-          <Row side="AL" ready={longReady} color="#0ECB81" items={[
+          <span style={{ color: 'var(--muted)', fontSize: 10, letterSpacing: '0.04em' }}>SİNYAL KOŞULLARI (anlık · hepsi ✓ olunca sinyal oluşur)</span>
+          <Row side="AL" ready={longReady} color="var(--win)" items={[
             { ok: c.slopeUp, label: CONDS.slopeUp },
             { ok: c.above, label: CONDS.above },
             { ok: c.pullLong, label: CONDS.pullLong },
@@ -428,7 +435,7 @@ export default function MidasLiveChart({ variant = 'midas', startMs = null, endM
             ...(isIchi ? [{ ok: c.kumoLong, label: CONDS.kumoLong }] : []),
             { ok: c.sessOk, label: CONDS.sess },
           ]} />
-          <Row side="SAT" ready={shortReady} color="#F6465D" items={[
+          <Row side="SAT" ready={shortReady} color="var(--loss)" items={[
             { ok: c.slopeDn, label: CONDS.slopeDn },
             { ok: c.below, label: CONDS.below },
             { ok: c.pullShort, label: CONDS.pullShort },

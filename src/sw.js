@@ -77,7 +77,9 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    tag: data.tag,
+    // null/undefined tag "null" string'ine dönüşüp bildirimleri YANLIŞLIKLA birleştirmesin;
+    // boş/eksik tag = coalesce yok (her olay ayrı kart).
+    tag: data.tag || undefined,
     data: { url: data.url || '/' },
   }
   event.waitUntil(self.registration.showNotification(title, options))

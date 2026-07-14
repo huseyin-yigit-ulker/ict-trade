@@ -387,6 +387,42 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-14 (2) — ✅ UX raporunun P0 onarım dalgası: signal-watch, push maskeleme, bildirim tag'i, grafik teması
+- **C-1 — Altın (talos_ichi/MENKAR) sinyal-izleme onarıldı.** Raporun "üç katman kırık" iddiası
+  DÜZELTİLDİ: DB CHECK'i migration 015 zaten genişletmişti (canlı DB'de doğrulandı) ve
+  `_MODE_TO_STREAM.get(mode, mode)` fallback'i raw key'i geçiriyordu. Gerçek kırıklar:
+  (1) `SignalWatchCard.jsx` `UNI_BUCKET`'ta talos_ichi eşlemesi yoktu → MENKAR sekmesi "sembol
+  listesi boş" gösteriyor, kayıt İMKÂNSIZDI — eşleme eklendi; (2) ölü stratejili izleme satırları
+  (d30so8f3vg, midas) `_watchlist_user_ids` yüzünden sahibini broadcast'ten düşürüyordu ama akış
+  hiç emit etmiyor → o kullanıcı HİÇ push almıyordu — `020_signal_watch_cleanup.sql` ile silindi
+  (✅ canlı DB'ye uygulandı; kalan satırlar yalnız d30so8f3h7); (3) `_MODE_TO_STREAM`'e talos_ichi
+  açıkça eklendi. ⚠️ Ders: bulgu raporlarken migration zincirinin TAMAMINI (011→013→015) oku.
+- **C-2 — Anonimleştirme sızıntısı kapatıldı (drain katmanı).** `drain_outbox` artık gönderim
+  anında admin-olmayan payload'ların title/body'sini `_mask_text`'ten geçiriyor (best-effort;
+  url/tag'e dokunmaz; çifte maske idempotent — test edildi). Böylece executor `_alert`→`push_user`
+  yolu ("OPUS · d30so8f3h7" sızıyordu) ve `admin_notify` tek noktadan korunuyor. VELA `_MASK_MAP`
+  girdileri de bu commit'te. KALAN (bildirim merkezi önkoşulu): enqueue-mask (rapor C-2).
+- **C-9/tag — Bildirimler artık birbirini ezmiyor.** 4 executor'da sabit `tag="exec"` → `tag=""`
+  (boş tag spec gereği coalesce edilmez → her olay ayrı kart); `sw.js`'te savunmacı
+  `tag: data.tag || undefined` (null tag'in "null" string'ine dönüşüp TERSİNE hepsini
+  birleştirmesini önler). Akıllı pozisyon-bazlı tag + dedup raporda C-9/P1 olarak kaldı.
+- **B-2 — Büyük grafikler tema-duyarlı.** Yeni `src/utils/chartTheme.js` (`readChartTheme()`:
+  CSS token'ları `getComputedStyle` ile ÇÖZÜP lightweight-charts seçeneklerine verir — canvas
+  CSS var çözemez; dim paleti dark'ta birebir eski değerler, light'ta pastel eşdeğerler).
+  `ChartModal` + `user/TradeChart` + `MidasLiveChart` + `TrendDetail` semantik eşlemeyle geçirildi
+  (up/down/accent/text/muted/border/bg; zone dolguları aynı alpha'larla `upSoft/downSoft`; DOM
+  inline stilleri CSS var string'leri). Tema değişimi effect dep'i ile grafiği yeniden kurar;
+  `ThemeContext` `data-theme` yazımı `useLayoutEffect`'e alındı (child effect'ler attribute'u
+  provider'dan ÖNCE okuyordu — canvas bir toggle geride kalırdı). Bilinçli dokunulmayanlar:
+  ICT geometri kimlik renkleri, TradingView iframe (`theme:'dark'`), `SharedTradePage` (public,
+  bilinçli hep koyu). Doğrulama: `npm run build` temiz; kalan `#0B0E11/#EAECEF` yalnız
+  chartTheme.js fallback'lerinde. Light-tema görsel kalibrasyonu (zone/dim opaklıkları) ilk
+  canlı bakışta gözden geçirilmeli.
+- Doğrulama: `py_compile` 5 dosya temiz; maske idempotans + `_MODE_TO_STREAM` testleri geçti;
+  migration sonrası DB sorgusu beklenen durumda. Executor + drain cron'la taze süreç koştuğundan
+  (crontab: live_exec */2dk, talos_ichi 1dk, --drain 1dk) değişiklikler restart'sız etkinleşir;
+  frontend Render'da main'den derlenir.
+
 ### 2026-07-14
 - **📚 PUSU-UX-RAPORU.md eklendi — UX/grafik/bildirim kapsamlı iyileştirme çalışması (rapor-only, kod değişikliği YOK).**
   - 3 paralel kod-keşif + 3 tasarım perspektifi; Binance/Bybit/TradingView/3Commas/Cornix benchmark'lı,
