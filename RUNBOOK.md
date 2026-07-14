@@ -388,6 +388,18 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-14
+- **📚 PUSU-UX-RAPORU.md eklendi — UX/grafik/bildirim kapsamlı iyileştirme çalışması (rapor-only, kod değişikliği YOK).**
+  - 3 paralel kod-keşif + 3 tasarım perspektifi; Binance/Bybit/TradingView/3Commas/Cornix benchmark'lı,
+    P0-P3 önceliklendirilmiş ~60 öneri (UX 22 · grafik 22 · bildirim 16) + bağımlılık sıralı yol haritası.
+  - ⚠️ Raporda **bugün kırık** 3 P0 bulgu belgelendi (henüz FİX EDİLMEDİ):
+    ① altın (talos_ichi) sinyal-izleme push'u hiç çalışamıyor — `011_user_signal_watch.sql` CHECK +
+    `push_notify.py` `_MODE_TO_STREAM` + `SignalWatchCard.jsx` `UNI_BUCKET` üçlüsü talos_ichi'yi tanımıyor;
+    ② anonimleştirme sızıntısı — executor kişisel push'ları (`executor.py` `_TAG`) gerçek strateji adıyla
+    `push_outbox`'a gidiyor, `drain_outbox` maskelemiyor, `admin_notify` verbatim;
+    ③ push teslimatı hata durumunda (429/5xx) sessizce "sent" işaretleniyor, retry yok.
+  - Önerilen ilk dalga: C-1 signal-watch onarımı → C-2 drain maskeleme → C-8/Aşama-1 Telegram kanal
+    ayrımı (.env'e TELEGRAM_EXEC_CHAT_ID, kod değişikliği yok) → B-2 chartTheme. Detay: rapor §7.
+
 - **🐛 UI FIX: Binance Paper açık pozisyonları HİÇ göstermiyordu (OPUS PAPER görünmezdi).**
   - Belirti (sahip raporu): "binance paper aktif işlemleri de göster". Testnet'te OPUS'un **2 açık
     pozisyonu vardı** (LINKUSDT + ETHUSDT LONG, `live_positions network=testnet state=OPEN_FULL`) ama
