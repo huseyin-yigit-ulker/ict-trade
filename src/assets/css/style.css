@@ -3209,12 +3209,23 @@ a.header-btn { text-decoration: none; display: inline-flex; align-items: center;
 .day-notebook:hover { border-color: var(--border); }
 .kpi-hero { border-radius: 16px; }
 
-/* Yapışkan başlık — user header gibi yarı saydam + blur */
+/* Yapışkan başlık — user header gibi yarı saydam + blur.
+   Blur bir pseudo-element'te durur: `backdrop-filter` doğrudan .topbar'a verilirse header,
+   içindeki position:fixed çocuklar için containing block olur (seans modalı, sembol
+   dropdown'ının scrim'i, mobil sembol sheet'i) ve hepsi 54px'lik başlık şeridine hapsolur. */
 .topbar {
+  background: transparent;
+  border-bottom-color: var(--border-soft);
+}
+.topbar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: -1px;   /* -1px: border'ın altını da doldur */
+  z-index: -1;
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border-bottom-color: var(--border-soft);
+  pointer-events: none;
 }
 
 /* Sidebar — hap nav, yumuşak ayraçlar */

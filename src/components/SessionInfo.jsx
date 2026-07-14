@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLang } from '../context/LanguageContext';
 import { marketSessions, etParts, US_HOLIDAYS, usSignalsActive } from '../utils/sessions';
 
@@ -41,7 +42,10 @@ const SessionInfo = ({ onClose }) => {
 
   const card = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8 };
 
-  return (
+  // Portal to <body>: the Topbar that renders us has `backdrop-filter`, which makes it a
+  // containing block for position:fixed children — the overlay would otherwise resolve
+  // inset:0 against the 54px-tall header and the card would center off the top of the screen.
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{
         ...card, width: 'min(560px, 94vw)', maxHeight: '88vh', overflowY: 'auto',
@@ -117,7 +121,8 @@ const SessionInfo = ({ onClose }) => {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

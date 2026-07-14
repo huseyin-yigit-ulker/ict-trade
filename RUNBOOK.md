@@ -387,6 +387,26 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > Append a dated entry on any system-level change (newest-first). Stream-specific detail goes in the
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
+### 2026-07-14
+- **🐛 UI FIX: Topbar'ın `backdrop-filter`'ı içindeki `position:fixed` katmanları başlığa hapsediyordu.**
+  - Belirti (sahip raporu): **"Seanslar" (SessionInfo) modalı ekrandan kayık** — 422px'lik kart 54px'lik
+    başlık şeridinde ortalanıp `y = −184`'e, ekranın üstünden dışarı taşıyordu.
+  - Kök neden: `style.css` → `.topbar { backdrop-filter: blur(10px) }`. `backdrop-filter` (transform/filter
+    gibi) elemanı **`position:fixed` torunları için containing block** yapar; `inset:0` artık viewport'a
+    değil, header'ın 1192×54 kutusuna çözülüyordu. Aynı tuzağa düşen **iki sessiz bug daha** vardı:
+    - `.header-overlay` (sembol dropdown'ının dışa-tık scrim'i) 1440×900 yerine 1192×54 → **sayfa gövdesine
+      tıklayınca dropdown kapanmıyordu**.
+    - Mobil sembol bottom-sheet'i (`.multi-select-content.show`, `position:fixed; bottom:0`) 664px'lik
+      ekranda **`y = −354`**'e, yani neredeyse tamamen ekran dışına düşüyordu.
+  - Düzeltme: blur **pseudo-element'e** taşındı (`.topbar::before`, `inset` + `bottom:-1px`, `z-index:-1`) →
+    görsel yarı-saydam/blur aynı, header artık containing block DEĞİL. Ayrıca `SessionInfo` `createPortal`
+    ile `document.body`'ye taşındı (modal, topbar'ın `z-index:40` stacking context'inde hapsolmasın).
+  - Doğrulama (Playwright, admin oturumu): modal overlay 1440×900 + kart tam merkez (440, 239); scrim
+    1440×900 ve dışa-tık dropdown'ı kapatıyor; mobil sheet `y=213 → 213+451=664` (ekran dibine yapışık).
+    `npm run build` temiz. Dosyalar: `src/assets/css/style.css`, `src/components/SessionInfo.jsx`.
+  - ⚠️ Ders: yapışkan/translucent başlıklarda `backdrop-filter`'ı **konteynerin kendisine verme** — içine
+    koyacağın her `position:fixed` çocuk (modal, scrim, sheet) sessizce o şeride hapsolur.
+
 ### 2026-07-13
 - **📝 OPUS PAPER (testnet) açıldı — 18 sembolün TAMAMI, maks 10 eşzamanlı pozisyon.**
   - Sahip isteği: "paper account'a OPUS'u tüm semboller için açalım." Amaç: mainnet'in 5-sembol /
