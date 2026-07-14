@@ -388,6 +388,23 @@ executor → `push_outbox` → `push_notify.py --drain` → kullanıcının push
 > stream's own doc (e.g. MIDAS changes → MIDAS.md).
 
 ### 2026-07-14
+- **🐛 UI FIX: Binance Paper açık pozisyonları HİÇ göstermiyordu (OPUS PAPER görünmezdi).**
+  - Belirti (sahip raporu): "binance paper aktif işlemleri de göster". Testnet'te OPUS'un **2 açık
+    pozisyonu vardı** (LINKUSDT + ETHUSDT LONG, `live_positions network=testnet state=OPEN_FULL`) ama
+    board'da tablo yoktu. Üstteki **"Açık Pozisyon: 2" KPI'ı bunları sayıyordu** — yani sayfa kendi
+    içinde çelişiyordu; "Son Kapananlar" da testnet satırlarını zaten gösteriyordu.
+  - Kök neden: `LivePositionsPage.jsx`'te açık-pozisyon tablosu `{net === 'mainnet' && ...}` ile
+    kapılıydı; yorumu "OPUS never trades testnet / paper board = MIDAS-X" diyordu. Bu varsayım
+    **20a3b77 (OPUS PAPER testnet açıldı: 18 sembol, maks 10 eşzamanlı)** ile geçersiz oldu, UI
+    güncellenmedi. Aynı anda MIDAS-X 2026-07-13'te emekli edildi → paper board sahipsiz kaldı.
+  - Düzeltme: (1) açık-pozisyon tablosu **her iki ağda** render ediliyor (aynı OPUS kolonları:
+    SL/TP1/Cap/Canlı R/Funding/geri sayım). (2) Başlık rozeti testnet'te artık emekli MIDAS-X·XAU
+    yerine **OPUS** ekonomisini gösteriyor. (3) Altın bölümü testnet'te yalnız **geçmiş satır varsa**
+    çiziliyor ve "sinyal bekleniyor" yerine "bu akış emekli — yalnızca geçmiş işlemler" diyor.
+  - Doğrulama (Playwright, admin): `/binance-paper` → Açık Pozisyonlar = LINKUSDT + ETHUSDT (DB ile
+    birebir), KPI 2 ile tutarlı; `/binance` (mainnet) çıktısı **değişmedi**. `npm run build` temiz.
+    Dosyalar: `src/pages/LivePositionsPage.jsx`, `src/context/LanguageContext.jsx`.
+
 - **🐛 UI FIX: Topbar'ın `backdrop-filter`'ı içindeki `position:fixed` katmanları başlığa hapsediyordu.**
   - Belirti (sahip raporu): **"Seanslar" (SessionInfo) modalı ekrandan kayık** — 422px'lik kart 54px'lik
     başlık şeridinde ortalanıp `y = −184`'e, ekranın üstünden dışarı taşıyordu.

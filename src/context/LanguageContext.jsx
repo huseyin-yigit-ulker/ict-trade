@@ -498,6 +498,7 @@ const EN = {
   'İz-Süren SL': 'Trailing SL',
   'Kilitli R': 'Locked R',
   'Açık altın pozisyonu yok — sinyal bekleniyor.': 'No open gold position — waiting for a signal.',
+  'Bu akış emekli — yalnızca geçmiş işlemler.': 'This stream is retired — history only.',
   'İşlem Merkezi': 'Trading Hub',
   'Yönetim': 'Admin',
   'Menü': 'Menu',

@@ -207,12 +207,12 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         <h1>{net === 'mainnet' ? t('Binance Canlı') : 'Binance Paper'}</h1>
         <span className={`livex__net livex__net--${net}`}>{net === 'testnet' ? 'TESTNET' : 'MAINNET'}</span>
         {/* Admin sees the plan economics; everyone else just the codename. The name comes
-            from useStreamDisplay so no raw stream key ships as a visible literal. */}
-        <span className="livex__badge">{net === 'testnet'
-          ? `${sd.name('midas')} · XAU · ${t('iz-süren')}`
-          : (sd.isAdmin
-            ? `${sd.name('d30so8f3h7')} · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`
-            : sd.name('d30so8f3h7'))}</span>
+            from useStreamDisplay so no raw stream key ships as a visible literal.
+            2026-07-14: both boards run the SAME OPUS stream — testnet no longer advertises
+            MIDAS-X/XAU (that executor was retired 2026-07-13; OPUS PAPER took the board). */}
+        <span className="livex__badge">{sd.isAdmin
+          ? `${sd.name('d30so8f3h7')} · +${CAP_R}R · %${Math.round(SO.closeFrac * 100)} TP1 ·0.5R`
+          : sd.name('d30so8f3h7')}</span>
         <span className="livex__upd">{updatedAt ? `${t('Güncellendi')}: ${ago(account?.updated_at, t)}` : ''}</span>
         <button className="livex__refresh" onClick={load} title={t('Yenile')}>⟳</button>
       </div>
@@ -237,9 +237,10 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
         </div>
       </div>
 
-      {/* open positions (OPUS scale-out) — mainnet only. On testnet/paper the board runs MIDAS-X,
-          rendered in the gold section below; OPUS never trades testnet. */}
-      {net === 'mainnet' && (<>
+      {/* open positions (OPUS scale-out) — BOTH networks. 2026-07-14: paper used to be gated off
+          here ("OPUS never trades testnet"), which stopped being true when OPUS PAPER opened on
+          testnet (18 symbols / 10 concurrent) — the paper board had live OPUS positions that the
+          page simply never drew, even though the KPI above counted them. */}
       <h2 className="livex__h2">{t('Açık Pozisyonlar')}</h2>
       {loading ? <div className="livex__empty">{t('Yükleniyor…')}</div>
         : open.length === 0 ? <div className="livex__empty">{t('Açık pozisyon yok — sinyal bekleniyor.')}</div>
@@ -302,12 +303,12 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
           </table>
         </div>
       )}
-      </>)}
 
       {/* ── Gold — the account's XAU trailing-stop stream. On mainnet: TALOS-ICHI-X (real money,
-            2026-07-08 took MIDAS's place; /binance-altin detail deep-link kept). On testnet/paper:
-            MIDAS-X — this IS the paper board, so always render it (waiting-for-signal included). ── */}
-      {(net === 'testnet' || goldOpen.length > 0 || goldClosed.length > 0) && (
+            2026-07-08 took MIDAS's place; /binance-altin detail deep-link kept). On testnet the
+            gold stream was MIDAS-X, RETIRED 2026-07-13 — so testnet renders this section only if
+            historical rows exist, and never claims it is "waiting for a signal". ── */}
+      {(goldOpen.length > 0 || goldClosed.length > 0) && (
         <>
           <h2 className="livex__h2">
             {t('Altın')} · {net === 'testnet' ? sd.name('midas') : sd.name('talos_ichi')}{' '}
@@ -316,7 +317,9 @@ export default function LivePositionsPage({ network = 'mainnet' }) {
             )}
           </h2>
           {goldOpen.length === 0
-            ? <div className="livex__empty">{t('Açık altın pozisyonu yok — sinyal bekleniyor.')}</div>
+            ? (net === 'mainnet'
+              ? <div className="livex__empty">{t('Açık altın pozisyonu yok — sinyal bekleniyor.')}</div>
+              : <div className="livex__empty">{t('Bu akış emekli — yalnızca geçmiş işlemler.')}</div>)
             : (
             <div className="livex__tablewrap">
               <table className="livex__table">
