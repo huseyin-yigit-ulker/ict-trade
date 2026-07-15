@@ -1,0 +1,148 @@
+{
+    "ict_signal": [
+        {
+            "id": 4159,
+            "symbol": "XRPUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T18:00:00+00:00",
+            "entry_price": 1.1117,
+            "sl_price": 1.095613078483426,
+            "tp_price": 1.1760476860662954,
+            "created_at": "2026-07-14T19:00:24.355540+00:00",
+            "status": "OPEN",
+            "signal_price": 1.1117
+        },
+        {
+            "id": 4158,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T16:06:00+00:00",
+            "entry_price": 4063.58,
+            "sl_price": 4043.6282540210905,
+            "tp_price": 4110.134073950789,
+            "created_at": "2026-07-14T16:07:46.976913+00:00",
+            "status": "OPEN",
+            "signal_price": 4063.58
+        },
+        {
+            "id": 4152,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T14:30:00+00:00",
+            "entry_price": 2.041,
+            "sl_price": 1.9995107151022362,
+            "tp_price": 2.2899357093865826,
+            "created_at": "2026-07-14T15:00:25.173484+00:00",
+            "status": "OPEN",
+            "signal_price": 2.041
+        },
+        {
+            "id": 4153,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T14:30:00+00:00",
+            "entry_price": 8.334,
+            "sl_price": 8.21343143542749,
+            "tp_price": 9.057411387435062,
+            "created_at": "2026-07-14T15:00:25.255547+00:00",
+            "status": "OPEN",
+            "signal_price": 8.334
+        },
+        {
+            "id": 4154,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T14:30:00+00:00",
+            "entry_price": 2.041,
+            "sl_price": 1.9995107151022362,
+            "tp_price": 2.206957139591055,
+            "created_at": "2026-07-14T15:00:25.871704+00:00",
+            "status": "OPEN",
+            "signal_price": 2.041
+        },
+        {
+            "id": 4155,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T14:30:00+00:00",
+            "entry_price": 8.334,
+            "sl_price": 8.21343143542749,
+            "tp_price": 8.816274258290042,
+            "created_at": "2026-07-14T15:00:26.643505+00:00",
+            "status": "OPEN",
+            "signal_price": 8.334
+        },
+        {
+            "id": 4148,
+            "symbol": "ETHUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T12:30:00+00:00",
+            "entry_price": 1860.7,
+            "sl_price": 1835.5458932918514,
+            "tp_price": 2011.6246402488916,
+            "created_at": "2026-07-14T13:00:23.322987+00:00",
+            "status": "OPEN",
+            "signal_price": 1860.7
+        },
+        {
+            "id": 4149,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T12:30:00+00:00",
+            "entry_price": 8.184,
+            "sl_price": 8.08020601601423,
+            "tp_price": 8.806763903914616,
+            "created_at": "2026-07-14T13:00:23.387969+00:00",
+            "status": "OPEN",
+            "signal_price": 8.184
+        },
+        {
+            "id": 4150,
+            "symbol": "ETHUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T12:30:00+00:00",
+            "entry_price": 1860.7,
+            "sl_price": 1835.5458932918514,
+            "tp_price": 1961.3164268325945,
+            "created_at": "2026-07-14T13:00:24.601687+00:00",
+            "status": "OPEN",
+            "signal_price": 1860.7
+        },
+        {
+            "id": 4151,
+            "symbol": "LINKUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T12:30:00+00:00",
+            "entry_price": 8.184,
+            "sl_price": 8.08020601601423,
+            "tp_price": 8.599175935943077,
+            "created_at": "2026-07-14T13:00:25.536275+00:00",
+            "status": "OPEN",
+            "signal_price": 8.184
+        },
+        {
+            "id": 4147,
+            "symbol": "ETHUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-14T12:00:00+00:00",
+            "entry_price": 1860.7,
+            "sl_price": 1827.704654065852,
+            "tp_price": 1992.6813837365917,
+            "created_at": "2026-07-14T13:00:21.348853+00:00",
+            "status": "OPEN",
+            "signal_price": 1860.7
+        },
+        {
+            "id": 4144,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-14T00:36:00+00:00",
+            "entry_price": 4004.59,
+            "sl_price": 4014.649518958638,
+            "tp_price": 3981.117789096512,
+            "created_at": "2026-07-14T00:37:46.811868+00:00",
+            "status": "OPEN",
+            "signal_price": 4004.59
+        }
+    ]
+}
