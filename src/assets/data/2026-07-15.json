@@ -1,0 +1,100 @@
+{
+    "ict_signal": [
+        {
+            "id": 4167,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T20:00:00+00:00",
+            "entry_price": 0.353,
+            "sl_price": 0.34365174155500056,
+            "tp_price": 0.3903930337799976,
+            "created_at": "2026-07-15T20:30:20.175404+00:00",
+            "status": "OPEN",
+            "signal_price": 0.353
+        },
+        {
+            "id": 4169,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T20:00:00+00:00",
+            "entry_price": 0.3589,
+            "sl_price": 0.34730449352668835,
+            "tp_price": 0.4052820258932466,
+            "created_at": "2026-07-15T21:00:21.072881+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3589
+        },
+        {
+            "id": 4168,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T20:00:00+00:00",
+            "entry_price": 0.353,
+            "sl_price": 0.34365174155500056,
+            "tp_price": 0.4090895506699964,
+            "created_at": "2026-07-15T20:30:21.020325+00:00",
+            "status": "OPEN",
+            "signal_price": 0.353
+        },
+        {
+            "id": 4166,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T19:35:00+00:00",
+            "entry_price": 4054.61,
+            "sl_price": 4040.5988206515426,
+            "tp_price": 4087.3027518130675,
+            "created_at": "2026-07-15T19:36:47.405340+00:00",
+            "status": "OPEN",
+            "signal_price": 4054.61
+        },
+        {
+            "id": 4165,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-15T17:31:00+00:00",
+            "entry_price": 4052.25,
+            "sl_price": 4065.8887541046906,
+            "tp_price": 4020.4262404223887,
+            "created_at": "2026-07-15T17:32:47.486829+00:00",
+            "status": "OPEN",
+            "signal_price": 4052.25
+        },
+        {
+            "id": 4163,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T12:00:00+00:00",
+            "entry_price": 0.3314,
+            "sl_price": 0.32375277786296525,
+            "tp_price": 0.36198888854813877,
+            "created_at": "2026-07-15T13:00:23.767811+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3314
+        },
+        {
+            "id": 4162,
+            "symbol": "ETHUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T12:00:00+00:00",
+            "entry_price": 1926.73,
+            "sl_price": 1895.3493367761228,
+            "tp_price": 2052.2526528955086,
+            "created_at": "2026-07-15T13:00:23.627596+00:00",
+            "status": "OPEN",
+            "signal_price": 1926.73
+        },
+        {
+            "id": 4161,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-15T11:00:00+00:00",
+            "entry_price": 2.078,
+            "sl_price": 2.028346664641178,
+            "tp_price": 2.2766133414352874,
+            "created_at": "2026-07-15T12:00:24.288850+00:00",
+            "status": "OPEN",
+            "signal_price": 2.078
+        }
+    ]
+}
