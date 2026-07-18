@@ -1,0 +1,172 @@
+{
+    "ict_signal": [
+        {
+            "id": 4216,
+            "symbol": "SOLUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T13:00:00+00:00",
+            "entry_price": 73.79,
+            "sl_price": 74.52717464824596,
+            "tp_price": 70.8413014070162,
+            "created_at": "2026-07-17T13:30:22.321820+00:00",
+            "status": "OPEN",
+            "signal_price": 73.79
+        },
+        {
+            "id": 4217,
+            "symbol": "SOLUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T13:00:00+00:00",
+            "entry_price": 73.79,
+            "sl_price": 74.52717464824596,
+            "tp_price": 69.3669521105243,
+            "created_at": "2026-07-17T13:30:22.698851+00:00",
+            "status": "OPEN",
+            "signal_price": 73.79
+        },
+        {
+            "id": 4214,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T12:30:00+00:00",
+            "entry_price": 561.76,
+            "sl_price": 565.5086029007145,
+            "tp_price": 539.2683825957129,
+            "created_at": "2026-07-17T13:00:24.296102+00:00",
+            "status": "OPEN",
+            "signal_price": 561.76
+        },
+        {
+            "id": 4213,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T12:30:00+00:00",
+            "entry_price": 561.76,
+            "sl_price": 565.5086029007145,
+            "tp_price": 546.765588397142,
+            "created_at": "2026-07-17T13:00:23.215808+00:00",
+            "status": "OPEN",
+            "signal_price": 561.76
+        },
+        {
+            "id": 4215,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T12:00:00+00:00",
+            "entry_price": 561.76,
+            "sl_price": 567.3050777439948,
+            "tp_price": 539.5796890240208,
+            "created_at": "2026-07-17T13:00:24.312228+00:00",
+            "status": "OPEN",
+            "signal_price": 561.76
+        },
+        {
+            "id": 4211,
+            "symbol": "NEARUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T08:00:00+00:00",
+            "entry_price": 1.929,
+            "sl_price": 1.965497911313587,
+            "tp_price": 1.7100125321184776,
+            "created_at": "2026-07-17T08:30:26.912848+00:00",
+            "status": "OPEN",
+            "signal_price": 1.929
+        },
+        {
+            "id": 4210,
+            "symbol": "NEARUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T08:00:00+00:00",
+            "entry_price": 1.929,
+            "sl_price": 1.965497911313587,
+            "tp_price": 1.7830083547456517,
+            "created_at": "2026-07-17T08:30:25.244139+00:00",
+            "status": "OPEN",
+            "signal_price": 1.929
+        },
+        {
+            "id": 4209,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T07:30:00+00:00",
+            "entry_price": 566.34,
+            "sl_price": 570.3558906538211,
+            "tp_price": 542.2446560770736,
+            "created_at": "2026-07-17T08:00:23.752386+00:00",
+            "status": "OPEN",
+            "signal_price": 566.34
+        },
+        {
+            "id": 4207,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T07:30:00+00:00",
+            "entry_price": 566.34,
+            "sl_price": 570.3558906538211,
+            "tp_price": 550.2764373847157,
+            "created_at": "2026-07-17T08:00:22.415251+00:00",
+            "status": "OPEN",
+            "signal_price": 566.34
+        },
+        {
+            "id": 4208,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T07:00:00+00:00",
+            "entry_price": 566.34,
+            "sl_price": 572.1311308658829,
+            "tp_price": 543.1754765364684,
+            "created_at": "2026-07-17T08:00:22.451791+00:00",
+            "status": "OPEN",
+            "signal_price": 566.34
+        },
+        {
+            "id": 4197,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T05:42:00+00:00",
+            "entry_price": 3994.04,
+            "sl_price": 4004.5639507975807,
+            "tp_price": 3969.484114805645,
+            "created_at": "2026-07-17T05:43:47.696196+00:00",
+            "status": "OPEN",
+            "signal_price": 3994.04
+        },
+        {
+            "id": 4196,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T05:00:00+00:00",
+            "entry_price": 63176.5,
+            "sl_price": 63676.1185933068,
+            "tp_price": 61178.025626772825,
+            "created_at": "2026-07-17T05:30:25.859099+00:00",
+            "status": "OPEN",
+            "signal_price": 63176.5
+        },
+        {
+            "id": 4195,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T05:00:00+00:00",
+            "entry_price": 63176.5,
+            "sl_price": 63676.1185933068,
+            "tp_price": 60178.78844015923,
+            "created_at": "2026-07-17T05:30:23.918791+00:00",
+            "status": "OPEN",
+            "signal_price": 63176.5
+        },
+        {
+            "id": 4201,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-17T05:00:00+00:00",
+            "entry_price": 568.08,
+            "sl_price": 573.6968144953436,
+            "tp_price": 545.6127420186261,
+            "created_at": "2026-07-17T06:00:22.098398+00:00",
+            "status": "OPEN",
+            "signal_price": 568.08
+        }
+    ]
+}
