@@ -1,0 +1,52 @@
+{
+    "ict_signal": [
+        {
+            "id": 4228,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-18T17:30:00+00:00",
+            "entry_price": 64450.0,
+            "sl_price": 64210.80249974513,
+            "tp_price": 65406.79000101949,
+            "created_at": "2026-07-18T18:00:26.010760+00:00",
+            "status": "OPEN",
+            "signal_price": 64450.0
+        },
+        {
+            "id": 4227,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-18T17:30:00+00:00",
+            "entry_price": 64450.0,
+            "sl_price": 64210.80249974513,
+            "tp_price": 65885.18500152924,
+            "created_at": "2026-07-18T18:00:25.903641+00:00",
+            "status": "OPEN",
+            "signal_price": 64450.0
+        },
+        {
+            "id": 4224,
+            "symbol": "SUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-18T16:00:00+00:00",
+            "entry_price": 0.02406,
+            "sl_price": 0.02435838269134809,
+            "tp_price": 0.022269703851911456,
+            "created_at": "2026-07-18T16:30:22.025110+00:00",
+            "status": "OPEN",
+            "signal_price": 0.02406
+        },
+        {
+            "id": 4225,
+            "symbol": "SUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-18T16:00:00+00:00",
+            "entry_price": 0.02406,
+            "sl_price": 0.02435838269134809,
+            "tp_price": 0.02286646923460764,
+            "created_at": "2026-07-18T16:30:23.386681+00:00",
+            "status": "OPEN",
+            "signal_price": 0.02406
+        }
+    ]
+}
