@@ -1,0 +1,148 @@
+{
+    "ict_signal": [
+        {
+            "id": 4429,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T21:00:00+00:00",
+            "entry_price": 6.753,
+            "sl_price": 6.6191503031642,
+            "tp_price": 7.288398787343203,
+            "created_at": "2026-07-25T22:00:22.666870+00:00",
+            "status": "OPEN",
+            "signal_price": 6.753
+        },
+        {
+            "id": 4427,
+            "symbol": "WIFUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T19:30:00+00:00",
+            "entry_price": 0.1569,
+            "sl_price": 0.1536118272846418,
+            "tp_price": 0.1766290362921493,
+            "created_at": "2026-07-25T20:00:23.376924+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1569
+        },
+        {
+            "id": 4426,
+            "symbol": "WIFUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T19:30:00+00:00",
+            "entry_price": 0.1569,
+            "sl_price": 0.1536118272846418,
+            "tp_price": 0.17005269086143288,
+            "created_at": "2026-07-25T20:00:23.306672+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1569
+        },
+        {
+            "id": 4424,
+            "symbol": "WIFUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T18:00:00+00:00",
+            "entry_price": 0.154,
+            "sl_price": 0.15041332038922975,
+            "tp_price": 0.16834671844308102,
+            "created_at": "2026-07-25T19:00:22.765429+00:00",
+            "status": "OPEN",
+            "signal_price": 0.154
+        },
+        {
+            "id": 4422,
+            "symbol": "WIFUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T17:00:00+00:00",
+            "entry_price": 0.1514,
+            "sl_price": 0.14884735289255435,
+            "tp_price": 0.1667158826446739,
+            "created_at": "2026-07-25T17:30:23.371548+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1514
+        },
+        {
+            "id": 4421,
+            "symbol": "WIFUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T17:00:00+00:00",
+            "entry_price": 0.1514,
+            "sl_price": 0.14884735289255435,
+            "tp_price": 0.1616105884297826,
+            "created_at": "2026-07-25T17:30:23.167960+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1514
+        },
+        {
+            "id": 4417,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T16:00:00+00:00",
+            "entry_price": 6.608,
+            "sl_price": 6.506634959986184,
+            "tp_price": 7.216190240082894,
+            "created_at": "2026-07-25T16:30:22.712169+00:00",
+            "status": "OPEN",
+            "signal_price": 6.608
+        },
+        {
+            "id": 4419,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-25T16:00:00+00:00",
+            "entry_price": 6.608,
+            "sl_price": 6.506634959986184,
+            "tp_price": 7.013460160055263,
+            "created_at": "2026-07-25T16:30:26.772037+00:00",
+            "status": "OPEN",
+            "signal_price": 6.608
+        },
+        {
+            "id": 4412,
+            "symbol": "SUIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-25T06:00:00+00:00",
+            "entry_price": 0.7067,
+            "sl_price": 0.7163223409518538,
+            "tp_price": 0.668210636192585,
+            "created_at": "2026-07-25T07:00:23.964432+00:00",
+            "status": "OPEN",
+            "signal_price": 0.7067
+        },
+        {
+            "id": 4404,
+            "symbol": "ARBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-25T00:30:00+00:00",
+            "entry_price": 0.08258,
+            "sl_price": 0.0834864603981002,
+            "tp_price": 0.07895415840759917,
+            "created_at": "2026-07-25T01:00:23.754139+00:00",
+            "status": "OPEN",
+            "signal_price": 0.08258
+        },
+        {
+            "id": 4405,
+            "symbol": "ARBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-25T00:30:00+00:00",
+            "entry_price": 0.08258,
+            "sl_price": 0.0834864603981002,
+            "tp_price": 0.07714123761139875,
+            "created_at": "2026-07-25T01:00:26.472780+00:00",
+            "status": "OPEN",
+            "signal_price": 0.08258
+        },
+        {
+            "id": 4403,
+            "symbol": "ARBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-25T00:00:00+00:00",
+            "entry_price": 0.08258,
+            "sl_price": 0.08406246475181836,
+            "tp_price": 0.07665014099272657,
+            "created_at": "2026-07-25T01:00:22.568892+00:00",
+            "status": "OPEN",
+            "signal_price": 0.08258
+        }
+    ]
+}
