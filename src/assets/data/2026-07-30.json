@@ -1,0 +1,124 @@
+{
+    "ict_signal": [
+        {
+            "id": 4636,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T20:50:00+00:00",
+            "entry_price": 4108.19,
+            "sl_price": 4097.28658509421,
+            "tp_price": 4133.631301446842,
+            "created_at": "2026-07-30T20:51:47.770335+00:00",
+            "status": "OPEN",
+            "signal_price": 4108.19
+        },
+        {
+            "id": 4633,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T16:00:00+00:00",
+            "entry_price": 592.94,
+            "sl_price": 587.914167493548,
+            "tp_price": 613.043330025808,
+            "created_at": "2026-07-30T16:30:25.253148+00:00",
+            "status": "OPEN",
+            "signal_price": 592.94
+        },
+        {
+            "id": 4632,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T16:00:00+00:00",
+            "entry_price": 592.94,
+            "sl_price": 587.914167493548,
+            "tp_price": 623.0949950387121,
+            "created_at": "2026-07-30T16:30:25.001234+00:00",
+            "status": "OPEN",
+            "signal_price": 592.94
+        },
+        {
+            "id": 4630,
+            "symbol": "ORDIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-30T14:30:00+00:00",
+            "entry_price": 3.162,
+            "sl_price": 3.2205051899834674,
+            "tp_price": 2.810968860099196,
+            "created_at": "2026-07-30T15:00:23.391444+00:00",
+            "status": "OPEN",
+            "signal_price": 3.162
+        },
+        {
+            "id": 4631,
+            "symbol": "ORDIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-07-30T14:30:00+00:00",
+            "entry_price": 3.162,
+            "sl_price": 3.2205051899834674,
+            "tp_price": 2.9279792400661306,
+            "created_at": "2026-07-30T15:00:24.647646+00:00",
+            "status": "OPEN",
+            "signal_price": 3.162
+        },
+        {
+            "id": 4628,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T09:30:00+00:00",
+            "entry_price": 580.3,
+            "sl_price": 576.736636092078,
+            "tp_price": 594.5534556316876,
+            "created_at": "2026-07-30T10:00:22.181976+00:00",
+            "status": "OPEN",
+            "signal_price": 580.3
+        },
+        {
+            "id": 4629,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T09:30:00+00:00",
+            "entry_price": 580.3,
+            "sl_price": 576.736636092078,
+            "tp_price": 601.6801834475314,
+            "created_at": "2026-07-30T10:00:24.148318+00:00",
+            "status": "OPEN",
+            "signal_price": 580.3
+        },
+        {
+            "id": 4627,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T08:30:00+00:00",
+            "entry_price": 579.15,
+            "sl_price": 575.4688205564929,
+            "tp_price": 593.8747177740282,
+            "created_at": "2026-07-30T09:00:28.149081+00:00",
+            "status": "OPEN",
+            "signal_price": 579.15
+        },
+        {
+            "id": 4626,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T08:30:00+00:00",
+            "entry_price": 579.15,
+            "sl_price": 575.4688205564929,
+            "tp_price": 601.2370766610425,
+            "created_at": "2026-07-30T09:00:24.662368+00:00",
+            "status": "OPEN",
+            "signal_price": 579.15
+        },
+        {
+            "id": 4625,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-07-30T00:45:00+00:00",
+            "entry_price": 4074.41,
+            "sl_price": 4059.000247182331,
+            "tp_price": 4110.366089907894,
+            "created_at": "2026-07-30T00:46:47.542174+00:00",
+            "status": "OPEN",
+            "signal_price": 4074.41
+        }
+    ]
+}
