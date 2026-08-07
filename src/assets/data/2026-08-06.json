@@ -1,0 +1,100 @@
+{
+    "ict_signal": [
+        {
+            "id": 4841,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T13:45:00+00:00",
+            "entry_price": 4273.52,
+            "sl_price": 4291.214693005884,
+            "tp_price": 4232.232382986272,
+            "created_at": "2026-08-06T13:46:47.328312+00:00",
+            "status": "OPEN",
+            "signal_price": 4273.52
+        },
+        {
+            "id": 4839,
+            "symbol": "DOGEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T13:00:00+00:00",
+            "entry_price": 0.06857,
+            "sl_price": 0.06909902299546246,
+            "tp_price": 0.0653958620272253,
+            "created_at": "2026-08-06T13:30:20.136041+00:00",
+            "status": "OPEN",
+            "signal_price": 0.06857
+        },
+        {
+            "id": 4840,
+            "symbol": "DOGEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T13:00:00+00:00",
+            "entry_price": 0.06857,
+            "sl_price": 0.06909902299546246,
+            "tp_price": 0.06645390801815021,
+            "created_at": "2026-08-06T13:30:23.268268+00:00",
+            "status": "OPEN",
+            "signal_price": 0.06857
+        },
+        {
+            "id": 4838,
+            "symbol": "FETUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T12:00:00+00:00",
+            "entry_price": 0.1364,
+            "sl_price": 0.1396431018952325,
+            "tp_price": 0.12342759241907003,
+            "created_at": "2026-08-06T13:00:24.114502+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1364
+        },
+        {
+            "id": 4837,
+            "symbol": "FETUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T10:00:00+00:00",
+            "entry_price": 0.1375,
+            "sl_price": 0.14089081639920456,
+            "tp_price": 0.12393673440318186,
+            "created_at": "2026-08-06T11:00:22.506453+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1375
+        },
+        {
+            "id": 4836,
+            "symbol": "ARBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T09:00:00+00:00",
+            "entry_price": 0.07823,
+            "sl_price": 0.0796297164942186,
+            "tp_price": 0.0726311340231256,
+            "created_at": "2026-08-06T10:00:24.370609+00:00",
+            "status": "OPEN",
+            "signal_price": 0.07823
+        },
+        {
+            "id": 4833,
+            "symbol": "FETUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T01:00:00+00:00",
+            "entry_price": 0.1405,
+            "sl_price": 0.14321377925914974,
+            "tp_price": 0.12964488296340113,
+            "created_at": "2026-08-06T01:30:23.090681+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1405
+        },
+        {
+            "id": 4832,
+            "symbol": "FETUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-06T01:00:00+00:00",
+            "entry_price": 0.1405,
+            "sl_price": 0.14321377925914974,
+            "tp_price": 0.1242173244451017,
+            "created_at": "2026-08-06T01:30:22.415461+00:00",
+            "status": "OPEN",
+            "signal_price": 0.1405
+        }
+    ]
+}
