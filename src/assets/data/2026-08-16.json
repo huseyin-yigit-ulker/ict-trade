@@ -1,0 +1,76 @@
+{
+    "ict_signal": [
+        {
+            "id": 5123,
+            "symbol": "SUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-16T21:30:00+00:00",
+            "entry_price": 0.02193,
+            "sl_price": 0.02219260802050595,
+            "tp_price": 0.020879567917976204,
+            "created_at": "2026-08-16T22:00:24.916505+00:00",
+            "status": "OPEN",
+            "signal_price": 0.02193
+        },
+        {
+            "id": 5127,
+            "symbol": "SUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-16T21:30:00+00:00",
+            "entry_price": 0.02193,
+            "sl_price": 0.02219260802050595,
+            "tp_price": 0.020354351876964306,
+            "created_at": "2026-08-16T22:00:25.989760+00:00",
+            "status": "OPEN",
+            "signal_price": 0.02193
+        },
+        {
+            "id": 5117,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-16T20:30:00+00:00",
+            "entry_price": 0.002572,
+            "sl_price": 0.0025963158771646223,
+            "tp_price": 0.0024747364913415113,
+            "created_at": "2026-08-16T21:00:24.584423+00:00",
+            "status": "OPEN",
+            "signal_price": 0.002572
+        },
+        {
+            "id": 5116,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-16T20:30:00+00:00",
+            "entry_price": 0.002572,
+            "sl_price": 0.0025963158771646223,
+            "tp_price": 0.002426104737012267,
+            "created_at": "2026-08-16T21:00:24.453744+00:00",
+            "status": "OPEN",
+            "signal_price": 0.002572
+        },
+        {
+            "id": 5114,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-16T20:00:00+00:00",
+            "entry_price": 0.002572,
+            "sl_price": 0.0026039701771615738,
+            "tp_price": 0.002444119291353705,
+            "created_at": "2026-08-16T21:00:23.305183+00:00",
+            "status": "OPEN",
+            "signal_price": 0.002572
+        },
+        {
+            "id": 5115,
+            "symbol": "ORDIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-16T20:00:00+00:00",
+            "entry_price": 3.376,
+            "sl_price": 3.4153642020967996,
+            "tp_price": 3.218543191612801,
+            "created_at": "2026-08-16T21:00:23.406800+00:00",
+            "status": "OPEN",
+            "signal_price": 3.376
+        }
+    ]
+}
