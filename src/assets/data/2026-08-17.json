@@ -1,0 +1,76 @@
+{
+    "ict_signal": [
+        {
+            "id": 5139,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-17T18:05:00+00:00",
+            "entry_price": 4415.96,
+            "sl_price": 4404.757791087529,
+            "tp_price": 4442.098487462433,
+            "created_at": "2026-08-17T18:06:47.749074+00:00",
+            "status": "OPEN",
+            "signal_price": 4415.96
+        },
+        {
+            "id": 5138,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-17T17:00:00+00:00",
+            "entry_price": 64293.1,
+            "sl_price": 63822.75602917277,
+            "tp_price": 66174.47588330891,
+            "created_at": "2026-08-17T18:00:22.734543+00:00",
+            "status": "OPEN",
+            "signal_price": 64293.1
+        },
+        {
+            "id": 5132,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-17T05:22:00+00:00",
+            "entry_price": 4400.38,
+            "sl_price": 4410.047720703567,
+            "tp_price": 4377.82198502501,
+            "created_at": "2026-08-17T05:23:47.886522+00:00",
+            "status": "OPEN",
+            "signal_price": 4400.38
+        },
+        {
+            "id": 5133,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-17T05:00:00+00:00",
+            "entry_price": 0.336,
+            "sl_price": 0.33086738860280074,
+            "tp_price": 0.3565304455887972,
+            "created_at": "2026-08-17T06:00:22.496354+00:00",
+            "status": "OPEN",
+            "signal_price": 0.336
+        },
+        {
+            "id": 5131,
+            "symbol": "ONDOUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-17T02:00:00+00:00",
+            "entry_price": 0.3348,
+            "sl_price": 0.3297965017415044,
+            "tp_price": 0.3548139930339825,
+            "created_at": "2026-08-17T03:00:24.483480+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3348
+        },
+        {
+            "id": 5130,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-17T00:13:00+00:00",
+            "entry_price": 4382.82,
+            "sl_price": 4388.123399786163,
+            "tp_price": 4370.445400498953,
+            "created_at": "2026-08-17T00:14:48.056961+00:00",
+            "status": "OPEN",
+            "signal_price": 4382.82
+        }
+    ]
+}
