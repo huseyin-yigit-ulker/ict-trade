@@ -1,0 +1,88 @@
+{
+    "ict_signal": [
+        {
+            "id": 5629,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T16:01:00+00:00",
+            "entry_price": 4656.85,
+            "sl_price": 4635.64024243899,
+            "tp_price": 4706.339434309025,
+            "created_at": "2026-08-24T16:02:47.540486+00:00",
+            "status": "OPEN",
+            "signal_price": 4656.85
+        },
+        {
+            "id": 5628,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T15:46:00+00:00",
+            "entry_price": 4666.49,
+            "sl_price": 4646.402953621847,
+            "tp_price": 4713.359774882357,
+            "created_at": "2026-08-24T15:47:48.029011+00:00",
+            "status": "OPEN",
+            "signal_price": 4666.49
+        },
+        {
+            "id": 5623,
+            "symbol": "FETUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T14:00:00+00:00",
+            "entry_price": 0.176,
+            "sl_price": 0.1696983380515278,
+            "tp_price": 0.2012066477938888,
+            "created_at": "2026-08-24T14:30:24.292682+00:00",
+            "status": "OPEN",
+            "signal_price": 0.176
+        },
+        {
+            "id": 5622,
+            "symbol": "FETUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T14:00:00+00:00",
+            "entry_price": 0.176,
+            "sl_price": 0.1696983380515278,
+            "tp_price": 0.2138099716908332,
+            "created_at": "2026-08-24T14:30:23.446784+00:00",
+            "status": "OPEN",
+            "signal_price": 0.176
+        },
+        {
+            "id": 5616,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T00:47:00+00:00",
+            "entry_price": 4614.2,
+            "sl_price": 4600.067267623946,
+            "tp_price": 4647.176375544126,
+            "created_at": "2026-08-24T00:48:47.718535+00:00",
+            "status": "OPEN",
+            "signal_price": 4614.2
+        },
+        {
+            "id": 5614,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T00:00:00+00:00",
+            "entry_price": 2.042,
+            "sl_price": 1.9786811316145416,
+            "tp_price": 2.421913210312749,
+            "created_at": "2026-08-24T00:30:22.490157+00:00",
+            "status": "OPEN",
+            "signal_price": 2.042
+        },
+        {
+            "id": 5615,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-24T00:00:00+00:00",
+            "entry_price": 2.042,
+            "sl_price": 1.9786811316145416,
+            "tp_price": 2.2952754735418326,
+            "created_at": "2026-08-24T00:30:24.127224+00:00",
+            "status": "OPEN",
+            "signal_price": 2.042
+        }
+    ]
+}
