@@ -1,0 +1,64 @@
+{
+    "ict_signal": [
+        {
+            "id": 5693,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-28T13:00:00+00:00",
+            "entry_price": 4599.83,
+            "sl_price": 4610.982861555187,
+            "tp_price": 4573.80665637123,
+            "created_at": "2026-08-28T13:01:47.493789+00:00",
+            "status": "OPEN",
+            "signal_price": 4599.83
+        },
+        {
+            "id": 5691,
+            "symbol": "ORDIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-28T08:30:00+00:00",
+            "entry_price": 4.07,
+            "sl_price": 4.14535206970735,
+            "tp_price": 3.768591721170602,
+            "created_at": "2026-08-28T09:00:25.422665+00:00",
+            "status": "OPEN",
+            "signal_price": 4.07
+        },
+        {
+            "id": 5692,
+            "symbol": "ORDIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-28T08:30:00+00:00",
+            "entry_price": 4.07,
+            "sl_price": 4.14535206970735,
+            "tp_price": 3.6178875817559035,
+            "created_at": "2026-08-28T09:00:26.840617+00:00",
+            "status": "OPEN",
+            "signal_price": 4.07
+        },
+        {
+            "id": 5687,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-28T01:00:00+00:00",
+            "entry_price": 81095.9,
+            "sl_price": 80403.30095952295,
+            "tp_price": 85251.49424286223,
+            "created_at": "2026-08-28T01:30:23.369814+00:00",
+            "status": "OPEN",
+            "signal_price": 81095.9
+        },
+        {
+            "id": 5689,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-28T01:00:00+00:00",
+            "entry_price": 81095.9,
+            "sl_price": 80403.30095952295,
+            "tp_price": 83866.29616190816,
+            "created_at": "2026-08-28T01:30:23.741183+00:00",
+            "status": "OPEN",
+            "signal_price": 81095.9
+        }
+    ]
+}
