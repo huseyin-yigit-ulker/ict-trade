@@ -1,0 +1,112 @@
+{
+    "ict_signal": [
+        {
+            "id": 5750,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-31T23:30:00+00:00",
+            "entry_price": 0.10938,
+            "sl_price": 0.10471885328011038,
+            "tp_price": 0.13734688031933773,
+            "created_at": "2026-09-01T00:00:23.247911+00:00",
+            "status": "OPEN",
+            "signal_price": 0.10938
+        },
+        {
+            "id": 5751,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-31T23:30:00+00:00",
+            "entry_price": 0.10938,
+            "sl_price": 0.10471885328011038,
+            "tp_price": 0.12802458687955848,
+            "created_at": "2026-09-01T00:00:25.513835+00:00",
+            "status": "OPEN",
+            "signal_price": 0.10938
+        },
+        {
+            "id": 5752,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-31T23:00:00+00:00",
+            "entry_price": 0.10938,
+            "sl_price": 0.10399228065203242,
+            "tp_price": 0.13093087739187037,
+            "created_at": "2026-09-01T00:00:31.401008+00:00",
+            "status": "OPEN",
+            "signal_price": 0.10938
+        },
+        {
+            "id": 5747,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-31T20:00:00+00:00",
+            "entry_price": 0.09818,
+            "sl_price": 0.09473748344328727,
+            "tp_price": 0.11883509934027645,
+            "created_at": "2026-08-31T20:30:23.187210+00:00",
+            "status": "OPEN",
+            "signal_price": 0.09818
+        },
+        {
+            "id": 5749,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-31T20:00:00+00:00",
+            "entry_price": 0.10024,
+            "sl_price": 0.09611421852943874,
+            "tp_price": 0.116743125882245,
+            "created_at": "2026-08-31T21:00:23.829269+00:00",
+            "status": "OPEN",
+            "signal_price": 0.10024
+        },
+        {
+            "id": 5748,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-08-31T20:00:00+00:00",
+            "entry_price": 0.09818,
+            "sl_price": 0.09473748344328727,
+            "tp_price": 0.11195006622685097,
+            "created_at": "2026-08-31T20:30:23.774264+00:00",
+            "status": "OPEN",
+            "signal_price": 0.09818
+        },
+        {
+            "id": 5746,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-31T05:30:00+00:00",
+            "entry_price": 4440.17,
+            "sl_price": 4457.2031748246945,
+            "tp_price": 4400.425925409047,
+            "created_at": "2026-08-31T05:31:47.219798+00:00",
+            "status": "OPEN",
+            "signal_price": 4440.17
+        },
+        {
+            "id": 5744,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-31T02:00:00+00:00",
+            "entry_price": 4427.63,
+            "sl_price": 4449.500537202415,
+            "tp_price": 4296.40677678551,
+            "created_at": "2026-08-31T02:30:22.337112+00:00",
+            "status": "OPEN",
+            "signal_price": 4427.63
+        },
+        {
+            "id": 5743,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-08-31T02:00:00+00:00",
+            "entry_price": 4427.63,
+            "sl_price": 4449.500537202415,
+            "tp_price": 4340.147851190341,
+            "created_at": "2026-08-31T02:30:21.368826+00:00",
+            "status": "OPEN",
+            "signal_price": 4427.63
+        }
+    ]
+}
