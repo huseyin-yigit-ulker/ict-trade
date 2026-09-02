@@ -1,0 +1,160 @@
+{
+    "ict_signal": [
+        {
+            "id": 5772,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T18:00:00+00:00",
+            "entry_price": 680.0,
+            "sl_price": 684.8693420023446,
+            "tp_price": 650.7839479859318,
+            "created_at": "2026-09-01T18:30:25.968075+00:00",
+            "status": "OPEN",
+            "signal_price": 680.0
+        },
+        {
+            "id": 5771,
+            "symbol": "ETHUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T18:00:00+00:00",
+            "entry_price": 2413.33,
+            "sl_price": 2442.819345629611,
+            "tp_price": 2236.3939262223357,
+            "created_at": "2026-09-01T18:30:25.884283+00:00",
+            "status": "OPEN",
+            "signal_price": 2413.33
+        },
+        {
+            "id": 5770,
+            "symbol": "ETHUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T18:00:00+00:00",
+            "entry_price": 2413.33,
+            "sl_price": 2442.819345629611,
+            "tp_price": 2295.3726174815574,
+            "created_at": "2026-09-01T18:30:24.777519+00:00",
+            "status": "OPEN",
+            "signal_price": 2413.33
+        },
+        {
+            "id": 5773,
+            "symbol": "BNBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T18:00:00+00:00",
+            "entry_price": 680.0,
+            "sl_price": 684.8693420023446,
+            "tp_price": 660.5226319906212,
+            "created_at": "2026-09-01T18:30:25.985833+00:00",
+            "status": "OPEN",
+            "signal_price": 680.0
+        },
+        {
+            "id": 5768,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T17:30:00+00:00",
+            "entry_price": 77239.9,
+            "sl_price": 77949.88198787438,
+            "tp_price": 74399.97204850246,
+            "created_at": "2026-09-01T18:00:23.208037+00:00",
+            "status": "OPEN",
+            "signal_price": 77239.9
+        },
+        {
+            "id": 5769,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T17:30:00+00:00",
+            "entry_price": 77239.9,
+            "sl_price": 77949.88198787438,
+            "tp_price": 72980.0080727537,
+            "created_at": "2026-09-01T18:00:23.436242+00:00",
+            "status": "OPEN",
+            "signal_price": 77239.9
+        },
+        {
+            "id": 5766,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T12:30:00+00:00",
+            "entry_price": 4362.35,
+            "sl_price": 4387.87012533067,
+            "tp_price": 4209.229248015984,
+            "created_at": "2026-09-01T13:00:22.975478+00:00",
+            "status": "OPEN",
+            "signal_price": 4362.35
+        },
+        {
+            "id": 5765,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T12:30:00+00:00",
+            "entry_price": 4362.35,
+            "sl_price": 4387.87012533067,
+            "tp_price": 4260.269498677322,
+            "created_at": "2026-09-01T13:00:21.523638+00:00",
+            "status": "OPEN",
+            "signal_price": 4362.35
+        },
+        {
+            "id": 5759,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T08:00:00+00:00",
+            "entry_price": 4389.2,
+            "sl_price": 4414.137001936031,
+            "tp_price": 4239.577988383813,
+            "created_at": "2026-09-01T08:30:22.755824+00:00",
+            "status": "OPEN",
+            "signal_price": 4389.2
+        },
+        {
+            "id": 5758,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T08:00:00+00:00",
+            "entry_price": 4389.2,
+            "sl_price": 4414.137001936031,
+            "tp_price": 4289.451992255876,
+            "created_at": "2026-09-01T08:30:20.977566+00:00",
+            "status": "OPEN",
+            "signal_price": 4389.2
+        },
+        {
+            "id": 5757,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-01T06:15:00+00:00",
+            "entry_price": 4438.44,
+            "sl_price": 4426.948003074841,
+            "tp_price": 4465.254659492037,
+            "created_at": "2026-09-01T06:16:47.906506+00:00",
+            "status": "OPEN",
+            "signal_price": 4438.44
+        },
+        {
+            "id": 5754,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-01T02:00:00+00:00",
+            "entry_price": 1.96,
+            "sl_price": 1.8949636522376365,
+            "tp_price": 2.220145391049454,
+            "created_at": "2026-09-01T03:00:22.739716+00:00",
+            "status": "OPEN",
+            "signal_price": 1.96
+        },
+        {
+            "id": 5753,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-01T00:00:00+00:00",
+            "entry_price": 4451.36,
+            "sl_price": 4459.064625185733,
+            "tp_price": 4433.382541233288,
+            "created_at": "2026-09-01T00:01:47.057780+00:00",
+            "status": "OPEN",
+            "signal_price": 4451.36
+        }
+    ]
+}
