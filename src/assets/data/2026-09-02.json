@@ -1,0 +1,40 @@
+{
+    "ict_signal": [
+        {
+            "id": 5790,
+            "symbol": "ETHUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-02T09:00:00+00:00",
+            "entry_price": 2375.43,
+            "sl_price": 2414.8480208156593,
+            "tp_price": 2217.757916737362,
+            "created_at": "2026-09-02T10:00:21.712793+00:00",
+            "status": "OPEN",
+            "signal_price": 2375.43
+        },
+        {
+            "id": 5780,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-02T00:00:00+00:00",
+            "entry_price": 4323.59,
+            "sl_price": 4358.755973878021,
+            "tp_price": 4182.926104487917,
+            "created_at": "2026-09-02T01:00:26.647519+00:00",
+            "status": "OPEN",
+            "signal_price": 4323.59
+        },
+        {
+            "id": 5781,
+            "symbol": "XAGUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-02T00:00:00+00:00",
+            "entry_price": 63.99,
+            "sl_price": 64.88546105594311,
+            "tp_price": 60.408155776227595,
+            "created_at": "2026-09-02T01:00:26.769411+00:00",
+            "status": "OPEN",
+            "signal_price": 63.99
+        }
+    ]
+}
