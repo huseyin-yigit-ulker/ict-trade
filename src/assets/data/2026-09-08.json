@@ -1,0 +1,88 @@
+{
+    "ict_signal": [
+        {
+            "id": 5984,
+            "symbol": "XRPUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-08T15:30:00+00:00",
+            "entry_price": 1.4338,
+            "sl_price": 1.4148967505604617,
+            "tp_price": 1.5094129977581534,
+            "created_at": "2026-09-08T16:00:23.271256+00:00",
+            "status": "OPEN",
+            "signal_price": 1.4338
+        },
+        {
+            "id": 5985,
+            "symbol": "XRPUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-08T15:30:00+00:00",
+            "entry_price": 1.4338,
+            "sl_price": 1.4148967505604617,
+            "tp_price": 1.5472194966372301,
+            "created_at": "2026-09-08T16:00:24.429470+00:00",
+            "status": "OPEN",
+            "signal_price": 1.4338
+        },
+        {
+            "id": 5982,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-08T15:00:00+00:00",
+            "entry_price": 0.2294,
+            "sl_price": 0.2242137423455968,
+            "tp_price": 0.2605175459264192,
+            "created_at": "2026-09-08T15:30:24.005499+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2294
+        },
+        {
+            "id": 5980,
+            "symbol": "ADAUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-08T15:00:00+00:00",
+            "entry_price": 0.2294,
+            "sl_price": 0.2242137423455968,
+            "tp_price": 0.2501450306176128,
+            "created_at": "2026-09-08T15:30:22.365203+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2294
+        },
+        {
+            "id": 5983,
+            "symbol": "XRPUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-08T15:00:00+00:00",
+            "entry_price": 1.4338,
+            "sl_price": 1.4080237845920895,
+            "tp_price": 1.5369048616316414,
+            "created_at": "2026-09-08T16:00:20.413566+00:00",
+            "status": "OPEN",
+            "signal_price": 1.4338
+        },
+        {
+            "id": 5976,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-08T13:01:00+00:00",
+            "entry_price": 4409.16,
+            "sl_price": 4423.430064727399,
+            "tp_price": 4375.8631823027345,
+            "created_at": "2026-09-08T13:02:47.566962+00:00",
+            "status": "OPEN",
+            "signal_price": 4409.16
+        },
+        {
+            "id": 5975,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-08T05:15:00+00:00",
+            "entry_price": 4431.7,
+            "sl_price": 4421.171653440108,
+            "tp_price": 4456.266141973082,
+            "created_at": "2026-09-08T05:16:48.113928+00:00",
+            "status": "OPEN",
+            "signal_price": 4431.7
+        }
+    ]
+}
