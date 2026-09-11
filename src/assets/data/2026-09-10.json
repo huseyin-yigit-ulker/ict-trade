@@ -1,0 +1,160 @@
+{
+    "ict_signal": [
+        {
+            "id": 6057,
+            "symbol": "XRPUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T23:00:00+00:00",
+            "entry_price": 1.3359,
+            "sl_price": 1.35398467349055,
+            "tp_price": 1.2635613060378,
+            "created_at": "2026-09-10T23:30:21.669114+00:00",
+            "status": "OPEN",
+            "signal_price": 1.3359
+        },
+        {
+            "id": 6062,
+            "symbol": "XRPUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T23:00:00+00:00",
+            "entry_price": 1.334,
+            "sl_price": 1.3595312290037713,
+            "tp_price": 1.2318750839849153,
+            "created_at": "2026-09-11T00:00:21.515074+00:00",
+            "status": "OPEN",
+            "signal_price": 1.334
+        },
+        {
+            "id": 6061,
+            "symbol": "ONDOUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T23:00:00+00:00",
+            "entry_price": 0.3423,
+            "sl_price": 0.3507406193545101,
+            "tp_price": 0.3085375225819596,
+            "created_at": "2026-09-11T00:00:21.452405+00:00",
+            "status": "OPEN",
+            "signal_price": 0.3423
+        },
+        {
+            "id": 6060,
+            "symbol": "WIFUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T23:00:00+00:00",
+            "entry_price": 0.19,
+            "sl_price": 0.19597329921686682,
+            "tp_price": 0.16610680313253268,
+            "created_at": "2026-09-11T00:00:21.382102+00:00",
+            "status": "OPEN",
+            "signal_price": 0.19
+        },
+        {
+            "id": 6059,
+            "symbol": "BTCUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T23:00:00+00:00",
+            "entry_price": 76535.7,
+            "sl_price": 77339.8458060747,
+            "tp_price": 73319.11677570116,
+            "created_at": "2026-09-11T00:00:21.286604+00:00",
+            "status": "OPEN",
+            "signal_price": 76535.7
+        },
+        {
+            "id": 6058,
+            "symbol": "XRPUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T23:00:00+00:00",
+            "entry_price": 1.3359,
+            "sl_price": 1.35398467349055,
+            "tp_price": 1.2273919590566997,
+            "created_at": "2026-09-10T23:30:22.885488+00:00",
+            "status": "OPEN",
+            "signal_price": 1.3359
+        },
+        {
+            "id": 6056,
+            "symbol": "SUIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T22:00:00+00:00",
+            "entry_price": 0.7313,
+            "sl_price": 0.7516400958622078,
+            "tp_price": 0.6499396165511684,
+            "created_at": "2026-09-10T23:00:22.091841+00:00",
+            "status": "OPEN",
+            "signal_price": 0.7313
+        },
+        {
+            "id": 6039,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T12:30:00+00:00",
+            "entry_price": 0.0033359,
+            "sl_price": 0.003408148292072983,
+            "tp_price": 0.002902410247562102,
+            "created_at": "2026-09-10T13:00:30.287316+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0033359
+        },
+        {
+            "id": 6042,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T12:30:00+00:00",
+            "entry_price": 0.0033359,
+            "sl_price": 0.003408148292072983,
+            "tp_price": 0.003046906831708068,
+            "created_at": "2026-09-10T13:00:32.564822+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0033359
+        },
+        {
+            "id": 6023,
+            "symbol": "XAGUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T12:00:00+00:00",
+            "entry_price": 65.15,
+            "sl_price": 65.86899404000263,
+            "tp_price": 60.83603575998423,
+            "created_at": "2026-09-10T12:30:22.021689+00:00",
+            "status": "OPEN",
+            "signal_price": 65.15
+        },
+        {
+            "id": 6028,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T12:00:00+00:00",
+            "entry_price": 0.0033359,
+            "sl_price": 0.003442818485951688,
+            "tp_price": 0.0029082260561932483,
+            "created_at": "2026-09-10T13:00:26.504511+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0033359
+        },
+        {
+            "id": 6022,
+            "symbol": "XAGUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T12:00:00+00:00",
+            "entry_price": 65.15,
+            "sl_price": 65.86899404000263,
+            "tp_price": 62.27402383998949,
+            "created_at": "2026-09-10T12:30:21.457156+00:00",
+            "status": "OPEN",
+            "signal_price": 65.15
+        },
+        {
+            "id": 6030,
+            "symbol": "SUIUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-10T12:00:00+00:00",
+            "entry_price": 0.7503,
+            "sl_price": 0.773343342873146,
+            "tp_price": 0.6581266285074159,
+            "created_at": "2026-09-10T13:00:26.685550+00:00",
+            "status": "OPEN",
+            "signal_price": 0.7503
+        }
+    ]
+}
