@@ -1,0 +1,124 @@
+{
+    "ict_signal": [
+        {
+            "id": 6300,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T23:00:00+00:00",
+            "entry_price": 2.619,
+            "sl_price": 2.5006874756589323,
+            "tp_price": 3.092250097364271,
+            "created_at": "2026-09-17T00:00:25.243137+00:00",
+            "status": "OPEN",
+            "signal_price": 2.619
+        },
+        {
+            "id": 6298,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T23:00:00+00:00",
+            "entry_price": 2.614,
+            "sl_price": 2.5133528690801135,
+            "tp_price": 3.0165885236795456,
+            "created_at": "2026-09-16T23:30:21.087427+00:00",
+            "status": "OPEN",
+            "signal_price": 2.614
+        },
+        {
+            "id": 6299,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T23:00:00+00:00",
+            "entry_price": 2.614,
+            "sl_price": 2.5133528690801135,
+            "tp_price": 3.2178827855193184,
+            "created_at": "2026-09-16T23:30:21.996044+00:00",
+            "status": "OPEN",
+            "signal_price": 2.614
+        },
+        {
+            "id": 6295,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T14:12:00+00:00",
+            "entry_price": 4343.5,
+            "sl_price": 4331.171801899846,
+            "tp_price": 4372.265795567026,
+            "created_at": "2026-09-16T14:13:47.576008+00:00",
+            "status": "OPEN",
+            "signal_price": 4343.5
+        },
+        {
+            "id": 6294,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T13:53:00+00:00",
+            "entry_price": 4344.63,
+            "sl_price": 4332.483094238915,
+            "tp_price": 4372.972780109198,
+            "created_at": "2026-09-16T13:54:47.717327+00:00",
+            "status": "OPEN",
+            "signal_price": 4344.63
+        },
+        {
+            "id": 6292,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T12:30:00+00:00",
+            "entry_price": 0.16938,
+            "sl_price": 0.16162596774634566,
+            "tp_price": 0.21590419352192602,
+            "created_at": "2026-09-16T13:00:26.266310+00:00",
+            "status": "OPEN",
+            "signal_price": 0.16938
+        },
+        {
+            "id": 6293,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T12:30:00+00:00",
+            "entry_price": 0.16938,
+            "sl_price": 0.16162596774634566,
+            "tp_price": 0.20039612901461734,
+            "created_at": "2026-09-16T13:00:29.166413+00:00",
+            "status": "OPEN",
+            "signal_price": 0.16938
+        },
+        {
+            "id": 6290,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T11:30:00+00:00",
+            "entry_price": 0.16405,
+            "sl_price": 0.15690378507860206,
+            "tp_price": 0.20692728952838763,
+            "created_at": "2026-09-16T12:00:26.850944+00:00",
+            "status": "OPEN",
+            "signal_price": 0.16405
+        },
+        {
+            "id": 6291,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T11:30:00+00:00",
+            "entry_price": 0.16405,
+            "sl_price": 0.15690378507860206,
+            "tp_price": 0.19263485968559174,
+            "created_at": "2026-09-16T12:00:26.977520+00:00",
+            "status": "OPEN",
+            "signal_price": 0.16405
+        },
+        {
+            "id": 6288,
+            "symbol": "ARBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-16T10:00:00+00:00",
+            "entry_price": 0.15954,
+            "sl_price": 0.15010155979315065,
+            "tp_price": 0.19729376082739733,
+            "created_at": "2026-09-16T11:00:25.253342+00:00",
+            "status": "OPEN",
+            "signal_price": 0.15954
+        }
+    ]
+}
