@@ -1,0 +1,88 @@
+{
+    "ict_signal": [
+        {
+            "id": 6538,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T22:30:00+00:00",
+            "entry_price": 774.96,
+            "sl_price": 766.6455389426711,
+            "tp_price": 808.2178442293156,
+            "created_at": "2026-09-20T23:00:24.410818+00:00",
+            "status": "OPEN",
+            "signal_price": 774.96
+        },
+        {
+            "id": 6539,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T22:30:00+00:00",
+            "entry_price": 774.96,
+            "sl_price": 766.6455389426711,
+            "tp_price": 824.8467663439733,
+            "created_at": "2026-09-20T23:00:25.639035+00:00",
+            "status": "OPEN",
+            "signal_price": 774.96
+        },
+        {
+            "id": 6537,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T19:00:00+00:00",
+            "entry_price": 0.03972,
+            "sl_price": 0.03707576693616732,
+            "tp_price": 0.050296932255330704,
+            "created_at": "2026-09-20T20:00:24.307122+00:00",
+            "status": "OPEN",
+            "signal_price": 0.03972
+        },
+        {
+            "id": 6531,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T15:30:00+00:00",
+            "entry_price": 3.911,
+            "sl_price": 3.7406515170533763,
+            "tp_price": 4.5923939317864955,
+            "created_at": "2026-09-20T16:00:24.129896+00:00",
+            "status": "OPEN",
+            "signal_price": 3.911
+        },
+        {
+            "id": 6530,
+            "symbol": "NEARUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T15:30:00+00:00",
+            "entry_price": 3.911,
+            "sl_price": 3.7406515170533763,
+            "tp_price": 4.933090897679743,
+            "created_at": "2026-09-20T16:00:22.747568+00:00",
+            "status": "OPEN",
+            "signal_price": 3.911
+        },
+        {
+            "id": 6527,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T15:00:00+00:00",
+            "entry_price": 11.112,
+            "sl_price": 10.588126966793968,
+            "tp_price": 14.255238199236189,
+            "created_at": "2026-09-20T15:30:23.507617+00:00",
+            "status": "OPEN",
+            "signal_price": 11.112
+        },
+        {
+            "id": 6528,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-20T15:00:00+00:00",
+            "entry_price": 11.112,
+            "sl_price": 10.588126966793968,
+            "tp_price": 13.207492132824125,
+            "created_at": "2026-09-20T15:30:23.545824+00:00",
+            "status": "OPEN",
+            "signal_price": 11.112
+        }
+    ]
+}
