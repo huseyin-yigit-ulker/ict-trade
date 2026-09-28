@@ -1,0 +1,88 @@
+{
+    "ict_signal": [
+        {
+            "id": 6748,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-27T22:00:00+00:00",
+            "entry_price": 4272.8,
+            "sl_price": 4277.281610653518,
+            "tp_price": 4245.9103360788895,
+            "created_at": "2026-09-27T22:30:24.846698+00:00",
+            "status": "OPEN",
+            "signal_price": 4272.8
+        },
+        {
+            "id": 6747,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-09-27T22:00:00+00:00",
+            "entry_price": 4272.8,
+            "sl_price": 4277.281610653518,
+            "tp_price": 4254.873557385927,
+            "created_at": "2026-09-27T22:30:24.476205+00:00",
+            "status": "OPEN",
+            "signal_price": 4272.8
+        },
+        {
+            "id": 6743,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-27T09:30:00+00:00",
+            "entry_price": 84910.4,
+            "sl_price": 84583.67365517926,
+            "tp_price": 86870.7580689244,
+            "created_at": "2026-09-27T10:00:22.099310+00:00",
+            "status": "OPEN",
+            "signal_price": 84910.4
+        },
+        {
+            "id": 6744,
+            "symbol": "BTCUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-27T09:30:00+00:00",
+            "entry_price": 84910.4,
+            "sl_price": 84583.67365517926,
+            "tp_price": 86217.30537928293,
+            "created_at": "2026-09-27T10:00:23.605276+00:00",
+            "status": "OPEN",
+            "signal_price": 84910.4
+        },
+        {
+            "id": 6738,
+            "symbol": "SUIUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-27T07:00:00+00:00",
+            "entry_price": 1.2632,
+            "sl_price": 1.216850458983041,
+            "tp_price": 1.4485981640678367,
+            "created_at": "2026-09-27T08:00:26.696873+00:00",
+            "status": "OPEN",
+            "signal_price": 1.2632
+        },
+        {
+            "id": 6736,
+            "symbol": "SUIUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-27T07:00:00+00:00",
+            "entry_price": 1.2325,
+            "sl_price": 1.2029004289413905,
+            "tp_price": 1.3508982842344375,
+            "created_at": "2026-09-27T07:30:20.757642+00:00",
+            "status": "OPEN",
+            "signal_price": 1.2325
+        },
+        {
+            "id": 6737,
+            "symbol": "SUIUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-27T07:00:00+00:00",
+            "entry_price": 1.2325,
+            "sl_price": 1.2029004289413905,
+            "tp_price": 1.4100974263516561,
+            "created_at": "2026-09-27T07:30:21.044661+00:00",
+            "status": "OPEN",
+            "signal_price": 1.2325
+        }
+    ]
+}
