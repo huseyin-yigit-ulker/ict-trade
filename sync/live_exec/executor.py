@@ -43,6 +43,7 @@ from exchange_info import ExchangeInfo               # noqa: E402
 LTF_MIN = 30                                         # dch30_4h base timeframe
 MODE = "dch30_4h"
 NEW_SIGNAL_LOOKBACK_MIN = tsc.EXPIRY_MINUTES + 60    # window to scan for not-yet-managed signals
+MAX_MARGIN_RETRIES = 5
 
 # Display name (EXEC_NAME, e.g. 'OPUS') prepended to the version tag in every Telegram alert, so the
 # receiver knows which strategy fired. Falls back to the bare version tag when unset.
@@ -914,7 +915,26 @@ def _run_tick(cfg, user, live, bt, shared: SharedTick, now: pd.Timestamp) -> Non
                 _reconcile(cfg, client, live, bt_conn, xi, pos, now, shared)
             except BinanceError as e:
                 print(f"  ! {pos['symbol']} reconcile error: {e}")
-                _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> reconcile error: {e}", kind="system")
+                if e.code == -2019 and pos["state"] in (st.PENDING_ENTRY, st.ENTRY_WORKING):
+                    context = pos.get("context") or {}
+                    if isinstance(context, str):
+                        try:
+                            context = json.loads(context)
+                        except (ValueError, TypeError):
+                            context = {}
+                    attempts = int(context.get("margin_insufficient_attempts", 0)) + 1
+                    context["margin_insufficient_attempts"] = attempts
+                    exhausted = attempts >= MAX_MARGIN_RETRIES
+                    fields = {"context": context}
+                    if exhausted:
+                        fields.update(state=st.CANCELLED, exit_reason="margin_insufficient")
+                    st.patch(live, pos["id"], **fields)
+                    suffix = (f" · deneme {attempts}/{MAX_MARGIN_RETRIES}; bakiye yetersizliği nedeniyle sinyal iptal edildi, "
+                              "bu pozisyon için tekrar denenmeyecek." if exhausted else
+                              f" · deneme {attempts}/{MAX_MARGIN_RETRIES}")
+                    _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> reconcile error: {e}{suffix}", kind="system")
+                else:
+                    _alert(cfg, live, f"⚠️ <b>{pos['symbol']}</b> reconcile error: {e}", kind="system")
 
     # 3) snapshot the real exchange state for the dashboard (read-only; needs only credentials)
     if cfg.api_key and cfg.api_secret:

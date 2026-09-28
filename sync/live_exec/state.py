@@ -205,7 +205,7 @@ def writeback_trading_signals(bt_conn, pos: dict) -> None:
     direction = pos["direction"]
     reason = pos.get("exit_reason")
     pnl = pos.get("realized_r")
-    if reason in ("entry_expired", "reversed") and not pos.get("entry_fill_time"):
+    if reason in ("entry_expired", "reversed", "margin_insufficient") and not pos.get("entry_fill_time"):
         status = "cancelled"                                # never entered
     elif reason == "sl":
         status = "closed_sl"
