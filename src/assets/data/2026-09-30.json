@@ -1,0 +1,52 @@
+{
+    "ict_signal": [
+        {
+            "id": 6836,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-30T13:33:00+00:00",
+            "entry_price": 4196.46,
+            "sl_price": 4183.222026297423,
+            "tp_price": 4227.348605306012,
+            "created_at": "2026-09-30T13:34:47.720096+00:00",
+            "status": "OPEN",
+            "signal_price": 4196.46
+        },
+        {
+            "id": 6833,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-30T05:28:00+00:00",
+            "entry_price": 4178.62,
+            "sl_price": 4170.51193742765,
+            "tp_price": 4197.538812668816,
+            "created_at": "2026-09-30T05:29:48.170309+00:00",
+            "status": "OPEN",
+            "signal_price": 4178.62
+        },
+        {
+            "id": 6832,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-30T03:36:00+00:00",
+            "entry_price": 4180.66,
+            "sl_price": 4172.959674811323,
+            "tp_price": 4198.627425440247,
+            "created_at": "2026-09-30T03:37:47.874783+00:00",
+            "status": "OPEN",
+            "signal_price": 4180.66
+        },
+        {
+            "id": 6831,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-09-30T01:00:00+00:00",
+            "entry_price": 4183.5,
+            "sl_price": 4176.478413487308,
+            "tp_price": 4199.883701862948,
+            "created_at": "2026-09-30T01:01:48.041868+00:00",
+            "status": "OPEN",
+            "signal_price": 4183.5
+        }
+    ]
+}
