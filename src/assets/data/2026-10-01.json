@@ -1,0 +1,64 @@
+{
+    "ict_signal": [
+        {
+            "id": 6846,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-01T18:06:00+00:00",
+            "entry_price": 4170.1,
+            "sl_price": 4155.633577783106,
+            "tp_price": 4203.854985172753,
+            "created_at": "2026-10-01T18:07:48.434236+00:00",
+            "status": "OPEN",
+            "signal_price": 4170.1
+        },
+        {
+            "id": 6845,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-01T17:07:00+00:00",
+            "entry_price": 4173.67,
+            "sl_price": 4187.138092874244,
+            "tp_price": 4142.244449960098,
+            "created_at": "2026-10-01T17:08:47.779660+00:00",
+            "status": "OPEN",
+            "signal_price": 4173.67
+        },
+        {
+            "id": 6844,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-01T13:17:00+00:00",
+            "entry_price": 4174.15,
+            "sl_price": 4163.198615513548,
+            "tp_price": 4199.703230468386,
+            "created_at": "2026-10-01T13:18:47.563019+00:00",
+            "status": "OPEN",
+            "signal_price": 4174.15
+        },
+        {
+            "id": 6840,
+            "symbol": "FETUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-01T05:00:00+00:00",
+            "entry_price": 0.2386,
+            "sl_price": 0.23156257391327525,
+            "tp_price": 0.266749704346899,
+            "created_at": "2026-10-01T05:30:23.842759+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2386
+        },
+        {
+            "id": 6841,
+            "symbol": "FETUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-01T05:00:00+00:00",
+            "entry_price": 0.2386,
+            "sl_price": 0.23156257391327525,
+            "tp_price": 0.28082455652034843,
+            "created_at": "2026-10-01T05:30:26.131845+00:00",
+            "status": "OPEN",
+            "signal_price": 0.2386
+        }
+    ]
+}
