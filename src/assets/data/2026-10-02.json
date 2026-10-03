@@ -1,0 +1,88 @@
+{
+    "ict_signal": [
+        {
+            "id": 6863,
+            "symbol": "ARBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-02T18:30:00+00:00",
+            "entry_price": 0.19413,
+            "sl_price": 0.1998904371728053,
+            "tp_price": 0.15956737696316825,
+            "created_at": "2026-10-02T19:00:39.904524+00:00",
+            "status": "OPEN",
+            "signal_price": 0.19413
+        },
+        {
+            "id": 6867,
+            "symbol": "ARBUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-02T18:30:00+00:00",
+            "entry_price": 0.19413,
+            "sl_price": 0.1998904371728053,
+            "tp_price": 0.17108825130877883,
+            "created_at": "2026-10-02T19:00:40.544673+00:00",
+            "status": "OPEN",
+            "signal_price": 0.19413
+        },
+        {
+            "id": 6859,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-02T17:30:00+00:00",
+            "entry_price": 0.0043054,
+            "sl_price": 0.0044172726711344985,
+            "tp_price": 0.0036341639731930116,
+            "created_at": "2026-10-02T18:00:32.463208+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0043054
+        },
+        {
+            "id": 6860,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-02T17:30:00+00:00",
+            "entry_price": 0.0043054,
+            "sl_price": 0.0044172726711344985,
+            "tp_price": 0.0038579093154620077,
+            "created_at": "2026-10-02T18:00:34.198160+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0043054
+        },
+        {
+            "id": 6858,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-02T13:54:00+00:00",
+            "entry_price": 4188.12,
+            "sl_price": 4168.717764489787,
+            "tp_price": 4233.391882857162,
+            "created_at": "2026-10-02T13:55:47.730289+00:00",
+            "status": "OPEN",
+            "signal_price": 4188.12
+        },
+        {
+            "id": 6848,
+            "symbol": "SOLUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-02T03:30:00+00:00",
+            "entry_price": 121.22,
+            "sl_price": 119.70911439347842,
+            "tp_price": 130.28531363912947,
+            "created_at": "2026-10-02T04:00:29.678538+00:00",
+            "status": "OPEN",
+            "signal_price": 121.22
+        },
+        {
+            "id": 6847,
+            "symbol": "SOLUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-02T03:30:00+00:00",
+            "entry_price": 121.22,
+            "sl_price": 119.70911439347842,
+            "tp_price": 127.26354242608632,
+            "created_at": "2026-10-02T04:00:27.985076+00:00",
+            "status": "OPEN",
+            "signal_price": 121.22
+        }
+    ]
+}
