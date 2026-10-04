@@ -1,0 +1,40 @@
+{
+    "ict_signal": [
+        {
+            "id": 6873,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-03T22:00:00+00:00",
+            "entry_price": 0.04074,
+            "sl_price": 0.03977183437773585,
+            "tp_price": 0.0446126624890566,
+            "created_at": "2026-10-03T23:00:24.241290+00:00",
+            "status": "OPEN",
+            "signal_price": 0.04074
+        },
+        {
+            "id": 6871,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-03T17:00:00+00:00",
+            "entry_price": 790.49,
+            "sl_price": 785.0097261804633,
+            "tp_price": 823.3716429172206,
+            "created_at": "2026-10-03T17:30:22.639348+00:00",
+            "status": "OPEN",
+            "signal_price": 790.49
+        },
+        {
+            "id": 6872,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-03T17:00:00+00:00",
+            "entry_price": 790.49,
+            "sl_price": 785.0097261804633,
+            "tp_price": 812.4110952781471,
+            "created_at": "2026-10-03T17:30:23.121852+00:00",
+            "status": "OPEN",
+            "signal_price": 790.49
+        }
+    ]
+}
