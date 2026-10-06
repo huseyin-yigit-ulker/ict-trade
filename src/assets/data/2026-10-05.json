@@ -1,0 +1,76 @@
+{
+    "ict_signal": [
+        {
+            "id": 6913,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-05T08:00:00+00:00",
+            "entry_price": 0.0045293,
+            "sl_price": 0.004438903821068386,
+            "tp_price": 0.0048908847157264545,
+            "created_at": "2026-10-05T08:30:24.012787+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0045293
+        },
+        {
+            "id": 6912,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-05T08:00:00+00:00",
+            "entry_price": 0.0045293,
+            "sl_price": 0.004438903821068386,
+            "tp_price": 0.005071677073589682,
+            "created_at": "2026-10-05T08:30:23.528897+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0045293
+        },
+        {
+            "id": 6911,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-05T07:00:00+00:00",
+            "entry_price": 0.0045066,
+            "sl_price": 0.004410059879560865,
+            "tp_price": 0.004892760481756541,
+            "created_at": "2026-10-05T08:00:26.439316+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0045066
+        },
+        {
+            "id": 6907,
+            "symbol": "BNBUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-05T01:00:00+00:00",
+            "entry_price": 800.29,
+            "sl_price": 793.5765426084672,
+            "tp_price": 827.1438295661311,
+            "created_at": "2026-10-05T02:00:25.579315+00:00",
+            "status": "OPEN",
+            "signal_price": 800.29
+        },
+        {
+            "id": 6899,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-05T00:00:00+00:00",
+            "entry_price": 4160.22,
+            "sl_price": 4151.67216671064,
+            "tp_price": 4194.411333157438,
+            "created_at": "2026-10-05T01:00:26.045200+00:00",
+            "status": "OPEN",
+            "signal_price": 4160.22
+        },
+        {
+            "id": 6900,
+            "symbol": "XAGUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-05T00:00:00+00:00",
+            "entry_price": 61.36,
+            "sl_price": 61.00922720679301,
+            "tp_price": 62.76309117282798,
+            "created_at": "2026-10-05T01:00:26.134570+00:00",
+            "status": "OPEN",
+            "signal_price": 61.36
+        }
+    ]
+}
