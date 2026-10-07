@@ -1,0 +1,112 @@
+{
+    "ict_signal": [
+        {
+            "id": 6934,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-06T20:22:00+00:00",
+            "entry_price": 4167.45,
+            "sl_price": 4159.217413487181,
+            "tp_price": 4186.65936852991,
+            "created_at": "2026-10-06T20:23:49.268193+00:00",
+            "status": "OPEN",
+            "signal_price": 4167.45
+        },
+        {
+            "id": 6933,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-06T16:51:00+00:00",
+            "entry_price": 4160.5,
+            "sl_price": 4151.395331584003,
+            "tp_price": 4181.744226303994,
+            "created_at": "2026-10-06T16:52:48.856349+00:00",
+            "status": "OPEN",
+            "signal_price": 4160.5
+        },
+        {
+            "id": 6930,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-06T11:30:00+00:00",
+            "entry_price": 11.432,
+            "sl_price": 11.236880371361014,
+            "tp_price": 12.212478514555945,
+            "created_at": "2026-10-06T12:00:34.133276+00:00",
+            "status": "OPEN",
+            "signal_price": 11.432
+        },
+        {
+            "id": 6931,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-06T11:30:00+00:00",
+            "entry_price": 11.432,
+            "sl_price": 11.236880371361014,
+            "tp_price": 12.602717771833918,
+            "created_at": "2026-10-06T12:00:34.509810+00:00",
+            "status": "OPEN",
+            "signal_price": 11.432
+        },
+        {
+            "id": 6932,
+            "symbol": "AVAXUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-06T11:00:00+00:00",
+            "entry_price": 11.432,
+            "sl_price": 11.185377500249887,
+            "tp_price": 12.418489999000457,
+            "created_at": "2026-10-06T12:00:36.804858+00:00",
+            "status": "OPEN",
+            "signal_price": 11.432
+        },
+        {
+            "id": 6926,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-06T06:25:00+00:00",
+            "entry_price": 4134.54,
+            "sl_price": 4144.2220832251505,
+            "tp_price": 4111.948472474649,
+            "created_at": "2026-10-06T06:26:49.754088+00:00",
+            "status": "OPEN",
+            "signal_price": 4134.54
+        },
+        {
+            "id": 6922,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-06T01:30:00+00:00",
+            "entry_price": 0.0043078,
+            "sl_price": 0.004378102713409679,
+            "tp_price": 0.0038859837195419286,
+            "created_at": "2026-10-06T02:00:35.227713+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0043078
+        },
+        {
+            "id": 6923,
+            "symbol": "1000PEPEUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-06T01:30:00+00:00",
+            "entry_price": 0.0043078,
+            "sl_price": 0.004378102713409679,
+            "tp_price": 0.004026589146361286,
+            "created_at": "2026-10-06T02:00:35.607563+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0043078
+        },
+        {
+            "id": 6921,
+            "symbol": "XAUUSDT",
+            "trade_type": "SELL",
+            "signal_time": "2026-10-06T00:33:00+00:00",
+            "entry_price": 4145.52,
+            "sl_price": 4151.059859792766,
+            "tp_price": 4132.593660483549,
+            "created_at": "2026-10-06T00:34:50.561962+00:00",
+            "status": "OPEN",
+            "signal_price": 4145.52
+        }
+    ]
+}
