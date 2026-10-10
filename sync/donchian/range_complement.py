@@ -61,7 +61,7 @@ def range_monthly(year):
 def dch_monthly(years):
     c = tsc.backtest_conn(); cur = c.cursor()
     lo = pd.Timestamp(f"{min(years)}-01-01", tz="UTC"); hi = pd.Timestamp(f"{max(years)+1}-01-01", tz="UTC")
-    cur.execute("""SELECT symbol, signal_time, pnl_r FROM ict_trade.trading_signals
+    cur.execute(f"""SELECT symbol, signal_time, pnl_r FROM {tsc.TABLE}
         WHERE version='dch30_4h' AND status IN ('closed_tp','closed_sl') AND pnl_r IS NOT NULL
           AND signal_time >= %s AND signal_time < %s""", (lo.to_pydatetime(), hi.to_pydatetime()))
     mo = defaultdict(float)

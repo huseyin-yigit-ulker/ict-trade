@@ -72,8 +72,8 @@ def cache_symbol(sym):
 
 def load(version, year):
     conn = tsc.backtest_conn(); cur = conn.cursor()
-    cur.execute("""SELECT symbol, signal_time, trade_type, entry_price, sl_price, tp_price, pnl_r, status, confluence_score
-        FROM ict_trade.trading_signals WHERE version=%s
+    cur.execute(f"""SELECT symbol, signal_time, trade_type, entry_price, sl_price, tp_price, pnl_r, status, confluence_score
+        FROM {tsc.TABLE} WHERE version=%s
           AND signal_time>=%s AND signal_time<%s AND status IN ('closed_tp','closed_sl')""",
                 (version, f"{year}-01-01", f"{year+1}-01-01"))
     rows = cur.fetchall(); cur.close(); conn.close()

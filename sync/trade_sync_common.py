@@ -39,6 +39,9 @@ EXPIRY_MINUTES = 180        # entry-fill window in minutes (= 180 bars on the 1m
 RESOLUTION_INTERVAL = "1m"  # outcome resolution timeframe — intrabar entry vs TP/SL order
 RESOLUTION_HORIZON = pd.Timedelta(days=10)  # per-signal 1m fetch span when df1m not passed
 VERSION = "v1"
+# Backtest results table. 2026-10 V2 migration: backtest moved into the main project as the
+# separate schema ict_backtest → set BACKTESTING_DB_TABLE=ict_backtest.trading_signals in .env.
+# Resolved lazily below (after _read_env is defined); this is the pre-migration default.
 TABLE = "ict_trade.trading_signals"
 
 # backtester.TradeStatus.value  ->  trading_signals.status
@@ -64,6 +67,11 @@ def _read_env() -> dict[str, str]:
             v = v[1:-1]
         out[k.strip()] = v
     return out
+
+
+_bt_table = (_read_env().get("BACKTESTING_DB_TABLE") or os.getenv("BACKTESTING_DB_TABLE") or "").strip().strip("\"'")
+if _bt_table:
+    TABLE = _bt_table
 
 
 def parse_dsn(dsn: str) -> dict:

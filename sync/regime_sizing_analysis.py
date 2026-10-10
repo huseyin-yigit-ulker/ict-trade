@@ -275,7 +275,7 @@ def score_at(roll, open_ms_list, fire_ms):
 def fetch_trades(conn, version, y0, y1):
     cur = conn.cursor()
     cur.execute(
-        """SELECT symbol, signal_time, pnl_r, status FROM ict_trade.trading_signals
+        f"""SELECT symbol, signal_time, pnl_r, status FROM {tsc.TABLE}
            WHERE version=%s AND signal_time>=%s AND signal_time<%s
              AND status IN ('closed_tp','closed_sl') AND pnl_r IS NOT NULL""",
         (version, y0, y1))

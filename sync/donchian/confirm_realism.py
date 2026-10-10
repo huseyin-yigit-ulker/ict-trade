@@ -65,8 +65,8 @@ def fetch_confirmed(version, syms, start, end):
     conn = psycopg2.connect(env["BACKTESTING_DB_CONNECTION_STRING"])
     cur = conn.cursor()
     cur.execute(
-        """select symbol, direction, trade_type, signal_time, entry_price, sl_price, tp_price, status, pnl_r
-           from ict_trade.trading_signals
+        f"""select symbol, direction, trade_type, signal_time, entry_price, sl_price, tp_price, status, pnl_r
+           from {tsc.TABLE}
            where version=%s and signal_time>=%s and signal_time<%s and symbol = ANY(%s)
              and lower(status) in ('closed_tp','closed_sl')
            order by symbol, signal_time""",

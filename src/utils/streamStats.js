@@ -51,7 +51,9 @@ export const fetchAllSummaries = async () => {
   const url = import.meta.env.BACKTESTING_VITE_SUPABASE_URL;
   const apiKey = import.meta.env.BACKTESTING_VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
   if (!url || !apiKey) throw new Error('config');
-  // The analytics functions live in the ict_trade schema; a POST resolves the
+  const rawTable = import.meta.env.BACKTESTING_DB_TABLE || 'ict_trade.trading_signals';
+  const schema = rawTable.includes('.') ? rawTable.split('.')[0] : 'ict_trade';
+  // The analytics functions live in the schema; a POST resolves the
   // function schema from Content-Profile (not Accept-Profile) — set both.
   const call = async (version) => {
     const res = await fetch(`${url}/rest/v1/rpc/backtest_summary_metrics`, {
@@ -59,8 +61,8 @@ export const fetchAllSummaries = async () => {
       headers: {
         apikey: apiKey,
         Authorization: `Bearer ${apiKey}`,
-        'Accept-Profile': 'ict_trade',
-        'Content-Profile': 'ict_trade',
+        'Accept-Profile': schema,
+        'Content-Profile': schema,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ p_version: version }),

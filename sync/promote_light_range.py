@@ -72,7 +72,7 @@ def roll_for(sym):
 
 def kept_ids(parent):
     conn = tsc.backtest_conn(); cur = conn.cursor()
-    cur.execute("""SELECT id, symbol, signal_time, pnl_r, status FROM ict_trade.trading_signals
+    cur.execute(f"""SELECT id, symbol, signal_time, pnl_r, status FROM {tsc.TABLE}
         WHERE version=%s ORDER BY symbol, signal_time""", (parent,))
     rows = cur.fetchall(); cur.close(); conn.close()
     kept, stats, noscore = [], defaultdict(lambda: [0, 0, 0.0]), 0

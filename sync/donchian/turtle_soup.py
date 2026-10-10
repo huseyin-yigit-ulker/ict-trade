@@ -116,7 +116,7 @@ def run_symbol(sym, w_start, w_end, rr):
 def dch30_4h_monthly(w_start, w_end):
     """dch30_4h crypto+metal monthly R from the backtest DB (the complement target)."""
     c = tsc.backtest_conn(); cur = c.cursor()
-    cur.execute("""SELECT symbol, signal_time, pnl_r FROM ict_trade.trading_signals
+    cur.execute(f"""SELECT symbol, signal_time, pnl_r FROM {tsc.TABLE}
         WHERE version='dch30_4h' AND status IN ('closed_tp','closed_sl') AND pnl_r IS NOT NULL
           AND signal_time >= %s AND signal_time < %s""",
                 (w_start.to_pydatetime(), w_end.to_pydatetime()))

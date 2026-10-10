@@ -13,8 +13,6 @@ import { authedFetch } from '../../utils/supa';
 export const STREAM_ROWS = [
   { stream: 'opus',       network: 'mainnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: true },
   { stream: 'opus',       network: 'testnet', maskKey: 'd30so8f3h7', version: 'd30so8f3h7', real: false },
-  { stream: 'talos_ichi', network: 'mainnet', maskKey: 'talos_ichi', version: 'talos_ichi', real: true },
-  { stream: 'talos_ichi', network: 'testnet', maskKey: 'talos_ichi', version: 'talos_ichi', real: false },
 ];
 
 export const rowKey = (d) => `${d.stream}:${d.network}`;
@@ -76,13 +74,17 @@ const rankCache = {};   // version -> rows sorted by total R desc (session cache
 export async function fetchRanking(version) {
   if (rankCache[version]) return rankCache[version];
   if (!BT_URL || !BT_KEY) throw new Error('config');
+
+  const rawTable = import.meta.env.BACKTESTING_DB_TABLE || 'ict_trade.trading_signals';
+  const schema = rawTable.includes('.') ? rawTable.split('.')[0] : 'ict_trade';
+
   const res = await fetch(`${BT_URL}/rest/v1/rpc/backtest_symbol_metrics`, {
     method: 'POST',
     headers: {
       apikey: BT_KEY,
       Authorization: `Bearer ${BT_KEY}`,
-      'Accept-Profile': 'ict_trade',
-      'Content-Profile': 'ict_trade',
+      'Accept-Profile': schema,
+      'Content-Profile': schema,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ p_version: version }),

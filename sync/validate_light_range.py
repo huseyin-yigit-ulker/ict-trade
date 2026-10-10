@@ -61,8 +61,8 @@ def roll_for(sym):
 
 def load(version):
     conn = tsc.backtest_conn(); cur = conn.cursor()
-    cur.execute("""SELECT symbol, signal_time, pnl_r, status
-        FROM ict_trade.trading_signals WHERE version=%s
+    cur.execute(f"""SELECT symbol, signal_time, pnl_r, status
+        FROM {tsc.TABLE} WHERE version=%s
           AND status IN ('closed_tp','closed_sl') ORDER BY signal_time""", (version,))
     rows = cur.fetchall(); cur.close(); conn.close()
     return rows

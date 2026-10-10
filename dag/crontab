@@ -93,8 +93,8 @@
 # ARM: LIVE_TRADING_ENABLED=true & TALOS_ICHI_EXEC_ENABLED=true & TALOS_ICHI_EXEC_DRY_RUN=false &
 # TALOS_ICHI_BINANCE_TESTNET=false + owner (talos_ichi,mainnet) enabled satırı (migration 016).
 # Executor +48s (paper emit :45s'ten ayrık), safety sweep +58s.
-* * * * * sleep 48 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi_exec/executor.py     >> $HOME/ict-talos-ichi-exec.log 2>&1
-*/3 * * * * sleep 58 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi_exec/safety_sweep.py >> $HOME/ict-talos-ichi-exec.log 2>&1
+# * * * * * sleep 48 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi_exec/executor.py     >> $HOME/ict-talos-ichi-exec.log 2>&1
+# */3 * * * * sleep 58 && cd $HOME/ict-trade && $HOME/ict-trade/.venv/bin/python sync/talos_ichi_exec/safety_sweep.py >> $HOME/ict-talos-ichi-exec.log 2>&1
 
 # --- d30so8c LIVE EXECUTION (Binance USDⓈ-M; testnet/mainnet via .env BINANCE_TESTNET) ---
 # Reconciler (cron #1): reads the SAME dch30_4h signals, drives real orders reproducing
