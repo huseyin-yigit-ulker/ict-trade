@@ -19,13 +19,18 @@ const BACKTEST_ALLOWED_HOURS = new Set(Array.from({ length: 24 }, (_, h) => h));
 // Haritası vb.) SADECE bunu gösterir; artık işlem yapılmayan hisseler kullanıcıyı
 // yanıltmasın diye. Backtest laboratuvarı (aşağıda) hisseleri koruyor.
 export const CRYPTO_METAL_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT',
-  '1000PEPEUSDT', 'WIFUSDT', 'SUIUSDT',
-  'NEARUSDT', 'FETUSDT', 'ADAUSDT', 'SUSDT',
-  'ARBUSDT', 'ORDIUSDT', 'ONDOUSDT',
-  // 2026-06-13: crypto re-add by user decision (XRP/LINK/DOGE re-added, AVAX new).
-  'XRPUSDT', 'DOGEUSDT', 'LINKUSDT', 'AVAXUSDT',
-  'XAUUSDT', 'XAGUSDT',
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', '1000PEPEUSDT',
+  'WIFUSDT', 'SUIUSDT', 'NEARUSDT', 'FETUSDT', 'ADAUSDT',
+  'SUSDT', 'ARBUSDT', 'ORDIUSDT', 'ONDOUSDT', 'XRPUSDT',
+  'DOGEUSDT', 'LINKUSDT', 'AVAXUSDT', 'TAOUSDT', 'RENDERUSDT',
+  'AKTUSDT', 'AAVEUSDT', 'UNIUSDT', 'INJUSDT', 'APTUSDT',
+  'SEIUSDT', 'TIAUSDT', 'ATOMUSDT', 'ICPUSDT', 'KASUSDT',
+  'HYPEUSDT', 'JUPUSDT', 'ENAUSDT', 'PENDLEUSDT', 'PEPEUSDT',
+  'BONKUSDT', 'FLOKIUSDT', 'PYTHUSDT', 'JTOUSDT', 'WLDUSDT',
+  'DOTUSDT', 'BCHUSDT', 'LTCUSDT', 'XLMUSDT', 'ZECUSDT',
+  'NEIROUSDT', 'VIRTUALUSDT', 'ARKMUSDT', 'ZRXUSDT', 'VETUSDT',
+  'FILUSDT', 'TONUSDT', 'TRXUSDT',
+  'XAUUSDT', 'XAGUSDT'
 ];
 
 // Stock-backed perps — SADECE araştırma/backtest laboratuvarı için tutulur.
