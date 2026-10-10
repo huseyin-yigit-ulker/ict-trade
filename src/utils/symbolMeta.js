@@ -134,12 +134,21 @@ export const fetchRegimeKlines = async (symbol, interval = '4h', startMs) => {
 // Each symbol is traded only in the NY session(s) where its 2026 signals had an
 // edge. 'am' = 09:00–12:00 ET, 'pm' = 12:00–16:00 ET. Symbols absent → not traded.
 export const OPUS_MAP = {
-  BTCUSDT: ['am'], ETHUSDT: ['am'], BNBUSDT: ['am'], SUSDT: ['am'],
-  CRCLUSDT: ['am'], ONDOUSDT: ['am'], XAGUSDT: ['am'], SUIUSDT: ['am'], INTCUSDT: ['am'],
-  MSTRUSDT: ['am', 'pm'], ARBUSDT: ['am', 'pm'], FETUSDT: ['am', 'pm'],
-  WIFUSDT: ['pm'], '1000PEPEUSDT': ['pm'], COINUSDT: ['pm'], HOODUSDT: ['pm'],
-  // 2026-06-13 crypto re-add: only edge sessions (LINK NY-PM +8.3R; DOGE NY-PM +1.0R marginal).
-  LINKUSDT: ['pm'], DOGEUSDT: ['pm'],
+  'BTCUSDT': ['am', 'pm'], 'ETHUSDT': ['am', 'pm'], 'SOLUSDT': ['am', 'pm'], 'BNBUSDT': ['am', 'pm'], '1000PEPEUSDT': ['am', 'pm'],
+  'WIFUSDT': ['am', 'pm'], 'SUIUSDT': ['am', 'pm'], 'NEARUSDT': ['am', 'pm'], 'FETUSDT': ['am', 'pm'], 'ADAUSDT': ['am', 'pm'],
+  'SUSDT': ['am', 'pm'], 'ARBUSDT': ['am', 'pm'], 'ORDIUSDT': ['am', 'pm'], 'ONDOUSDT': ['am', 'pm'], 'XRPUSDT': ['am', 'pm'],
+  'DOGEUSDT': ['am', 'pm'], 'LINKUSDT': ['am', 'pm'], 'AVAXUSDT': ['am', 'pm'], 'TAOUSDT': ['am', 'pm'], 'RENDERUSDT': ['am', 'pm'],
+  'AKTUSDT': ['am', 'pm'], 'AAVEUSDT': ['am', 'pm'], 'UNIUSDT': ['am', 'pm'], 'INJUSDT': ['am', 'pm'], 'APTUSDT': ['am', 'pm'],
+  'SEIUSDT': ['am', 'pm'], 'TIAUSDT': ['am', 'pm'], 'ATOMUSDT': ['am', 'pm'], 'ICPUSDT': ['am', 'pm'], 'KASUSDT': ['am', 'pm'],
+  'HYPEUSDT': ['am', 'pm'], 'JUPUSDT': ['am', 'pm'], 'ENAUSDT': ['am', 'pm'], 'PENDLEUSDT': ['am', 'pm'], 'PEPEUSDT': ['am', 'pm'],
+  'BONKUSDT': ['am', 'pm'], 'FLOKIUSDT': ['am', 'pm'], 'PYTHUSDT': ['am', 'pm'], 'JTOUSDT': ['am', 'pm'], 'WLDUSDT': ['am', 'pm'],
+  'DOTUSDT': ['am', 'pm'], 'BCHUSDT': ['am', 'pm'], 'LTCUSDT': ['am', 'pm'], 'XLMUSDT': ['am', 'pm'], 'ZECUSDT': ['am', 'pm'],
+  'NEIROUSDT': ['am', 'pm'], 'VIRTUALUSDT': ['am', 'pm'], 'ARKMUSDT': ['am', 'pm'], 'ZRXUSDT': ['am', 'pm'], 'VETUSDT': ['am', 'pm'],
+  'FILUSDT': ['am', 'pm'], 'TONUSDT': ['am', 'pm'], 'TRXUSDT': ['am', 'pm'], 'XAGUSDT': ['am', 'pm'], 'NVDAUSDT': ['am', 'pm'],
+  'METAUSDT': ['am', 'pm'], 'AMZNUSDT': ['am', 'pm'], 'COINUSDT': ['am', 'pm'], 'MSTRUSDT': ['am', 'pm'], 'CRCLUSDT': ['am', 'pm'],
+  'PLTRUSDT': ['am', 'pm'], 'TSLAUSDT': ['am', 'pm'], 'INTCUSDT': ['am', 'pm'], 'HOODUSDT': ['am', 'pm'], 'MSFTUSDT': ['am', 'pm'],
+  'AVGOUSDT': ['am', 'pm'], 'BABAUSDT': ['am', 'pm'], 'BXUSDT': ['am', 'pm'], 'HPEUSDT': ['am', 'pm'], 'AMATUSDT': ['am', 'pm'],
+  'CRWDUSDT': ['am', 'pm'], 'CRDOUSDT': ['am', 'pm'], 'AAOIUSDT': ['am', 'pm'], 'IWMUSDT': ['am', 'pm']
 };
 
 // Hour-of-day in America/New_York for a UTC timestamp (DST handled by Intl).
