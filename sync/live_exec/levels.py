@@ -73,8 +73,13 @@ def compute_levels(direction: str, entry_close: float, sl: float, *,
 def reanchor(levels: Levels, avg_fill: float, *, first_r: float) -> Levels:
     """After the entry FILLS at avg_fill, re-anchor tp1/be to the real fill (B2).
     sl stays structural (full close at the original stop); cap stays pinned to the structural
-    price (matches the backtest row's tp_price). risk_eff becomes |avg_fill - sl|."""
-    risk_eff = abs(float(avg_fill) - levels.sl)
+    price (matches the backtest row's tp_price). risk_eff is clamped to at least 10% of risk0 
+    to prevent R-math explosion on extreme/inverted slippage."""
+    # Directional distance to SL. If short (sign=-1), sl should be > avg_fill.
+    raw_risk = (levels.sl - float(avg_fill)) * (-levels.sign)
+    # Floor the effective risk to prevent division by zero or negative risk on bad fills
+    risk_eff = max(float(raw_risk), levels.risk0 * 0.1)
+    
     return Levels(
         direction=levels.direction,
         sign=levels.sign,
