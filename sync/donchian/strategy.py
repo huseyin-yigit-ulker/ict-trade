@@ -153,19 +153,13 @@ def htf_confirm(signals: list["DonSignal"], base_tf: str, htf_df: pd.DataFrame,
 # on the 5 "temel" core (BTC/ETH/SOL/XAU/XAG, all positive); the rest are unvalidated —
 # the per-symbol backtest R surfaces which crypto/stock-perp symbols actually carry a
 # trend edge (prune the negatives after reviewing + the 2025 OOS run).
-CORE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XAUUSDT", "XAGUSDT"]
-SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
-    "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
-    "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
-    "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
-    "XRPUSDT", "DOGEUSDT", "LINKUSDT", "AVAXUSDT",
-    "XAUUSDT", "XAGUSDT",
-    "NVDAUSDT", "METAUSDT", "AMZNUSDT", "COINUSDT", "MSTRUSDT",
-    "CRCLUSDT", "PLTRUSDT", "TSLAUSDT", "INTCUSDT", "HOODUSDT",
-    "MSFTUSDT", "AVGOUSDT", "BABAUSDT", "BXUSDT", "HPEUSDT",
-    "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
-]
+import json
+from pathlib import Path
+_here = Path(__file__).resolve().parent
+with open(_here.parents[1] / "symbols.json") as f:
+    _sc = json.load(f)
+
+SYMBOLS = _sc["CRYPTO_METAL_SYMBOLS"] + _sc["STOCK_PERP_SYMBOLS"]
 
 # Crypto + metals ONLY (drops the 20 US-stock perps in STOCK_SYMBOLS). 2026-07-09 owner decision:
 # Donchian trades/signals CRYPTO + METALS (XAU/XAG) only — the tokenised US equities were pure

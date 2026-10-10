@@ -14,34 +14,12 @@ const BACKTEST_ALLOWED_HOURS = new Set(Array.from({ length: 24 }, (_, h) => h));
 // audit (PLTR/TSLA were cut too but re-added 2026-06-12 by user decision with
 // the tokenized-equity expansion). Old rows for hidden symbols stay in the
 // database but the dashboard hides them. Mirrors dag/dag.py SYMBOLS.
-// Canlı işlem evreni — kripto + metal (20). 2026-07-09 (ebd03d4) kararı: US-hisse
-// perp'leri canlı Donchian evreninden atıldı. Kullanıcıya dönük yüzeyler (Rejim
-// Haritası vb.) SADECE bunu gösterir; artık işlem yapılmayan hisseler kullanıcıyı
-// yanıltmasın diye. Backtest laboratuvarı (aşağıda) hisseleri koruyor.
-export const CRYPTO_METAL_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', '1000PEPEUSDT',
-  'WIFUSDT', 'SUIUSDT', 'NEARUSDT', 'FETUSDT', 'ADAUSDT',
-  'SUSDT', 'ARBUSDT', 'ORDIUSDT', 'ONDOUSDT', 'XRPUSDT',
-  'DOGEUSDT', 'LINKUSDT', 'AVAXUSDT', 'TAOUSDT', 'RENDERUSDT',
-  'AKTUSDT', 'AAVEUSDT', 'UNIUSDT', 'INJUSDT', 'APTUSDT',
-  'SEIUSDT', 'TIAUSDT', 'ATOMUSDT', 'ICPUSDT', 'KASUSDT',
-  'HYPEUSDT', 'JUPUSDT', 'ENAUSDT', 'PENDLEUSDT', 'PEPEUSDT',
-  'BONKUSDT', 'FLOKIUSDT', 'PYTHUSDT', 'JTOUSDT', 'WLDUSDT',
-  'DOTUSDT', 'BCHUSDT', 'LTCUSDT', 'XLMUSDT', 'ZECUSDT',
-  'NEIROUSDT', 'VIRTUALUSDT', 'ARKMUSDT', 'ZRXUSDT', 'VETUSDT',
-  'FILUSDT', 'TONUSDT', 'TRXUSDT',
-  'XAUUSDT', 'XAGUSDT'
-];
+import symbolsConfig from '../../symbols.json';
+
+export const CRYPTO_METAL_SYMBOLS = symbolsConfig.CRYPTO_METAL_SYMBOLS;
 
 // Stock-backed perps — SADECE araştırma/backtest laboratuvarı için tutulur.
-const STOCK_PERP_SYMBOLS = [
-  'NVDAUSDT', 'METAUSDT',
-  'AMZNUSDT', 'COINUSDT', 'MSTRUSDT',
-  // 2026-06-12 tokenized-equity expansion (listings 2026-01-28 .. 2026-06-08)
-  'CRCLUSDT', 'PLTRUSDT', 'TSLAUSDT', 'INTCUSDT', 'HOODUSDT',
-  'MSFTUSDT', 'AVGOUSDT', 'BABAUSDT', 'BXUSDT', 'HPEUSDT',
-  'AMATUSDT', 'CRWDUSDT', 'CRDOUSDT', 'AAOIUSDT', 'IWMUSDT',
-];
+const STOCK_PERP_SYMBOLS = symbolsConfig.STOCK_PERP_SYMBOLS;
 
 // Backtest (araştırma) evreni = canlı 20 + hisse perp'leri. Sıra korunur ki cache
 // anahtarları ve mevcut backtest tabloları değişmesin.

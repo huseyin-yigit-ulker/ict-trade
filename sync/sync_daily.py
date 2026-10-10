@@ -43,24 +43,13 @@ from ict import config as C   # backtest/ict (path added by tsc) — partial-TP 
 # 2026-06-10: DOGE/GOOGL/PLTR/TSLA removed after the 2026 Jan-Jun v1 audit
 # (mirrors dag/dag.py SYMBOLS). 2026-06-12: PLTR/TSLA re-added by user decision
 # with the tokenized-equity expansion.
-STATIC_SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
-    "1000PEPEUSDT", "WIFUSDT", "SUIUSDT",
-    "NEARUSDT", "FETUSDT", "ADAUSDT", "SUSDT",
-    "ARBUSDT", "ORDIUSDT", "ONDOUSDT",
-    # 2026-06-13: crypto re-add by user decision (XRP/LINK/DOGE were cut for weak
-    # 2025-26 backtests; AVAX is new) — re-validate in the next audit.
-    "XRPUSDT", "DOGEUSDT", "LINKUSDT", "AVAXUSDT",
-    "XAUUSDT", "XAGUSDT",
-    # Stock-backed perps (underlying equities)
-    "NVDAUSDT", "METAUSDT",
-    "AMZNUSDT", "COINUSDT", "MSTRUSDT",
-    # 2026-06-12 tokenized-equity expansion (PLTR/TSLA re-added by user decision,
-    # reversing the 2026-06-10 cut). Listings span 2026-01-28 .. 2026-06-08.
-    "CRCLUSDT", "PLTRUSDT", "TSLAUSDT", "INTCUSDT", "HOODUSDT",
-    "MSFTUSDT", "AVGOUSDT", "BABAUSDT", "BXUSDT", "HPEUSDT",
-    "AMATUSDT", "CRWDUSDT", "CRDOUSDT", "AAOIUSDT", "IWMUSDT",
-]
+import json
+from pathlib import Path
+_here = Path(__file__).resolve().parent
+with open(_here.parent / "symbols.json") as f:
+    _sc = json.load(f)
+
+STATIC_SYMBOLS = _sc["CRYPTO_METAL_SYMBOLS"] + _sc["STOCK_PERP_SYMBOLS"]
 
 # Each live stream resolves the SAME way (emitted live signals + still-active rows
 # -> outcomes on 1m), differing only in source mode, bar timeframe (-> ltf_minutes
