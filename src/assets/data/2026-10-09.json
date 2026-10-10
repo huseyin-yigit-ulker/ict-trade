@@ -1,0 +1,160 @@
+{
+    "ict_signal": [
+        {
+            "id": 7097,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T14:51:00+00:00",
+            "entry_price": 4188.38,
+            "sl_price": 4177.872435423611,
+            "tp_price": 4212.897650678241,
+            "created_at": "2026-10-09T14:52:49.437479+00:00",
+            "status": "OPEN",
+            "signal_price": 4188.38
+        },
+        {
+            "id": 7095,
+            "symbol": "XAGUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T13:00:00+00:00",
+            "entry_price": 60.89,
+            "sl_price": 60.450620282984346,
+            "tp_price": 62.64751886806261,
+            "created_at": "2026-10-09T13:30:28.169394+00:00",
+            "status": "OPEN",
+            "signal_price": 60.89
+        },
+        {
+            "id": 7094,
+            "symbol": "XAGUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T13:00:00+00:00",
+            "entry_price": 60.89,
+            "sl_price": 60.450620282984346,
+            "tp_price": 63.52627830209392,
+            "created_at": "2026-10-09T13:30:27.176752+00:00",
+            "status": "OPEN",
+            "signal_price": 60.89
+        },
+        {
+            "id": 7092,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T09:30:00+00:00",
+            "entry_price": 0.04483,
+            "sl_price": 0.043367435369827435,
+            "tp_price": 0.05068025852069027,
+            "created_at": "2026-10-09T10:00:36.903206+00:00",
+            "status": "OPEN",
+            "signal_price": 0.04483
+        },
+        {
+            "id": 7093,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T09:30:00+00:00",
+            "entry_price": 0.04483,
+            "sl_price": 0.043367435369827435,
+            "tp_price": 0.0536053877810354,
+            "created_at": "2026-10-09T10:00:38.968931+00:00",
+            "status": "OPEN",
+            "signal_price": 0.04483
+        },
+        {
+            "id": 7090,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T08:30:00+00:00",
+            "entry_price": 0.0443,
+            "sl_price": 0.04291773569518448,
+            "tp_price": 0.05259358582889313,
+            "created_at": "2026-10-09T09:00:35.166678+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0443
+        },
+        {
+            "id": 7091,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T08:30:00+00:00",
+            "entry_price": 0.0443,
+            "sl_price": 0.04291773569518448,
+            "tp_price": 0.049829057219262084,
+            "created_at": "2026-10-09T09:00:36.332505+00:00",
+            "status": "OPEN",
+            "signal_price": 0.0443
+        },
+        {
+            "id": 7088,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T06:00:00+00:00",
+            "entry_price": 0.04277,
+            "sl_price": 0.04148126986645829,
+            "tp_price": 0.050502380801250274,
+            "created_at": "2026-10-09T06:30:31.398919+00:00",
+            "status": "OPEN",
+            "signal_price": 0.04277
+        },
+        {
+            "id": 7089,
+            "symbol": "SUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T06:00:00+00:00",
+            "entry_price": 0.04277,
+            "sl_price": 0.04148126986645829,
+            "tp_price": 0.04792492053416685,
+            "created_at": "2026-10-09T06:30:32.658829+00:00",
+            "status": "OPEN",
+            "signal_price": 0.04277
+        },
+        {
+            "id": 7086,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T05:00:00+00:00",
+            "entry_price": 4196.81,
+            "sl_price": 4179.812064000109,
+            "tp_price": 4264.8017439995665,
+            "created_at": "2026-10-09T05:30:28.535361+00:00",
+            "status": "OPEN",
+            "signal_price": 4196.81
+        },
+        {
+            "id": 7087,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T05:00:00+00:00",
+            "entry_price": 4196.81,
+            "sl_price": 4179.812064000109,
+            "tp_price": 4298.79761599935,
+            "created_at": "2026-10-09T05:30:29.906664+00:00",
+            "status": "OPEN",
+            "signal_price": 4196.81
+        },
+        {
+            "id": 7084,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T04:00:00+00:00",
+            "entry_price": 4186.95,
+            "sl_price": 4170.329435171723,
+            "tp_price": 4253.432259313106,
+            "created_at": "2026-10-09T04:30:26.634658+00:00",
+            "status": "OPEN",
+            "signal_price": 4186.95
+        },
+        {
+            "id": 7085,
+            "symbol": "XAUUSDT",
+            "trade_type": "BUY",
+            "signal_time": "2026-10-09T04:00:00+00:00",
+            "entry_price": 4186.95,
+            "sl_price": 4170.329435171723,
+            "tp_price": 4286.673388969659,
+            "created_at": "2026-10-09T04:30:27.637509+00:00",
+            "status": "OPEN",
+            "signal_price": 4186.95
+        }
+    ]
+}
