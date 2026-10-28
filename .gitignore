@@ -34,3 +34,7 @@ backtest/validation/klines/
 backtest/validation/out/
 # Auto-generated crontab backups
 dag/crontab.backup.*
+data_collect/
+.git_backup*
+*.tmpnote
+scratchpad/scan_secrets_history.py

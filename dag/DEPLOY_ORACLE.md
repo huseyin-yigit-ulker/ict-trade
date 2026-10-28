@@ -44,7 +44,7 @@ nano .env
 ```
 DB_CONNECTION_STRING=postgresql://postgres.xxxx:SIFRE@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
 TELEGRAM_BOT_TOKEN=123456789:AAH...
-TELEGRAM_CHAT_ID=your_telegram_chat_id
+TELEGRAM_CHAT_ID=123456789
 # Günlük backtest senkronu (sync/) için — backtest Supabase'inin yazma yetkili postgres bağlantısı:
 BACKTESTING_DB_CONNECTION_STRING=postgresql://postgres.yyyy:SIFRE@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
 ```
