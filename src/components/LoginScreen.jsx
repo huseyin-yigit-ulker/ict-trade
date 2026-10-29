@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, usingDefaultCreds, consumeAuthNote } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { codenameFor, isResearchStream } from '../utils/streamMask';
@@ -392,6 +392,12 @@ const LoginScreen = () => {
             ⚠ {t('Varsayılan giriş bilgileri aktif — .env ile özelleştirin.')}
           </div>
         )}
+
+        <div style={{ textAlign: 'center', margin: '14px 0 6px' }}>
+          <Link to="/" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
+            ← {t('Canlı Sinyalleri İncele (Giriş Yapmadan)')}
+          </Link>
+        </div>
 
         <div className="login-meta">
           <span className="login-ver">PUSU · v1.1</span>

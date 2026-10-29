@@ -37,4 +37,4 @@ dag/crontab.backup.*
 data_collect/
 .git_backup*
 *.tmpnote
-scratchpad/scan_secrets_history.py
+scratchpad/

@@ -22,16 +22,20 @@ import ProfilePage from './pages/user/ProfilePage';
 import HelpPage from './pages/user/HelpPage';
 import PusuLogo from './components/PusuLogo';
 import SharedTradePage from './pages/SharedTradePage';
+import PublicSignalsPage from './pages/PublicSignalsPage';
 
-// PUBLIC yüzey (2026-07-13): /p/:token = admin'in ürettiği 1 saatlik paylaşım linki.
-// /login gibi RequireAuth'un DIŞINDA ve HER İKİ dalda tanımlı olmalı — aksi halde oturumu
-// olan biri linki açtığında ilgili dalın '*' fallback'ine takılıp eve yönlenir.
-
-// Rol çatalı (2026-07-11): admin MEVCUT arayüzün tamamını görür (aşağıdaki AdminRoutes,
-// eski App.jsx rota ağacının birebir taşınmışı); admin-dışı herkes Binance-tarzı 4 sekmeli
-// basit kabuğa (UserShell) düşer. Güvenlik sınırı Supabase RLS'tir — bu çatal yalnız deneyimi
-// ayırır. Profil yüklenmeden shell seçmek, admin'in soğuk deep-link'ini /portfoy'a EZER
-// (URL mutasyonu, sadece flash değil) — o yüzden profil gelene dek BootSplash.
+// PUBLIC yüzey: Oturum gerektirmeyen şeffaf canlı sinyal ve strateji takip ekranı
+const PublicRoutes = () => (
+  <Routes>
+    <Route path="/" element={<PublicSignalsPage />} />
+    <Route path="/signals" element={<PublicSignalsPage />} />
+    <Route path="/live" element={<PublicSignalsPage />} />
+    <Route path="/public" element={<PublicSignalsPage />} />
+    <Route path="/login" element={<LoginScreen />} />
+    <Route path="/p/:token" element={<SharedTradePage />} />
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
+);
 
 const BootSplash = () => (
   <div style={{
@@ -45,6 +49,8 @@ const BootSplash = () => (
 const AdminRoutes = () => (
   <Routes>
     <Route path="/login" element={<LoginScreen />} />
+    <Route path="/public" element={<PublicSignalsPage />} />
+    <Route path="/signals" element={<PublicSignalsPage />} />
     <Route path="/p/:token" element={<SharedTradePage />} />
     <Route element={<RequireAuth><AppShell /></RequireAuth>}>
       <Route index element={<IntroPage />} />
@@ -56,8 +62,7 @@ const AdminRoutes = () => (
       <Route path="/trading" element={<RequireActive><RequireFeature k="trading"><TradingSettingsPage /></RequireFeature></RequireActive>} />
       <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
       <Route path="/:strategy/:mode" element={<CommandCenterPage />} />
-      {/* İstihbarat = kurumsal quant tearsheet → yalnız admin. Non-admin (eski
-          user_features.intelligence=true izni olsa bile) '/'e döner. */}
+      {/* İstihbarat = kurumsal quant tearsheet → yalnız admin */}
       <Route path="/intelligence" element={<RequireAdmin><IntelligencePage /></RequireAdmin>} />
       <Route path="/settings" element={<SettingsPage />} />
     </Route>
@@ -68,6 +73,7 @@ const AdminRoutes = () => (
 const UserRoutes = () => (
   <Routes>
     <Route path="/login" element={<LoginScreen />} />
+    <Route path="/public" element={<PublicSignalsPage />} />
     <Route path="/p/:token" element={<SharedTradePage />} />
     <Route element={<RequireAuth><UserShell /></RequireAuth>}>
       <Route index element={<Navigate to="/portfoy" replace />} />
@@ -77,23 +83,20 @@ const UserRoutes = () => (
       <Route path="/bot" element={<RequireActive><BotPage /></RequireActive>} />
       <Route path="/profil" element={<ProfilePage />} />
       <Route path="/yardim" element={<HelpPage />} />
-      {/* Push/deep-link/bookmark alias'ları — sw.js push data.url eski yolları taşıyabilir. */}
+      {/* Push/deep-link/bookmark alias'ları */}
       <Route path="/binance" element={<Navigate to="/portfoy" replace />} />
       <Route path="/binance-paper" element={<Navigate to="/portfoy" replace />} />
       <Route path="/binance-altin" element={<Navigate to="/islemler" replace />} />
       <Route path="/trading" element={<Navigate to="/bot" replace />} />
       <Route path="/settings" element={<Navigate to="/profil" replace />} />
     </Route>
-    {/* Gizli yüzeyler (/trend, /total, /admin, /intelligence, /:strategy/:mode …) bu dalda
-        hiç tanımlı değil → hepsi eve döner. */}
     <Route path="*" element={<Navigate to="/portfoy" replace />} />
   </Routes>
 );
 
 export default function AppRoutes() {
   const { isAuthed, isAdmin, profile, profileLoading } = useAuth();
-  // Profil fetch'i kalıcı başarısız olursa (profile=null, loading=false) kullanıcı
-  // kabuğuna düşülür — fail-closed, gizlilik-güvenli taraf.
   if (isAuthed && !profile && profileLoading) return <BootSplash />;
+  if (!isAuthed) return <PublicRoutes />;
   return isAdmin ? <AdminRoutes /> : <UserRoutes />;
 }
