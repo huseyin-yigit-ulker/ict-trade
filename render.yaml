@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: pusu-signals
+    name: ict-trade
     env: static
     buildCommand: npm run build
     staticPublishPath: ./dist

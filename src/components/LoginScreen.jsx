@@ -393,9 +393,19 @@ const LoginScreen = () => {
           </div>
         )}
 
-        <div style={{ textAlign: 'center', margin: '14px 0 6px' }}>
-          <Link to="/" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
-            ← {t('Canlı Sinyalleri İncele (Giriş Yapmadan)')}
+        {/* Halka Açık Canlı Sinyal Ekranı Kartı */}
+        <div className="login-public-box">
+          <div className="login-public-box__head">
+            <span className="pub-badge-dot" />
+            <span className="login-public-box__title">{t('Canlı Sinyal Takip Ekranı')}</span>
+            <span className="login-public-box__badge">GİRİŞSİZ</span>
+          </div>
+          <p className="login-public-box__desc">
+            {t('OPUS, TALOS-ICHI ve tüm stratejilerin anlık sinyallerini, TP/SL durumlarını ve mum grafiklerini şifresiz izleyin.')}
+          </p>
+          <Link to="/public" className="login-public-box__link">
+            <span>{t('Genel Sinyalleri İncele (/public)')}</span>
+            <span className="login-public-box__arrow">→</span>
           </Link>
         </div>
 

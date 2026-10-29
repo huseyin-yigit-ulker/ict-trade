@@ -4,8 +4,8 @@
 ### *Açık Kaynak Algoritmik Alım-Satım, Strateji Araştırma ve Canlı Sinyal Laboratuvarı*
 ### *Open-Source Algorithmic Trading, Empirical Research & Live Signal Monitor*
 
-[![Live Signals](https://img.shields.io/badge/Live%20Signals-ict--trade--public.onrender.com-0ECB81?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ict-trade-public.onrender.com)
-[![Render Ready](https://img.shields.io/badge/Deploy%20on-Render-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://ict-trade-public.onrender.com)
+[![Live Signals](https://img.shields.io/badge/Live%20Signals-ict--trade.onrender.com%2Fpublic-0ECB81?style=for-the-badge&logo=google-chrome&logoColor=white)](https://ict-trade.onrender.com/public)
+[![Render Ready](https://img.shields.io/badge/Deploy%20on-Render-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://ict-trade.onrender.com/public)
 [![Vercel Ready](https://img.shields.io/badge/Deploy%20on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](#-render--vercel-üzerinde-canlı-yayınlama-deployment)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-18%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
@@ -56,7 +56,7 @@ Artık sistemde oturum açma zorunluluğu olmadan canlı sinyalleri izleyebilece
 ```
 
 > 🔗 **Canlı Demo / Yayındaki Genel Uygulama:**  
-> 👉 **[https://ict-trade-public.onrender.com](https://ict-trade-public.onrender.com)**  
+> 👉 **[https://ict-trade.onrender.com/public](https://ict-trade.onrender.com/public)**  
 > *(Giriş/Login yapmaya gerek olmadan doğrudan açıp canlı sinyalleri, strateji metriklerini ve TradingView mum grafiklerini inceleyebilirsiniz).*
 
 ---
